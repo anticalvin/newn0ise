@@ -715,6 +715,10 @@ const B=(tab,g,k,l,d)=>CT.push({t:'b',tab,g,k,l,d});
 C('display','Screen','aspect','Aspect',[['src','Source'],['4:3','4:3'],['3:4','3:4'],['1:1','1:1'],['16:9','16:9']],'src');
 C('display','Screen','quality','Render quality',[['0.5','Draft'],['0.8','Normal'],['1.15','High']],'0.8');
 C('display','Screen','fcap','Frame rate',[['0','Smooth'],['30','Save battery']],'0');
+R('display','Chain macros','mWear','Wear',0,100,0);
+R('display','Chain macros','mAge','Age',0,100,0);
+R('display','Chain macros','mBand','Bandwidth loss',0,100,0);
+R('display','Chain macros','mInst','Instability',0,100,0);
 R('display','Hardware identity','seed','Hardware seed',0,999,7);
 
 /* Bitmap */
@@ -915,6 +919,7 @@ const PROFILES=[
 /* ---------- state ---------- */
 const BASE={pal:'ice',custom:['#000000','#ff3d6e','#3df5ff','#ffffff'],txt:'n0ise\n> signal acquired\n> ',profile:'studio'};
 CT.forEach(c=>BASE[c.k]=c.d);
+BASE.stg=['clean','live','direct','studio'];
 const P=JSON.parse(JSON.stringify(BASE));
 const PROTECT=new Set(['aspect','quality','fcap','seed','method','px','dstr','tbias','anim','depth','cycle','bright','contrast','mid','high','sat','hue','blur','sharp','edge','invert','pal','custom','profile']);
 const E={};
@@ -1282,6 +1287,146 @@ function powerShape(t){
   const fall=1-u;
   return{sx:.0005+sstep(0,.45,fall)*.995,sy:.004+sstep(.4,1,fall)*.996,gain:1+(1-sstep(.4,1,fall))*3*fall};
 }
+/* =====================================================================
+   Chains: Camera → Medium → Playback → Display. Each stage is a swappable
+   module that writes plain P keys, so every old control keeps working.
+   ===================================================================== */
+const STAGES=[
+  ['cam','Camera',[
+    ['clean','Clean',{}],
+    ['tube','Tube camera',{fblend:30,hal:40,blur:1,clip:8,contrast:10}],
+    ['ccd','CCD',{clip:35,hal:10,sharp:30,csat:115,rgbs:6}],
+    ['filmcam','Film camera',{hal:55,contrast:20,csat:90,temp:15}],
+    ['sec','Security cam',{contrast:-10,csat:0,blur:1,clip:20,sharp:20}],
+    ['handy','Handycam',{hal:25,csat:105,clip:15,temp:-10}]]],
+  ['med','Medium',[
+    ['live','Live',{}],
+    ['film','Film print',{micro:45,dust:55,scr:40,jit:12,drift:6,gen:8,sati:25}],
+    ['vhs','VHS tape',{gen:40,jit:35,drift:20,trk:30,hsw:60,drop:30,vhold:4,phs:6}],
+    ['beta','Betacam',{gen:6,jit:4,drop:5}],
+    ['cctv','Surveillance tape',{gen:50,jit:25,hsw:35,drop:45,trk:35,sline:10}],
+    ['worn','Worn VHS',{gen:65,drop:55,trk:60,hsw:80,vhold:15,jit:55,drift:35,rgbs:15,tear:12}]]],
+  ['play','Playback',[
+    ['direct','Direct',{lines:576,lbw:0,cbw:0,ycs:100}],
+    ['comp','Composite',{lines:480,lbw:20,cbw:40,ycs:45,cper:4,ring:15}],
+    ['rf','RF antenna',{lines:240,lbw:45,cbw:60,ycs:30,snr:25,coh:50,snow:8,ghost:12}],
+    ['svid','S-Video',{lines:480,lbw:12,cbw:18,ycs:100}],
+    ['compo','Component',{lines:480,lbw:5,cbw:5,ycs:100}],
+    ['weak','Weak UHF',{lines:200,lbw:55,cbw:70,snr:40,coh:60,snow:20,ghost:20,gdel:30,ring:30}]]],
+  ['disp','Display',[
+    ['studio','Studio CRT',{}],
+    ['bw','70s B&W',{phos:'3',csat:0,mask:'0',mstr:0,curv:55,corner:50,spot:60,efoc:50,scan:35,beam:60,bloom:50,after:40,dr:60,dg:60,db:60,vig:55,refl:30,glare:30,bez:6,bsh:60,iface:'1',iflk:40,aging:40}],
+    ['tv80','80s TV',{mask:'2',mstr:60,mpitch:3,curv:40,corner:40,spot:45,efoc:35,scan:45,bloom:40,hal:30,refl:25,bez:5,bsh:50,aging:35,iface:'1',iflk:30}],
+    ['arcade','Arcade',{mask:'3',mstr:70,mpitch:4,curv:30,corner:30,scan:70,beam:35,bloomb:60,bloom:55,hal:35,refl:30,glare:25,vig:40,csat:130,bez:6,bsh:60,temp:10}],
+    ['pc','PC monitor',{mask:'1',mstr:50,mpitch:3,curv:10,corner:15,scan:25,beam:30,spot:15,efoc:20,bloom:25,ar:60,bez:4,bsh:40}],
+    ['port','Portable TV',{mask:'2',mstr:30,mpitch:4,curv:70,corner:60,spot:70,efoc:60,scan:30,vig:55,aging:60,bez:8,bsh:70,refl:35,glare:35}],
+    ['lcd','Handheld LCD',{pal:'gameboy',method:'b4',px:4,mask:'2',mstr:35,mpitch:2,mgap:45,msoft:10,scan:0,beam:0,curv:0,corner:10,spot:0,efoc:0,fblend:40,vig:15,bez:8,bsh:60,refl:12,bloom:0,hal:0,after:0,csat:0}],
+    ['vec','Vector',{phos:'1',pal:'mono',method:'off',edge:100,mask:'0',mstr:0,scan:0,beam:10,bloom:90,brad:70,hal:40,dr:400,dg:400,db:400,after:85,curv:30,corner:30,csat:0,bright:20,contrast:30}],
+    ['amber','Amber terminal',{phos:'2',pal:'mono',csat:0,mask:'0',mstr:0,scan:60,beam:50,bloom:60,hal:40,dr:120,dg:120,db:120,after:70,burn:40,curv:35,corner:35,spot:40,vig:45,refl:25}],
+    ['green','Green terminal',{phos:'1',pal:'mono',csat:0,mask:'0',mstr:0,scan:60,beam:50,bloom:60,hal:40,dr:220,dg:220,db:220,after:75,burn:50,curv:35,corner:35,spot:40,vig:45,refl:25}],
+    ['nvg','Night vision',{phos:'1',pal:'phosphor',method:'off',csat:0,mask:'0',mstr:0,bloom:90,brad:40,hal:55,vig:95,corner:100,curv:0,scan:10,bright:25,contrast:35,fbg:12,fbz:1,fbr:0,fbh:0}],
+    ['therm','Thermal viewer',{pal:'custom',custom:['#05001a','#4b0a8c','#d4145a','#ff8c1a','#fff6a8'],method:'off',blur:2,csat:0,mask:'0',mstr:0,bloom:45,hal:30,vig:25,curv:0,corner:20,scan:8,spot:60,contrast:20}]]]
+];
+const stageModel=(sid,mid)=>STAGES.find(s=>s[0]===sid)[2].find(m=>m[0]===mid);
+const CHAINS=[
+  ['Newsroom studio',['tube','live','comp','studio']],
+  ['Evening news 1984',['tube','live','comp','tv80']],
+  ['Home movie',['filmcam','film','comp','bw']],
+  ['Rental tape',['ccd','vhs','comp','tv80']],
+  ['Worn rental',['ccd','worn','rf','port']],
+  ['Camcorder replay',['handy','vhs','svid','pc']],
+  ['Edit suite',['ccd','beta','compo','pc']],
+  ['Shop CCTV',['sec','cctv','comp','green']],
+  ['Night patrol',['sec','cctv','direct','nvg']],
+  ['Arcade cabinet',['clean','live','comp','arcade']],
+  ['Pocket console',['clean','live','direct','lcd']],
+  ['Vector cabinet',['clean','live','direct','vec']],
+  ['Amber terminal',['clean','live','direct','amber']],
+  ['Green terminal',['clean','live','direct','green']],
+  ['Thermal inspection',['ccd','live','direct','therm']],
+  ['Pirate broadcast',['tube','live','weak','port']],
+  ['Late-night UHF',['sec','live','rf','tv80']],
+  ['Film on tube',['filmcam','film','comp','studio']],
+  ['Wedding on portable',['handy','vhs','rf','port']],
+  ['CCTV at 3am',['sec','worn','weak','bw']],
+  ['Bootleg arcade tape',['ccd','worn','comp','arcade']],
+  ['Archive reel',['filmcam','film','direct','bw']],
+  ['Dead channel',['tube','worn','weak','bw']],
+  ['Studio on S-Video',['tube','beta','svid','pc']]
+];
+const MACROS=['mWear','mAge','mBand','mInst'];
+function applyStages(stg){
+  const keep={};MACROS.forEach(k=>keep[k]=P[k]);
+  applyProfile('studio');
+  stg.forEach((mid,i)=>Object.assign(P,JSON.parse(JSON.stringify(stageModel(STAGES[i][0],mid)[2]))));
+  MACROS.forEach(k=>P[k]=keep[k]);
+  P.stg=stg.slice();P.profile='chain';
+}
+function buildChainUI(){
+  const g=group('display','Chain');
+  STAGES.forEach(([sid,name,models],i)=>{
+    g.appendChild(el('div','cl',name));
+    chipRow(g,models.map(m=>[m[0],m[1]]),'stg_'+sid,(id)=>{
+      const s=(P.stg||BASE.stg).slice();s[i]=id;applyStages(s);snap();refreshUI();
+    });
+  });
+  g.appendChild(el('div','cl','Ready-made chains'));
+  chipRow(g,CHAINS.map((c,i)=>[String(i),c[0]]),'chains',(i)=>{applyStages(CHAINS[+i][1]);snap();refreshUI();});
+}
+function refreshChainUI(){
+  STAGES.forEach(([sid],i)=>document.querySelectorAll('#stg_'+sid+' .chip').forEach(b=>b.setAttribute('aria-pressed',P.profile==='chain'&&b.dataset.v===(P.stg||[])[i])));
+  document.querySelectorAll('#chains .chip').forEach(b=>b.setAttribute('aria-pressed',P.profile==='chain'&&JSON.stringify(CHAINS[+b.dataset.v][1])===JSON.stringify(P.stg)));
+}
+
+/* ---- life: macros, clustered events, weather states, slow drift ---- */
+const EVT=[['tear',60],['rgbs',70],['drop',80],['snr',35],['trk',70],['hsw',70],['gblock',50],['sline',50]];
+function lifeStep(t,dt,add){
+  const cu=v=>Math.pow(clamp(v/100,0,1),1.5);
+  const wr=cu(P.mWear),ag=cu(P.mAge),bd=cu(P.mBand),ins=cu(P.mInst);
+  if(wr){add('dust',60*wr);add('scr',45*wr);add('smud',50*wr);add('burn',40*wr);add('micro',25*wr);add('aging',50*wr);}
+  if(bd){add('lbw',60*bd);add('cbw',70*bd);add('efoc',40*bd);add('spot',30*bd);E.lines=Math.max(60,E.lines*(1-.6*bd));}
+  if(ins){add('jit',50*ins);add('drift',40*ins);add('trk',30*ins);add('hsw',30*ins);add('vhold',8*ins);}
+  if(ag){
+    const warm=Math.exp(-t/60);
+    add('aging',60*ag+Math.min(30,t/8)*ag);add('sati',50*ag);add('convs',40*ag+25*warm*ag);add('conve',45*ag);add('cdrift',60*ag);add('gen',25*ag);
+    add('temp',18*ag*Math.sin(t/70+P.seed)+10*warm*ag);add('cbri',-10*warm*ag);
+    if(t-(ST.lastDeg??0)>240){ST.lastDeg=t;ST.degT0=t;}
+  }
+  /* seeded RNG */
+  if(ST.rngSeed!==P.seed){ST.rngSeed=P.seed;ST.rng=mulberry(P.seed*7919+13);ST.ev=[];ST.hx=0;ST.wS=0;ST.wDwell=0;ST.wl=0;ST.ws=0;}
+  const rnd=ST.rng;
+  /* Hawkes-style clustered events */
+  const rate=P.grate/100*(.02+ins*.9);
+  ST.hx*=Math.exp(-dt/2);
+  if(rate>0){
+    const lam=rate+ST.hx;
+    if(rnd()<1-Math.exp(-lam*dt)&&ST.ev.length<6){
+      const e=EVT[rnd()*EVT.length|0];
+      ST.ev.push({k:e[0],a:e[1]*(.4+.6*rnd()),t0:t,dur:.15+rnd()*1.1});
+      ST.hx+=.5+ins;
+    }
+  }
+  ST.ev=ST.ev.filter(v=>t-v.t0<v.dur+.25);
+  for(const v of ST.ev){
+    const x=t-v.t0;let env;
+    if(x<.04)env=x/.04;else if(x<.16)env=1-.4*(x-.04)/.12;else if(x<v.dur)env=.6;else env=.6*(1-(x-v.dur)/.25);
+    add(v.k,v.a*Math.max(0,env));
+  }
+  /* weather Markov states with hysteresis: clear / overcast / storm */
+  ST.wDwell+=dt;
+  const minDwell=[4,8,6][ST.wS];
+  if(P.weather>0&&ST.wDwell>minDwell){
+    const r=rnd(),pr=dt;
+    let n=ST.wS;
+    if(ST.wS===0&&r<.08*pr)n=1;
+    else if(ST.wS===1){if(r<.10*pr)n=2;else if(r<.22*pr)n=0;}
+    else if(ST.wS===2&&r<.25*pr)n=1;
+    if(n!==ST.wS){ST.wS=n;ST.wDwell=0;}
+  }
+  const tl=[0,.6,.9][ST.wS],ts=ST.wS===2?1:0;
+  ST.wl+=(tl-ST.wl)*Math.min(1,dt*1.2);ST.ws+=(ts-ST.ws)*Math.min(1,dt*1.5);
+  return [ST.wl,ST.ws];
+}
 function computeE(t,dt){
   Object.assign(E,P);
   for(const k of ['bit','g','s','b','m','l','gl'])E['lay_'+k]=P.solo==='all'||P.solo===k;
@@ -1301,10 +1446,10 @@ function computeE(t,dt){
     E[m.target]=clamp(E[m.target]+w*(m.depth/100)*(c.max-c.min)/2,c.min,c.max);
   }
   const wx=P.weather/100,seed=P.seed;
-  const wn=noise1(t*.13+seed),storm=sstep(.55,.85,noise1(t*.05+seed*3.1));
-  const wl=wx*(.35+.65*wn),ws=wx*storm;
   const ch=ST.chanT0>-90?Math.max(0,1-(t-ST.chanT0)/.7):0;
   const add=(k,v)=>{E[k]=clamp(E[k]+v,CTL[k].min,CTL[k].max);};
+  const [lw,sw]=lifeStep(t,dt,add);
+  const wl=wx*lw,ws=wx*sw;
   add('snr',wl*30+ws*45+ch*80);add('jit',wl*25+ws*40+ch*50);add('drift',wl*15+ws*25);
   add('drop',ws*60);add('trk',ws*50);add('snow',ws*30+ch*70);add('ghost',wl*20);add('hsw',ch*40);
   const vh=clamp(E.vhold/100+ch,0,1.5);
@@ -1549,6 +1694,7 @@ function adaptQ(){
 }
 function loop(now){
   requestAnimationFrame(loop);
+  if(window.__benching)return;
   if(document.hidden||!GLOK||CTX.lost||DEAD)return;
   const cap=+P.fcap;
   if(cap&&now-lastRenderMs<1000/cap-4)return;
@@ -1668,7 +1814,7 @@ function refreshUI(){
   $('#textoff').hidden=!P.ton;
   $('#paint').setAttribute('aria-pressed',ST.paint);
   $('#cam').textContent=SRC.name==='Camera'?'Flip':'Camera';
-  refreshMods();
+  refreshMods();refreshChainUI();
 }
 
 /* ---------- tabs & panes ---------- */
@@ -1717,6 +1863,7 @@ function buildDisplayExtras(){
     $('#cam').textContent='Camera';
     setSource(v==='Demo'?demoCanvas():testCanvas(),v);refreshUI();
   });
+  buildChainUI();
   const gh=group('display','Hardware profile');
   const host=el('div');host.id='profilesHost';gh.appendChild(host);
   const ga=group('display','Actions');
@@ -2144,6 +2291,95 @@ function wire(){
 }
 
 /* ---------- boot ---------- */
+/* =====================================================================
+   ?bench=1  test bench: every profile and chain over a fixed test set,
+   a contact sheet, and a diversity gate (?thr=0.05 to tune).
+   ===================================================================== */
+function benchSources(){
+  const W=640,H=480,mk=()=>{const c=document.createElement('canvas');c.width=W;c.height=H;return [c,c.getContext('2d')];};
+  const S=[];
+  let [c,g]=mk();
+  ['#c0c0c0','#c0c000','#00c0c0','#00c000','#c000c0','#c00000','#0000c0'].forEach((col,i)=>{g.fillStyle=col;g.fillRect(i*W/7,0,W/7+1,H*.67);});
+  ['#0000c0','#111','#c000c0','#111','#00c0c0','#111','#c0c0c0'].forEach((col,i)=>{g.fillStyle=col;g.fillRect(i*W/7,H*.67,W/7+1,H*.08);});
+  ['#00214c','#fff','#32006a','#111','#090909','#111','#1d1d1d','#111'].forEach((col,i)=>{g.fillStyle=col;g.fillRect(i*W/8,H*.75,W/8+1,H*.25);});
+  S.push(['bars',c]);
+  [c,g]=mk();g.fillStyle='#000';g.fillRect(0,0,W,H);g.fillStyle='#fff';
+  for(let b=0;b<8;b++){const pitch=2+b*2;for(let x=0;x<W;x+=pitch*2)g.fillRect(x,b*H/8,pitch,H/8-4);}
+  S.push(['wedge',c]);
+  [c,g]=mk();for(let i=0;i<16;i++){g.fillStyle=`hsl(0 0% ${i/15*100}%)`;g.fillRect(i*W/16,0,W/16+1,H*.6);}
+  g.fillStyle='#000';g.fillRect(0,H*.6,W,H*.4);g.fillStyle='#fff';g.fillRect(W*.1,H*.65,W*.1,H*.3);
+  [[.35,.0],[.45,.04],[.55,.08],[.65,.12]].forEach(([x,v])=>{g.fillStyle=`rgb(${v*255},${v*255},${v*255})`;g.fillRect(W*x,H*.65,W*.1,H*.3);});
+  S.push(['ramp',c]);
+  [c,g]=mk();const gr=g.createLinearGradient(0,0,W,H);gr.addColorStop(0,'#1b0a3a');gr.addColorStop(.5,'#e04b7a');gr.addColorStop(1,'#ffd27a');g.fillStyle=gr;g.fillRect(0,0,W,H);
+  S.push(['gradient',c]);
+  [c,g]=mk();g.fillStyle='#10131a';g.fillRect(0,0,W,H);g.fillStyle='#e8ecf4';g.font='bold 34px monospace';g.fillText('THE QUICK BROWN FOX',30,70);
+  g.font='20px monospace';for(let i=0;i<12;i++)g.fillText('jumps over the lazy dog 0123456789 '+i,30,120+i*28);S.push(['text',c]);
+  [c,g]=mk();g.fillStyle='#46506a';g.fillRect(0,0,W,H);g.fillStyle='#d9a37e';g.beginPath();g.ellipse(W/2,H/2,130,170,0,0,7);g.fill();
+  g.fillStyle='#2a1a10';g.beginPath();g.ellipse(W/2,H/2-110,140,90,0,Math.PI,0);g.fill();
+  g.fillStyle='#fff';[-55,55].forEach(x=>{g.beginPath();g.ellipse(W/2+x,H/2-30,26,14,0,0,7);g.fill();});g.fillStyle='#222';[-55,55].forEach(x=>{g.beginPath();g.arc(W/2+x,H/2-30,8,0,7);g.fill();});
+  g.strokeStyle='#8a3b3b';g.lineWidth=8;g.beginPath();g.arc(W/2,H/2+60,45,.15,Math.PI-.15);g.stroke();
+  S.push(['face',c]);
+  const anim=(name,fn)=>{const [c,g]=mk();S.push([name,c,t=>fn(g,t)]);};
+  anim('ball',(g,t)=>{g.fillStyle='#14171f';g.fillRect(0,0,W,H);g.fillStyle='#fff';g.beginPath();g.arc(80+(Math.abs(((t*260)%1000)-500)/500)*480,H-60-Math.abs(Math.sin(t*3.2))*300,38,0,7);g.fill();});
+  anim('pan',(g,t)=>{g.fillStyle='#0d1b2a';g.fillRect(0,0,W,H);const o=(t*180)%160;for(let x=-160;x<W+160;x+=160){g.fillStyle=(((x+o)/160|0)&1)?'#e0b04a':'#4a90e0';g.fillRect(x+o,120,90,240);}});
+  anim('scroll',(g,t)=>{g.fillStyle='#10131a';g.fillRect(0,0,W,H);g.fillStyle='#e8ecf4';g.font='26px monospace';const o=(t*120)%32;for(let i=0;i<18;i++)g.fillText('SCROLLING TEXT LINE '+((i+(t*120/32|0))%100),30,-o+30+i*32);});
+  return S;
+}
+function bFeat(cv){
+  const t=document.createElement('canvas');t.width=t.height=64;const g=t.getContext('2d',{willReadFrequently:true});g.drawImage(cv,0,0,64,64);
+  const d=g.getImageData(0,0,64,64).data,L=new Float32Array(4096),hist=new Float32Array(64);
+  for(let i=0;i<4096;i++){const r=d[i*4],gg=d[i*4+1],b=d[i*4+2];L[i]=(.299*r+.587*gg+.114*b)/255;hist[(r>>6)<<4|(gg>>6)<<2|(b>>6)]++;}
+  for(let i=0;i<64;i++)hist[i]/=4096;
+  let e=0;for(let y=0;y<63;y++)for(let x=0;x<63;x++){const i=y*64+x;if(Math.abs(L[i+1]-L[i])+Math.abs(L[i+64]-L[i])>.1)e++;}
+  /* radial spectrum via naive separable DFT on 32x32 */
+  const N=32,re=new Float32Array(N*N),im=new Float32Array(N*N),cs=[],sn=[];
+  for(let k=0;k<N;k++){cs.push([]);sn.push([]);for(let n=0;n<N;n++){const a=2*Math.PI*k*n/N;cs[k].push(Math.cos(a));sn[k].push(-Math.sin(a));}}
+  const m=new Float32Array(N*N);for(let y=0;y<N;y++)for(let x=0;x<N;x++)m[y*N+x]=L[(y*2)*64+x*2];
+  const tr=new Float32Array(N*N),ti=new Float32Array(N*N);
+  for(let y=0;y<N;y++)for(let k=0;k<N;k++){let a=0,b=0;for(let n=0;n<N;n++){a+=m[y*N+n]*cs[k][n];b+=m[y*N+n]*sn[k][n];}tr[y*N+k]=a;ti[y*N+k]=b;}
+  for(let x=0;x<N;x++)for(let k=0;k<N;k++){let a=0,b=0;for(let n=0;n<N;n++){const c=cs[k][n],s=sn[k][n],xr=tr[n*N+x],xi=ti[n*N+x];a+=xr*c-xi*s;b+=xr*s+xi*c;}re[k*N+x]=a;im[k*N+x]=b;}
+  const rb=new Float32Array(6),rc=new Float32Array(6);
+  for(let ky=0;ky<N;ky++)for(let kx=0;kx<N;kx++){const fy=ky>N/2?N-ky:ky,fx=kx>N/2?N-kx:kx,r=Math.hypot(fx,fy);if(r<1)continue;const b=Math.min(5,Math.floor(Math.log2(r)*1.2));rb[b]+=re[ky*N+kx]**2+im[ky*N+kx]**2;rc[b]++;}
+  const spec=Array.from(rb,(v,i)=>Math.log10(1+v/Math.max(1,rc[i]))/4);
+  return {hist,spec,edge:e/3969};
+}
+function bDist(a,b){
+  let h=0;for(let i=0;i<64;i++)h+=Math.abs(a.hist[i]-b.hist[i]);h/=2;
+  let s=0;for(let i=0;i<6;i++)s+=Math.abs(a.spec[i]-b.spec[i]);s/=6;
+  return .5*h+.3*s*2+.2*Math.abs(a.edge-b.edge)*3;
+}
+async function runBench(){
+  window.__benching=true;const thr=parseFloat(new URLSearchParams(location.search).get('thr')||'0.05');
+  const root=document.createElement('div');
+  root.style.cssText='position:fixed;inset:0;z-index:99;background:var(--bg);overflow:auto;padding:12px;font:12px/1.4 var(--mono);color:var(--ink)';
+  root.innerHTML='<b>n0ise bench</b> <span id="bp">starting…</span><div id="bres"></div><canvas id="bsheet" style="max-width:100%;display:block;margin-top:8px"></canvas>';
+  document.body.appendChild(root);
+  const prog=root.querySelector('#bp'),srcs=benchSources(),cols=srcs.length,TW=128,TH=96;
+  const items=[...PROFILES.map(p=>({id:'p:'+p[0],name:p[1],apply:()=>applyProfile(p[0])})),...CHAINS.map(c=>({id:'c:'+c[0],name:'⛓ '+c[0],apply:()=>applyStages(c[1])}))];
+  const sheet=root.querySelector('#bsheet');sheet.width=cols*TW+160;sheet.height=items.length*TH;
+  const sg=sheet.getContext('2d');sg.fillStyle='#000';sg.fillRect(0,0,sheet.width,sheet.height);sg.font='11px monospace';
+  const raf=()=>new Promise(r=>requestAnimationFrame(r)),feats=[];
+  const t0=performance.now();let BT=100;
+  for(let r=0;r<items.length;r++){await new Promise(q=>setTimeout(q,0));
+    const it=items[r];it.f=[];prog.textContent=`${r+1}/${items.length} ${it.name}`;
+    sg.fillStyle='#fff';sg.fillText(it.name,4,r*TH+14);
+    for(let c=0;c<cols;c++){
+      it.apply();P.seed=7;setSource(srcs[c][1],'Bench',!!srcs[c][2]);
+      for(let f=0;f<6;f++){if(srcs[c][2]){srcs[c][2](f/30+r);uploadSrc();}renderFrame(BT+=1/60,1/60);frameNo++;}
+      sg.drawImage(canvas,160+c*TW,r*TH,TW,TH);it.f.push(bFeat(canvas));
+    }
+  }
+  const pairs=[];
+  for(let i=0;i<items.length;i++)for(let j=i+1;j<items.length;j++){
+    let d=0;for(let c=0;c<cols;c++)d+=bDist(items[i].f[c],items[j].f[c]);pairs.push([d/cols,items[i].name,items[j].name]);
+  }
+  pairs.sort((a,b)=>a[0]-b[0]);
+  const bad=new Set();pairs.filter(p=>p[0]<thr).forEach(p=>{bad.add(p[1]);bad.add(p[2]);});
+  const res={threshold:thr,items:items.length,seconds:Math.round((performance.now()-t0)/1000),tooClose:pairs.filter(p=>p[0]<thr).length,closest:pairs.slice(0,15).map(p=>[+p[0].toFixed(4),p[1],p[2]])};
+  window.__bench=res;console.log(JSON.stringify(res));
+  root.querySelector('#bres').innerHTML=`<p>${res.tooClose?'FAIL':'PASS'}: ${res.tooClose} pair(s) closer than ${thr}. ${res.items} looks in ${res.seconds}s.</p><pre>${res.closest.map(p=>p.join('  ')).join('\n')}</pre>`;
+  prog.textContent='done';
+}
 (function boot(){
   applyProfile('studio');
   ST.pwrT0=now();
@@ -2157,6 +2393,7 @@ function wire(){
   lastSnap=JSON.stringify(P);
   refreshUI();
   requestAnimationFrame(loop);
+  if(new URLSearchParams(location.search).get('bench'))setTimeout(runBench,600);
 })();
 </script>
 </body>
