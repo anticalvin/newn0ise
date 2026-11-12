@@ -246,6 +246,29 @@ body[data-sheet] .insp{padding-bottom:calc(var(--ty,0px) + 32px + env(safe-area-
 .rg{flex:none;scroll-snap-align:start}.rgl{font:600 9.5px var(--lab);letter-spacing:.14em;text-transform:uppercase;color:var(--mute);margin:0 0 4px}
 .rgt{display:flex;gap:6px}
 .gq{width:100%;min-height:44px;margin:0 0 8px;padding:0 12px;border:1px solid var(--line);background:var(--raise);color:var(--ink);font:500 13px var(--lab)}
+.camui{display:none}
+body[data-cam] .camui{display:block;position:absolute;inset:0;pointer-events:none;z-index:7}
+body[data-cam] .float,body[data-cam] .chipb{display:none!important}
+.camui .cb,.camui .camroll,.camui .shutter{pointer-events:auto}
+.camtop{position:absolute;left:8px;right:8px;top:calc(8px + env(safe-area-inset-top,0px));display:flex;gap:6px;flex-wrap:wrap}
+.cb{min-height:44px;min-width:44px;padding:0 12px;border:1px solid var(--line);background:var(--panel);color:var(--ink);font:600 11px var(--lab);text-transform:uppercase;letter-spacing:.06em;border-radius:3px}
+.cb[aria-pressed=true]{background:var(--ink);color:var(--bg)}
+.cambot{position:absolute;left:0;right:0;bottom:calc(10px + env(safe-area-inset-bottom,0px));display:flex;align-items:center;justify-content:center;gap:28px}
+.camroll{width:52px;height:52px;border:1px solid var(--line);background:var(--panel);color:var(--ink);font:600 10px var(--lab);overflow:hidden;padding:0;border-radius:3px}.camroll img{width:100%;height:100%;object-fit:cover;display:block}
+.shutter{width:72px;height:72px;border-radius:50%;border:3px solid #fff;background:transparent;position:relative;touch-action:none}
+.shutter::after{content:"";position:absolute;inset:6px;border-radius:50%;background:#fff;transition:inset .12s,background .12s,border-radius .12s}
+.shutter.rec::after{inset:20px;border-radius:3px;background:#ff3b3b}
+.camhint{position:absolute;bottom:-2px;font:500 9px var(--lab);opacity:.0}
+.camcount{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font:700 96px var(--lab);color:#fff;text-shadow:0 0 12px rgba(0,0,0,.6)}
+.camfpsv{position:absolute;right:10px;bottom:calc(96px + env(safe-area-inset-bottom,0px));font:600 11px var(--lab);padding:4px 8px;background:var(--panel);border:1px solid var(--line)}
+.camui .g1,.camui .g2,.camui .g3,.camui .g4{display:none;position:absolute;background:rgba(255,255,255,.45)}
+.camui.grid .g1,.camui.grid .g2{display:block;top:0;bottom:0;width:1px}.camui.grid .g1{left:33.33%}.camui.grid .g2{left:66.66%}
+.camui.grid .g3,.camui.grid .g4{display:block;left:0;right:0;height:1px}.camui.grid .g3{top:33.33%}.camui.grid .g4{top:66.66%}
+.camui.flash::before{content:"";position:absolute;inset:0;background:#fff;opacity:.7}
+.rollbox{background:var(--panel);color:var(--ink);padding:16px;max-width:560px;width:100%;max-height:86dvh;overflow:auto;border:1px solid var(--line)}
+.rollgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:10px 0}.rollcell{position:relative}
+.rollitem{display:block;width:100%;aspect-ratio:1;padding:0;border:1px solid var(--line);background:#000;overflow:hidden}.rollitem img,.rollitem video{width:100%;height:100%;object-fit:cover}
+.rolldel{position:absolute;top:0;right:0;width:44px;height:44px;color:#fff;font-size:20px;text-shadow:0 0 4px #000}
 .coach{position:absolute;left:12px;right:12px;top:60px;z-index:8;padding:12px 14px;display:flex;flex-direction:column;gap:6px;font-size:12px;border:1px solid var(--line);background:var(--panel);border-radius:3px}
 .coach b{font:600 11px var(--lab);text-transform:uppercase;letter-spacing:.08em}.coach button{min-height:44px;border:1px solid var(--line);margin-top:4px;font:600 11px var(--lab);text-transform:uppercase}
 body[data-lefty] .float.br{right:auto;left:8px}body[data-lefty] .float.bl{left:auto;right:8px}
@@ -1226,8 +1249,10 @@ function uploadSrc(){
   const el=SRC.el;if(!el)return;
   const [w,h]=srcDims(el);if(!w||!h)return;
   gl.bindTexture(gl.TEXTURE_2D,TEX.src);
+  let up=el;
+  if(SRC.mirror&&el instanceof HTMLVideoElement){const mc=SRC.mcv||(SRC.mcv=document.createElement('canvas'));if(mc.width!==w||mc.height!==h){mc.width=w;mc.height=h;}const g=mc.getContext('2d');g.setTransform(-1,0,0,1,w,0);g.drawImage(el,0,0,w,h);up=mc;}
   gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);
-  gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA8,gl.RGBA,gl.UNSIGNED_BYTE,el);
+  gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA8,gl.RGBA,gl.UNSIGNED_BYTE,up);
   gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,false);
   gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
   gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
@@ -1236,7 +1261,7 @@ function uploadSrc(){
 function setSource(el,name,live){
   if(SRC.el instanceof HTMLVideoElement&&SRC.el!==el){try{SRC.el.pause();const s=SRC.el.srcObject;if(s)s.getTracks().forEach(t=>t.stop());}catch(e){}}
   if(SRC.gif&&SRC.el!==el)SRC.gif=null;
-  SRC.el=el;SRC.name=name;SRC.live=!!live;SRC.ver++;
+  SRC.el=el;SRC.name=name;SRC.live=!!live;SRC.ver++;SRC.mirror=false;
   if(!(el instanceof HTMLVideoElement||el instanceof HTMLImageElement))uploadSrc();
 }
 function fitCanvas(img,w0,h0,maxL=2048){
@@ -2540,6 +2565,7 @@ function fuseParams(){
     ps.push({k:'mk'+s,t:'c',label:'Apply to',opts:['Everything','Edges','Bright areas','Dark areas'],def:0,sec});
     ps.push({k:'mt'+s,label:'Mask threshold',min:0,max:100,def:50,sec});}
   return ps.concat([{k:'hue',label:'Hue',min:-180,max:180,def:0,sec:'Finish'},{k:'sat',label:'Saturation',min:0,max:300,def:100,sec:'Finish'},
+    {k:'glow',label:'Glow',min:0,max:100,def:0,sec:'Finish'},{k:'split',label:'Color split',min:0,max:100,def:0,sec:'Finish'},
     {k:'grain',label:'Grain',min:0,max:100,def:0,sec:'Finish'},{k:'vig',label:'Vignette',min:0,max:100,def:0,sec:'Finish'}]);
 }
 const fuseFxs=V=>[1,2,3,4].map(s=>+V['f'+s]>0?CAMFX[+V['f'+s]-1]:null);
@@ -2575,7 +2601,17 @@ const fuseCost=V=>fuseFxs(V).reduce((a,f,i)=>a+(f&&V['on'+(i+1)]?fxCost(f):0),0)
 defineModule({id:'fuse',family:'Camera',name:'Fuse',params:fuseParams(),
   dyn:V=>{const fx=fuseFxs(V);return{key:fx.map(f=>f?f.id:'-').join(),frag:fuseFrag(fx)};},
   bind(pr,V,ctx){samp(pr,'u_prev',2,fusePrev(ctx.W,ctx.H).tex);},
-  after(pr,V,ctx){if(!ctx.out||!ctx.out.tex||!fuseFxs(V).some(f=>f&&f.hist))return;const c=PR.copy;bindRT(fusePrev(ctx.W,ctx.H));c.use();samp(c,'uT',0,ctx.out.tex);draw();}});
+  after(pr,V,ctx){if(!ctx.out||!ctx.out.tex)return;
+    if(fuseFxs(V).some(f=>f&&f.hist)){const c=PR.copy;bindRT(fusePrev(ctx.W,ctx.H));c.use();samp(c,'uT',0,ctx.out.tex);draw();}
+    if(+V.glow>0||+V.split>0){/* Finish pass: copy the result, then glow + chromatic split back into the output */
+      const tmp=histRT('fin',ctx.W,ctx.H),c=PR.copy;bindRT(tmp);c.use();samp(c,'uT',0,ctx.out.tex);draw();
+      const f=PR.fin||(PR.fin=mkProg(VS,F_FIN));bindRT(ctx.out);f.use();samp(f,'uT',0,tmp.tex);f.v2('uRes',ctx.W,ctx.H);f.f('uGlow',V.glow/100);f.f('uSplit',V.split/100);f.f('uS',ctx.H/600);draw();}}});
+const F_FIN=HEAD+`uniform sampler2D uT;uniform vec2 uRes;uniform float uGlow,uSplit,uS;
+void main(){vec2 uv=vUv;vec3 c=texture(uT,uv).rgb;
+  if(uSplit>0.){vec2 d=uv-.5,o=d*dot(d,d)*uSplit*.16+d*uSplit*.006;c=vec3(texture(uT,uv+o).r,c.g,texture(uT,uv-o).b);}
+  if(uGlow>0.){vec3 b=vec3(0.);for(int k=0;k<3;k++){float r=(5.+float(k)*8.)*uS/uRes.y;for(int i=0;i<8;i++){float a=float(i)*.7854+float(k)*.4;b+=texture(uT,uv+vec2(cos(a)*r*uRes.y/uRes.x,sin(a)*r)).rgb;}}
+    b/=24.;c=1.-(1.-c)*(1.-clamp(b*uGlow*1.6,0.,1.));}
+  o=vec4(clamp(c,0.,1.),1.);}`;
 /* helpers the UI uses */
 function fuseSet(l,slot,id){l.params['f'+slot]=id?fxIndex(id):0;const f=id&&FXBY[id];if(f){l.params['i'+slot]=f.i;l.params['m'+slot]=f.m;l.params['on'+slot]=true;}}
 const FUSE_KEYS=['f','on','i','m','mx','bl','mk','mt'];
@@ -2821,7 +2857,7 @@ canvas.addEventListener('webglcontextrestored',()=>{
   try{
     initGL();initLUT();
     Object.keys(T).forEach(k=>delete T[k]);
-    Object.keys(FUSE_PREV).forEach(k=>delete FUSE_PREV[k]);Object.keys(HISTRT).forEach(k=>delete HISTRT[k]);sizeKey='';lastBKey='';palCache={key:'',v:null};textKey='';pIdx=0;RB.pbo=null;RB.sync=null;RB.size=0;
+    PR.fin=null;Object.values(MODULES).forEach(m=>{m.prog=null;m.cache={};m.progKey=null;});Object.keys(FUSE_PREV).forEach(k=>delete FUSE_PREV[k]);Object.keys(HISTRT).forEach(k=>delete HISTRT[k]);sizeKey='';lastBKey='';palCache={key:'',v:null};textKey='';pIdx=0;RB.pbo=null;RB.sync=null;RB.size=0;
     SRC.lastVer=-1;if(SRC.el&&!(SRC.el instanceof HTMLVideoElement))uploadSrc();
     $('#err').hidden=true;CTX.lost=false;errN=0;
     if(typeof toast==='function')toast('Display recovered');
@@ -3300,7 +3336,7 @@ function openSheet(blob,name,isVideo){
   sh.addEventListener('pointerdown',e=>{if(e.target===sh)close();});
   const shr=$('#shr',sh);if(shr)shr.addEventListener('click',async()=>{try{await navigator.share({files:[file]});}catch(e){}});
 }
-function deliver(blob,name,isVideo){openSheet(blob,name,isVideo);}
+function deliver(blob,name,isVideo){if(CAMMODE){rollAdd(blob,name,isVideo).then(ok=>ok&&toast(isVideo?'Video saved to roll':'Saved to roll'));return;}openSheet(blob,name,isVideo);}
 const stamp=()=>`n0ise-${P.profile}-${Date.now().toString(36)}`;
 const frames2=()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
 async function savePNG(){
@@ -3310,6 +3346,63 @@ async function savePNG(){
   if(!blob){toast('Couldn’t export that image');return;}
   deliver(blob,stamp()+'.png',false);
 }
+/* ---- WP2: camera screen ---- */
+let CAMMODE=false,camTimer=0,camGrid=false,camFps=false,camBusy=false;
+const rollDB=()=>new Promise((res,rej)=>{if(!window.indexedDB)return rej(new Error('no idb'));const q=indexedDB.open('n0ise-roll',1);q.onupgradeneeded=()=>q.result.createObjectStore('caps',{keyPath:'id',autoIncrement:true});q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error);});
+async function rollAdd(blob,name,isVideo){try{const db=await rollDB();await new Promise((res,rej)=>{const tx=db.transaction('caps','readwrite');tx.objectStore('caps').add({blob,name,isVideo,ts:Date.now()});tx.oncomplete=res;tx.onerror=()=>rej(tx.error);});camThumbUpdate();return true;}catch(e){toast('Couldn’t save to the roll. Download it instead.');deliver2(blob,name,isVideo);return false;}}
+async function rollList(){try{const db=await rollDB();return await new Promise((res,rej)=>{const out=[],tx=db.transaction('caps');const c=tx.objectStore('caps').openCursor(null,'prev');c.onsuccess=()=>{const cur=c.result;if(cur&&out.length<60){out.push(cur.value);cur.continue();}else res(out);};c.onerror=()=>rej(c.error);});}catch(e){return[];}}
+async function rollDelete(id){try{const db=await rollDB();await new Promise(res=>{const tx=db.transaction('caps','readwrite');tx.objectStore('caps').delete(id);tx.oncomplete=res;});}catch(e){}}
+const deliver2=(b,n,v)=>openSheet(b,n,v);
+async function camThumbUpdate(){const b=$('#camroll');if(!b)return;const l=await rollList();b.innerHTML='';if(l[0]&&!l[0].isVideo){const im=new Image();im.alt='';im.src=URL.createObjectURL(l[0].blob);im.onload=()=>URL.revokeObjectURL(im.src);b.appendChild(im);}else b.textContent=l.length?String(l.length):'Roll';}
+async function openRoll(){
+  const sh=el('div','sheet'),l=await rollList(),urls=[];
+  const box=el('div','rollbox',`<h3>Roll</h3>`);const grid=el('div','rollgrid');
+  if(!l.length)box.appendChild(el('p','','Nothing here yet. Tap the shutter for a photo, hold it to record.'));
+  l.forEach(c=>{const u=URL.createObjectURL(c.blob);urls.push(u);const b=el('button','rollitem');b.setAttribute('aria-label','Open '+c.name);
+    b.innerHTML=c.isVideo?`<video src="${u}" muted playsinline></video>`:`<img alt="" src="${u}">`;
+    b.addEventListener('click',()=>{close();openSheet(c.blob,c.name,c.isVideo);});
+    const d=el('button','rolldel','×');d.setAttribute('aria-label','Delete');d.addEventListener('click',async e=>{e.stopPropagation();await rollDelete(c.id);b.remove();d.remove();camThumbUpdate();});
+    const w=el('div','rollcell');w.append(b,d);grid.appendChild(w);});
+  box.appendChild(grid);const cl=el('button','btn','Close');box.appendChild(cl);sh.appendChild(box);document.body.appendChild(sh);
+  const close=()=>{sh.remove();urls.forEach(URL.revokeObjectURL);};cl.addEventListener('click',close);
+}
+function buildCamUI(){
+  if($('#camui'))return;const stage=$('#stage'),u=el('div','camui');u.id='camui';
+  const btn=(id,txt,label,fn)=>{const b=el('button','cb',txt);b.id=id;b.setAttribute('aria-label',label);b.addEventListener('click',fn);return b;};
+  const top=el('div','camtop');
+  top.append(btn('camx','✕','Close camera',closeCamera),btn('camflip','Flip','Flip camera',async()=>{await startCam(true);SRC.mirror=camFacing==='user';}),
+    btn('cammir','Mirror','Mirror preview',e=>{SRC.mirror=!SRC.mirror;SRC.lastVer=-1;e.currentTarget.setAttribute('aria-pressed',SRC.mirror);}),
+    btn('camgrid','Grid','Grid lines',e=>{camGrid=!camGrid;u.classList.toggle('grid',camGrid);e.currentTarget.setAttribute('aria-pressed',camGrid);}),
+    btn('camtim','Timer off','Timer',e=>{camTimer=camTimer===0?3:camTimer===3?10:0;e.currentTarget.textContent=camTimer?'Timer '+camTimer+'s':'Timer off';}),
+    btn('camfps','FPS','Show frame rate',e=>{camFps=!camFps;e.currentTarget.setAttribute('aria-pressed',camFps);}));
+  const bot=el('div','cambot');
+  const roll=el('button','camroll','Roll');roll.id='camroll';roll.setAttribute('aria-label','Open roll');roll.addEventListener('click',openRoll);
+  const sh=el('button','shutter');sh.id='shutter';sh.setAttribute('aria-label','Shutter. Tap for a photo, hold to record');
+  bot.append(roll,sh,el('span','camhint','Tap photo · hold video'));
+  const cd=el('div','camcount');cd.id='camcount';cd.hidden=true;const fp=el('div','camfpsv');fp.id='camfpsv';fp.hidden=true;
+  u.append(top,bot,cd,fp,el('i','g1'),el('i','g2'),el('i','g3'),el('i','g4'));stage.appendChild(u);
+  let hold=0,recording=false;
+  sh.addEventListener('pointerdown',e=>{e.preventDefault();try{sh.setPointerCapture(e.pointerId);}catch(_){}recording=false;hold=setTimeout(()=>{recording=true;sh.classList.add('rec');buzz(20);toggleRec();},380);});
+  const end=()=>{clearTimeout(hold);if(recording){recording=false;sh.classList.remove('rec');toggleRec();return;}};
+  sh.addEventListener('pointerup',async e=>{const was=recording;clearTimeout(hold);if(was){end();return;}if(camBusy)return;camBusy=true;
+    for(let n=camTimer;n>0;n--){cd.hidden=false;cd.textContent=n;buzz(8);await new Promise(r=>setTimeout(r,1000));}cd.hidden=true;
+    ST.clean=true;await frames2();const blob=await new Promise(r=>canvas.toBlob(r,'image/png'));ST.clean=false;
+    if(blob){u.classList.add('flash');setTimeout(()=>u.classList.remove('flash'),120);buzz(25);await rollAdd(blob,stamp()+'.png',false);}camBusy=false;});
+  sh.addEventListener('pointercancel',end);sh.addEventListener('contextmenu',e=>e.preventDefault());
+  setInterval(()=>{if(CAMMODE&&camFps){fp.hidden=false;fp.textContent=Math.round(fps)+' fps';}else fp.hidden=true;},500);
+  camThumbUpdate();
+}
+async function openCamera(){
+  await startCam(false);
+  if(!(SRC.el instanceof HTMLVideoElement)||SRC.name!=='Camera')return;
+  SRC.mirror=camFacing==='user';buildCamUI();CAMMODE=true;document.body.dataset.cam='1';
+  const m=$('#cammir');if(m)m.setAttribute('aria-pressed',SRC.mirror);
+  if(navigator.wakeLock)navigator.wakeLock.request('screen').then(w=>{CAMWAKE=w;}).catch(()=>{});
+  if(window.SHEET&&document.body.dataset.sheet!==undefined)try{SHEET.apply(1,true);}catch(e){}
+  camThumbUpdate();
+}
+let CAMWAKE=null;
+function closeCamera(){CAMMODE=false;delete document.body.dataset.cam;if(CAMWAKE){CAMWAKE.release().catch(()=>{});CAMWAKE=null;}if(rec)toggleRec();setSource(demoCanvas(),'Demo');refreshUI();}
 let rec=null,chunks=[];
 let WAKE=null;
 function toggleRec(sec){
@@ -3365,7 +3458,7 @@ function wire(){
   $('#undo').addEventListener('click',undo);$('#redo').addEventListener('click',redo);
   $('#open').addEventListener('click',()=>$('#file').click());
   $('#file').addEventListener('change',e=>{loadFile(e.target.files[0]);e.target.value='';});
-  $('#cam').addEventListener('click',()=>startCam(SRC.name==='Camera'));
+  $('#cam').addEventListener('click',()=>SRC.name==='Camera'?startCam(true).then(()=>{SRC.mirror=camFacing==='user';}):openCamera());
   $('#rec').addEventListener('click',()=>toggleRec());
   $('#save').addEventListener('click',openExport);$('#reset').addEventListener('click',resetAll);
   $('#textoff').addEventListener('click',()=>{P.ton=false;snap();refreshUI();});
@@ -4006,7 +4099,7 @@ function wireSheet(){
   const sm=$i('srcchip'),menu=$i('srcmenu');
   if(sm){sm.addEventListener('click',()=>{menu.hidden=!menu.hidden;});
     menu.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;menu.hidden=true;const a=b.dataset.a;
-      if(a==='open')$i('open').click();else if(a==='cam')$i('cam').click();else if(a==='rec')$i('rec').click();
+      if(a==='open')$i('open').click();else if(a==='cam')openCamera();else if(a==='rec')$i('rec').click();
       else if(a==='demo'){setSource(demoCanvas(),'Demo');refreshUI();}else if(a==='test'){setSource(testCanvas(),'Test');refreshUI();}});}
 }
 (function boot(){
