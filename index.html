@@ -486,7 +486,7 @@ const F_SIGA=HEAD+`
 uniform sampler2D uSrc;
 uniform vec2 uRes;
 uniform int uFrame,uStd;
-uniform float uTime,uSeed,uPer,uSL,uSC,uYC,uSnr,uCoh,uSnow,uGhost,uGD,uJit,uDrift,uTrk,uHsw,uDrop,uClip,uCsat,uPhase;
+uniform float uTime,uSeed,uPer,uSL,uSC,uYC,uSnr,uCoh,uSnow,uGhost,uGD,uJit,uDrift,uTrk,uHsw,uDrop,uClip,uCsat,uPhase,uRG,uGS,uGDec,uTJ;
 void main(){
   float W=uRes.x,L=uRes.y;
   float ln=floor(vUv.y*L);
@@ -495,10 +495,11 @@ void main(){
   float fr=floor(t*30.);
   float off=(h21(vec2(ln,fr+uSeed))-.5)*2.*uJit;
   off+=sin(ln*.045+t*1.7+uSeed)*uDrift+sin(ln*.011-t*.6)*uDrift*1.5;
-  float tb=fract(t*.09+h11(uSeed));
+  float tb=fract(t*.09+h11(uSeed)+(h11(floor(t*6.)+uSeed)-.5)*uTJ*.12);
   float dty=abs(vUv.y-tb);dty=min(dty,1.-dty);
   float inTrk=smoothstep(.07,0.,dty)*uTrk;
   off+=inTrk*((h21(vec2(ln,fr))-.5)*60.+sin(ln*.3+t*40.)*30.);
+  off+=smoothstep(.12,0.,dty)*uTJ*(h21(vec2(ln*.1,fr))-.5)*50.;
   float hs=smoothstep(.045,0.,vUv.y)*uHsw;
   off+=hs*(sin(ln*1.7+t*20.)*40.+(h21(vec2(ln,fr+5.))-.5)*40.);
   float fl=mod(float(uFrame),2.);
@@ -514,6 +515,7 @@ void main(){
     vec2 uv=vec2(xs/W,vUv.y);
     vec3 c=texture(uSrc,uv).rgb;
     if(uGhost>.001){c+=texture(uSrc,vec2((xs-uGD)/W,vUv.y)).rgb*uGhost*.6;}
+    if(uRG>.001){for(int gi=1;gi<=4;gi++){float gf=float(gi);c+=texture(uSrc,vec2((xs-uGD-uGS*(gf-1.))/W,vUv.y)).rgb*uRG*.5*pow(uGDec,gf)*(mod(gf,2.)>.5?1.:-1.);}}
     vec3 q=rgb2yiq(c);
     float ph=6.2831853*xs/uPer+lp;
     float sig=q.x+uCsat*(q.y*cos(ph)+q.z*sg*sin(ph));
@@ -551,7 +553,7 @@ void main(){
 const F_SIGB=HEAD+`
 uniform sampler2D uY;
 uniform vec2 uRes;
-uniform float uTau,uStep,uRing,uGenBlur;
+uniform float uTau,uStep,uRing,uGenBlur,uPop;
 void main(){
   vec3 c0=texture(uY,vUv).rgb;
   float Y=c0.x;
@@ -565,6 +567,7 @@ void main(){
   float Ya=texture(uY,vUv+vec2(2./uRes.x,0.)).x,Yb=texture(uY,vUv-vec2(2./uRes.x,0.)).x;
   Y+=uRing*(Y-.5*(Ya+Yb));
   Y=mix(Y,.5*(Ya+Yb),uGenBlur);
+  float cm=length(iq);iq*=1.+uPop*1.6*smoothstep(.12,.45,cm);
   vec3 rgb=yiq2rgb(vec3(Y,iq));
   o=vec4(clamp(rgb,-.1,1.6),1.);
 }`;
@@ -574,7 +577,7 @@ const F_CRT=HEAD+`
 uniform sampler2D uSig;
 uniform vec2 uRes,uHwGeo;
 uniform vec3 uWhite,uGain,uHwConv;
-uniform int uMask,uPhos;
+uniform int uMask,uPhos;uniform vec3 uPT;uniform float uPTA;
 uniform float uLines,uTime,uSeed,uField,uInter,uIflk;
 uniform float uCurv,uCorner,uOver,uConvS,uConvE,uCdrift,uAging;
 uniform float uSX,uSY,uGainP,uDegT,uRoll,uRollAmt;
@@ -662,6 +665,7 @@ void main(){
     vec3 m=maskAt(gl_FragCoord.xy);
     c*=mix(vec3(1.),m*2.6,uMStr);
   }
+  if(uPTA>.001)c=mix(c,lum(c)*uPT*1.5,uPTA);
   c*=inside*blank*uGainP;
   if(uGainP>1.5){c=mix(c,vec3(.9,1.,.95)*uGainP*.4*inside,smoothstep(.12,.01,uSY));}
   o=vec4(c,1.);
@@ -825,17 +829,23 @@ R('signal','Format','lbw','Luma softness',0,100,25);
 R('signal','Format','cbw','Chroma bleed',0,100,30);
 R('signal','Format','ycs','Y/C separation',0,100,70);
 R('signal','Format','cper','Dot crawl size',2,10,4,.5);
-R('signal','Format','csat','Chroma gain',0,200,100);
+C('signal','Format','cmode','Color mode',[['0','Composite NTSC'],['1','S-Video'],['2','RGB']],'0');
+R('signal','Format','csat','Chroma saturation',0,300,100);
+R('signal','Format','pop','Color pops',0,100,0);
 R('signal','Format','phs','Phase error',-180,180,0);
 R('signal','Format','ring','Edge ringing',0,100,0);
 R('signal','Noise','snr','Noise',0,100,8);
 R('signal','Noise','coh','Living static',0,100,30);
-R('signal','Noise','snow','Snow',0,100,0);
+R('signal','Noise','snow','Tape snow',0,100,0);
 R('signal','Noise','ghost','Ghost echo',0,100,0);
 R('signal','Noise','gdel','Echo delay',1,80,20);
+R('signal','Noise','rgho','Ring ghost',0,100,0);
+R('signal','Noise','gspr','Ghost spread',1,40,6);
+R('signal','Noise','gdec','Ghost decay',10,95,60);
 R('signal','Sync','jit','Time-base jitter',0,100,5);
 R('signal','Sync','drift','Sync drift',0,100,0);
 R('signal','Sync','trk','Tracking error',0,100,0);
+R('signal','Sync','tjit','Tracking jitter',0,100,0);
 R('signal','Sync','hsw','Head switching',0,100,0);
 R('signal','Sync','drop','Dropouts',0,100,0);
 R('signal','Sync','vhold','Vertical hold',0,100,0);
@@ -853,7 +863,9 @@ C('beam','Scan','iface','Scanning',[['0','Progressive'],['1','Interlaced']],'0')
 R('beam','Scan','iflk','Field flicker',0,100,50);
 C('beam','Phosphor','mask','Mask',[['0','None'],['1','Aperture grille'],['2','Shadow mask'],['3','Slot mask']],'1');
 R('beam','Phosphor','mstr','Mask strength',0,100,55);
-R('beam','Phosphor','mpitch','Mask pitch',2,8,3,.25);
+R('beam','Phosphor','ptint','Phosphor tint hue',-180,180,0);
+R('beam','Phosphor','ptamt','Phosphor tint amount',0,100,0);
+R('beam','Phosphor','mpitch','Mask scale',2,8,3,.25);
 R('beam','Phosphor','msoft','Mask softness',0,100,50);
 R('beam','Phosphor','mgap','Mask gap',0,100,20);
 C('beam','Phosphor','phos','Phosphor',[['0','RGB'],['1','P1 green'],['2','P3 amber'],['3','P4 white'],['4','P11 blue']],'0');
@@ -990,6 +1002,7 @@ const PROFILES=[
   ['teletext','Teletext',{pal:'cga',method:'thr',px:6,lines:240,lbw:0,cbw:0,ycs:100,mask:'0',mstr:0,curv:0,corner:10,scan:0,snr:0,bloom:15,aging:0,contrast:30,ton:true,txt:'P100  CEEFAX\nNEWS  WEATHER  SPORT\n101 102 103\n> ',tsz:11,ty:14,tcur:true}],
   ['dashcam','Dashcam',{lines:480,lbw:15,cbw:20,snr:12,coh:30,jit:8,hsw:12,gen:15,temp:-35,csat:85,ccon:115,blkl:8,mask:'0',mstr:0,scan:10,curv:0,corner:8,vig:45,glare:45,refl:35,room:50,ton:true,txt:'DASHCAM  {t}\n72 KM/H',tsz:5,ty:92,tcur:false}],
   ['cursed','Cursed broadcast',{lines:240,cbw:65,snr:30,coh:55,jit:30,drift:20,trk:30,drop:25,rgbs:35,tear:20,gblock:12,band:30,wamp:28,wfreq:6,wfm:55,wfmr:3,wph:45,w2:35,fbg:38,fbz:2,fbr:3,fbh:35,hue:0,mask:'2',mstr:55,aging:60,bloom:50,gen:20,ghost:15,curv:35,corner:35}],
+  ['limecomp','Lime composite',{pal:'gameboy',method:'b4',px:3,lines:200,lbw:25,cbw:55,ycs:20,cper:3,csat:220,pop:60,rgho:55,gspr:5,gdec:70,gdel:18,ring:35,mask:'2',mstr:45,mpitch:3,convs:30,curv:20,corner:25,scan:35,snr:10,coh:40,tjit:20,trk:8}],
   ['damaged','Damaged CRT',{convs:70,conve:70,curv:45,corner:50,snr:30,coh:50,snow:10,jit:30,drift:25,trk:25,drop:25,vhold:15,rgbs:20,tear:15,gblock:10,burn:60,dust:50,scr:40,smud:50,sati:50,cdrift:60,aging:100,clip:25}],
   ['aging','Unstable old TV',{cdrift:80,aging:90,jit:20,drift:30,vhold:20,sati:60,convs:40,conve:50,burn:50,snr:20,dust:40,smud:40,refl:30,temp:20,gen:10}]
 ];
@@ -1671,21 +1684,21 @@ function renderFrame(t,dt,OUT){
   draw();
 
   /* ---- 3. signal laboratory ---- */
-  if(E.lay_s){
+  if(E.lay_s&&+E.cmode!==2){
     const gen=E.gen/100;
     const sA=PR.sigA;bindRT(T.yiq);sA.use();samp(sA,'uSrc',0,T.sigIn.tex);
     sA.v2('uRes',DW,lines);sA.i('uFrame',frameNo);sA.i('uStd',+E.std);sA.f('uTime',t);sA.f('uSeed',E.seed);
     sA.f('uPer',Math.max(2.2,E.cper*k));
     sA.f('uSL',Math.max(.35,(.3+E.lbw/100*3.2+gen*1.5)*k));
     sA.f('uSC',Math.max(.6,(1.2+E.cbw/100*3.5)*k));
-    sA.f('uYC',E.ycs/100);sA.f('uSnr',E.snr/100*(1+gen*.8));sA.f('uCoh',E.coh/100);sA.f('uSnow',E.snow/100);
+    sA.f('uYC',+E.cmode===1?1:E.ycs/100);sA.f('uSnr',E.snr/100*(1+gen*.8));sA.f('uCoh',E.coh/100);sA.f('uSnow',E.snow/100);
     sA.f('uGhost',E.ghost/100);sA.f('uGD',E.gdel*k);sA.f('uJit',E.jit/100*12*k);sA.f('uDrift',E.drift/100*10*k);
-    sA.f('uTrk',E.trk/100);sA.f('uHsw',E.hsw/100);sA.f('uDrop',E.drop/100);sA.f('uClip',E.clip/100);
+    sA.f('uTrk',E.trk/100);sA.f('uTJ',E.tjit/100);sA.f('uRG',E.rgho/100);sA.f('uGS',E.gspr*k);sA.f('uGDec',E.gdec/100);sA.f('uHsw',E.hsw/100);sA.f('uDrop',E.drop/100);sA.f('uClip',E.clip/100);
     sA.f('uCsat',E.csat/100*(1-gen*.35));sA.f('uPhase',E.phs*Math.PI/180);
     draw();
     const sB=PR.sigB;bindRT(T.sig);sB.use();samp(sB,'uY',0,T.yiq.tex);
     sB.v2('uRes',DW,lines);sB.f('uTau',E.cbw/100*5+.01);sB.f('uStep',(1+E.cbw/100*2.5)*k);
-    sB.f('uRing',E.ring/100*.8);sB.f('uGenBlur',gen*.5);
+    sB.f('uRing',E.ring/100*.8);sB.f('uPop',E.pop/100);sB.f('uGenBlur',gen*.5);
     draw();
   }else{
     bindRT(T.sig);PR.copy.use();samp(PR.copy,'uT',0,T.sigIn.tex);draw();
@@ -1700,6 +1713,7 @@ function renderFrame(t,dt,OUT){
   const ag=E.aging/100;
   cp.v3('uGain',E.gr/100*lerp(1,hw.gain[0],ag*2),E.gg/100*lerp(1,hw.gain[1],ag*2),E.gb/100*lerp(1,hw.gain[2],ag*2));
   cp.v3('uHwConv',hw.conv[0],hw.conv[1],hw.conv[2]);
+  {const h=((E.ptint%360)+360)%360/60,x=1-Math.abs(h%2-1),rgb=h<1?[1,x,0]:h<2?[x,1,0]:h<3?[0,1,x]:h<4?[0,x,1]:h<5?[x,0,1]:[1,0,x];cp.v3('uPT',.35+rgb[0]*.65,.35+rgb[1]*.65,.35+rgb[2]*.65);cp.f('uPTA',E.ptamt/100);}
   cp.i('uMask',E.lay_m?+E.mask:0);cp.i('uPhos',+E.phos);
   cp.f('uLines',lines);cp.f('uTime',t);cp.f('uSeed',E.seed);cp.f('uField',frameNo%2);
   cp.f('uInter',+E.iface);cp.f('uIflk',E.iflk/100);
