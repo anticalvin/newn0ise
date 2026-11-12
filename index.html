@@ -3316,7 +3316,7 @@ function stopAudio(){
   audio.on=false;audio.level=0;delete document.body.dataset.aud;const b=$('#audbar');if(b)b.hidden=true;
 }
 async function startAudio(file){
-  stopAudio();let ctx;
+  stopAudio();toast('Loading '+file.name.slice(0,26)+'…');let ctx;
   try{ctx=new (window.AudioContext||window.webkitAudioContext)();}catch(e){toast('Audio isn’t available here');return;}
   const el=new Audio();AUD.url=URL.createObjectURL(file);el.src=AUD.url;el.loop=true;el.preload='auto';
   try{
@@ -3324,9 +3324,11 @@ async function startAudio(file){
     const sp=ctx.createChannelSplitter(2),aL=ctx.createAnalyser(),aR=ctx.createAnalyser();aL.fftSize=aR.fftSize=1024;
     node.connect(an);an.connect(ctx.destination);node.connect(sp);sp.connect(aL,0);sp.connect(aR,1);
     const dest=ctx.createMediaStreamDestination();node.connect(dest);
-    await ctx.resume();await el.play();
+    ctx.resume().catch(()=>{});
+    await Promise.race([el.play(),new Promise((_,no)=>setTimeout(()=>no(new Error('timeout')),15000))]);
+    if(ctx.state!=='running')document.addEventListener('pointerdown',()=>{ctx.resume();if(el.paused)el.play().catch(()=>{});},{once:true});
     Object.assign(AUD,{el,ctx,an,aL,aR,dest,f:new Uint8Array(an.frequencyBinCount),t:new Uint8Array(an.fftSize),l:new Uint8Array(aL.fftSize),r:new Uint8Array(aR.fftSize),hist:[],row:null,name:file.name});
-  }catch(e){try{ctx.close();}catch(_){}URL.revokeObjectURL(AUD.url);toast('That audio file couldn’t be played');return;}
+  }catch(e){try{ctx.close();}catch(_){}URL.revokeObjectURL(AUD.url);toast(el.error&&el.error.code===4?'This browser can’t play that audio format. Try an mp3 or m4a.':e.message==='timeout'?'The audio took too long to start. Try a smaller file or tap the screen and try again.':'That audio file couldn’t be played');return;}
   const cv=document.createElement('canvas');cv.width=1024;cv.height=768;AUD.cv=cv;AUD.g=cv.getContext('2d');AUD.g.fillStyle='#000';AUD.g.fillRect(0,0,1024,768);
   setSource(cv,'Audio',true);SRC.viz=true;AUD.on=true;audio.on=true;audio.an=null;
   document.body.dataset.aud='1';buildAudUI();refreshUI();toast('Playing '+file.name.slice(0,28));
@@ -3959,7 +3961,7 @@ function runModuleGate(thr=.08){
   const names=['face','animal','text','gradient'],TW=200,TH=150,srcs=benchSources().filter(x=>names.includes(x[0]));
   const sheet=document.createElement('canvas');sheet.width=TW*srcs.length;sheet.height=TH*ids.length;const sg=sheet.getContext('2d');
   const feats=[],errs=[],cyan={},hue={};let BT=5,all=0,allN=0;window.__benching=true;const saved=STACK.layers;
-  ids.forEach((id,r)=>{feats[r]=[];let cs=0,hs=0,hn=0;srcs.forEach((s,c)=>{
+  ids.forEach((id,r)=>{feats[r]=[];let cs=0,hs=0,hn=0;if(id==='crtlab'){BT=5;ST.lastDeg=0;sizeKey='';lastBKey='';}/* CRT Lab is time dependent: always measure it at the same clock */srcs.forEach((s,c)=>{
     setSource(s[1],'B');STACK.layers=[mkLayer(id)];
     try{for(let i=0;i<4;i++){renderStack(BT+=1/60,1/60);frameNo++;}sg.drawImage(canvas,c*TW,r*TH,TW,TH);feats[r].push(bFeat(canvas));cs+=cyanFrac(canvas);const hh=hueShift(s[1],canvas);if(hh!==null){hs+=hh;hn++;}}catch(e){errs.push(id+': '+String(e.message).slice(0,160));}
   });cyan[id]=+(cs/srcs.length).toFixed(3);hue[id]=hn?+(hs/hn).toFixed(1):null;all+=cs;allN+=srcs.length;});
@@ -4081,7 +4083,8 @@ function palEditor(host,p,V,onchange){
   };
   draw();host.appendChild(box);
 }
-function accordion(title,open){const d=document.createElement('details');d.className='acc';d.open=!!open;const s=document.createElement('summary');s.textContent=title;const b=el('div','bd');d.append(s,b);return{d,b};}
+const ACC_OPEN={};
+function accordion(title,open){const d=document.createElement('details');d.className='acc';const ak=(STACK.layers[STACK.sel]?STACK.layers[STACK.sel].module:'')+'|'+title;d.open=ak in ACC_OPEN?ACC_OPEN[ak]:!!open;d.addEventListener('toggle',()=>{ACC_OPEN[ak]=d.open;});const s=document.createElement('summary');s.textContent=title;const b=el('div','bd');d.append(s,b);return{d,b};}
 
 /* thumbnails: render a module over the current source into a small offscreen RT */
 const TH={rt:null,src:null,buf:null};
@@ -4119,15 +4122,18 @@ function renderGallery(host){
   Object.values(MODULES).filter(m=>!m.hidden&&(INS.cat==='All'||m.family===INS.cat)).forEach(m=>{
     const t=el('button','tile'),c=moduleThumb(m.id),i=document.createElement('i');i.style.background=IDENT[m.id]||'#888';
     t.append(c,i,el('span','',m.name));
-    t.addEventListener('click',()=>{if(m.id==='crtlab'&&STACK.layers.some(l=>l.module==='crtlab')){toast('CRT Lab is already in the stack');return;}
-      STACK.layers.push(mkLayer(m.id));STACK.sel=STACK.layers.length-1;INS.gallery=false;renderInspector();});
+    t.addEventListener('click',()=>{
+      if(INS.addMode){if(m.id==='crtlab'&&STACK.layers.some(l=>l.module==='crtlab')){toast('CRT Lab is already in the stack');return;}
+        STACK.layers.push(mkLayer(m.id));STACK.sel=STACK.layers.length-1;INS.gallery=false;renderInspector();}
+      else pickEffect(m.id);});
     grid.appendChild(t);});
   if(INS.cat==='All'||INS.cat==='Camera')CAMFX.forEach(f=>{if(f.cat==='draft')return;
     const tl=el('button','tile'),c=moduleThumb('fuse',160,120,{f1:fxIndex(f.id),i1:f.i,m1:f.m}),i=document.createElement('i');i.style.background=f.c;
-    tl.append(c,i,el('span','',f.label));tl.addEventListener('click',()=>pickCam(f.id));grid.appendChild(tl);});
+    tl.append(c,i,el('span','',f.label));tl.addEventListener('click',()=>{if(INS.addMode){STACK.layers.push(mkLayer('fuse'));STACK.sel=STACK.layers.length-1;for(let s=2;s<=4;s++)STACK.layers[STACK.sel].params['f'+s]=0;}pickCam(f.id);});grid.appendChild(tl);});
+  const md=el('div','cats');['Replace this effect','Add as new layer'].forEach((n,i)=>{const b=el('button','',n);b.setAttribute('aria-pressed',!!INS.addMode===!!i);b.addEventListener('click',()=>{INS.addMode=!!i;md.querySelectorAll('button').forEach((x,j)=>x.setAttribute('aria-pressed',!!INS.addMode===!!j));});md.appendChild(b);});
   const q=document.createElement('input');q.type='search';q.placeholder='Search effects';q.className='gq';q.setAttribute('aria-label','Search effects');
   q.addEventListener('input',()=>{const s=q.value.trim().toLowerCase();grid.querySelectorAll('.tile').forEach(x=>{x.hidden=!!s&&!x.textContent.toLowerCase().includes(s);});});
-  g.append(q,cats,grid);host.appendChild(g);
+  g.append(md,q,cats,grid);host.appendChild(g);
 }
 function remix(l){
   const m=MODULES[l.module];l.seed=Math.random()*999|0;
@@ -4225,6 +4231,11 @@ function fuseBar(host,l){
 }
 let FUSEPICK=0;
 function renderInspector(){
+  const h=$i('insp'),st=h?h.scrollTop:0,g0=INS.gallery,m0=layer().module;
+  renderInspector0();
+  if(h&&g0===INS.gallery&&m0===layer().module)h.scrollTop=st;
+}
+function renderInspector0(){
   renderStrip();renderPeek();
   const host=$i('insp');host.innerHTML='';
   if(INS.gallery){renderGallery(host);return;}
@@ -4349,8 +4360,9 @@ function heroOf(l){const m=MODULES[l.module],h=(m.schema.hero||[])[0];if(!h)retu
   if(l.module==='crtlab'){const c=CTL[h];return c&&c.t==='r'?{V:P,p:{k:c.k,label:c.l,min:c.min,max:c.max,step:c.step,t:'r'}}:null;}
   const p=m.params.find(x=>x.k===h);return p&&p.t==='r'?{V:l.params,p}:null;}
 function replaceModule(l,id){
-  const other=STACK.layers.findIndex(x=>x.module===id);
-  if(other>=0){STACK.sel=other;}else{l.module=id;l.params=MODULES[id].defaults();}
+  /* tapping an effect swaps it into the layer you are on; CRT Lab is the one effect that can only exist once */
+  if(id==='crtlab'){const o=STACK.layers.findIndex(x=>x.module==='crtlab');if(o>=0&&STACK.layers[o]!==l){STACK.sel=o;INS.gallery=false;renderInspector();return;}}
+  if(l.module!==id){l.module=id;l.params=MODULES[id].defaults();}
   INS.gallery=false;renderInspector();
 }
 function cycleMode(l){
@@ -4361,7 +4373,7 @@ function cycleMode(l){
   l.seed=(l.seed+1)%4;return 'Seed '+(l.seed+1);
 }
 function renderPeek(){
-  const host=$i('peek');if(!host)return;host.innerHTML='';const l=layer(),m=MODULES[l.module];
+  const host=$i('peek');if(!host)return;[...host.children].forEach(c=>{if(!c.classList.contains('railwrap'))c.remove();});const l=layer(),m=MODULES[l.module];
   /* hero scrubber */
   const h=heroOf(l),sc=el('div','scrub');
   const lab=el('span','sl',h?h.p.label.toUpperCase():'—'),val=el('span','sv','');
@@ -4370,14 +4382,22 @@ function renderPeek(){
     inp.addEventListener('input',()=>{h.V[h.p.k]=+inp.value;val.textContent=fmtv(h.p,+inp.value);inp.style.setProperty('--p',((+inp.value-h.p.min)/(h.p.max-h.p.min)*100)+'%');});
     inp.addEventListener('change',()=>{if(l.module==='crtlab')snap();});}
   else inp.disabled=true;
-  sc.append(lab,inp,val);host.appendChild(sc);
+  sc.append(lab,inp,val);host.insertBefore(sc,host.querySelector('.railwrap'));
   /* MODE */
   const row=el('div','moderow'),mb=el('button','btn mode','MODE 1');
   const label=()=>{const p=l.module==='crtlab'?null:m.params.find(x=>x.t==='c');mb.textContent='MODE '+(p?(+l.params[p.k]+1):(l.module==='crtlab'?(PROFILES.filter(q=>q[0]!=='none').findIndex(q=>q[0]===P.profile)+1||1):(l.seed+1)));};
   label();mb.addEventListener('click',()=>{const n=cycleMode(l);label();toast(n);if(navigator.vibrate)try{navigator.vibrate(6);}catch(e){}});
-  row.appendChild(mb);host.appendChild(row);
-  /* rail */
-  const wrap=el('div','railwrap'),rail=el('div','rail');
+  row.appendChild(mb);host.insertBefore(row,host.querySelector('.railwrap'));
+  /* rail: kept between renders. A selection only moves the highlight; the list is rebuilt only when its contents change. */
+  const curId=effectId(l),sig=[SRC.ver,Object.keys(MODULES).length,CAMFX.length,JSON.stringify(lsGet('n0ise.fav',[])),JSON.stringify(lsGet('n0ise.recent',[])),loadRecipes().map(r=>r.id).join()].join('|');
+  const oldW=host.querySelector('.railwrap');
+  const press=(rl)=>{const ts=[...rl.querySelectorAll('.rtile')];ts.forEach(t=>t.setAttribute('aria-pressed',t._fx?camOn(l,t._fx):t._rec?false:t._id===l.module));
+    if(ts.some(t=>t._fx&&t.getAttribute('aria-pressed')==='true'))ts.forEach(t=>{if(!t._fx&&t._id==='fuse')t.setAttribute('aria-pressed',false);});
+    if(RAIL.cur!==curId){RAIL.cur=curId;const s=rl.querySelector('[aria-pressed=true]');if(s){const rr=rl.getBoundingClientRect(),sr=s.getBoundingClientRect();
+      if(sr.left<rr.left||sr.right>rr.right-48)rl.scrollTo({left:Math.max(0,rl.scrollLeft+sr.left-rr.left-12),behavior:'smooth'});}}};
+  if(oldW&&oldW._sig===sig){press(oldW.firstChild);return;}
+  const prevScroll=oldW?oldW.firstChild.scrollLeft:null;if(oldW)oldW.remove();
+  const wrap=el('div','railwrap'),rail=el('div','rail');wrap._sig=sig;
   const groups={};Object.values(MODULES).filter(x=>!x.hidden).forEach(x=>{(groups[RAIL_FAMILY[x.id]||x.family]=groups[RAIL_FAMILY[x.id]||x.family]||[]).push(x);});
   Object.entries(FX_CATS).forEach(([c,n])=>{groups['Cam · '+n]=CAMFX.filter(f=>f.cat===c).map(f=>({id:'fuse:'+f.id,name:f.label,fx:f}));});
   {const all=effectList(),by=Object.fromEntries(all.map(e=>[e.id,e])),mk=id=>{const e=by[id];if(!e)return null;const f=e.cam&&FXBY[e.cam];return f?{id:e.id,name:e.name,fx:f}:MODULES[e.id];};
@@ -4389,7 +4409,7 @@ function renderPeek(){
     const g=el('div','rg');g.dataset.f=f;g.appendChild(el('div','rgl',f));const row=el('div','rgt');
     groups[f].forEach(x=>{
       const t=el('button','rtile');t.setAttribute('aria-pressed',x.fx?camOn(l,x.fx):x.id===l.module);t.title=x.name;
-      const ph=el('canvas','rt');ph.width=112;ph.height=84;t.append(ph,el('span','',x.name));t._id=x.id;
+      const ph=el('canvas','rt');ph.width=112;ph.height=84;t.append(ph,el('span','',x.name));t._id=x.id;t._fx=x.fx||null;t._rec=!!x.rec;
       let lpT=0,lpDone=false;t.addEventListener('pointerdown',()=>{lpDone=false;lpT=setTimeout(()=>{lpDone=true;toggleFav(x.id);},520);});['pointerup','pointerleave','pointercancel'].forEach(ev=>t.addEventListener(ev,()=>clearTimeout(lpT)));
       t.addEventListener('contextmenu',e=>e.preventDefault());
       if(lsGet('n0ise.fav',[]).includes(x.id))t.appendChild(el('i','star','★'));
@@ -4399,8 +4419,11 @@ function renderPeek(){
   const nx=el('button','railnext','›');nx.setAttribute('aria-label','Next category');
   nx.addEventListener('click',()=>{const gs=[...rail.querySelectorAll('.rg')],x=rail.scrollLeft+8,n=gs.find(g=>g.offsetLeft>x+4)||gs[0];rail.scrollTo({left:n.offsetLeft-8,behavior:'smooth'});});
   wrap.append(rail,nx);host.appendChild(wrap);
-  const sel=rail.querySelector('[aria-pressed=true]');if(sel)rail.scrollLeft=Math.max(0,sel.parentElement.parentElement.offsetLeft-8);
+  press(rail);RAIL.cur=curId;
+  if(prevScroll!=null)rail.scrollLeft=prevScroll;else{const sel=rail.querySelector('[aria-pressed=true]');if(sel){const rr=rail.getBoundingClientRect(),sr=sel.getBoundingClientRect();rail.scrollLeft=Math.max(0,rail.scrollLeft+sr.left-rr.left-12);}}
+  RAIL.cur=curId;
 }
+const RAIL={cur:''};
 const SHEET={s:1,vis:()=>[26,222,Math.round(innerHeight*.46),Math.round(innerHeight*.86)]};
 function wireSheet(){
   const dock=$i('dock'),grab=$i('grab'),app=document.querySelector('.app');
@@ -4432,7 +4455,7 @@ function wireSheet(){
   const sm=$i('srcchip'),menu=$i('srcmenu');
   if(sm){sm.addEventListener('click',()=>{menu.hidden=!menu.hidden;});
     menu.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;menu.hidden=true;const a=b.dataset.a;
-      if(a==='open')$i('open').click();else if(a==='audio'){const fi=document.createElement('input');fi.type='file';fi.accept='audio/*,.mp3,.wav,.m4a,.ogg,.flac,.aac';fi.addEventListener('change',()=>fi.files[0]&&startAudio(fi.files[0]));fi.click();}else if(a==='cam')openCamera();else if(a==='rec')$i('rec').click();
+      if(a==='open')$i('open').click();else if(a==='audio'){let fi=$('#audfile');if(!fi){fi=document.createElement('input');fi.type='file';fi.id='audfile';fi.accept='audio/*,.mp3,.wav,.m4a,.ogg,.flac,.aac';fi.hidden=true;fi.addEventListener('change',()=>{const f=fi.files[0];fi.value='';if(f)startAudio(f);});document.body.appendChild(fi);}fi.click();}else if(a==='cam')openCamera();else if(a==='rec')$i('rec').click();
       else if(a==='demo'){setSource(demoCanvas(),'Demo');refreshUI();}else if(a==='test'){setSource(testCanvas(),'Test');refreshUI();}});}
 }
 (function boot(){
