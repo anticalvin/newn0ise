@@ -269,6 +269,7 @@ body[data-cam] .float,body[data-cam] .chipb{display:none!important}
 .rollgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:10px 0}.rollcell{position:relative}
 .rollitem{display:block;width:100%;aspect-ratio:1;padding:0;border:1px solid var(--line);background:#000;overflow:hidden}.rollitem img,.rollitem video{width:100%;height:100%;object-fit:cover}
 .rolldel{position:absolute;top:0;right:0;width:44px;height:44px;color:#fff;font-size:20px;text-shadow:0 0 4px #000}
+.prrow{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--line)}.prrow img{width:48px;height:36px;object-fit:cover;background:#000;flex:none}.prrow span{flex:1;font:500 12px var(--lab);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .coach{position:absolute;left:12px;right:12px;top:60px;z-index:8;padding:12px 14px;display:flex;flex-direction:column;gap:6px;font-size:12px;border:1px solid var(--line);background:var(--panel);border-radius:3px}
 .coach b{font:600 11px var(--lab);text-transform:uppercase;letter-spacing:.08em}.coach button{min-height:44px;border:1px solid var(--line);margin-top:4px;font:600 11px var(--lab);text-transform:uppercase}
 body[data-lefty] .float.br{right:auto;left:8px}body[data-lefty] .float.bl{left:auto;right:8px}
@@ -1664,6 +1665,11 @@ function ensureTargets(DW,DH,lines,gw,gh){
 
 const SZ={w:0,h:0,cw:0,ch:0};
 new ResizeObserver(es=>{const r=es[0].contentRect;SZ.w=r.width;SZ.h=r.height;}).observe(stage);
+/* export sizes: preview size times 2 or 4, capped by the GPU texture limit and ~24 megapixels (not tiled yet) */
+function exportCap(){const mt=gl.getParameter(gl.MAX_TEXTURE_SIZE);return Math.min(mt,matchMedia('(pointer:coarse)').matches?4096:6144);}
+function expDims(cw,ch,mul){const dpr=Math.min(2,window.devicePixelRatio||1);let DW=Math.round(cw*dpr*mul),DH=Math.round(ch*dpr*mul);
+  const cap=ST.expCap||exportCap(),m=Math.max(DW,DH);if(m>cap){DW=Math.round(DW*cap/m);DH=Math.round(DH*cap/m);}
+  const px=DW*DH;if(px>2.4e7){const k=Math.sqrt(2.4e7/px);DW=Math.round(DW*k);DH=Math.round(DH*k);}return[DW&~1,DH&~1];}
 function layout(){
   const srcAsp=ST.ovr?ST.ovr.w/ST.ovr.h:SRC.w/SRC.h;
   let asp=srcAsp;
@@ -1673,7 +1679,8 @@ function layout(){
   let cw=sw,ch=sw/asp;if(ch>sh){ch=sh;cw=sh*asp;}
   const dpr=Math.min(2,window.devicePixelRatio||1),q=parseFloat(E.quality)*ST.autoQ;
   let DW=Math.round(cw*dpr*q),DH=Math.round(ch*dpr*q);
-  const m=Math.max(DW,DH);if(m>1800){DW=Math.round(DW*1800/m);DH=Math.round(DH*1800/m);}
+  if(ST.expMul>=1){[DW,DH]=expDims(cw,ch,ST.expMul);}
+  else{const m=Math.max(DW,DH);if(m>1800){DW=Math.round(DW*1800/m);DH=Math.round(DH*1800/m);}}
   DW=Math.max(160,DW&~1);DH=Math.max(120,DH&~1);
   if(cw!==SZ.cw||ch!==SZ.ch){canvas.style.width=cw+'px';canvas.style.height=ch+'px';SZ.cw=cw;SZ.ch=ch;}
   if(canvas.width!==DW||canvas.height!==DH){canvas.width=DW;canvas.height=DH;}
@@ -3308,7 +3315,7 @@ function encodeGIF(frames,w,h,delayMs){
   }
   out.push(0x3B);return new Blob([new Uint8Array(out)],{type:'image/gif'});
 }
-async function exportGIF(sec,width,setMsg){
+async function exportGIF(sec,width,setMsg,boom){
   const fps=12,n=sec*fps,w=width,h=Math.round(width*canvas.height/canvas.width);
   const cv=document.createElement('canvas');cv.width=w;cv.height=h;const cx=cv.getContext('2d',{willReadFrequently:true});
   const frames=[];ST.clean=true;
@@ -3319,10 +3326,44 @@ async function exportGIF(sec,width,setMsg){
     setMsg(`Capturing ${i+1}/${n}`);
     const wait=1000/fps-(performance.now()-t0);if(wait>0)await new Promise(r=>setTimeout(r,wait));
   }
-  ST.clean=false;setMsg('Encoding GIF…');await new Promise(r=>setTimeout(r,30));
+  ST.clean=false;if(boom)frames.push(...frames.slice(1,-1).reverse());setMsg('Encoding GIF…');await new Promise(r=>setTimeout(r,30));
   return encodeGIF(frames,w,h,1000/fps);
 }
 
+/* ---------- image export: PNG / JPG / WebP at 1x, 2x, 4x ---------- */
+const IMG_FMT=[['image/png','png'],['image/jpeg','jpg'],['image/webp','webp']];
+async function renderImage(mul,fmt,q){
+  const q0=ST.autoQ;ST.expMul=mul;ST.expCap=exportCap();ST.autoQ=1;ST.clean=true;
+  try{await frames2();await frames2();const w=canvas.width,h=canvas.height;
+    const blob=await new Promise(r=>canvas.toBlob(r,IMG_FMT[fmt][0],q));return{blob,w,h};}
+  finally{ST.expMul=0;ST.autoQ=q0;ST.clean=false;await frames2();}
+}
+async function exportImage(o,msg){
+  const [dw,dh]=expDims(SZ.cw||canvas.clientWidth,SZ.ch||canvas.clientHeight,o.mul);
+  msg(`Rendering ${dw}×${dh}…`);
+  const r=await renderImage(o.mul,o.fmt,.92);
+  if(!r.blob){toast('Couldn’t render that size. Try 2x or a smaller size.');return;}
+  const ext=r.blob.type==='image/jpeg'?'jpg':r.blob.type==='image/webp'?'webp':'png';
+  if(o.fmt===2&&ext!=='webp')toast('This browser can’t save WebP, saved '+ext.toUpperCase()+' instead');
+  deliver(r.blob,stamp()+(o.mul>1?'@'+o.mul+'x':'')+'.'+ext,false);
+}
+/* batch: apply the current look to many images */
+async function exportBatch(files,o,msg){
+  const keep=SRC.el,keepName=SRC.name,out=[];
+  for(let i=0;i<files.length;i++){
+    msg(`Image ${i+1}/${files.length}…`);
+    const f=files[i];if(!f.type.startsWith('image/'))continue;
+    const u=URL.createObjectURL(f),im=new Image();await new Promise((res,rej)=>{im.onload=res;im.onerror=rej;im.src=u;}).catch(()=>{});
+    if(!im.naturalWidth){URL.revokeObjectURL(u);continue;}
+    setSource(fitCanvas(im,im.naturalWidth,im.naturalHeight),'File');URL.revokeObjectURL(u);await frames2();
+    const r=await renderImage(o.mul,o.fmt,.92);if(r.blob)out.push(new File([r.blob],f.name.replace(/\.[^.]+$/,'')+'-n0ise.'+IMG_FMT[o.fmt][1],{type:r.blob.type}));
+  }
+  if(keep)setSource(keep,keepName,keep instanceof HTMLVideoElement);refreshUI();
+  if(!out.length){toast('No images could be processed');return;}
+  if(navigator.canShare&&navigator.canShare({files:out})){try{await navigator.share({files:out});return;}catch(e){}}
+  for(const f of out){const a=document.createElement('a');a.href=URL.createObjectURL(f);a.download=f.name;document.body.appendChild(a);a.click();a.remove();await new Promise(r=>setTimeout(r,350));}
+  toast(out.length+' images saved');
+}
 /* ---------- export ---------- */
 function openSheet(blob,name,isVideo){
   const url=URL.createObjectURL(blob),sh=el('div','sheet');
@@ -3427,25 +3468,55 @@ function toggleRec(sec){
 let busy=false;
 function openExport(){
   if(!GLOK||$('.sheet'))return;
-  const sh=el('div','sheet'),o={len:4,w:480};
+  const sh=el('div','sheet'),o={len:4,w:480,mul:1,fmt:0,boom:0};
   sh.innerHTML=`<div class="xp"><h3>Export</h3>
   <div class="cl">Length</div><div class="chips" data-k="len"><button class="chip" data-v="2">2s</button><button class="chip" data-v="4">4s</button><button class="chip" data-v="8">8s</button></div>
   <div class="cl">GIF size</div><div class="chips" data-k="w"><button class="chip" data-v="320">Small</button><button class="chip" data-v="480">Medium</button><button class="chip" data-v="640">Large</button></div>
-  <button class="btn primary big" id="xg">Loop GIF</button><button class="btn big" id="xv">Video</button><button class="btn big" id="xp">PNG image</button>
-  <p id="xm"></p><button class="btn" id="xc">Close</button></div>`;
+  <div class="cl">GIF loop</div><div class="chips" data-k="boom"><button class="chip" data-v="0">Forward</button><button class="chip" data-v="1">Boomerang</button></div>
+  <div class="cl">Image size</div><div class="chips" data-k="mul"><button class="chip" data-v="1">1x</button><button class="chip" data-v="2">2x</button><button class="chip" data-v="4">4x</button></div>
+  <div class="cl">Image format</div><div class="chips" data-k="fmt"><button class="chip" data-v="0">PNG</button><button class="chip" data-v="1">JPG</button><button class="chip" data-v="2">WebP</button></div>
+  <button class="btn primary big" id="xg">Loop GIF</button><button class="btn big" id="xv">Video</button><button class="btn big" id="xp">Image</button>
+  <button class="btn" id="xb">Batch images…</button><button class="btn" id="xj">Projects…</button><input type="file" id="xbf" accept="image/*" multiple hidden>
+  <p id="xd"></p><p id="xm"></p><button class="btn" id="xc">Close</button></div>`;
   document.body.appendChild(sh);
-  const sync=()=>sh.querySelectorAll('.chips').forEach(r=>r.querySelectorAll('.chip').forEach(b=>b.setAttribute('aria-pressed',+b.dataset.v===o[r.dataset.k])));
-  sh.querySelectorAll('.chips').forEach(r=>r.addEventListener('click',e=>{const b=e.target.closest('.chip');if(b&&!busy){o[r.dataset.k]=+b.dataset.v;sync();}}));sync();
+  const sync=()=>sh.querySelectorAll('.chips').forEach(r=>r.querySelectorAll('.chip').forEach(b=>b.setAttribute('aria-pressed',+b.dataset.v===o[r.dataset.k])));const upd=()=>{const[dw,dh]=expDims(SZ.cw||canvas.clientWidth,SZ.ch||canvas.clientHeight,o.mul);$('#xd',sh).textContent=`Image: ${dw}×${dh}`+(Math.max(dw,dh)>=exportCap()?' (largest this device allows)':'');};upd();
+  sh.querySelectorAll('.chips').forEach(r=>r.addEventListener('click',e=>{const b=e.target.closest('.chip');if(b&&!busy){o[r.dataset.k]=+b.dataset.v;sync();upd();}}));sync();
   const msg=t=>{$('#xm',sh).textContent=t;};
   const run=async f=>{if(busy)return;busy=true;sh.classList.add('busy');try{await f();}catch(e){console.error(e);toast('Export failed, try a smaller size');}busy=false;sh.classList.remove('busy');msg('');};
   const close=()=>{if(!busy)sh.remove();};
   $('#xc',sh).addEventListener('click',close);sh.addEventListener('pointerdown',e=>{if(e.target===sh)close();});
-  $('#xp',sh).addEventListener('click',()=>run(async()=>{await savePNG();sh.remove();}));
-  $('#xg',sh).addEventListener('click',()=>run(async()=>{const b=await exportGIF(o.len,o.w,msg);sh.remove();deliver(b,stamp()+'.gif',false);}));
+  $('#xp',sh).addEventListener('click',()=>run(async()=>{await exportImage(o,msg);sh.remove();}));
+  $('#xb',sh).addEventListener('click',()=>$('#xbf',sh).click());
+  $('#xbf',sh).addEventListener('change',e=>run(async()=>{await exportBatch([...e.target.files],o,msg);sh.remove();}));
+  $('#xj',sh).addEventListener('click',()=>{sh.remove();openProjects();});
+  $('#xg',sh).addEventListener('click',()=>run(async()=>{const b=await exportGIF(o.len,o.w,msg,o.boom);sh.remove();deliver(b,stamp()+'.gif',false);}));
   $('#xv',sh).addEventListener('click',()=>run(async()=>{
     toggleRec(o.len);const t0=performance.now();
     await new Promise(r=>{const i=setInterval(()=>{msg(`Recording ${Math.min(o.len,(performance.now()-t0)/1000).toFixed(0)}/${o.len}s`);if(!rec){clearInterval(i);r();}},250);});
     sh.remove();}));
+}
+/* ---------- projects: autosave + named versions in IndexedDB ---------- */
+const projDB=()=>new Promise((res,rej)=>{if(!window.indexedDB)return rej(new Error('no idb'));const q=indexedDB.open('n0ise-proj',1);q.onupgradeneeded=()=>q.result.createObjectStore('p',{keyPath:'id',autoIncrement:true});q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error);});
+const projTx=async(mode,f)=>{const db=await projDB();return new Promise((res,rej)=>{const tx=db.transaction('p',mode),r=f(tx.objectStore('p'));tx.oncomplete=()=>res(r&&r.result);tx.onerror=()=>rej(tx.error);});};
+const projPut=rec=>projTx('readwrite',s=>s.put(rec));
+const projList=async()=>{try{return((await projTx('readonly',s=>s.getAll()))||[]).sort((a,b)=>(b.auto?1:0)-(a.auto?1:0)||b.ts-a.ts);}catch(e){return[];}};
+const projState=()=>JSON.stringify({p:P,l:stackState()});
+function projThumb(){try{const c=document.createElement('canvas');c.width=96;c.height=72;c.getContext('2d').drawImage(canvas,0,0,96,72);return c.toDataURL('image/jpeg',.6);}catch(e){return'';}}
+let autoT=0;function autosave(){clearTimeout(autoT);autoT=setTimeout(()=>projPut({id:'auto',name:'Autosave',auto:true,ts:Date.now(),state:projState(),thumb:projThumb()}).catch(()=>{}),2500);}
+async function openProjects(){
+  if($('.sheet'))return;const sh=el('div','sheet'),box=el('div','rollbox','<h3>Projects</h3>');sh.appendChild(box);document.body.appendChild(sh);
+  const close=()=>sh.remove();sh.addEventListener('pointerdown',e=>{if(e.target===sh)close();});
+  const row=el('div','pe'),name=document.createElement('input');name.className='gq';name.placeholder='Name this version';name.setAttribute('aria-label','Version name');
+  const sv=el('button','btn primary','Save version');row.append(name,sv);box.appendChild(row);
+  const list=el('div','prlist');box.appendChild(list);const cl=el('button','btn','Close');cl.addEventListener('click',close);box.appendChild(cl);
+  const draw=async()=>{list.innerHTML='';const items=await projList();if(!items.length)list.appendChild(el('p','','Nothing saved yet. Your work autosaves as you edit.'));
+    items.forEach(it=>{const r=el('div','prrow'),im=new Image();im.alt='';im.src=it.thumb||'';const nm=el('span','',`${it.name} · ${new Date(it.ts).toLocaleString([], {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}`);
+      const ld=el('button','btn','Load'),dl=el('button','btn','×');dl.setAttribute('aria-label','Delete '+it.name);
+      ld.addEventListener('click',()=>{if(lastSnap)HIST.push(lastSnap);applySnap(it.state);close();toast('Loaded '+it.name);});
+      dl.addEventListener('click',async()=>{await projTx('readwrite',s=>s.delete(it.id));draw();});
+      r.append(im,nm,ld);if(!it.auto)r.appendChild(dl);list.appendChild(r);});};
+  sv.addEventListener('click',async()=>{try{await projPut({name:name.value.trim()||'Version '+new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}),ts:Date.now(),state:projState(),thumb:projThumb()});name.value='';toast('Version saved');draw();}catch(e){toast('This browser won’t store projects');}});
+  draw();
 }
 function resetAll(){
   Object.assign(P,JSON.parse(JSON.stringify(BASE)));applyProfile('studio');
@@ -3979,7 +4050,7 @@ function wireTouch(){
   stage.addEventListener('pointerup',up);stage.addEventListener('pointercancel',e=>{pts.delete(e.pointerId);endHold();});
   stage.addEventListener('contextmenu',e=>e.preventDefault());
   /* one history step per finished gesture, for the whole stack */
-  ['pointerup','change'].forEach(ev=>addEventListener(ev,()=>setTimeout(snap,60)));
+  ['pointerup','change'].forEach(ev=>addEventListener(ev,()=>{setTimeout(snap,60);autosave();}));
   /* left-handed layout */
   const lefty=lsGet('n0ise.lefty',false);if(lefty)document.body.dataset.lefty='1';
   /* first-run coach: one dismissable card, three tips */
@@ -4115,6 +4186,7 @@ function wireSheet(){
   lastSnap=JSON.stringify(P);
   refreshUI();
   setSkin((()=>{try{return localStorage.getItem('n0ise.skin');}catch(e){return null;}})()||'lab');
+  if('serviceWorker' in navigator&&/^https?:/.test(location.protocol)&&location.hostname!=='')navigator.serviceWorker.register('sw.js').catch(()=>{});
   loadStackHash();loadFuseHash();wireHero();wireTouch();wireSheet();renderInspector();
   requestAnimationFrame(loop);
   if(new URLSearchParams(location.search).get('bench'))setTimeout(runBench,600);
