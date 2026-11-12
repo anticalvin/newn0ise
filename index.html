@@ -1500,9 +1500,9 @@ function layout(){
   return{srcAsp,asp:DW/DH,DW,DH};
 }
 
-function renderFrame(t,dt){
+function renderFrame(t,dt,OUT){
   computeE(t,dt);
-  const L=layout(),{srcAsp,asp,DW,DH}=L;
+  const L=layout(),{srcAsp,asp,DW,DH}=L;ST.DW=DW;ST.DH=DH;
   const k=DW/1000;
   const lines=Math.round(clamp(E.lines,60,720));
   let gw=Math.max(16,Math.round(1000/E.px)),gh=Math.max(8,Math.round(gw/asp));
@@ -1669,7 +1669,7 @@ function renderFrame(t,dt){
   }
 
   /* ---- 7. glass & cabinet ---- */
-  const fp=PR.final;bindRT(null);fp.use();
+  const fp=PR.final;bindRT(OUT||null);fp.use();
   samp(fp,'uP',0,newP.tex);samp(fp,'uBA',1,T.bA1.tex);samp(fp,'uBB',2,T.bB1.tex);samp(fp,'uBC',3,(ST.lite?T.bB1:T.bC1).tex);
   fp.v2('uRes',DW,DH);fp.v2('uPointer',POINTER.x,POINTER.y);fp.f('uSeed',E.seed);fp.f('uTime',t);
   fp.f('uBloom',E.bloom/100);fp.f('uBrad',E.brad/100);fp.f('uHal',E.hal/100);fp.f('uDiff',E.diff/100);
@@ -1692,6 +1692,99 @@ function adaptQ(){
   else if(fps>=tgt*.93&&ST.autoQ<1&&++ST.okN>=8){ST.autoQ=Math.min(1,ST.autoQ*1.08);ST.okN=0;}
   ST.lite=ST.autoQ<.6;
 }
+/* =====================================================================
+   Layer stack. A layer = {module, params, opacity, blend, showSource,
+   select, thr, pos, size, seed}. A module renders its own effect:
+   render(inputTex, ctx) writes into ctx.out (an RT, or null = screen).
+   CRT Lab is one module (it reads the source itself and is the base).
+   ===================================================================== */
+const MODULES={};
+const registerModule=m=>(MODULES[m.id]=m);
+const BLENDS=['normal','multiply','screen','additive','difference','overlay'];
+const LAYER_DEFAULTS={opacity:100,blend:'normal',showSource:false,select:'all',thr:50,pos:[0,0],size:100,seed:0,visible:true};
+let layerUid=1;
+const mkLayer=(mod,params)=>({uid:layerUid++,module:mod,params:params||(MODULES[mod]&&MODULES[mod].defaults?MODULES[mod].defaults():{}),...JSON.parse(JSON.stringify(LAYER_DEFAULTS))});
+
+function crtSchema(){
+  const secs=[];
+  for(const [tid,tn] of TABS){
+    const gs=[];
+    CT.filter(c=>c.tab===tid).forEach(c=>{let g=gs.find(x=>x.name===c.g);if(!g)gs.push(g={name:c.g,keys:[]});g.keys.push(c.k);});
+    secs.push({id:tid,label:tn,groups:gs});
+  }
+  return secs;
+}
+registerModule({
+  id:'crtlab',family:'Display',name:'CRT Lab',engine:'gpu',base:true,
+  get schema(){return{sections:crtSchema(),hero:['curv','scan','bloom']};},
+  defaultLook:{paper:'#020204',ink:'#ecedf4',palette:'ice'},
+  defaults:()=>P,
+  render(inTex,ctx){renderFrame(ctx.t,ctx.dt,ctx.out);},
+  thumbnail(px=96){const c=document.createElement('canvas');c.width=px;c.height=Math.round(px*canvas.height/canvas.width)||px;c.getContext('2d').drawImage(canvas,0,0,c.width,c.height);return c;}
+});
+/* dev-only module used to validate the compositor (not listed in any UI) */
+registerModule({
+  id:'_invert',family:'Dev',name:'Invert',engine:'gpu',hidden:true,defaults:()=>({}),
+  render(inTex,ctx){
+    const p=PR._inv||(PR._inv=mkProg(VS,HEAD+'uniform sampler2D uT;void main(){o=vec4(1.-texture(uT,vUv).rgb,1.);}'));
+    bindRT(ctx.out);p.use();samp(p,'uT',0,inTex);draw();
+  }
+});
+const STACK={layers:[mkLayer('crtlab')],sel:0,rt:{}};
+const F_COMP=HEAD+`
+uniform sampler2D uBase,uLay;
+uniform vec2 uTexel,uPos;
+uniform float uOpa,uSize,uThr,uShow;
+uniform int uBlend,uSel;
+float L3(vec3 c){return dot(c,vec3(.299,.587,.114));}
+void main(){
+  vec3 b=texture(uBase,vUv).rgb;
+  vec2 uv=(vUv-.5-uPos)/max(uSize,.01)+.5;
+  bool inside=all(greaterThanEqual(uv,vec2(0.)))&&all(lessThanEqual(uv,vec2(1.)));
+  vec3 l=texture(uLay,clamp(uv,0.,1.)).rgb;
+  float m=inside?1.:0.;
+  if(uSel==1){
+    float e=abs(L3(texture(uBase,vUv+vec2(uTexel.x,0.)).rgb)-L3(texture(uBase,vUv-vec2(uTexel.x,0.)).rgb))
+           +abs(L3(texture(uBase,vUv+vec2(0.,uTexel.y)).rgb)-L3(texture(uBase,vUv-vec2(0.,uTexel.y)).rgb));
+    m*=smoothstep(uThr*.5,uThr*.5+.08,e);
+  }else if(uSel==2){m*=smoothstep(uThr-.04,uThr+.04,L3(b));}
+  vec3 r;
+  if(uBlend==1)r=b*l;
+  else if(uBlend==2)r=1.-(1.-b)*(1.-l);
+  else if(uBlend==3)r=b+l;
+  else if(uBlend==4)r=abs(b-l);
+  else if(uBlend==5)r=mix(2.*b*l,1.-2.*(1.-b)*(1.-l),step(.5,b));
+  else r=l;
+  vec3 under=mix(vec3(0.),b,uShow);
+  o=vec4(mix(under,mix(b,r,m*uOpa),1.),1.);
+  o.rgb=mix(under,mix(b,r,uOpa),m);
+}`;
+function stackRT(name,w,h){
+  let r=STACK.rt[name];
+  if(!r||r.w!==w||r.h!==h){if(r)freeRT(r);r=STACK.rt[name]=mkRT(w,h,{hdr:true});}
+  return r;
+}
+function renderStack(t,dt){
+  const vis=STACK.layers.filter(l=>l.visible&&MODULES[l.module]);
+  const L0=vis[0];
+  if(!L0)return;
+  if(vis.length===1&&L0.opacity===100&&L0.module==='crtlab'){MODULES.crtlab.render(null,{t,dt,out:null});return;}
+  const W=ST.DW||canvas.width,H=ST.DH||canvas.height;
+  let acc=stackRT('a',W,H),tmp=stackRT('b',W,H),lay=stackRT('l',W,H);
+  MODULES[L0.module].render(null,{t,dt,out:acc,layer:L0});
+  for(let i=1;i<vis.length;i++){
+    const l=vis[i],m=MODULES[l.module];
+    m.render(acc.tex,{t,dt,out:lay,layer:l,params:l.params});
+    const cp=PR.comp||(PR.comp=mkProg(VS,F_COMP));
+    bindRT(tmp);cp.use();samp(cp,'uBase',0,acc.tex);samp(cp,'uLay',1,lay.tex);
+    cp.v2('uTexel',1/W,1/H);cp.v2('uPos',l.pos[0]/100,l.pos[1]/100);
+    cp.f('uOpa',l.opacity/100);cp.f('uSize',l.size/100);cp.f('uThr',l.thr/100);cp.f('uShow',l.showSource?1:0);
+    cp.i('uBlend',Math.max(0,BLENDS.indexOf(l.blend)));cp.i('uSel',['all','edges','luma'].indexOf(l.select)<0?0:['all','edges','luma'].indexOf(l.select));
+    draw();
+    const s=acc;acc=tmp;tmp=s;STACK.rt.a=acc;STACK.rt.b=tmp;
+  }
+  bindRT(null);PR.copy.use();samp(PR.copy,'uT',0,acc.tex);draw();
+}
 function loop(now){
   requestAnimationFrame(loop);
   if(window.__benching)return;
@@ -1703,7 +1796,7 @@ function loop(now){
   fpsAcc+=1/dt;fpsN++;if(fpsN>=20){fps=fpsAcc/fpsN;fpsAcc=0;fpsN=0;adaptQ();$('#info').textContent=infoStr;}
   try{
     if(audio.on)audioTick();
-    renderFrame(t,dt);frameNo++;
+    renderStack(t,dt);frameNo++;
     if(errN){errN=0;const e=$('#err');if(e&&!e.hidden&&!DEAD)e.hidden=true;}
   }catch(e){
     console.error(e);errN++;
@@ -2365,7 +2458,7 @@ async function runBench(){
     sg.fillStyle='#fff';sg.fillText(it.name,4,r*TH+14);
     for(let c=0;c<cols;c++){
       it.apply();P.seed=7;setSource(srcs[c][1],'Bench',!!srcs[c][2]);
-      for(let f=0;f<6;f++){if(srcs[c][2]){srcs[c][2](f/30+r);uploadSrc();}renderFrame(BT+=1/60,1/60);frameNo++;}
+      for(let f=0;f<6;f++){if(srcs[c][2]){srcs[c][2](f/30+r);uploadSrc();}renderStack(BT+=1/60,1/60);frameNo++;}
       sg.drawImage(canvas,160+c*TW,r*TH,TW,TH);it.f.push(bFeat(canvas));
     }
   }
