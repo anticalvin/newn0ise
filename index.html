@@ -195,6 +195,8 @@ input[type=range]::-webkit-slider-thumb{border-radius:0;width:9px;height:15px;ma
 .ir .hx{grid-column:3;width:100%;min-height:30px;padding:4px}
 .ir .cb{grid-column:2;width:22px;height:22px;accent-color:var(--accent)}
 .pe{padding:2px 12px 6px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.ir.r2{grid-template-columns:104px 1fr 54px}.dual{position:relative;height:30px;grid-column:2}.dual::before{content:'';position:absolute;left:0;right:0;top:14px;height:1px;background:var(--line)}.dual::after{content:'';position:absolute;top:13px;height:3px;left:var(--a);right:calc(100% - var(--b));background:var(--ink)}
+.dual input{position:absolute;left:0;top:0;width:100%;height:30px;margin:0;pointer-events:none;background:none;-webkit-appearance:none;appearance:none;z-index:1}.dual input::-webkit-slider-runnable-track{background:none;height:1px}.dual input::-webkit-slider-thumb{pointer-events:auto;-webkit-appearance:none;width:11px;height:20px;background:var(--ink);border-radius:0;margin-top:-10px;border:0}
 .pe .sl{display:flex;align-items:center;gap:2px;border:1px solid var(--line);padding:2px;background:var(--raise)}
 .pe input[type=color]{width:30px;height:30px;border:0;padding:0;background:none}
 .pe .hx{width:64px;font:500 10.5px var(--lab);background:none;border:0;color:var(--ink)}
@@ -1794,7 +1796,7 @@ function adaptQ(){
    render(inputTex, ctx) writes into ctx.out (an RT, or null = screen).
    CRT Lab is one module (it reads the source itself and is the base).
    ===================================================================== */
-const MODULES={};
+const MODULES={};const MAPIMG={};
 const registerModule=m=>(MODULES[m.id]=m);
 const BLENDS=['normal','multiply','screen','additive','difference','overlay'];
 const LAYER_DEFAULTS={opacity:100,blend:'normal',showSource:false,select:'all',thr:50,pos:[0,0],size:100,seed:0,visible:true};
@@ -1910,11 +1912,11 @@ function defineModule(d){
     id:d.id,family:d.family,name:d.name,engine:d.engine||'gpu',hidden:d.hidden,params,
     defaultLook:d.defaultLook||{paper:'#ffffff',ink:'#000000',palette:null},
     get schema(){const secs=[];params.forEach(p=>{let s=secs.find(x=>x.label===p.sec);if(!s)secs.push(s={id:p.sec,label:p.sec,keys:[]});s.keys.push(p.k);});return{sections:secs,hero:params.filter(p=>p.hero).map(p=>p.k)};},
-    defaults(){const o={};params.forEach(p=>{o[p.k]=p.t==='pal'?(p.def||[]).slice():p.def;});return o;},
+    defaults(){const o={};params.forEach(p=>{o[p.k]=Array.isArray(p.def)?p.def.slice():p.def;});return o;},
     prog:null,
     render(inTex,ctx){
       if(!m.prog){
-        const decl=params.map(p=>p.t==='color'?`uniform vec3 u_${p.k};`:p.t==='pal'?'':`uniform float u_${p.k};`).join('\n');
+        const decl=params.map(p=>p.t==='color'?`uniform vec3 u_${p.k};`:p.t==='pal'||p.t==='image'?'':p.t==='range2'?`uniform vec2 u_${p.k};`:p.t==='curve'?`uniform float u_${p.k}[5];`:`uniform float u_${p.k};`).join('\n');
         try{m.prog=mkProg(VS,HEAD+GLSL_LIB+'uniform sampler2D uSrc,uAux;uniform vec2 uRes;uniform float uTime,uSeed;\n'+decl+'\n'+d.frag+'\nvoid main(){o=vec4(fx(vUv).rgb,1.);}');}
         catch(e){m.prog=null;throw new Error(d.id+' shader: '+String(e.message).split('\n').slice(0,3).join(' | '));}
       }
@@ -1925,6 +1927,9 @@ function defineModule(d){
         const v=V[p.k];
         if(p.t==='color'){const c=hexRGB(v||'#000000');pr.v3('u_'+p.k,c[0]/255,c[1]/255,c[2]/255);}
         else if(p.t==='pal'){const a=(v&&v.length?v:['#000000','#ffffff']).slice(0,16),buf=new Float32Array(48);a.forEach((h,i)=>{const c=hexRGB(h);buf[i*3]=c[0]/255;buf[i*3+1]=c[1]/255;buf[i*3+2]=c[2]/255;});pr.v3v('uPal',buf);pr.i('uPalN',a.length);}
+        else if(p.t==='range2'){const a=v||p.def;pr.v2('u_'+p.k,a[0],a[1]);}
+        else if(p.t==='curve'){pr.fv('u_'+p.k,new Float32Array(v||p.def));}
+        else if(p.t==='image'){}
         else pr.f('u_'+p.k,p.t==='b'?(v?1:0):+v);
       }
       if(d.bind)d.bind(pr,V,ctx);
@@ -1958,23 +1963,44 @@ const SS='#define S (uRes.y/600.)\n';
 
 /* ---------- Dither ---------- */
 const dith={gw:0,gh:0,rt:null,tex:null,buf:null};
-function cpuDiffuse(inTex,W,H,cell,n,method,seed){
-  const gw=Math.min(480,Math.max(8,Math.round(W/cell))),gh=Math.min(480,Math.max(8,Math.round(H/cell)));
-  if(!dith.rt||dith.rt.w!==gw||dith.rt.h!==gh){if(dith.rt)freeRT(dith.rt);dith.rt=mkRT(gw,gh,{});dith.buf=new Uint8Array(gw*gh*4);dith.out=new Uint8Array(gw*gh);}
-  bindRT(dith.rt);PR.copy.use();samp(PR.copy,'uT',0,inTex);draw();
-  gl.readPixels(0,0,gw,gh,gl.RGBA,gl.UNSIGNED_BYTE,dith.buf);
-  const v=new Float32Array(gw*gh);for(let i=0;i<gw*gh;i++)v[i]=(.299*dith.buf[i*4]+.587*dith.buf[i*4+1]+.114*dith.buf[i*4+2])/255*(n-1);
+/* error diffusion runs in a Worker; the shader keeps drawing the last finished result */
+function diffuseCore(v,gw,gh,n,method){
+  const out=new Uint8Array(gw*gh);
   const SA=[[2,0,32],[-3,1,12],[-1,1,26],[1,1,30],[3,1,16],[-2,2,12],[0,2,26],[2,2,12],[-3,3,5],[-1,3,12],[1,3,12],[3,3,5]],SL=[[1,0,2],[-1,1,1],[0,1,1]];
   const K=method===7?SA:SL,D=method===7?200:4;
   for(let y=0;y<gh;y++)for(let x=0;x<gw;x++){
-    const i=y*gw+x,o=v[i],q=Math.max(0,Math.min(n-1,Math.round(o))),e=o-q;dith.out[i]=q;
-    for(const [dx,dy,w] of K){const xx=x+dx,yy=y+dy;if(xx>=0&&xx<gw&&yy<gh)v[yy*gw+xx]+=e*w/D;}
+    const i=y*gw+x,o=v[i],q=Math.max(0,Math.min(n-1,Math.round(o))),e=o-q;out[i]=q;
+    for(let k=0;k<K.length;k++){const xx=x+K[k][0],yy=y+K[k][1];if(xx>=0&&xx<gw&&yy<gh)v[yy*gw+xx]+=e*K[k][2]/D;}
+  }
+  return out;
+}
+const dw={w:null,busy:false,res:null,fresh:false,failed:false};
+function diffWorker(){
+  if(dw.w||dw.failed)return dw.w;
+  try{
+    const src=diffuseCore.toString()+';onmessage=function(e){var d=e.data;var out=diffuseCore(d.v,d.gw,d.gh,d.n,d.m);postMessage({out:out,gw:d.gw,gh:d.gh},[out.buffer]);};';
+    dw.w=new Worker(URL.createObjectURL(new Blob([src],{type:'text/javascript'})));
+    dw.w.onmessage=e=>{dw.res=e.data;dw.busy=false;dw.fresh=true;};
+    dw.w.onerror=()=>{dw.failed=true;dw.w=null;dw.busy=false;};
+  }catch(e){dw.failed=true;dw.w=null;}
+  return dw.w;
+}
+function cpuDiffuse(inTex,W,H,cell,n,method,seed){
+  const gw=Math.min(480,Math.max(8,Math.round(W/cell))),gh=Math.min(480,Math.max(8,Math.round(H/cell)));
+  if(!dith.rt||dith.rt.w!==gw||dith.rt.h!==gh){if(dith.rt)freeRT(dith.rt);dith.rt=mkRT(gw,gh,{});dith.buf=new Uint8Array(gw*gh*4);}
+  const worker=diffWorker();
+  if(!dw.res||!worker||(!dw.busy&&true)){
+    bindRT(dith.rt);PR.copy.use();samp(PR.copy,'uT',0,inTex);draw();
+    gl.readPixels(0,0,gw,gh,gl.RGBA,gl.UNSIGNED_BYTE,dith.buf);
+    const v=new Float32Array(gw*gh);for(let i=0;i<gw*gh;i++)v[i]=(.299*dith.buf[i*4]+.587*dith.buf[i*4+1]+.114*dith.buf[i*4+2])/255*(n-1);
+    if(!dw.res||!worker){dw.res={out:diffuseCore(v,gw,gh,n,method),gw,gh};dw.fresh=true;}   /* first frame, or no Worker available */
+    else{dw.busy=true;worker.postMessage({v,gw,gh,n,m:method},[v.buffer]);}
   }
   if(!dith.tex){dith.tex=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,dith.tex);
     gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);
     gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);}
-  gl.bindTexture(gl.TEXTURE_2D,dith.tex);gl.pixelStorei(gl.UNPACK_ALIGNMENT,1);
-  gl.texImage2D(gl.TEXTURE_2D,0,gl.R8,gw,gh,0,gl.RED,gl.UNSIGNED_BYTE,dith.out);
+  gl.bindTexture(gl.TEXTURE_2D,dith.tex);
+  if(dw.fresh){dw.fresh=false;gl.pixelStorei(gl.UNPACK_ALIGNMENT,1);gl.texImage2D(gl.TEXTURE_2D,0,gl.R8,dw.res.gw,dw.res.gh,0,gl.RED,gl.UNSIGNED_BYTE,dw.res.out);}
   return dith.tex;
 }
 defineModule({id:'dither',family:'Bitmap',name:'Dither',
@@ -2166,8 +2192,8 @@ defineModule({id:'shapes',family:'Print',name:'Shape Halftone',
   params:[
     ...chP('r','#ff3b30',15,0),...chP('g','#34ff5a',75,2),...chP('b','#ff2d95',45,5),
     {k:'mode',t:'c',label:'Ink mode',opts:['Additive','Multiply','Subtractive'],def:0,sec:'Ink'},
-    {k:'cv0',label:'Curve shadows',min:0,max:100,def:0,sec:'Ink curve'},{k:'cv1',label:'Curve mids',min:0,max:100,def:50,sec:'Ink curve'},{k:'cv2',label:'Curve highlights',min:0,max:100,def:100,sec:'Ink curve'},
-    {k:'tlo',label:'Threshold low',min:0,max:100,def:6,sec:'Threshold range'},{k:'thi',label:'Threshold high',min:0,max:100,def:100,sec:'Threshold range'},
+    {k:'curve',t:'curve',label:'Ink curve',def:[0,.25,.5,.75,1],sec:'Ink curve'},
+    {k:'thr',t:'range2',label:'Threshold range',min:0,max:100,def:[6,100],sec:'Threshold range'},
     {k:'cell',label:'Cell size',min:4,max:48,def:18,sec:'Cells',hero:true},{k:'spread',label:'Size spread',min:0,max:100,def:20,sec:'Cells'},
     {k:'gain',label:'Dot gain',min:-50,max:100,def:10,sec:'Cells',hero:true},{k:'glow',label:'Glow',min:0,max:100,def:35,sec:'Cells'},
     {k:'exp',label:'Exposure',min:-100,max:100,def:10,sec:'Cells'},{k:'mis',label:'Misregistration',min:0,max:100,def:20,sec:'Cells'},
@@ -2183,11 +2209,11 @@ float shp(vec2 p,int t,float r){
   if(t==3){vec2 q=p;float head=max(abs(q.y)-(.5-q.x)*.7*r*1.2,q.x-.5*r*1.1);float stem=max(abs(q.y)-r*.2,max(q.x-.1,-q.x-r*.9));return smoothstep(.04,-.04,min(head,stem));}
   float ring=abs(length(p)-r*.8)-r*.08;float ex=min(length(p-vec2(-.3,.25)*r*1.2),length(p-vec2(.3,.25)*r*1.2))-r*.11;
   float mo=max(abs(length(p-vec2(0.,.05)*r)-r*.5)-r*.07,-(p.y+.02*r)-.0);return smoothstep(.04,-.04,min(min(ring,ex),mo));}
-float curve(float x){float a=u_cv0/100.,b=u_cv1/100.,c=u_cv2/100.;return x<.5?mix(a,b,x*2.):mix(b,c,x*2.-1.);}
+float curve(float x){float f=clamp(x,0.,1.)*4.;int i=int(min(floor(f),3.));float t=fract(f);if(i==3)t=f-3.;t=t*t*(3.-2.*t);return mix(u_curve[i],u_curve[i+1],t);}
 vec3 chan(vec2 px,int ch,float ang,int shape,float val,vec2 off,vec3 ink,float inten,float seed){
   vec2 p=rot2(px+off,ang)/(u_cell*S);vec2 g=floor(p),f=fract(p)-.5;
   vec2 c=rot2((g+.5)*u_cell*S,-ang)-off;float v=ch==0?gen(texture(uSrc,c/uRes).rgb).r:ch==1?gen(texture(uSrc,c/uRes).rgb).g:gen(texture(uSrc,c/uRes).rgb).b;
-  v=curve(clamp(v+u_exp/200.,0.,1.));float on=smoothstep(u_tlo/100.-.02,u_tlo/100.+.02,v)*step(v,u_thi/100.+.01);
+  v=curve(clamp(v+u_exp/200.,0.,1.));float on=smoothstep(u_thr.x/100.-.02,u_thr.x/100.+.02,v)*step(v,u_thr.y/100.+.01);
   float r=sqrt(v)*.5*(1.+u_gain/100.)*(1.+(h21(g+seed)-.5)*u_spread/100.);
   return ink*shp(f,shape,r)*on*inten/100.;}
 vec4 fx(vec2 uv){
@@ -2276,7 +2302,7 @@ defineModule({id:'displace',family:'Warp',name:'DisplacePRO',
     {k:'dmode',t:'c',label:'Map mode',opts:['Gradient','Luma','Noise','Image'],def:1,sec:'Displacement map'},
     {k:'dstr',label:'Strength',min:0,max:100,def:25,sec:'Displacement map',hero:true},{k:'dscale',label:'Scale',min:1,max:60,def:6,sec:'Displacement map'},
     {k:'dgam',label:'Gamma',min:30,max:250,def:100,sec:'Displacement map'},{k:'dcon',label:'Contrast',min:-100,max:100,def:0,sec:'Displacement map'},
-    {k:'dinv',t:'b',label:'Invert',def:false,sec:'Displacement map'},
+    {k:'dinv',t:'b',label:'Invert',def:false,sec:'Displacement map'},{k:'img',t:'image',label:'Map image',sec:'Displacement map'},
     {k:'flow',label:'Flow warp',min:0,max:100,def:30,sec:'Flow warp',hero:true},{k:'fsc',label:'Flow scale',min:1,max:20,def:3,step:.5,sec:'Flow warp'},{k:'fsp',label:'Flow speed',min:0,max:100,def:20,sec:'Flow warp'},
     {k:'ebm',t:'c',label:'Bend mode',opts:['Push out','Pull in','Swirl'],def:0,sec:'Edge bend'},{k:'eamt',label:'Bend amount',min:0,max:100,def:35,sec:'Edge bend'},
     {k:'ebw',label:'Border width',min:1,max:40,def:12,sec:'Edge bend'},{k:'ewrap',t:'c',label:'Edge wrap',opts:['Transparent','Clamp','Mirror'],def:2,sec:'Edge bend'},
@@ -2284,7 +2310,9 @@ defineModule({id:'displace',family:'Warp',name:'DisplacePRO',
     {k:'shat',label:'Glass shatter',min:0,max:100,def:0,sec:'Glass shatter'},{k:'shn',label:'Shard count',min:3,max:40,def:12,sec:'Glass shatter'},
     {k:'bjit',label:'Band jitter',min:0,max:100,def:20,sec:'Bands'},{k:'bn',label:'Band count',min:4,max:120,def:30,sec:'Bands'},
     {k:'csp',label:'Chroma split',min:0,max:100,def:25,sec:'Chroma'},{k:'flip',t:'b',label:'Flip vertical',def:false,sec:'Chroma'}],
-  frag:`vec2 vor(vec2 p,out float edge){vec2 g=floor(p),f=fract(p);float d1=9.,d2=9.;vec2 id=g;for(int j=-1;j<=1;j++)for(int i=-1;i<=1;i++){vec2 o=vec2(float(i),float(j));vec2 r=o+h22(g+o+uSeed)-f;float d=dot(r,r);if(d<d1){d2=d1;d1=d;id=g+o;}else if(d<d2)d2=d;}edge=sqrt(d2)-sqrt(d1);return id;}
+  bind(pr,V,ctx){const t=MAPIMG[ctx.layer&&ctx.layer.uid];pr.f('uHasImg',t?1:0);if(t){gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,t);pr.i('uAux',1);}},
+  frag:`uniform float uHasImg;
+vec2 vor(vec2 p,out float edge){vec2 g=floor(p),f=fract(p);float d1=9.,d2=9.;vec2 id=g;for(int j=-1;j<=1;j++)for(int i=-1;i<=1;i++){vec2 o=vec2(float(i),float(j));vec2 r=o+h22(g+o+uSeed)-f;float d=dot(r,r);if(d<d1){d2=d1;d1=d;id=g+o;}else if(d<d2)d2=d;}edge=sqrt(d2)-sqrt(d1);return id;}
 vec3 samp(vec2 uv){
   if(u_ewrap<.5&&(uv.x<0.||uv.x>1.||uv.y<0.||uv.y>1.))return vec3(0.);
   if(u_ewrap>1.5)uv=1.-abs(1.-mod(uv,2.));else uv=clamp(uv,0.,1.);
@@ -2295,7 +2323,7 @@ vec4 fx(vec2 uv){
   float band=floor(uv.y*u_bn);uv.x+=(h21(vec2(band,floor(uTime*8.)+uSeed))-.5)*u_bjit/100.*.08*step(.7,h21(vec2(band*1.3,floor(uTime*3.))));
   /* displacement map */
   float m;int dm=int(u_dmode+.5);
-  if(dm==0)m=uv.x;else if(dm==1)m=luma(texture(uSrc,uv).rgb);else if(dm==2)m=fbm(uv*u_dscale*vec2(asp,1.)+uSeed);else m=fbm(uv*u_dscale*2.+7.);
+  if(dm==0)m=uv.x;else if(dm==1)m=luma(texture(uSrc,uv).rgb);else if(dm==2)m=fbm(uv*u_dscale*vec2(asp,1.)+uSeed);else m=uHasImg>.5?luma(texture(uAux,fract(uv*u_dscale/6.)).rgb):fbm(uv*u_dscale*2.+7.);
   m=pow(clamp(m,0.,1.),u_dgam/100.);m=(m-.5)*(1.+u_dcon/100.)+.5;if(u_dinv>.5)m=1.-m;
   uv+=vec2(m-.5,fbm(uv*u_dscale+3.)-.5)*u_dstr/100.*.25*vec2(1.,asp>1.?1.:1.);
   /* flow warp */
@@ -3228,9 +3256,36 @@ function rowRange(host,label,get,set,min,max,step){
   l.addEventListener('pointermove',e=>{if(!l.hasPointerCapture(e.pointerId))return;const d=(e.clientX-sx)/(e.shiftKey?900:300)*(max-min);let n=s0+d;if(step)n=Math.round(n/step)*step;set(Math.min(max,Math.max(min,n)));paint();});
   r.append(l,inp,v);host.appendChild(r);paint();return paint;
 }
+const LAYER_ID=()=>layer().uid;
 function rowParam(host,p,V,onchange){
   const set=x=>{V[p.k]=x;onchange&&onchange(p);};
   if(p.t==='r')return rowRange(host,p.label||p.k,()=>V[p.k],set,p.min,p.max,p.step);
+  if(p.t==='range2'){
+    const r=el('div','ir r2'),l=el('span','l',p.label||p.k);l.style.cursor='default';const w=el('div','dual'),a=document.createElement('input'),b=document.createElement('input'),v=el('span','v');
+    [a,b].forEach(x=>{x.type='range';x.min=p.min;x.max=p.max;x.step=p.step||1;});
+    const paint=()=>{a.value=V[p.k][0];b.value=V[p.k][1];v.textContent=Math.round(V[p.k][0])+'–'+Math.round(V[p.k][1]);w.style.setProperty('--a',(V[p.k][0]-p.min)/(p.max-p.min)*100+'%');w.style.setProperty('--b',(V[p.k][1]-p.min)/(p.max-p.min)*100+'%');};
+    a.addEventListener('input',()=>{V[p.k][0]=Math.min(+a.value,V[p.k][1]);paint();onchange&&onchange(p);});
+    b.addEventListener('input',()=>{V[p.k][1]=Math.max(+b.value,V[p.k][0]);paint();onchange&&onchange(p);});
+    w.append(a,b);r.append(l,w,v);host.appendChild(r);paint();return;
+  }
+  if(p.t==='curve'){
+    const box=el('div','pe');box.style.display='block';const W=232,H=120,svg=document.createElementNS('http://www.w3.org/2000/svg','svg');svg.setAttribute('viewBox',`0 0 ${W} ${H}`);svg.style.cssText='width:100%;max-width:300px;touch-action:none;background:var(--raise);border:1px solid var(--line);display:block';
+    const draw=()=>{const pts=V[p.k].map((y,i)=>[8+i*(W-16)/4,H-8-y*(H-16)]);
+      let d='M'+pts[0].join(',');for(let i=0;i<=40;i++){const f=i/40*4,j=Math.min(3,Math.floor(f)),t=f-j,tt=t*t*(3-2*t),y=V[p.k][j]*(1-tt)+V[p.k][j+1]*tt;d+=' L'+(8+f*(W-16)/4)+','+(H-8-y*(H-16));}
+      svg.innerHTML=`<line x1="8" y1="${H-8}" x2="${W-8}" y2="8" stroke="var(--line)"/><path d="${d}" fill="none" stroke="var(--ink)" stroke-width="1.5"/>`+pts.map((q,i)=>`<circle data-i="${i}" cx="${q[0]}" cy="${q[1]}" r="9" fill="var(--accent)" stroke="var(--ink)"/>`).join('');};
+    let cur=-1;const move=e=>{if(cur<0)return;const r=svg.getBoundingClientRect(),y=1-((e.clientY-r.top)/r.height*H-8)/(H-16);V[p.k][cur]=Math.min(1,Math.max(0,y));draw();onchange&&onchange(p);};
+    svg.addEventListener('pointerdown',e=>{const c=e.target.closest('circle');if(!c)return;cur=+c.dataset.i;svg.setPointerCapture(e.pointerId);});
+    svg.addEventListener('pointermove',move);svg.addEventListener('pointerup',()=>cur=-1);
+    const t=el('div','l',p.label||p.k);t.style.cssText='font:500 11.5px var(--lab);padding:8px 12px 4px';host.appendChild(t);box.appendChild(svg);host.appendChild(box);draw();return;
+  }
+  if(p.t==='image'){
+    const r=el('div','ir');r.appendChild(el('span','l',p.label));const b=el('button','btn',MAPIMG[LAYER_ID()]?'Replace':'Choose');b.style.cssText='grid-column:2/4;min-height:34px';
+    const fi=document.createElement('input');fi.type='file';fi.accept='image/*';fi.hidden=true;b.addEventListener('click',()=>fi.click());
+    fi.addEventListener('change',()=>{const f=fi.files[0];if(!f)return;const im=new Image();im.onload=()=>{const t=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,t);gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA8,gl.RGBA,gl.UNSIGNED_BYTE,im);gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,false);
+      gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.REPEAT);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.REPEAT);
+      MAPIMG[LAYER_ID()]=t;V.dmode=3;b.textContent='Replace';toast('Map image loaded');renderInspector();URL.revokeObjectURL(im.src);};im.onerror=()=>toast('That file couldn’t be read as an image');im.src=URL.createObjectURL(f);});
+    r.append(b,fi);host.appendChild(r);return;
+  }
   const r=el('div','ir'),l=el('span','l',p.label||p.k);l.style.cursor='default';r.appendChild(l);
   if(p.t==='c'){const s=document.createElement('select');p.opts.forEach((o,i)=>{const op=document.createElement('option');op.value=i;op.textContent=o;s.appendChild(op);});s.value=V[p.k];s.addEventListener('change',()=>set(+s.value));r.appendChild(s);}
   else if(p.t==='b'){const c=document.createElement('input');c.type='checkbox';c.className='cb';c.checked=!!V[p.k];c.addEventListener('change',()=>set(c.checked));r.appendChild(c);}
