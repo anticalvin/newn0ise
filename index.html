@@ -2531,7 +2531,9 @@ function fuseParams(){
     ps.push({k:'i'+s,label:'Intensity',min:0,max:100,def:55,sec,hero:s===1});
     ps.push({k:'m'+s,label:'Motion',min:0,max:100,def:45,sec,hero:s===1});
     ps.push({k:'mx'+s,label:'Mix',min:0,max:100,def:100,sec});
-    ps.push({k:'bl'+s,t:'c',label:'Blend',opts:FUSE_BLENDS,def:0,sec});}
+    ps.push({k:'bl'+s,t:'c',label:'Blend',opts:FUSE_BLENDS,def:0,sec});
+    ps.push({k:'mk'+s,t:'c',label:'Apply to',opts:['Everything','Edges','Bright areas','Dark areas'],def:0,sec});
+    ps.push({k:'mt'+s,label:'Mask threshold',min:0,max:100,def:50,sec});}
   return ps.concat([{k:'hue',label:'Hue',min:-180,max:180,def:0,sec:'Finish'},{k:'sat',label:'Saturation',min:0,max:300,def:100,sec:'Finish'},
     {k:'grain',label:'Grain',min:0,max:100,def:0,sec:'Finish'},{k:'vig',label:'Vignette',min:0,max:100,def:0,sec:'Finish'}]);
 }
@@ -2550,7 +2552,11 @@ void main(){vec2 uv=vUv;U0=uv;ASP=uRes.x/uRes.y;CUR=texture(uSrc,uv).rgb;vec3 c=
   fxs.forEach((f,i)=>{if(!f)return;const n=i+1;
     s+=`if(u_on${n}>.5){I=u_i${n}/100.;M=u_m${n}/100.;vec3 r=${f.fn}(uv);${f.hs?`r=hueRot(r,${(f.hs*Math.PI/180).toFixed(4)});`:''}int b=int(u_bl${n}+.5);
 vec3 q=b==1?c*r:b==2?1.-(1.-c)*(1.-r):b==3?c+r:b==4?abs(c-r):b==5?mix(2.*c*r,1.-2.*(1.-c)*(1.-r),step(.5,c)):r;
-c=mix(c,q,u_mx${n}/100.);CUR=c;}
+float k=u_mx${n}/100.;int mm=int(u_mk${n}+.5);
+if(mm==1)k*=smoothstep(u_mt${n}*.004,u_mt${n}*.004+.08,length(sobel(uSrc,uv,1.5/uRes)));
+else if(mm==2)k*=smoothstep(u_mt${n}/100.-.05,u_mt${n}/100.+.05,luma(c));
+else if(mm==3)k*=1.-smoothstep(u_mt${n}/100.-.05,u_mt${n}/100.+.05,luma(c));
+c=mix(c,q,k);CUR=c;}
 `;});
   return s+`if(abs(u_hue)>.5)c=hueRot(c,u_hue*.0174533);
 c=mix(vec3(luma(c)),c,u_sat/100.);
@@ -2567,6 +2573,15 @@ defineModule({id:'fuse',family:'Camera',name:'Fuse',params:fuseParams(),
   after(pr,V,ctx){if(!ctx.out||!ctx.out.tex||!fuseFxs(V).some(f=>f&&f.hist))return;const c=PR.copy;bindRT(fusePrev(ctx.W,ctx.H));c.use();samp(c,'uT',0,ctx.out.tex);draw();}});
 /* helpers the UI uses */
 function fuseSet(l,slot,id){l.params['f'+slot]=id?fxIndex(id):0;const f=id&&FXBY[id];if(f){l.params['i'+slot]=f.i;l.params['m'+slot]=f.m;l.params['on'+slot]=true;}}
+const FUSE_KEYS=['f','on','i','m','mx','bl','mk','mt'];
+function fuseSwap(l,a,b){FUSE_KEYS.forEach(k=>{const x=l.params[k+a];l.params[k+a]=l.params[k+b];l.params[k+b]=x;});}
+const RECIPES_KEY='n0ise.recipes';
+const loadRecipes=()=>{try{return JSON.parse(localStorage.getItem(RECIPES_KEY)||'[]');}catch(e){return[];}};
+const fuseSnapshot=l=>{const o={};MODULES.fuse.params.forEach(p=>{o[p.k]=l.params[p.k];});return o;};
+function saveRecipe(l,name){const r=loadRecipes();r.push({id:'r'+Date.now(),name:name||fuseName(l),p:fuseSnapshot(l)});try{localStorage.setItem(RECIPES_KEY,JSON.stringify(r.slice(-40)));return true;}catch(e){return false;}}
+const fuseName=l=>fuseFxs(l.params).filter(Boolean).map(f=>f.label).join(' + ')||'Empty';
+function fuseShare(l){const h='#f='+btoa(JSON.stringify(fuseSnapshot(l)));history.replaceState(null,'',h);(navigator.clipboard?navigator.clipboard.writeText(location.href):Promise.reject()).then(()=>toast('Link copied')).catch(()=>toast('Link is in the address bar'));}
+function loadFuseHash(){const m=location.hash.match(/^#f=(.+)$/);if(!m)return;try{const o=JSON.parse(atob(m[1])),l=mkLayer('fuse');Object.keys(o).forEach(k=>{if(k in l.params&&typeof o[k]===typeof l.params[k])l.params[k]=o[k];});STACK.layers=[l];STACK.sel=0;}catch(e){}}
 function fuseRandomPair(l){
   const pool=fusePool(),pick=()=>pool[Math.random()*pool.length|0];
   const a=pick();let b=pick();while(b.cat===a.cat&&pool.length>3)b=pick();
@@ -3609,14 +3624,21 @@ function fuseBar(host,l){
     dot.addEventListener('pointerup',()=>{clearTimeout(hold);if(solo||!f)return;V['on'+s]=!V['on'+s];renderInspector();});
     dot.addEventListener('pointerleave',()=>clearTimeout(hold));
     const nm=el('button','fname',f?f.label:'Add effect');nm.addEventListener('click',()=>{FUSEPICK=FUSEPICK===s?0:s;renderInspector();});
-    c.append(dot,nm);if(f&&s>1){const x=el('button','fx','×');x.setAttribute('aria-label','Remove step '+s);x.addEventListener('click',()=>{fuseSet(l,s,null);renderInspector();});c.appendChild(x);}
+    c.append(dot,nm);
+    if(f&&s>1){const up=el('button','fx','‹');up.setAttribute('aria-label','Move step '+s+' earlier');up.addEventListener('click',()=>{fuseSwap(l,s,s-1);renderInspector();});c.appendChild(up);}
+    if(f&&s>1){const x=el('button','fx','×');x.setAttribute('aria-label','Remove step '+s);x.addEventListener('click',()=>{fuseSet(l,s,null);renderInspector();});c.appendChild(x);}
     row.appendChild(c);}
   bar.appendChild(row);
   const cost=fuseCost(V),meter=el('span','fcost','Cost '+'●'.repeat(Math.min(cost,9))+'○'.repeat(Math.max(0,9-cost)));
   const act=el('div','pe');
   const fb=el('button','','Fuse');fb.title='Random compatible pair';fb.addEventListener('click',()=>{toast(fuseRandomPair(l));renderInspector();});
   const rs=el('button','','Reset');rs.addEventListener('click',()=>{Object.assign(l.params,MODULES.fuse.defaults());renderInspector();});
-  act.append(fb,rs,meter);bar.appendChild(act);
+  const sv=el('button','','Save');sv.title='Save this recipe';sv.addEventListener('click',()=>{const n=prompt('Name this recipe',fuseName(l));if(n===null)return;toast(saveRecipe(l,n.trim()||fuseName(l))?'Recipe saved':'This browser won’t store recipes');renderInspector();});
+  const sh=el('button','','Share');sh.addEventListener('click',()=>fuseShare(l));
+  act.append(fb,sv,sh,rs,meter);bar.appendChild(act);
+  const rc=loadRecipes();if(rc.length){bar.appendChild(el('div','cl','Mine'));const w=el('div','pe');
+    rc.slice().reverse().forEach(r=>{const b=el('button','',r.name);b.addEventListener('click',()=>{Object.assign(l.params,r.p);renderInspector();});
+      const x=el('button','','×');x.setAttribute('aria-label','Delete '+r.name);x.addEventListener('click',()=>{localStorage.setItem(RECIPES_KEY,JSON.stringify(loadRecipes().filter(q=>q.id!==r.id)));renderInspector();});w.append(b,x);});bar.appendChild(w);}
   if(cost>=9&&matchMedia('(pointer:coarse)').matches)bar.appendChild(el('div','cl','Heavy on a phone. Switch a step off if it stutters.'));
   if(FUSEPICK){const pk=el('div','fpick');
     Object.entries(FX_CATS).forEach(([c,n])=>{pk.appendChild(el('div','cl',n));const w=el('div','pe');
@@ -3799,7 +3821,7 @@ function wireSheet(){
   lastSnap=JSON.stringify(P);
   refreshUI();
   setSkin((()=>{try{return localStorage.getItem('n0ise.skin');}catch(e){return null;}})()||'lab');
-  loadStackHash();wireHero();wireSheet();renderInspector();
+  loadStackHash();loadFuseHash();wireHero();wireSheet();renderInspector();
   requestAnimationFrame(loop);
   if(new URLSearchParams(location.search).get('bench'))setTimeout(runBench,600);
 })();
