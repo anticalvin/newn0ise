@@ -245,6 +245,16 @@ body[data-sheet] .insp{padding-bottom:calc(var(--ty,0px) + 32px + env(safe-area-
 .rail::-webkit-scrollbar{display:none}
 .rg{flex:none;scroll-snap-align:start}.rgl{font:600 9.5px var(--lab);letter-spacing:.14em;text-transform:uppercase;color:var(--mute);margin:0 0 4px}
 .rgt{display:flex;gap:6px}
+.fbar{padding:10px 12px;border-bottom:1px solid var(--line)}
+.fchips{display:grid;grid-template-columns:repeat(2,1fr);gap:6px}
+.fchip{display:flex;align-items:center;gap:2px;border:1px solid var(--line);background:var(--raise);min-height:44px;border-radius:2px}
+.fchip.off .fname{opacity:.45}.fchip.empty .fname{opacity:.6;font-style:italic}
+.fdot{width:44px;height:44px;flex:none;position:relative}.fdot::after{content:"";position:absolute;inset:16px;border-radius:50%;border:1.5px solid var(--ink);opacity:.5}
+.fdot[aria-pressed=true]::after{background:var(--acc,#ff5c8a);border-color:var(--acc,#ff5c8a);opacity:1}
+.fname{flex:1;min-height:44px;text-align:left;font:600 11px var(--lab);text-transform:uppercase;letter-spacing:.06em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fx{width:36px;height:44px;flex:none;opacity:.6;font-size:16px}
+.fcost{font:600 10px var(--lab);letter-spacing:.1em;margin-left:auto;align-self:center;opacity:.7}
+.fpick{margin-top:8px;max-height:260px;overflow:auto}
 .rtile{width:86px;flex:none;border:1px solid var(--line);background:var(--raise);padding:0;color:var(--ink);cursor:pointer;text-align:left}
 .rtile canvas.rt{width:100%;aspect-ratio:4/3;display:block;background:#000;height:auto}
 .rtile span{display:block;font:600 9.5px var(--lab);text-transform:uppercase;letter-spacing:.04em;padding:5px 5px 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -1088,6 +1098,23 @@ function mkProg(vs,fs){
   gl.attachShader(p,compile(gl.VERTEX_SHADER,vs));gl.attachShader(p,compile(gl.FRAGMENT_SHADER,fs));
   gl.linkProgram(p);
   if(!gl.getProgramParameter(p,gl.LINK_STATUS))throw new Error(gl.getProgramInfoLog(p));
+  return wrapProg(p);
+}
+/* background compile (KHR_parallel_shader_compile): returns {poll()->null|'ok'|'err', prog, err}. Falls back to a sync compile. */
+function mkProgAsync(vs,fs){
+  const ext=gl.getExtension('KHR_parallel_shader_compile'),h={prog:null,err:null};
+  if(!ext){try{h.prog=mkProg(vs,fs);}catch(e){h.err=String(e.message).split('\n')[0];}h.poll=h.force=()=>h.err?'err':'ok';return h;}
+  const p=gl.createProgram(),sh=[[gl.VERTEX_SHADER,vs],[gl.FRAGMENT_SHADER,fs]].map(([ty,s])=>{const x=gl.createShader(ty);gl.shaderSource(x,s);gl.compileShader(x);gl.attachShader(p,x);return x;});
+  gl.linkProgram(p);
+  h.force=()=>{if(!h.prog&&!h.err){gl.getProgramParameter(p,gl.LINK_STATUS);}return h.poll();};
+  h.poll=()=>{
+    if(h.prog)return 'ok';if(h.err)return 'err';
+    if(!gl.getProgramParameter(p,ext.COMPLETION_STATUS_KHR))return null;
+    if(gl.getProgramParameter(p,gl.LINK_STATUS)){h.prog=wrapProg(p);return 'ok';}
+    h.err=(sh.map(x=>gl.getShaderInfoLog(x)).join(' ')||gl.getProgramInfoLog(p)||'compile failed').split('\n').filter(Boolean).slice(0,2).join(' | ');return 'err';};
+  return h;
+}
+function wrapProg(p){
   const o={p,loc:{}};
   o.l=n=>{let l=o.loc[n];if(l===undefined){l=gl.getUniformLocation(p,n);o.loc[n]=l;}return l;};
   o.f=(n,v)=>{const l=o.l(n);if(l!==null)gl.uniform1f(l,v);};
@@ -1944,14 +1971,27 @@ function defineModule(d){
     defaultLook:d.defaultLook||{paper:'#ffffff',ink:'#000000',palette:null},
     get schema(){const secs=[];params.forEach(p=>{let s=secs.find(x=>x.label===p.sec);if(!s)secs.push(s={id:p.sec,label:p.sec,keys:[]});s.keys.push(p.k);});return{sections:secs,hero:params.filter(p=>p.hero).map(p=>p.k)};},
     defaults(){const o={};params.forEach(p=>{o[p.k]=Array.isArray(p.def)?p.def.slice():p.def;});return o;},
-    prog:null,
+    prog:null,cache:{},
+    build(frag,ps){const decl=ps.map(p=>p.t==='color'?`uniform vec3 u_${p.k};`:p.t==='pal'||p.t==='image'?'':p.t==='range2'?`uniform vec2 u_${p.k};`:p.t==='curve'?`uniform float u_${p.k}[5];`:`uniform float u_${p.k};`).join('\n');return HEAD+GLSL_LIB+'uniform sampler2D uSrc,uAux;uniform vec2 uRes;uniform float uTime,uSeed;\n'+decl+'\n'+frag;},
     render(inTex,ctx){
-      if(!m.prog){
+      let ent=null;
+      if(d.dyn){
+        const V0=ctx.params||(ctx.layer&&ctx.layer.params)||m.defaults(),dy=d.dyn(V0);let e=m.cache[dy.key];
+        if(!e){e=m.cache[dy.key]={h:mkProgAsync(VS,m.build(dy.frag,params,d)),key:dy.key};m.fresh=true;}ent=e;
+        if(ctx.sync&&!e.done){const s=e.h.force();if(s==='ok')e.done=1;else if(s==='err')e.done=2;}
+        if(!ctx.sync&&e.done===1&&m.progKey!==dy.key){m.prog=e.h.prog;m.progKey=dy.key;}
+        if(!e.done){const s=e.h.poll();if(s==='ok'){e.done=1;m.prog=e.h.prog;m.progKey=dy.key;}else if(s==='err'){e.done=2;m.err=e.h.err;toast('Effect didn’t compile: '+e.h.err.slice(0,80));}}
+        if(ctx.sync&&e.done!==1){const c=PR.copy;bindRT(ctx.out);c.use();samp(c,'uT',0,inTex);draw();return;}
+        if(!m.prog&&e.done!==1){/* very first program: nothing to show yet, so wait for it */
+          for(let i=0;i<400&&!e.done;i++){const s=e.h.poll();if(s==='ok'){e.done=1;m.prog=e.h.prog;m.progKey=dy.key;}else if(s==='err'){e.done=2;break;}}
+          if(!m.prog){const c=PR.copy;bindRT(ctx.out);c.use();samp(c,'uT',0,inTex);draw();return;}
+        }
+      }else if(!m.prog){
         const decl=params.map(p=>p.t==='color'?`uniform vec3 u_${p.k};`:p.t==='pal'||p.t==='image'?'':p.t==='range2'?`uniform vec2 u_${p.k};`:p.t==='curve'?`uniform float u_${p.k}[5];`:`uniform float u_${p.k};`).join('\n');
         try{m.prog=mkProg(VS,HEAD+GLSL_LIB+'uniform sampler2D uSrc,uAux;uniform vec2 uRes;uniform float uTime,uSeed;\n'+decl+'\n'+d.frag+(d.colorBound?'\nvoid main(){vec3 m=fx(vUv).rgb;if(u_orig>.5){vec2 t=1./uRes;vec3 s=(texture(uSrc,vUv).rgb*2.+texture(uSrc,vUv+vec2(t.x*3.,0.)).rgb+texture(uSrc,vUv-vec2(t.x*3.,0.)).rgb+texture(uSrc,vUv+vec2(0.,t.y*3.)).rgb+texture(uSrc,vUv-vec2(0.,t.y*3.)).rgb)/6.;vec3 ym=rgb2yiq(m),ys=rgb2yiq(s);float k=clamp(ym.x/max(ys.x,.06),0.,1.);m=yiq2rgb(vec3(ym.x,ys.yz*k));}o=vec4(clamp(m,0.,1.),1.);}':'\nvoid main(){o=vec4(fx(vUv).rgb,1.);}'));}
         catch(e){m.prog=null;throw new Error(d.id+' shader: '+String(e.message).split('\n').slice(0,3).join(' | '));}
       }
-      const pr=m.prog,V=ctx.params||(ctx.layer&&ctx.layer.params)||m.defaults();
+      const pr=(ctx.sync&&ent&&ent.h.prog)||m.prog,V=ctx.params||(ctx.layer&&ctx.layer.params)||m.defaults();
       bindRT(ctx.out);pr.use();samp(pr,'uSrc',0,inTex);
       ctx.inTex=inTex;pr.v2('uRes',ctx.W,ctx.H);pr.f('uTime',ctx.t);pr.f('uSeed',(ctx.layer?ctx.layer.seed:0)+(V.seed||0));
       for(const p of params){
@@ -1965,6 +2005,7 @@ function defineModule(d){
       }
       if(d.bind)d.bind(pr,V,ctx);
       draw();
+      if(d.after)d.after(pr,V,ctx);
     },
     thumbnail(){return null;}
   };
@@ -2461,6 +2502,79 @@ vec4 fx(vec2 uv){
   else if(u_keep>1.5)col=mix(col,src*(u_ss>.5?1.:0.),1.-t*0.-0.);
   if(u_ss>.5)col=mix(col,src,u_so/100.*(u_keep<.5?1.:0.));
   return vec4(col,1.);}`});
+/*CAMFX:BEGIN (generated by tools/gen_camfx.py from the n0ise camera app)*/
+const CAMLIB="float hash11(float p){ p=fract(p*.1031); p*=p+33.33; p*=p+p; return fract(p); }\nfloat hash21(vec2 p){ vec3 p3=fract(vec3(p.xyx)*.1031); p3+=dot(p3,p3.yzx+33.33); return fract((p3.x+p3.y)*p3.z); }\nfloat luma(vec3 c){ return dot(c,vec3(.299,.587,.114)); }\nvec3 hueRot(vec3 c,float a){ vec3 k=vec3(.57735); float cs=cos(a), sn=sin(a); return c*cs+cross(k,c)*sn+k*dot(k,c)*(1.-cs); }\nvec3 hpal(float h){ return .5+.5*cos(6.28318*(h+vec3(0.,.33,.67))); }\nvec2 mir(vec2 u){ return 1.-abs(1.-mod(u,2.)); }\nfloat edge(vec2 uv,float k){\n  vec2 p=k/u_res;\n  float tl=luma(vid(uv+p*vec2(-1.,1.))), t=luma(vid(uv+p*vec2(0.,1.))), tr=luma(vid(uv+p*vec2(1.,1.)));\n  float l=luma(vid(uv+p*vec2(-1.,0.))), r=luma(vid(uv+p*vec2(1.,0.)));\n  float bl=luma(vid(uv+p*vec2(-1.,-1.))), b=luma(vid(uv+p*vec2(0.,-1.))), br=luma(vid(uv+p*vec2(1.,-1.)));\n  float gx=-tl-2.*l-bl+tr+2.*r+br;\n  float gy=-tl-2.*t-tr+bl+2.*b+br;\n  return length(vec2(gx,gy));\n}\nvec3 heat(float t){\n  vec3 c=mix(vec3(0.,0.,.08),vec3(.25,0.,.65),smoothstep(0.,.2,t));\n  c=mix(c,vec3(.95,.08,.3),smoothstep(.2,.45,t));\n  c=mix(c,vec3(1.,.62,0.),smoothstep(.45,.7,t));\n  c=mix(c,vec3(1.,1.,.4),smoothstep(.7,.9,t));\n  return mix(c,vec3(1.),smoothstep(.9,1.,t));\n}\nvec3 firePal(float t){ return clamp(vec3(t*2.4,t*2.4-.8,t*2.4-1.7),0.,1.); }\nvec3 grade(vec3 c,vec3 sh,vec3 hi,float amt,float sat,float con){\n  c=clamp((c-.5)*con+.5,0.,1.);\n  float l=luma(c);\n  c+=(mix(sh,hi,l)-.5)*amt;\n  return mix(vec3(luma(c)),c,sat);\n}\nfloat vig(vec2 uv,float a,float b){ return smoothstep(a,b,length((uv-.5)*vec2(ASP,1.))); }";
+const CAMFX=[{"id":"clean","label":"clean","cat":"color","c":"#e9e9ee","i":45,"m":40,"fn":"fx_clean","hist":false,"src":"vec3 fx_clean(vec2 uv){ vec3 c=vid(uv); c=(c-.5)*(1.+I*.18)+.5; return mix(vec3(luma(c)),c,1.+I*.25); }","dep":[]},{"id":"chrome","label":"chrome","cat":"color","c":"#ff5c8a","i":55,"m":45,"fn":"fx_chrome","hist":false,"src":"vec3 fx_chrome(vec2 uv){\n  vec2 d=uv-.5; float r=length(d); vec2 o=d*r*(.03+I*.09+M*.05);\n  vec3 c=vec3(vid(uv+o).r,vid(uv).g,vid(uv-o).b);\n  c=(c-.5)*(1.15+I*.6)+.5;\n  c=mix(vec3(luma(c)),c,1.35+I*1.4);\n  return hueRot(c,sin(u_time*.7+uv.y*3.)*M*.5);\n}","dep":[]},{"id":"aqua","label":"aqua","cat":"color","c":"#35e0ff","i":55,"m":45,"fn":"fx_aqua","hist":false,"src":"vec3 fx_aqua(vec2 uv){\n  vec3 c=vid(uv); float l=luma(c);\n  vec3 g=mix(vec3(0.,.08,.3),vec3(.6,1.,1.),smoothstep(0.,1.,l));\n  c=mix(c,g,.35+I*.55);\n  return hueRot(c,(M-.5)*1.6)*1.08;\n}","dep":[]},{"id":"solar","label":"solar","cat":"color","c":"#ffb02e","i":55,"m":45,"fn":"fx_solar","hist":false,"src":"vec3 fx_solar(vec2 uv){\n  vec3 c=vid(uv); float thr=.3+M*.4;\n  vec3 s=mix(c,1.-c,smoothstep(thr-.04,thr+.04,c));\n  s=hueRot(s,I*2.5+u_time*.1*M);\n  s=(s-.5)*(1.3+I)+.5;\n  return mix(c,s,.4+I*.6);\n}","dep":[]},{"id":"thermal","label":"thermal","cat":"color","c":"#ff5a1f","i":55,"m":45,"fn":"fx_thermal","hist":false,"src":"vec3 fx_thermal(vec2 uv){\n  float l=luma(vid(uv));\n  l=clamp((l-.5)*(1.3+I*1.2)+.5+(M-.5)*.5,0.,1.);\n  return heat(l);\n}","dep":[]},{"id":"duo","label":"duo","cat":"color","c":"#a35cff","i":60,"m":40,"fn":"fx_duo","hist":false,"src":"vec3 fx_duo(vec2 uv){\n  float l=luma(vid(uv)); l=clamp((l-.5)*(1.1+I)+.5,0.,1.);\n  return mix(hpal(M)*.22,hpal(M+.42),l);\n}","dep":[]},{"id":"tri","label":"tri","cat":"color","c":"#3ff0a0","i":60,"m":35,"fn":"fx_tri","hist":false,"src":"vec3 fx_tri(vec2 uv){\n  float l=luma(vid(uv)); l=clamp((l-.5)*(1.1+I*.9)+.5,0.,1.);\n  vec3 a=hpal(M)*.2, b=hpal(M+.33), c2=hpal(M+.66)*1.1+.1;\n  return l<.5?mix(a,b,l*2.):mix(b,c2,(l-.5)*2.);\n}","dep":[]},{"id":"neon","label":"neon","cat":"color","c":"#00ffd0","i":60,"m":50,"fn":"fx_neon","hist":false,"src":"vec3 fx_neon(vec2 uv){\n  vec3 c=vid(uv); float e=edge(uv,1.2+M*1.5);\n  vec3 g=hpal(luma(c)*.7+uv.x*.25+u_time*.05*(M+.2));\n  return c*c*.18*(1.-I*.6)+g*smoothstep(.08,.7,e)*(1.2+I*3.2);\n}","dep":[]},{"id":"fire","label":"fire","cat":"color","c":"#ff7a18","i":55,"m":55,"fn":"fx_fire","hist":false,"src":"vec3 fx_fire(vec2 uv){\n  vec2 w=vec2(sin(uv.y*22.+u_time*3.2),cos(uv.x*17.+u_time*2.6))*.008*(.3+M*2.);\n  w.y+=(hash21(floor(uv*40.)+floor(u_time*20.))-.5)*.01*M;\n  float l=luma(vid(uv+w));\n  l=pow(clamp(l,0.,1.),.9-I*.35)*(1.+I*.5);\n  return firePal(l);\n}","dep":[]},{"id":"cyber","label":"cyber","cat":"color","c":"#ff2bd6","i":55,"m":45,"fn":"fx_cyber","hist":false,"src":"vec3 fx_cyber(vec2 uv){\n  float o=.004*(1.+M*2.);\n  vec3 c=vec3(vid(uv+vec2(o,0.)).r,vid(uv).g,vid(uv-vec2(o,0.)).b);\n  float l=luma(c);\n  vec3 g=mix(vec3(.9,.05,.6)*l*1.7,vec3(.1,1.,.9)*(.3+l),smoothstep(.25,.75,l));\n  c=mix(c,g,.55+I*.45);\n  c*=.93+.07*sin(uv.y*u_res.y*1.2);\n  return c*1.1;\n}","dep":[]},{"id":"sunset","label":"sunset","cat":"color","c":"#ff7f50","i":50,"m":50,"fn":"fx_sunset","hist":false,"src":"vec3 fx_sunset(vec2 uv){\n  vec3 c=vid(uv);\n  c=grade(c,vec3(.55,.38,.75),vec3(.98,.62,.28),.55+I*.6,1.2+I*.5,1.05+I*.25);\n  return hueRot(c,(M-.5)*.5);\n}","dep":[]},{"id":"forest","label":"forest","cat":"color","c":"#7ddc5a","i":50,"m":50,"fn":"fx_forest","hist":false,"src":"vec3 fx_forest(vec2 uv){\n  vec3 c=vid(uv);\n  c=grade(c,vec3(.3,.52,.46),vec3(.72,.82,.4),.55+I*.6,1.15+I*.5,1.05+I*.25);\n  return hueRot(c,(M-.5)*.6);\n}","dep":[]},{"id":"noir","label":"noir","cat":"mono","c":"#ffffff","i":55,"m":40,"fn":"fx_noir","hist":false,"src":"vec3 fx_noir(vec2 uv){\n  float l=luma(vid(uv));\n  l=clamp((l-.5)*(1.25+I*1.6)+.5+(M-.5)*.25,0.,1.);\n  l+=(hash21(uv*u_res+fract(u_time)*77.)-.5)*(.06+I*.12);\n  return vec3(l);\n}","dep":[]},{"id":"invert","label":"invert","cat":"mono","c":"#d7f0ff","i":55,"m":45,"fn":"fx_invert","hist":false,"src":"vec3 fx_invert(vec2 uv){\n  vec3 c=vid(uv); vec3 n=1.-c;\n  n=(n-.5)*(1.+M*.6)+.5;\n  return mix(c,n,.3+.7*I);\n}","dep":[]},{"id":"xray","label":"x-ray","cat":"mono","c":"#6fd2ff","i":55,"m":45,"fn":"fx_xray","hist":false,"src":"vec3 fx_xray(vec2 uv){\n  vec3 c=vid(uv); float l=1.-luma(c);\n  l=pow(clamp(l,0.,1.),1.+I*1.2);\n  float e=edge(uv,1.+M*1.5);\n  return vec3(l*.78,l*.95,l)+vec3(.2,.5,.65)*e*.4;\n}","dep":[]},{"id":"poster","label":"poster","cat":"mono","c":"#ffd23f","i":45,"m":40,"fn":"fx_poster","hist":false,"src":"vec3 fx_poster(vec2 uv){\n  vec3 c=vid(uv);\n  float s=floor(mix(7.,2.,I)+.5);\n  c=mix(vec3(luma(c)),c,1.5);\n  c=floor(c*s+.5)/s;\n  float e=edge(uv,1.+M);\n  return c*(1.-smoothstep(.25,.7,e));\n}","dep":[]},{"id":"halftone","label":"halftone","cat":"mono","c":"#ff4d6d","i":50,"m":20,"fn":"fx_halftone","hist":false,"src":"vec3 fx_halftone(vec2 uv){\n  float cells=mix(110.,34.,I);\n  vec2 q=vec2(uv.x*ASP,uv.y);\n  float ang=.45; mat2 R=mat2(cos(ang),-sin(ang),sin(ang),cos(ang));\n  vec2 p=R*q*cells; vec2 id=floor(p); vec2 f=fract(p)-.5;\n  vec2 qc=transpose(R)*((id+.5)/cells);\n  vec3 c=vid(vec2(qc.x/ASP,qc.y));\n  float l=luma(c);\n  float dark=step(.5,M);\n  float rad=mix(1.-l,l,dark)*.75;\n  float d=length(f);\n  float aa=max(fwidth(d),.001);\n  float dot_=1.-smoothstep(rad-aa,rad+aa,d);\n  vec3 ink=mix(vec3(.05),c*1.25,dark);\n  vec3 paper=mix(vec3(.96,.94,.88),vec3(.03),dark);\n  return mix(paper,ink,dot_);\n}","dep":[]},{"id":"ascii","label":"ascii","cat":"mono","c":"#f5f5f5","i":45,"m":50,"fn":"fx_ascii","hist":false,"src":"vec3 fx_ascii(vec2 uv){ return glyphFx(uv,0); }","dep":["vec3 glyphFx(vec2 uv,int mode){\n  float rows=mix(86.,30.,I);\n  vec2 cells=vec2(rows*ASP*.62,rows);\n  vec2 g=uv*cells; vec2 id=floor(g); vec2 f=fract(g);\n  vec3 c=vid((id+.5)/cells);\n  float l=luma(c);\n  float seed=hash21(id);\n  float tick=floor(u_time*(2.+M*10.)+seed*20.);\n  vec2 gp=f*vec2(4.,6.); vec2 pi=floor(gp); vec2 pf=fract(gp);\n  float h=hash21(id*13.1+pi*3.7+tick*.17);\n  float shape=step(.2,pf.x)*step(.2,pf.y)*step(.2,1.-pf.x)*step(.2,1.-pf.y);\n  float on=step(1.-clamp(l*1.3,0.,1.),h)*shape;\n  if(mode==0){\n    return vec3(.03)+on*mix(vec3(1.),c*1.4,.45);\n  }\n  float sp=.15+hash11(id.x*1.3)*.6;\n  float rain=fract(uv.y+u_time*sp*(.4+M*1.6)+hash11(id.x)*10.);\n  float trail=pow(1.-rain,3.);\n  float head=smoothstep(.04,.0,rain);\n  vec3 gc=vec3(.1,1.,.35);\n  return vec3(0.,.02,.0)+gc*(l*1.3+.08)*on*(.3+trail*1.3)+vec3(.8,1.,.85)*head*on;\n}"]},{"id":"lomo","label":"lomo","cat":"film","c":"#ffb347","i":55,"m":45,"fn":"fx_lomo","hist":false,"src":"vec3 fx_lomo(vec2 uv){\n  vec3 c=vid(uv);\n  c=vec3(pow(c.r,.8),pow(c.g,1.),pow(c.b,1.25));\n  c=(c-.5)*(1.2+I*.5)+.5;\n  c=mix(vec3(luma(c)),c,1.3+I*.9);\n  c*=mix(1.,1.-vig(uv,.2,.85),.55+I*.35);\n  c+=(hash21(uv*u_res+fract(u_time)*91.)-.5)*.06;\n  return c+vec3(.04,0.,-.02)*M;\n}","dep":[]},{"id":"vintage","label":"vintage","cat":"film","c":"#e8c07a","i":55,"m":45,"fn":"fx_vintage","hist":false,"src":"vec3 fx_vintage(vec2 uv){\n  vec3 c=vid(uv); float l=luma(c);\n  c=mix(c,vec3(l)*vec3(1.12,.96,.76),.5+M*.4);\n  c=c*(.82-I*.05)+.1+I*.04;\n  c+=(hash21(uv*u_res+fract(u_time)*53.)-.5)*(.05+I*.08);\n  c*=1.-vig(uv,.25,.9)*.5;\n  return c;\n}","dep":[]},{"id":"kodak","label":"kodak","cat":"film","c":"#ffcc66","i":55,"m":45,"fn":"fx_kodak","hist":false,"src":"vec3 fx_kodak(vec2 uv){\n  vec3 c=grade(vid(uv),vec3(.46,.5,.56),vec3(.66,.55,.4),.55+I*.5,1.2+I*.4,1.08+I*.2);\n  c+=(hash21(uv*u_res+fract(u_time)*31.)-.5)*.04;\n  return hueRot(c,(M-.5)*.3);\n}","dep":[]},{"id":"fuji","label":"fuji","cat":"film","c":"#7bd8a0","i":55,"m":45,"fn":"fx_fuji","hist":false,"src":"vec3 fx_fuji(vec2 uv){\n  vec3 c=grade(vid(uv),vec3(.46,.54,.5),vec3(.55,.6,.56),.5+I*.45,1.1+I*.4,1.04+I*.15);\n  c+=(hash21(uv*u_res+fract(u_time)*37.)-.5)*.035;\n  return hueRot(c,(M-.5)*.35);\n}","dep":[]},{"id":"cinema","label":"cinema","cat":"film","c":"#4fc3d9","i":55,"m":45,"fn":"fx_cinema","hist":false,"src":"vec3 fx_cinema(vec2 uv){\n  vec3 c=grade(vid(uv),vec3(.28,.5,.58),vec3(.76,.55,.38),.85+I*.5,1.1+I*.3,1.12+I*.25);\n  c*=1.-vig(uv,.3,1.)*.35;\n  return hueRot(c,(M-.5)*.25);\n}","dep":[]},{"id":"super8","label":"super 8","cat":"film","c":"#f0b36a","i":55,"m":45,"fn":"fx_super8","hist":false,"src":"vec3 fx_super8(vec2 uv){\n  float t=floor(u_time*18.);\n  vec2 wv=vec2(hash11(t)-.5,hash11(t+3.)-.5)*.004*(.5+M);\n  vec3 c=vid(uv+wv); float l=luma(c);\n  c=mix(c,vec3(l)*vec3(1.1,.95,.8),.35);\n  c=grade(c,vec3(.55,.46,.4),vec3(.62,.52,.4),.6,.95,1.05+I*.2);\n  c*=.9+.1*hash11(t+7.)*(1.+M);\n  c+=(hash21(uv*u_res*.7+t)-.5)*(.08+I*.14);\n  float sc=step(.997-.004*I,hash21(vec2(floor(uv.x*u_res.x*.3),t)));\n  c=mix(c,vec3(.9),sc*.5*step(.5,hash11(t+1.)));\n  c*=1.-vig(uv,.25,.9)*.7;\n  return c;\n}","dep":[]},{"id":"vhs","label":"vhs","cat":"film","c":"#ff6bd5","i":55,"m":45,"fn":"fx_vhs","hist":false,"src":"vec3 fx_vhs(vec2 uv){\n  float t=u_time;\n  float jit=(hash21(vec2(floor(uv.y*u_res.y*.5),floor(t*30.)))-.5)*.0025*(.5+M*2.);\n  float trk=smoothstep(.95,1.,fract(uv.y*.6+t*.15*(.4+M)));\n  vec2 u=vec2(uv.x+jit+trk*(.02+.04*I)*sin(uv.y*80.+t*20.),uv.y);\n  float bl=.003+I*.004;\n  vec3 c=vec3(vid(u+vec2(bl,0.)).r,vid(u).g,vid(u-vec2(bl,0.)).b);\n  c=mix(vec3(luma(c)),c,.75);\n  c=(c-.5)*(.95+I*.25)+.5+vec3(.02,0.,.04);\n  c+=(hash21(uv*u_res+t*60.)-.5)*(.08+I*.1);\n  c+=trk*.18;\n  c*=.94+.06*sin(uv.y*u_res.y*1.6);\n  return c;\n}","dep":[]},{"id":"crt","label":"crt","cat":"film","c":"#9dff7a","i":55,"m":45,"fn":"fx_crt","hist":false,"src":"vec3 fx_crt(vec2 uv){\n  vec2 p=uv*2.-1.;\n  p*=1.+dot(p,p)*(.05+I*.1);\n  vec2 u=p*.5+.5;\n  if(u.x<0.||u.x>1.||u.y<0.||u.y>1.) return vec3(0.);\n  float ca=.0015+.003*M;\n  vec3 c=vec3(vid(u+vec2(ca,0.)).r,vid(u).g,vid(u-vec2(ca,0.)).b);\n  float sl=.78+.22*sin(u.y*u_res.y*1.57);\n  float xx=mod(u.x*u_res.x,3.);\n  vec3 mk=.75+.25*vec3(step(xx,1.),step(1.,xx)*step(xx,2.),step(2.,xx));\n  c*=sl*mk*(1.2+I*.4)*(.97+.03*sin(u_time*60.));\n  c*=1.-vig(u,.45,.95)*.6;\n  return c;\n}","dep":[]},{"id":"night","label":"night","cat":"film","c":"#3dff6e","i":50,"m":50,"fn":"fx_night","hist":false,"src":"vec3 fx_night(vec2 uv){\n  float l=luma(vid(uv));\n  l=pow(clamp(l*(1.8+I*2.),0.,1.),.8);\n  l+=(hash21(uv*u_res+fract(u_time)*45.)-.5)*.18;\n  vec3 g=vec3(.1,1.,.3)*l;\n  g*=.85+.15*sin(uv.y*u_res.y*1.3+u_time*8.);\n  return g*mix(1.,smoothstep(.72,.35,length((uv-.5)*vec2(ASP,1.))),.8);\n}","dep":[]},{"id":"bloom","label":"bloom","cat":"fx","c":"#ffd6f5","i":55,"m":45,"fn":"fx_bloom","hist":false,"src":"vec3 fx_bloom(vec2 uv){\n  vec3 c=vid(uv); vec3 b=vec3(0.); float r=.012+M*.03;\n  for(int i=0;i<12;i++){\n    float fi=float(i); float a=fi*2.39996; float rr=sqrt((fi+.5)/12.)*r;\n    vec3 s=vid(uv+vec2(cos(a)/ASP,sin(a))*rr);\n    b+=max(s-.5,0.);\n  }\n  b/=12.;\n  return c+b*(3.+I*8.);\n}","dep":[]},{"id":"dream","label":"dream","cat":"fx","c":"#c7a6ff","i":55,"m":45,"fn":"fx_dream","hist":false,"src":"vec3 fx_dream(vec2 uv){\n  vec3 c=vid(uv); vec3 b=vec3(0.); float r=.018+I*.035;\n  for(int i=0;i<16;i++){\n    float fi=float(i); float a=fi*2.39996+u_time*.2*M; float rr=sqrt((fi+.5)/16.)*r;\n    b+=vid(uv+vec2(cos(a)/ASP,sin(a))*rr);\n  }\n  b/=16.;\n  vec3 o=mix(c,b,.55);\n  o=o*1.08+.07*vec3(.9,.7,1.);\n  o=hueRot(o,sin(u_time*.4)*M*.5);\n  return mix(vec3(luma(o)),o,1.2+I*.4);\n}","dep":[]},{"id":"glitch","label":"glitch","cat":"fx","c":"#00f0ff","i":55,"m":60,"fn":"fx_glitch","hist":false,"src":"vec3 fx_glitch(vec2 uv){\n  float t=floor(u_time*(6.+M*14.));\n  float band=floor(uv.y*mix(8.,40.,hash11(t)));\n  float h=hash21(vec2(band,t));\n  float on=step(1.-(.08+I*.35),h);\n  float shift=(hash21(vec2(band,t+9.))-.5)*(.1+I*.25)*on;\n  float ca=.004+.02*I*on+.003*M;\n  vec2 u=vec2(uv.x+shift,uv.y);\n  vec3 c=vec3(vid(u+vec2(ca,0.)).r,vid(u).g,vid(u-vec2(ca,0.)).b);\n  vec2 bk=floor(uv*vec2(10.,18.));\n  float hb=step(1.-.04*I,hash21(bk+t*1.3));\n  c=mix(c,1.-c,hb);\n  return c;\n}","dep":[]},{"id":"pixel","label":"pixel","cat":"fx","c":"#b5ff3c","i":50,"m":45,"fn":"fx_pixel","hist":false,"src":"vec3 fx_pixel(vec2 uv){\n  float rows=mix(110.,18.,I);\n  vec2 cells=vec2(rows*ASP,rows);\n  vec2 g=uv*cells; vec2 f=fract(g);\n  vec3 c=vid((floor(g)+.5)/cells);\n  float lv=floor(mix(24.,4.,M)+.5);\n  c=floor(c*lv+.5)/lv;\n  c*=1.-.14*step(.9,max(f.x,f.y));\n  return c;\n}","dep":[]},{"id":"prism","label":"prism","cat":"fx","c":"#ff6ad5","i":55,"m":45,"fn":"fx_prism","hist":false,"src":"vec3 fx_prism(vec2 uv){\n  vec2 d=uv-.5; float len=length(d); vec2 dir=normalize(d+1e-4);\n  float amt=(.01+I*.06)*(.4+len*1.6)*(1.+M*sin(u_time*2.));\n  vec3 acc=vec3(0.); vec3 ws=vec3(0.);\n  for(int i=0;i<8;i++){\n    float t=float(i)/7.;\n    vec3 w=clamp(vec3(1.-t*2.,1.-abs(t-.5)*2.,t*2.-1.),0.,1.);\n    acc+=vid(uv+dir*amt*(t-.5)*2.)*w; ws+=w;\n  }\n  return acc/max(ws,vec3(.001))*1.05;\n}","dep":[]},{"id":"kaleido","label":"kaleido","cat":"fx","c":"#ff9d00","i":45,"m":55,"fn":"fx_kal","hist":false,"src":"vec3 fx_kal(vec2 uv){\n  vec2 p=(uv-.5)*vec2(ASP,1.);\n  float n=floor(mix(3.,12.,I)+.5);\n  float r=length(p); float a=atan(p.y,p.x)+u_time*.12*(M-.3);\n  float seg=6.28318/n; a=mod(a,seg); a=abs(a-seg*.5);\n  vec2 q=vec2(cos(a),sin(a))*r;\n  vec2 u=q/vec2(ASP,1.)+.5;\n  u=(u-.5)*.9+.5;\n  return vid(mir(u));\n}","dep":[]},{"id":"mirror","label":"mirror","cat":"fx","c":"#74b9ff","i":50,"m":20,"fn":"fx_mirror","hist":false,"src":"vec3 fx_mirror(vec2 uv){\n  float c=.5+(I-.5)*.3; vec2 u=uv;\n  if(M<.34) u.x=c-abs(uv.x-c);\n  else if(M<.67) u.y=.5-abs(uv.y-.5);\n  else { u.x=c-abs(uv.x-c); u.y=.5-abs(uv.y-.5); }\n  return vid(u);\n}","dep":[]},{"id":"matrix","label":"matrix","cat":"fx","c":"#00ff41","i":45,"m":50,"fn":"fx_matrix","hist":false,"src":"vec3 fx_matrix(vec2 uv){ return glyphFx(uv,1); }","dep":["vec3 glyphFx(vec2 uv,int mode){\n  float rows=mix(86.,30.,I);\n  vec2 cells=vec2(rows*ASP*.62,rows);\n  vec2 g=uv*cells; vec2 id=floor(g); vec2 f=fract(g);\n  vec3 c=vid((id+.5)/cells);\n  float l=luma(c);\n  float seed=hash21(id);\n  float tick=floor(u_time*(2.+M*10.)+seed*20.);\n  vec2 gp=f*vec2(4.,6.); vec2 pi=floor(gp); vec2 pf=fract(gp);\n  float h=hash21(id*13.1+pi*3.7+tick*.17);\n  float shape=step(.2,pf.x)*step(.2,pf.y)*step(.2,1.-pf.x)*step(.2,1.-pf.y);\n  float on=step(1.-clamp(l*1.3,0.,1.),h)*shape;\n  if(mode==0){\n    return vec3(.03)+on*mix(vec3(1.),c*1.4,.45);\n  }\n  float sp=.15+hash11(id.x*1.3)*.6;\n  float rain=fract(uv.y+u_time*sp*(.4+M*1.6)+hash11(id.x)*10.);\n  float trail=pow(1.-rain,3.);\n  float head=smoothstep(.04,.0,rain);\n  vec3 gc=vec3(.1,1.,.35);\n  return vec3(0.,.02,.0)+gc*(l*1.3+.08)*on*(.3+trail*1.3)+vec3(.8,1.,.85)*head*on;\n}"]},{"id":"liquid","label":"liquid","cat":"fx","c":"#4cc9f0","i":55,"m":45,"fn":"fx_liquid","hist":false,"src":"vec3 fx_liquid(vec2 uv){\n  vec2 p=uv*vec2(ASP,1.)*3.; float t=u_time*(.4+M*1.5);\n  vec2 w=vec2(sin(p.y*2.+t)+sin(p.y*4.7-t*1.3)*.5,cos(p.x*2.2-t*.9)+cos(p.x*5.1+t*1.1)*.5);\n  vec2 o=w*(.006+I*.045);\n  return vec3(vid(uv+o*1.05).r,vid(uv+o).g,vid(uv+o*.95).b);\n}","dep":[]},{"id":"paint","label":"paint","cat":"fx","c":"#ff8fab","i":55,"m":45,"fn":"fx_paint","hist":false,"src":"vec3 fx_paint(vec2 uv){\n  vec2 px=mix(1.2,3.5,I)/u_res;\n  vec3 best=vec3(0.); float bv=1e9;\n  for(int q=0;q<4;q++){\n    vec2 dir=vec2((q==0||q==2)?-1.:1.,q<2?-1.:1.);\n    vec3 s=vec3(0.); vec3 s2=vec3(0.);\n    for(int j=0;j<2;j++){\n      for(int i=0;i<2;i++){\n        vec3 t=vid(uv+dir*(vec2(float(i),float(j))+.5)*px*1.6);\n        s+=t; s2+=t*t;\n      }\n    }\n    vec3 m=s*.25; vec3 v=s2*.25-m*m; float vv=v.r+v.g+v.b;\n    if(vv<bv){ bv=vv; best=m; }\n  }\n  best=(best-.5)*(1.1+M*.4)+.5;\n  return mix(vec3(luma(best)),best,1.25);\n}","dep":[]},{"id":"grid","label":"grid","cat":"fx","c":"#d0d0d0","i":40,"m":40,"fn":"fx_grid","hist":false,"src":"vec3 fx_grid(vec2 uv){\n  float n=floor(mix(2.,5.,I)+.5);\n  vec2 g=uv*n; vec2 id=floor(g); vec2 f=fract(g);\n  vec3 c=hueRot(vid(f),(hash21(id)-.5)*M*4.);\n  vec2 e=min(f,1.-f);\n  float inset=.02*n;\n  float k=smoothstep(inset*.5,inset,min(e.x,e.y));\n  return mix(vec3(.04),c,k);\n}","dep":[]},{"id":"ghost","label":"ghost","cat":"time","c":"#a0b4ff","i":55,"m":50,"fn":"fx_ghost","hist":true,"src":"vec3 fx_ghost(vec2 uv){\n  vec3 c=vid(uv);\n  if(u_chip>.5) return c;\n  vec3 p=texture(u_prev,uv).rgb;\n  float k=.55+M*.4;\n  return mix(mix(c,p,k),max(c,p*(.9+M*.09)),I);\n}","dep":[]},{"id":"tunnel","label":"tunnel","cat":"time","c":"#ff3df0","i":55,"m":45,"fn":"fx_tunnel","hist":true,"src":"vec3 fx_tunnel(vec2 uv){\n  vec3 c=vid(uv);\n  if(u_chip>.5) return hueRot(c,.8);\n  vec2 p=uv-.5; p.x*=ASP;\n  float a=(.006+M*.03)*sin(u_time*.5+1.);\n  float cs=cos(a), sn=sin(a);\n  p=mat2(cs,-sn,sn,cs)*p;\n  p*=.975-I*.02; p.x/=ASP;\n  vec3 pv=hueRot(texture(u_prev,p+.5).rgb,.05+M*.08);\n  return mix(pv*.985,c,.1+.25*(1.-I));\n}","dep":[]},{"id":"slit","label":"slit","cat":"time","c":"#ffe14d","i":50,"m":35,"fn":"fx_slit","hist":true,"src":"vec3 fx_slit(vec2 uv){\n  vec3 c=vid(uv);\n  if(u_chip>.5) return c*vec3(1.1,.95,.7);\n  float n=floor(1.+M*6.);\n  float dx=n/u_res.x;\n  if(uv.x>1.-dx){ return vid(vec2(.5+(I-.5)*.6,uv.y)); }\n  return texture(u_prev,vec2(uv.x+dx,uv.y)).rgb;\n}","dep":[]},{"id":"mosh","label":"mosh","cat":"time","c":"#ff5555","i":60,"m":45,"fn":"fx_mosh","hist":true,"src":"vec3 fx_mosh(vec2 uv){\n  vec3 c=vid(uv); float l=luma(c);\n  if(u_chip>.5) return c;\n  vec4 pr=texture(u_prev,uv);\n  float it=l-pr.a;\n  vec2 px=1./u_res;\n  float gx=(luma(vid(uv+vec2(px.x,0.)))-luma(vid(uv-vec2(px.x,0.))))*.5;\n  float gy=(luma(vid(uv+vec2(0.,px.y)))-luma(vid(uv-vec2(0.,px.y))))*.5;\n  vec2 g=vec2(gx,gy);\n  vec2 flow=-it*g/(dot(g,g)+.004);\n  float lim=2.+I*10.;\n  flow=clamp(flow,vec2(-lim),vec2(lim));\n  vec3 q=texture(u_prev,uv-flow*px).rgb;\n  float key=step(.994-.02*M,hash11(floor(u_time*(2.+M*6.))));\n  float bleed=.012+(1.-I)*.05;\n  return mix(q,c,max(bleed,key));\n}","dep":[]}];
+/*CAMFX:END*/
+/*FUSE:BEGIN WP1 fusion engine: a recipe of up to 4 steps compiles to ONE fragment program.
+  Toggling a step is a uniform (u_on*), never a recompile. Changing which effects are chosen compiles in the
+  background (KHR_parallel_shader_compile) and the previous program keeps drawing until the new one is ready. */
+const CAMLIB2=CAMLIB.replace(/^float luma\(.*$/m,'').replace(/^vec3 hueRot\(.*$/m,'');
+/* tuning for newn0ise: default hue offsets keep the blue/cyan share low (gate 2), chrome gets a stronger default so it differs from clean */
+const FX_HUE={aqua:-95,duo:45,tri:50,cyber:50,sunset:-35,invert:70,poster:-30,dream:-35,night:0};
+/* random Fuse picks skip looks that are blue/cyan by nature (they stay one tap away) */
+const FX_BLUISH=new Set(['aqua','xray','night','dream','duo','tri','cyber','bloom','cinema','glitch']);
+const fusePool=()=>CAMFX.filter(f=>!f.hist&&!FX_BLUISH.has(f.id)&&f.id!=='clean');
+const FX_DEF={chrome:[100,100]};
+CAMFX.forEach(f=>{f.hs=FX_HUE[f.id]||0;if(FX_DEF[f.id]){f.i=FX_DEF[f.id][0];f.m=FX_DEF[f.id][1];}});
+const FXBY=Object.fromEntries(CAMFX.map(f=>[f.id,f]));
+const fxCost=f=>{const n=(f.src.match(/vid\(|texture\(/g)||[]).length;return /for\s*\(/.test(f.src)||n>8?3:n>3?2:1;};
+const FUSE_BLENDS=['normal','multiply','screen','add','difference','overlay'];
+const FX_OPTS=['Off',...CAMFX.map(f=>f.label+' '+'·'.repeat(fxCost(f)))];
+const FX_CATS={color:'Color',mono:'Mono',film:'Film',fx:'FX',time:'Time'};
+const fxIndex=id=>CAMFX.findIndex(f=>f.id===id)+1;
+function fuseParams(){
+  const ps=[];
+  for(let s=1;s<=4;s++){const sec='Step '+s;
+    ps.push({k:'f'+s,t:'c',label:'Effect',opts:FX_OPTS,def:s===1?fxIndex('chrome'):0,sec});
+    ps.push({k:'on'+s,t:'b',label:'On',def:true,sec});
+    ps.push({k:'i'+s,label:'Intensity',min:0,max:100,def:55,sec,hero:s===1});
+    ps.push({k:'m'+s,label:'Motion',min:0,max:100,def:45,sec,hero:s===1});
+    ps.push({k:'mx'+s,label:'Mix',min:0,max:100,def:100,sec});
+    ps.push({k:'bl'+s,t:'c',label:'Blend',opts:FUSE_BLENDS,def:0,sec});}
+  return ps.concat([{k:'hue',label:'Hue',min:-180,max:180,def:0,sec:'Finish'},{k:'sat',label:'Saturation',min:0,max:300,def:100,sec:'Finish'},
+    {k:'grain',label:'Grain',min:0,max:100,def:0,sec:'Finish'},{k:'vig',label:'Vignette',min:0,max:100,def:0,sec:'Finish'}]);
+}
+const fuseFxs=V=>[1,2,3,4].map(s=>+V['f'+s]>0?CAMFX[+V['f'+s]-1]:null);
+function fuseFrag(fxs){
+  const used=[...new Set(fxs.filter(Boolean))];
+  let s=`#define u_time uTime
+#define u_res uRes
+uniform sampler2D u_prev;
+const float u_chip=0.;const float u_aud=0.;
+float I,M,ASP;vec3 CUR;vec2 U0;
+vec3 vid(vec2 uv){return uv==U0?CUR:texture(uSrc,uv).rgb;}
+`+CAMLIB2+'\n'+[...new Set(used.flatMap(f=>f.dep||[]))].join('\n')+'\n'+used.map(f=>f.src).join('\n')+`
+void main(){vec2 uv=vUv;U0=uv;ASP=uRes.x/uRes.y;CUR=texture(uSrc,uv).rgb;vec3 c=CUR;
+`;
+  fxs.forEach((f,i)=>{if(!f)return;const n=i+1;
+    s+=`if(u_on${n}>.5){I=u_i${n}/100.;M=u_m${n}/100.;vec3 r=${f.fn}(uv);${f.hs?`r=hueRot(r,${(f.hs*Math.PI/180).toFixed(4)});`:''}int b=int(u_bl${n}+.5);
+vec3 q=b==1?c*r:b==2?1.-(1.-c)*(1.-r):b==3?c+r:b==4?abs(c-r):b==5?mix(2.*c*r,1.-2.*(1.-c)*(1.-r),step(.5,c)):r;
+c=mix(c,q,u_mx${n}/100.);CUR=c;}
+`;});
+  return s+`if(abs(u_hue)>.5)c=hueRot(c,u_hue*.0174533);
+c=mix(vec3(luma(c)),c,u_sat/100.);
+c*=1.-smoothstep(.35,1.05,length((uv-.5)*vec2(ASP,1.)))*u_vig/100.;
+c+=(hash21(gl_FragCoord.xy+fract(uTime)*173.)-.5)*u_grain/100.*.3;
+o=vec4(clamp(c,0.,1.),1.);}`;
+}
+const FUSE_PREV={};
+const fusePrev=(w,h)=>{const k=w+'x'+h;return FUSE_PREV[k]||(FUSE_PREV[k]=mkRT(w,h,{hdr:true}));};
+const fuseCost=V=>fuseFxs(V).reduce((a,f,i)=>a+(f&&V['on'+(i+1)]?fxCost(f):0),0);
+defineModule({id:'fuse',family:'Camera',name:'Fuse',params:fuseParams(),
+  dyn:V=>{const fx=fuseFxs(V);return{key:fx.map(f=>f?f.id:'-').join(),frag:fuseFrag(fx)};},
+  bind(pr,V,ctx){samp(pr,'u_prev',2,fusePrev(ctx.W,ctx.H).tex);},
+  after(pr,V,ctx){if(!ctx.out||!ctx.out.tex||!fuseFxs(V).some(f=>f&&f.hist))return;const c=PR.copy;bindRT(fusePrev(ctx.W,ctx.H));c.use();samp(c,'uT',0,ctx.out.tex);draw();}});
+/* helpers the UI uses */
+function fuseSet(l,slot,id){l.params['f'+slot]=id?fxIndex(id):0;const f=id&&FXBY[id];if(f){l.params['i'+slot]=f.i;l.params['m'+slot]=f.m;l.params['on'+slot]=true;}}
+function fuseRandomPair(l){
+  const pool=fusePool(),pick=()=>pool[Math.random()*pool.length|0];
+  const a=pick();let b=pick();while(b.cat===a.cat&&pool.length>3)b=pick();
+  for(let s=1;s<=4;s++)fuseSet(l,s,null);
+  fuseSet(l,1,a.id);fuseSet(l,2,b.id);l.params.bl2=[0,2,0,5][Math.random()*4|0];l.params.mx2=60+Math.random()*30|0;return a.label+' + '+b.label;
+}
+/*FUSE:END*/
+
 const STACK={layers:[mkLayer('crtlab')],sel:0,rt:{}};
 const F_COMP=HEAD+GLSL_LIB+`
 uniform int uCM;uniform float uCA;
@@ -3280,10 +3394,33 @@ function runModuleGate(thr=.08){
   res.pass=!errs.length&&!res.tooClose.length&&!traitFail.length&&res.cyanAll<=.15&&!res.hueFail.length;
   return{res,sheet};
 }
+/* Fuse gate: every camera effect alone + 20 random fused pairs, over 4 bench sources. Needs async waits for compiles. */
+async function runFuseGate(thr=.04,pairsN=20){
+  const names=['face','animal','text','gradient'],TW=160,TH=120,srcs=benchSources().filter(x=>names.includes(x[0]));
+  const rec=CAMFX.filter(f=>f.id!=='clean'/* identity-style baseline, exempt from the distinctness check */).map(f=>({n:f.id,set:V=>{V.f1=fxIndex(f.id);V.i1=f.i;V.m1=f.m;}}));
+  const rnd=(()=>{let s=7;return()=>(s=(s*16807)%2147483647)/2147483647;})(),pool=fusePool();
+  for(let i=0;i<pairsN;i++){const a=pool[rnd()*pool.length|0],b=pool[rnd()*pool.length|0];if(a===b){i--;continue;}
+    rec.push({n:a.id+'+'+b.id,set:V=>{V.f1=fxIndex(a.id);V.i1=a.i;V.m1=a.m;V.f2=fxIndex(b.id);V.i2=b.i;V.m2=b.m;V.bl2=[0,2,0,5][i%4];V.mx2=70;}});}
+  const sheet=document.createElement('canvas');sheet.width=TW*srcs.length;sheet.height=TH*rec.length;const sg=sheet.getContext('2d');
+  const feats=[],cyan={},saved=STACK.layers,hue={};window.__benching=true;let BT=5;
+  for(let r=0;r<rec.length;r++){feats[r]=[];let cs=0,hs=0,hn=0;
+    for(let c=0;c<srcs.length;c++){
+      setSource(srcs[c][1],'B');const l=mkLayer('fuse');for(let s=2;s<=4;s++)l.params['f'+s]=0;l.params.f1=0;rec[r].set(l.params);STACK.layers=[l];
+      const key=fuseFxs(l.params).map(x=>x?x.id:'-').join();
+      for(let i=0;i<300&&MODULES.fuse.progKey!==key;i++){renderStack(BT+=1/60,1/60);await new Promise(q=>setTimeout(q,10));}
+      for(let i=0;i<4;i++){renderStack(BT+=1/60,1/60);frameNo++;}
+      sg.drawImage(canvas,c*TW,r*TH,TW,TH);feats[r].push(bFeat(canvas));cs+=cyanFrac(canvas);const hh=hueShift(srcs[c][1],canvas);if(hh!==null){hs+=hh;hn++;}}
+    cyan[rec[r].n]=+(cs/srcs.length).toFixed(3);hue[rec[r].n]=hn?+(hs/hn).toFixed(1):null;}
+  STACK.layers=saved;window.__benching=false;
+  const pairs=[];for(let i=0;i<rec.length;i++)for(let j=i+1;j<rec.length;j++){if(rec[i].n.split('+').some(x=>rec[j].n.split('+').includes(x)))continue;/* a pair that contains the other effect is a variation of it, not a duplicate */let d=0;for(let c=0;c<srcs.length;c++)d+=bDist(feats[i][c],feats[j][c]);pairs.push([+(d/srcs.length).toFixed(3),rec[i].n,rec[j].n]);}
+  pairs.sort((a,b)=>a[0]-b[0]);
+  const cyanOver=Object.entries(cyan).filter(([k,v])=>v>.15).map(([k,v])=>k+':'+v);
+  return{res:{n:rec.length,thr,tooClose:pairs.filter(p=>p[0]<thr),closest:pairs.slice(0,8),cyanOver,cyanMean:+(Object.values(cyan).reduce((a,b)=>a+b,0)/rec.length).toFixed(3),pass:!pairs.some(p=>p[0]<thr)&&!cyanOver.length},sheet};
+}
 /* =====================================================================
    Inspector: layer strip, accordions, generic param rows, gallery, skins
    ===================================================================== */
-const IDENT={crtlab:'#ff5a1f',dither:'#8bac0f',ascii:'#ff2a2a',epsilon:'#ffb347',orb:'#ff2a6d',linemod:'#d8ff3a',cmyk:'#e6007e',shapes:'#ffd60a',stipple:'#f4efe1',pixelmania:'#ff9a1f',displace:'#c9c9c9',crusher:'#ff6a00',patmerge:'#ff6fae',multithr:'#f7f3ea'};
+const IDENT={crtlab:'#ff5a1f',fuse:'#ff5c8a',dither:'#8bac0f',ascii:'#ff2a2a',epsilon:'#ffb347',orb:'#ff2a6d',linemod:'#d8ff3a',cmyk:'#e6007e',shapes:'#ffd60a',stipple:'#f4efe1',pixelmania:'#ff9a1f',displace:'#c9c9c9',crusher:'#ff6a00',patmerge:'#ff6fae',multithr:'#f7f3ea'};
 const INS={gallery:false,cat:'All'};
 const $i=id=>document.getElementById(id);
 const layer=()=>STACK.layers[STACK.sel]||STACK.layers[0];
@@ -3366,15 +3503,15 @@ function accordion(title,open){const d=document.createElement('details');d.class
 
 /* thumbnails: render a module over the current source into a small offscreen RT */
 const TH={rt:null,src:null,buf:null};
-function moduleThumb(id,w=160,h=120){
+function moduleThumb(id,w=160,h=120,over){
   const m=MODULES[id];if(!m)return null;
   const cv=document.createElement('canvas');cv.width=w;cv.height=h;
   if(id==='crtlab'){cv.getContext('2d').drawImage(canvas,0,0,w,h);return cv;}
   if(!TH.rt||TH.rt.w!==w){TH.rt=mkRT(w,h,{});TH.src=mkRT(w,h,{});TH.buf=new Uint8Array(w*h*4);}
   const sp=PR.srcp||(PR.srcp=mkProg(VS,F_SRCP));
   bindRT(TH.src);sp.use();samp(sp,'uSrc',0,TEX.src);sp.f('uSrcAsp',SRC.w/SRC.h);sp.f('uScrAsp',w/h);draw();
-  const l=mkLayer(id);
-  try{m.render(TH.src.tex,{t:1.3,dt:.016,out:TH.rt,layer:l,params:l.params,W:w,H:h});}catch(e){return cv;}
+  const l=mkLayer(id);if(over)Object.assign(l.params,over);
+  try{m.render(TH.src.tex,{t:1.3,dt:.016,out:TH.rt,layer:l,params:l.params,W:w,H:h,sync:true});}catch(e){return cv;}
   bindRT(TH.rt);gl.readPixels(0,0,w,h,gl.RGBA,gl.UNSIGNED_BYTE,TH.buf);
   const im=new ImageData(w,h),row=w*4;for(let y=0;y<h;y++)im.data.set(TH.buf.subarray((h-1-y)*row,(h-y)*row),y*row);
   cv.getContext('2d').putImageData(im,0,0);bindRT(null);return cv;
@@ -3403,6 +3540,9 @@ function renderGallery(host){
     t.addEventListener('click',()=>{if(m.id==='crtlab'&&STACK.layers.some(l=>l.module==='crtlab')){toast('CRT Lab is already in the stack');return;}
       STACK.layers.push(mkLayer(m.id));STACK.sel=STACK.layers.length-1;INS.gallery=false;renderInspector();});
     grid.appendChild(t);});
+  if(INS.cat==='All'||INS.cat==='Camera')CAMFX.forEach(f=>{
+    const tl=el('button','tile'),c=moduleThumb('fuse',160,120,{f1:fxIndex(f.id),i1:f.i,m1:f.m}),i=document.createElement('i');i.style.background=f.c;
+    tl.append(c,i,el('span','',f.label));tl.addEventListener('click',()=>pickCam(f.id));grid.appendChild(tl);});
   g.append(cats,grid);host.appendChild(g);
 }
 function remix(l){
@@ -3457,6 +3597,34 @@ function colorRow(host,l){
   }
 }
 const recolors=o=>!!(o&&(o.pal&&o.pal!=='src'));
+/* Fuse bar: up to 4 steps as chips with a power dot (tap = on/off, hold = solo), tap name = pick effect */
+function fuseBar(host,l){
+  const V=l.params,bar=el('div','fbar');
+  const row=el('div','fchips');
+  for(let s=1;s<=4;s++){
+    const f=CAMFX[+V['f'+s]-1],c=el('div','fchip'+(f?'':' empty')+(f&&!V['on'+s]?' off':''));
+    const dot=el('button','fdot');dot.setAttribute('aria-label','Step '+s+' power');dot.setAttribute('aria-pressed',!!(f&&V['on'+s]));
+    let hold=0,solo=false;
+    dot.addEventListener('pointerdown',()=>{solo=false;hold=setTimeout(()=>{solo=true;for(let k=1;k<=4;k++)V['on'+k]=k===s&&!!CAMFX[+V['f'+k]-1];if(navigator.vibrate)try{navigator.vibrate(12);}catch(e){}renderInspector();},450);});
+    dot.addEventListener('pointerup',()=>{clearTimeout(hold);if(solo||!f)return;V['on'+s]=!V['on'+s];renderInspector();});
+    dot.addEventListener('pointerleave',()=>clearTimeout(hold));
+    const nm=el('button','fname',f?f.label:'Add effect');nm.addEventListener('click',()=>{FUSEPICK=FUSEPICK===s?0:s;renderInspector();});
+    c.append(dot,nm);if(f&&s>1){const x=el('button','fx','×');x.setAttribute('aria-label','Remove step '+s);x.addEventListener('click',()=>{fuseSet(l,s,null);renderInspector();});c.appendChild(x);}
+    row.appendChild(c);}
+  bar.appendChild(row);
+  const cost=fuseCost(V),meter=el('span','fcost','Cost '+'●'.repeat(Math.min(cost,9))+'○'.repeat(Math.max(0,9-cost)));
+  const act=el('div','pe');
+  const fb=el('button','','Fuse');fb.title='Random compatible pair';fb.addEventListener('click',()=>{toast(fuseRandomPair(l));renderInspector();});
+  const rs=el('button','','Reset');rs.addEventListener('click',()=>{Object.assign(l.params,MODULES.fuse.defaults());renderInspector();});
+  act.append(fb,rs,meter);bar.appendChild(act);
+  if(cost>=9&&matchMedia('(pointer:coarse)').matches)bar.appendChild(el('div','cl','Heavy on a phone. Switch a step off if it stutters.'));
+  if(FUSEPICK){const pk=el('div','fpick');
+    Object.entries(FX_CATS).forEach(([c,n])=>{pk.appendChild(el('div','cl',n));const w=el('div','pe');
+      CAMFX.filter(f=>f.cat===c).forEach(f=>{const b=el('button','',f.label);b.addEventListener('click',()=>{fuseSet(l,FUSEPICK,f.id);FUSEPICK=0;renderInspector();});w.appendChild(b);});pk.appendChild(w);});
+    bar.appendChild(pk);}
+  host.appendChild(bar);
+}
+let FUSEPICK=0;
 function renderInspector(){
   renderStrip();renderPeek();
   const host=$i('insp');host.innerHTML='';
@@ -3489,6 +3657,7 @@ function renderInspector(){
     grp('Chains',CHAINS.map(c=>[c[0],c[1].some((mid,i)=>stageModel(STAGES[i][0],mid)[2].pal),()=>applyStages(c[1])]));
     pr.b.appendChild(el('div','cl','◐ = this preset also sets a color palette'));
   }
+  if(l.module==='fuse')fuseBar(host,l);
   host.appendChild(pr.d);
   /* transform */
   const tf=accordion('Transform',false);
@@ -3527,10 +3696,13 @@ function wireHero(){
    Stage 2: artwork-first mobile. Peek = hero scrubber + MODE + effect rail.
    Sheet states: hidden / peek / half / full (transform only).
    ===================================================================== */
-const RAIL_FAMILY={dither:'Dither',orb:'Dither',multithr:'Dither',cmyk:'Print',shapes:'Print',stipple:'Print',patmerge:'Print',crusher:'Pixel',pixelmania:'Pixel',ascii:'Glyph',linemod:'Lines',displace:'Glitch',epsilon:'Light',crtlab:'Signal / CRT'};
-const RAIL_ORDER=['Signal / CRT','Dither','Print','Pixel','Glyph','Lines','Glitch','Light'];
+/* camera filters as one-tap tiles: tap = replace step 1 of the Fuse recipe */
+function pickCam(id){const l=layer();if(l.module!=='fuse'){l.module='fuse';l.params=MODULES.fuse.defaults();for(let s=2;s<=4;s++)l.params['f'+s]=0;}fuseSet(l,1,id);INS.gallery=false;renderInspector();}
+const camOn=(l,fx)=>l.module==='fuse'&&+l.params.f1===fxIndex(fx.id);
+const RAIL_FAMILY={dither:'Dither',orb:'Dither',multithr:'Dither',cmyk:'Print',shapes:'Print',stipple:'Print',patmerge:'Print',crusher:'Pixel',pixelmania:'Pixel',ascii:'Glyph',linemod:'Lines',displace:'Glitch',epsilon:'Light',crtlab:'Signal / CRT',fuse:'Camera'};
+const RAIL_ORDER=['Signal / CRT','Camera','Cam · Color','Cam · Mono','Cam · Film','Cam · FX','Cam · Time','Dither','Print','Pixel','Glyph','Lines','Glitch','Light'];
 const THUMBS=new Map();   /* key: module id + source version -> canvas */
-function cachedThumb(id){const k=id+'|'+SRC.ver;if(id!=='crtlab'&&THUMBS.has(k))return THUMBS.get(k);const c=moduleThumb(id,112,84);if(id!=='crtlab'){THUMBS.set(k,c);if(THUMBS.size>60)THUMBS.delete(THUMBS.keys().next().value);}return c;}
+function cachedThumb(id){const k=id+'|'+SRC.ver;if(id!=='crtlab'&&THUMBS.has(k))return THUMBS.get(k);const fx=id.startsWith('fuse:')&&FXBY[id.slice(5)];const c=fx?moduleThumb('fuse',112,84,{f1:fxIndex(fx.id),i1:fx.i,m1:fx.m}):moduleThumb(id,112,84);if(id!=='crtlab'){THUMBS.set(k,c);if(THUMBS.size>60)THUMBS.delete(THUMBS.keys().next().value);}return c;}
 function heroOf(l){const m=MODULES[l.module],h=(m.schema.hero||[])[0];if(!h)return null;
   if(l.module==='crtlab'){const c=CTL[h];return c&&c.t==='r'?{V:P,p:{k:c.k,label:c.l,min:c.min,max:c.max,step:c.step,t:'r'}}:null;}
   const p=m.params.find(x=>x.k===h);return p&&p.t==='r'?{V:l.params,p}:null;}
@@ -3565,13 +3737,14 @@ function renderPeek(){
   /* rail */
   const wrap=el('div','railwrap'),rail=el('div','rail');
   const groups={};Object.values(MODULES).filter(x=>!x.hidden).forEach(x=>{(groups[RAIL_FAMILY[x.id]||x.family]=groups[RAIL_FAMILY[x.id]||x.family]||[]).push(x);});
+  Object.entries(FX_CATS).forEach(([c,n])=>{groups['Cam · '+n]=CAMFX.filter(f=>f.cat===c).map(f=>({id:'fuse:'+f.id,name:f.label,fx:f}));});
   const io='IntersectionObserver' in window?new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){const t=e.target;io.unobserve(t);requestAnimationFrame(()=>{if(!t._id)return;const c=cachedThumb(t._id);c.className='rt';t.replaceChild(c,t.firstChild);});}}),{root:rail,rootMargin:'0px 200px'}):null;
   RAIL_ORDER.filter(f=>groups[f]).concat(Object.keys(groups).filter(f=>!RAIL_ORDER.includes(f))).forEach(f=>{
     const g=el('div','rg');g.dataset.f=f;g.appendChild(el('div','rgl',f));const row=el('div','rgt');
     groups[f].forEach(x=>{
-      const t=el('button','rtile');t.setAttribute('aria-pressed',x.id===l.module);t.title=x.name;
+      const t=el('button','rtile');t.setAttribute('aria-pressed',x.fx?camOn(l,x.fx):x.id===l.module);t.title=x.name;
       const ph=el('canvas','rt');ph.width=112;ph.height=84;t.append(ph,el('span','',x.name));t._id=x.id;
-      t.addEventListener('click',()=>{replaceModule(layer(),x.id);if(navigator.vibrate)try{navigator.vibrate(5);}catch(e){}});
+      t.addEventListener('click',()=>{if(x.fx)pickCam(x.fx.id);else replaceModule(layer(),x.id);if(navigator.vibrate)try{navigator.vibrate(5);}catch(e){}});
       row.appendChild(t);io?io.observe(t):(t.replaceChild(Object.assign(cachedThumb(x.id),{className:'rt'}),ph));});
     g.appendChild(row);rail.appendChild(g);});
   const nx=el('button','railnext','›');nx.setAttribute('aria-label','Next category');
