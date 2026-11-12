@@ -1010,7 +1010,7 @@ const PROFILES=[
 ];
 
 /* ---------- state ---------- */
-const BASE={pal:'amber',custom:['#000000','#ff3d6e','#3df5ff','#ffffff'],txt:'n0ise\n> signal acquired\n> ',profile:'studio'};
+const BASE={pal:'src',custom:['#000000','#ff3d6e','#3df5ff','#ffffff'],txt:'n0ise\n> signal acquired\n> ',profile:'studio'};
 CT.forEach(c=>BASE[c.k]=c.d);
 BASE.stg=['clean','live','direct','studio'];
 const P=JSON.parse(JSON.stringify(BASE));
@@ -1459,12 +1459,12 @@ function buildChainUI(){
   const g=group('display','Chain');
   STAGES.forEach(([sid,name,models],i)=>{
     g.appendChild(el('div','cl',name));
-    chipRow(g,models.map(m=>[m[0],m[1]]),'stg_'+sid,(id)=>{
+    chipRow(g,models.map(m=>[m[0],m[1]+(m[2].pal?' ◐':'')]),'stg_'+sid,(id)=>{
       const s=(P.stg||BASE.stg).slice();s[i]=id;applyStages(s);snap();refreshUI();
     });
   });
   g.appendChild(el('div','cl','Ready-made chains'));
-  chipRow(g,CHAINS.map((c,i)=>[String(i),c[0]]),'chains',(i)=>{applyStages(CHAINS[+i][1]);snap();refreshUI();});
+  chipRow(g,CHAINS.map((c,i)=>[String(i),c[0]+(c[1].some((mid,j)=>stageModel(STAGES[j][0],mid)[2].pal)?' ◐':'')]),'chains',(i)=>{applyStages(CHAINS[+i][1]);snap();refreshUI();});
 }
 function refreshChainUI(){
   STAGES.forEach(([sid],i)=>document.querySelectorAll('#stg_'+sid+' .chip').forEach(b=>b.setAttribute('aria-pressed',P.profile==='chain'&&b.dataset.v===(P.stg||[])[i])));
@@ -1798,8 +1798,9 @@ function adaptQ(){
    ===================================================================== */
 const MODULES={};const MAPIMG={};
 const registerModule=m=>(MODULES[m.id]=m);
+const COLOR_MODES=['original','mono','duotone','gradient','palette'];
 const BLENDS=['normal','multiply','screen','additive','difference','overlay'];
-const LAYER_DEFAULTS={opacity:100,blend:'normal',showSource:false,select:'all',thr:50,pos:[0,0],size:100,seed:0,visible:true};
+const LAYER_DEFAULTS={color:{mode:'original',pal:['#1a0f2e','#ffd27a'],amt:100},opacity:100,blend:'normal',showSource:false,select:'all',thr:50,pos:[0,0],size:100,seed:0,visible:true};
 let layerUid=1;
 const mkLayer=(mod,params)=>({uid:layerUid++,module:mod,params:params||(MODULES[mod]&&MODULES[mod].defaults?MODULES[mod].defaults():{}),...JSON.parse(JSON.stringify(LAYER_DEFAULTS))});
 
@@ -1907,9 +1908,9 @@ float selMask(sampler2D t,vec2 uv,vec2 d,int mode,float thr){
 const F_SRCP=HEAD+`uniform sampler2D uSrc;uniform float uSrcAsp,uScrAsp;
 void main(){float r=uScrAsp/uSrcAsp;vec2 s=r>1.?vec2(1.,1./r):vec2(r,1.);o=vec4(texture(uSrc,(vUv-.5)*s+.5).rgb,1.);}`;
 function defineModule(d){
-  const params=d.params.map(p=>({t:'r',step:1,sec:'Main',...p}));
+  const params=(d.colorBound?[{k:'orig',t:'b',label:'Original colors',def:true,sec:'Color'}]:[]).concat(d.params).map(p=>({t:'r',step:1,sec:'Main',...p}));
   const m={
-    id:d.id,family:d.family,name:d.name,engine:d.engine||'gpu',hidden:d.hidden,params,
+    id:d.id,family:d.family,name:d.name,colorBound:!!d.colorBound,hideOnOrig:d.hideOnOrig||[],engine:d.engine||'gpu',hidden:d.hidden,params,
     defaultLook:d.defaultLook||{paper:'#ffffff',ink:'#000000',palette:null},
     get schema(){const secs=[];params.forEach(p=>{let s=secs.find(x=>x.label===p.sec);if(!s)secs.push(s={id:p.sec,label:p.sec,keys:[]});s.keys.push(p.k);});return{sections:secs,hero:params.filter(p=>p.hero).map(p=>p.k)};},
     defaults(){const o={};params.forEach(p=>{o[p.k]=Array.isArray(p.def)?p.def.slice():p.def;});return o;},
@@ -1917,7 +1918,7 @@ function defineModule(d){
     render(inTex,ctx){
       if(!m.prog){
         const decl=params.map(p=>p.t==='color'?`uniform vec3 u_${p.k};`:p.t==='pal'||p.t==='image'?'':p.t==='range2'?`uniform vec2 u_${p.k};`:p.t==='curve'?`uniform float u_${p.k}[5];`:`uniform float u_${p.k};`).join('\n');
-        try{m.prog=mkProg(VS,HEAD+GLSL_LIB+'uniform sampler2D uSrc,uAux;uniform vec2 uRes;uniform float uTime,uSeed;\n'+decl+'\n'+d.frag+'\nvoid main(){o=vec4(fx(vUv).rgb,1.);}');}
+        try{m.prog=mkProg(VS,HEAD+GLSL_LIB+'uniform sampler2D uSrc,uAux;uniform vec2 uRes;uniform float uTime,uSeed;\n'+decl+'\n'+d.frag+(d.colorBound?'\nvoid main(){vec3 m=fx(vUv).rgb;if(u_orig>.5){vec2 t=1./uRes;vec3 s=(texture(uSrc,vUv).rgb*2.+texture(uSrc,vUv+vec2(t.x*3.,0.)).rgb+texture(uSrc,vUv-vec2(t.x*3.,0.)).rgb+texture(uSrc,vUv+vec2(0.,t.y*3.)).rgb+texture(uSrc,vUv-vec2(0.,t.y*3.)).rgb)/6.;vec3 ym=rgb2yiq(m),ys=rgb2yiq(s);float k=clamp(ym.x/max(ys.x,.06),0.,1.);m=yiq2rgb(vec3(ym.x,ys.yz*k));}o=vec4(clamp(m,0.,1.),1.);}':'\nvoid main(){o=vec4(fx(vUv).rgb,1.);}'));}
         catch(e){m.prog=null;throw new Error(d.id+' shader: '+String(e.message).split('\n').slice(0,3).join(' | '));}
       }
       const pr=m.prog,V=ctx.params||(ctx.layer&&ctx.layer.params)||m.defaults();
@@ -2003,7 +2004,7 @@ function cpuDiffuse(inTex,W,H,cell,n,method,seed){
   if(dw.fresh){dw.fresh=false;gl.pixelStorei(gl.UNPACK_ALIGNMENT,1);gl.texImage2D(gl.TEXTURE_2D,0,gl.R8,dw.res.gw,dw.res.gh,0,gl.RED,gl.UNSIGNED_BYTE,dw.res.out);}
   return dith.tex;
 }
-defineModule({id:'dither',family:'Bitmap',name:'Dither',
+defineModule({colorBound:true,hideOnOrig:['pal'],id:'dither',family:'Bitmap',name:'Dither',
   defaultLook:{paper:'#9bbc0f',ink:'#0f380f',palette:'Gameboy'},
   params:[
     {k:'pal',t:'pal',label:'Palette',def:PALETTES.Handheld.Gameboy,sec:'Palette',hero:false},
@@ -2047,7 +2048,7 @@ vec4 fx(vec2 uv){
   }});
 
 /* ---------- ASCII ---------- */
-defineModule({id:'ascii',family:'Glyph',name:'ASCII',
+defineModule({colorBound:true,hideOnOrig:['pal','usepal','transp','bg'],id:'ascii',family:'Glyph',name:'ASCII',
   defaultLook:{paper:'#000000',ink:'#ff0000',palette:'Red on black'},
   params:[
     {k:'pal',t:'pal',label:'Palette',def:PALETTES.Mono['Red on black'],sec:'Palette'},
@@ -2082,7 +2083,7 @@ defineModule({id:'epsilon',family:'Optical',name:'Epsilon Glow',
     {k:'rad',label:'Radius',min:2,max:300,def:90,sec:'Glow',hero:true},{k:'int',label:'Intensity',min:0,max:500,def:140,sec:'Glow',hero:true},
     {k:'asp',label:'Aspect ratio',min:20,max:500,def:100,sec:'Shape'},{k:'dir',label:'Direction',min:0,max:180,def:0,sec:'Shape'},
     {k:'n',label:'Falloff n',min:1,max:6,def:2.2,step:.1,sec:'Falloff'},{k:'eps',label:'Epsilon',min:1,max:100,def:12,sec:'Falloff'},
-    {k:'ds',label:'Distance scale',min:10,max:400,def:100,sec:'Falloff'},{k:'tint',t:'color',label:'Glow tint',def:'#ff9d3a',sec:'Glow'},{k:'tmix',label:'Tint amount',min:0,max:100,def:55,sec:'Glow'}],
+    {k:'ds',label:'Distance scale',min:10,max:400,def:100,sec:'Falloff'},{k:'tint',t:'color',label:'Glow tint',def:'#ff9d3a',sec:'Glow'},{k:'tmix',label:'Tint amount',min:0,max:100,def:0,sec:'Glow'}],
   frag:SS+`vec4 fx(vec2 uv){
   vec3 base=texture(uSrc,uv).rgb;float R=u_rad*S/uRes.y;float th=u_thr/100.,sm=max(.01,u_sm/100.*.5);
   float ang=u_dir*PI/180.,ca=cos(ang),sa=sin(ang),asp=u_asp/100.,e=u_eps/100.,sc=u_ds/100.;vec3 acc=vec3(0.);float wsum=0.;
@@ -2095,7 +2096,7 @@ defineModule({id:'epsilon',family:'Optical',name:'Epsilon Glow',
   return vec4(base+gcol*u_int/100.*.35,1.);}`});
 
 /* ---------- Orb Diffuse X ---------- */
-defineModule({id:'orb',family:'Bitmap',name:'Orb Diffuse X',
+defineModule({colorBound:true,hideOnOrig:['pal'],id:'orb',family:'Bitmap',name:'Orb Diffuse X',
   defaultLook:{paper:'#000000',ink:'#ff2a6d',palette:'Retro scan'},
   params:[
     {k:'pal',t:'pal',label:'Palette',def:PALETTES.Neon['Retro scan'],sec:'Palette'},
@@ -2117,7 +2118,7 @@ defineModule({id:'orb',family:'Bitmap',name:'Orb Diffuse X',
   return vec4(col*orb*u_int/100.*lines,1.);}`});
 
 /* ---------- Line Modulation ---------- */
-defineModule({id:'linemod',family:'Modulation',name:'Line Modulation',
+defineModule({colorBound:true,hideOnOrig:['ink','bg'],id:'linemod',family:'Modulation',name:'Line Modulation',
   defaultLook:{paper:'#000000',ink:'#d8ff3a',palette:null},
   params:[
     {k:'ink',t:'color',label:'Line color',def:'#d8ff3a',sec:'Lines'},{k:'bg',t:'color',label:'Background',def:'#050605',sec:'Lines'},
@@ -2145,7 +2146,7 @@ const GLSL_GEN=`vec3 gen(vec3 c){c=pow(clamp(c,0.,1.),vec3(u_gam/100.));c=(c-.5)
 vec2 rot2(vec2 p,float a){float c=cos(a),s=sin(a);return vec2(p.x*c-p.y*s,p.x*s+p.y*c);}`;
 
 /* ---------- CMYK Print ---------- */
-defineModule({id:'cmyk',family:'Print',name:'CMYK Print',
+defineModule({colorBound:true,hideOnOrig:['paper'],id:'cmyk',family:'Print',name:'CMYK Print',
   defaultLook:{paper:'#f2ead3',ink:'#1d1d1b',palette:'CMYK on cream'},
   params:[
     {k:'pitch',label:'Screen pitch',min:3,max:40,def:9,step:.5,sec:'Screen',hero:true},{k:'gain',label:'Dot gain',min:-50,max:100,def:20,sec:'Screen',hero:true},
@@ -2187,7 +2188,7 @@ const chP=(c,col,ang,shape)=>[
   {k:'an'+c,label:'Angle '+c.toUpperCase(),min:0,max:180,def:ang,sec:'Screen '+c.toUpperCase()},
   {k:'ik'+c,t:'color',label:'Ink '+c.toUpperCase(),def:col,sec:'Screen '+c.toUpperCase()},
   {k:'in'+c,label:'Intensity '+c.toUpperCase(),min:0,max:200,def:100,sec:'Screen '+c.toUpperCase()}];
-defineModule({id:'shapes',family:'Print',name:'Shape Halftone',
+defineModule({colorBound:true,hideOnOrig:['ikr','ikg','ikb','paper'],id:'shapes',family:'Print',name:'Shape Halftone',
   defaultLook:{paper:'#000000',ink:'#ff3b30',palette:null},
   params:[
     ...chP('r','#ff3b30',15,0),...chP('g','#34ff5a',75,2),...chP('b','#ff2d95',45,5),
@@ -2229,7 +2230,7 @@ vec4 fx(vec2 uv){
   return vec4(col,1.);}`});
 
 /* ---------- Stipple Print ---------- */
-defineModule({id:'stipple',family:'Print',name:'Stipple Print',
+defineModule({colorBound:true,hideOnOrig:['inkc','paper'],id:'stipple',family:'Print',name:'Stipple Print',
   defaultLook:{paper:'#f4efe1',ink:'#14110f',palette:'Paper'},
   params:[
     {k:'sp',label:'Stipple spacing',min:2,max:30,def:6,step:.5,sec:'Dots',hero:true},{k:'dens',label:'Density',min:10,max:300,def:140,sec:'Dots',hero:true},
@@ -2343,7 +2344,7 @@ vec4 fx(vec2 uv){
   return vec4(col,1.);}`});
 
 /* ---------- Pixel Crusher: LED bead matrix ---------- */
-defineModule({id:'crusher',family:'Display',name:'Pixel Crusher',
+defineModule({colorBound:true,hideOnOrig:['pal','usepal'],id:'crusher',family:'Display',name:'Pixel Crusher',
   defaultLook:{paper:'#05010f',ink:'#ff2a6d',palette:'Video synth'},
   params:[
     {k:'pal',t:'pal',label:'Palette: Video synth',def:PALETTES.Neon['Video synth'],sec:'Color'},{k:'usepal',t:'b',label:'Use palette',def:true,sec:'Color'},
@@ -2380,7 +2381,7 @@ vec4 fx(vec2 uv){
 /* =====================================================================
    Step 4c: pattern merge and multi threshold.
    ===================================================================== */
-defineModule({id:'patmerge',family:'Pattern',name:'Pattern Merge',
+defineModule({colorBound:true,hideOnOrig:['dc','bg','tr'],id:'patmerge',family:'Pattern',name:'Pattern Merge',
   defaultLook:{paper:'#808080',ink:'#ff6fae',palette:'Pink on gray'},
   params:[
     {k:'style',t:'c',label:'Style',opts:['Rounded merge','Square merge','Ring'],def:0,sec:'Pattern'},
@@ -2405,7 +2406,7 @@ vec4 fx(vec2 uv){
   vec3 src=texture(uSrc,uv).rgb;vec3 bg=u_tr>.5?src*(1.-u_dim/100.*.6):u_bg;
   return vec4(mix(bg,u_dc,m),1.);}`});
 
-defineModule({id:'multithr',family:'Bitmap',name:'Multi Threshold',
+defineModule({colorBound:true,hideOnOrig:['blk','wht'],id:'multithr',family:'Bitmap',name:'Multi Threshold',
   defaultLook:{paper:'#ffffff',ink:'#000000',palette:'Ink'},
   params:[
     {k:'lvl',label:'Level',min:0,max:100,def:50,sec:'Threshold',hero:true},{k:'sm',label:'Smoothness',min:0,max:100,def:6,sec:'Threshold'},
@@ -2431,7 +2432,11 @@ vec4 fx(vec2 uv){
   if(u_ss>.5)col=mix(col,src,u_so/100.*(u_keep<.5?1.:0.));
   return vec4(col,1.);}`});
 const STACK={layers:[mkLayer('crtlab')],sel:0,rt:{}};
-const F_COMP=HEAD+`
+const F_COMP=HEAD+GLSL_LIB+`
+uniform int uCM;uniform float uCA;
+vec3 treat(vec3 c){if(uCM==0)return c;float l=luma(c);vec3 r;
+  if(uCM==1)r=vec3(l);else if(uCM==2)r=mix(uPal[0],uPal[max(uPalN-1,0)],l);else if(uCM==3)r=palSmooth(l);else r=palNearest(c);
+  return mix(c,r,uCA);}
 uniform sampler2D uBase,uLay;
 uniform vec2 uTexel,uPos;
 uniform float uOpa,uSize,uThr,uShow;
@@ -2441,7 +2446,7 @@ void main(){
   vec3 b=texture(uBase,vUv).rgb;
   vec2 uv=(vUv-.5-uPos)/max(uSize,.01)+.5;
   bool inside=all(greaterThanEqual(uv,vec2(0.)))&&all(lessThanEqual(uv,vec2(1.)));
-  vec3 l=texture(uLay,clamp(uv,0.,1.)).rgb;
+  vec3 l=treat(texture(uLay,clamp(uv,0.,1.)).rgb);
   float m=inside?1.:0.;
   if(uSel==1){
     float e=abs(L3(texture(uBase,vUv+vec2(uTexel.x,0.)).rgb)-L3(texture(uBase,vUv-vec2(uTexel.x,0.)).rgb))
@@ -2484,6 +2489,8 @@ function renderStack(t,dt){
     cp.f('uOpa',l.opacity/100);cp.f('uSize',l.size/100);cp.f('uThr',l.thr/100);cp.f('uShow',l.showSource?1:0);
     const bi=BLENDS.indexOf(l.blend),si=['all','edges','luma'].indexOf(l.select);
     cp.i('uBlend',Math.max(0,bi));cp.i('uSel',Math.max(0,si));
+    const col=l.color||LAYER_DEFAULTS.color,cmi=Math.max(0,COLOR_MODES.indexOf(col.mode));cp.i('uCM',cmi);cp.f('uCA',col.amt/100);
+    {const a=(col.pal&&col.pal.length?col.pal:['#000000','#ffffff']).slice(0,16),buf=new Float32Array(48);a.forEach((h,i)=>{const c=hexRGB(h);buf[i*3]=c[0]/255;buf[i*3+1]=c[1]/255;buf[i*3+2]=c[2]/255;});cp.v3v('uPal',buf);cp.i('uPalN',a.length);}
     draw();
     const q=acc;acc=tmp;tmp=q;STACK.rt.a=acc;STACK.rt.b=tmp;
   }
@@ -2646,7 +2653,7 @@ function chipRow(parent,items,idPrefix,onClick,cls){
 /* ---------- display tab custom blocks ---------- */
 function buildProfiles(){
   const host=$('#profilesHost');if(!host)return;host.innerHTML='';
-  const items=PROFILES.map(p=>[p[0],p[1]]).concat(loadLooks().map(l=>[l.id,'★ '+l.name]));
+  const items=PROFILES.map(p=>[p[0],p[1]+(recolors(p[2])?' ◐':'')]).concat(loadLooks().map(l=>[l.id,'★ '+l.name]));
   const row=chipRow(host,items,'profiles',(id)=>{
     const look=loadLooks().find(l=>l.id===id);
     if(look){Object.assign(P,JSON.parse(JSON.stringify(look.p)));P.profile=id;}
@@ -3205,7 +3212,8 @@ const TRAITS={
   shapes:['additive-channel','shape-grid','rgb-black','static','paper'],stipple:['probabilistic','stipple','bw-paper','static','paper'],
   pixelmania:['avg-block','quadtree','image','static','bevel'],displace:['warp','warp','source','flow','none'],
   crusher:['led','bead-grid','synth','wobble','bead'],patmerge:['select','sdf-blob','pink-gray','static','none'],
-  multithr:['threshold','bitmap','bw','static','grain']
+  multithr:['threshold','bitmap','bw','static','grain'],
+  crtlab:['crt-chain','scanline-mask','source','flicker','scan']
 };
 const TRAIT_NAMES=['tone mapping','spatial structure','palette','temporal','surface'];
 function cyanFrac(cv){
@@ -3214,15 +3222,22 @@ function cyanFrac(cv){
     let h;if(mx===r)h=((gg-b)/dl+6)%6;else if(mx===gg)h=(b-r)/dl+2;else h=(r-gg)/dl+4;h*=60;if(h>=165&&h<=255)n++;}
   return n/(96*72);
 }
+function hueShift(srcCv,outCv){
+  const rd=cv=>{let w=cv.width,h=cv.height,cur=cv;while(w>24){w=Math.max(24,w>>1);h=Math.max(18,h>>1);const t=document.createElement('canvas');t.width=w;t.height=h;t.getContext('2d').drawImage(cur,0,0,w,h);cur=t;}const t=document.createElement('canvas');t.width=24;t.height=18;const g=t.getContext('2d',{willReadFrequently:true});g.drawImage(cur,0,0,24,18);return g.getImageData(0,0,24,18).data;};
+  const a=rd(srcCv),b=rd(outCv);let sum=0,n=0;
+  const hsv=(d,i)=>{const r=d[i]/255,g=d[i+1]/255,bl=d[i+2]/255,mx=Math.max(r,g,bl),mn=Math.min(r,g,bl),dl=mx-mn;if(mx<.2||dl/mx<.25)return null;let h;if(mx===r)h=((g-bl)/dl+6)%6;else if(mx===g)h=(bl-r)/dl+2;else h=(r-g)/dl+4;return h*60;};
+  for(let i=0;i<a.length;i+=4){const x=hsv(a,i),y=hsv(b,i);if(x===null||y===null)continue;let d=Math.abs(x-y);if(d>180)d=360-d;sum+=d;n++;}
+  return n>12?sum/n:null;
+}
 function runModuleGate(thr=.08){
   const ids=Object.keys(MODULES).filter(i=>!MODULES[i].hidden&&TRAITS[i]);
   const names=['face','animal','text','gradient'],TW=200,TH=150,srcs=benchSources().filter(x=>names.includes(x[0]));
   const sheet=document.createElement('canvas');sheet.width=TW*srcs.length;sheet.height=TH*ids.length;const sg=sheet.getContext('2d');
-  const feats=[],errs=[],cyan={};let BT=5,all=0,allN=0;window.__benching=true;const saved=STACK.layers;
-  ids.forEach((id,r)=>{feats[r]=[];let cs=0;srcs.forEach((s,c)=>{
+  const feats=[],errs=[],cyan={},hue={};let BT=5,all=0,allN=0;window.__benching=true;const saved=STACK.layers;
+  ids.forEach((id,r)=>{feats[r]=[];let cs=0,hs=0,hn=0;srcs.forEach((s,c)=>{
     setSource(s[1],'B');STACK.layers=[mkLayer(id)];
-    try{for(let i=0;i<4;i++){renderStack(BT+=1/60,1/60);frameNo++;}sg.drawImage(canvas,c*TW,r*TH,TW,TH);feats[r].push(bFeat(canvas));cs+=cyanFrac(canvas);}catch(e){errs.push(id+': '+String(e.message).slice(0,160));}
-  });cyan[id]=+(cs/srcs.length).toFixed(3);all+=cs;allN+=srcs.length;});
+    try{for(let i=0;i<4;i++){renderStack(BT+=1/60,1/60);frameNo++;}sg.drawImage(canvas,c*TW,r*TH,TW,TH);feats[r].push(bFeat(canvas));cs+=cyanFrac(canvas);const hh=hueShift(s[1],canvas);if(hh!==null){hs+=hh;hn++;}}catch(e){errs.push(id+': '+String(e.message).slice(0,160));}
+  });cyan[id]=+(cs/srcs.length).toFixed(3);hue[id]=hn?+(hs/hn).toFixed(1):null;all+=cs;allN+=srcs.length;});
   STACK.layers=saved;
   const pairs=[],traitFail=[];
   for(let i=0;i<ids.length;i++)for(let j=i+1;j<ids.length;j++){
@@ -3230,8 +3245,9 @@ function runModuleGate(thr=.08){
     const diff=TRAITS[ids[i]].filter((v,k)=>v!==TRAITS[ids[j]][k]).length;if(diff<2)traitFail.push([ids[i],ids[j],diff]);
   }
   pairs.sort((a,b)=>a[0]-b[0]);
-  const res={modules:ids.length,distThreshold:thr,tooClose:pairs.filter(p=>p[0]<thr),closest:pairs.slice(0,6),traitFail,cyanAll:+(all/allN).toFixed(3),cyan,errs};
-  res.pass=!errs.length&&!res.tooClose.length&&!traitFail.length&&res.cyanAll<=.15;
+  const res={modules:ids.length,distThreshold:thr,tooClose:pairs.filter(p=>p[0]<thr),closest:pairs.slice(0,6),traitFail,cyanAll:+(all/allN).toFixed(3),cyan,hue,errs};
+  res.hueFail=Object.entries(hue).filter(([k,v])=>v!==null&&v>35).map(([k,v])=>k);
+  res.pass=!errs.length&&!res.tooClose.length&&!traitFail.length&&res.cyanAll<=.15&&!res.hueFail.length;
   return{res,sheet};
 }
 /* =====================================================================
@@ -3371,7 +3387,7 @@ function remix(l){
 }
 function hslHex(h,s,l){const a=s*Math.min(l,1-l),f=n=>{const k=(n+h/30)%12;return Math.round(255*(l-a*Math.max(-1,Math.min(k-3,9-k,1))));};return rgbHex([f(0),f(8),f(4)]);}
 function shareStack(){
-  const data=STACK.layers.map(l=>({m:l.module,p:l.module==='crtlab'?null:l.params,o:l.opacity,b:l.blend,s:l.showSource,sel:l.select,t:l.thr,pos:l.pos,z:l.size,seed:l.seed,v:l.visible}));
+  const data=STACK.layers.map(l=>({m:l.module,p:l.module==='crtlab'?null:l.params,o:l.opacity,b:l.blend,s:l.showSource,sel:l.select,t:l.thr,pos:l.pos,z:l.size,seed:l.seed,v:l.visible,c:l.color}));
   const hash='#s='+btoa(unescape(encodeURIComponent(JSON.stringify(data))));
   history.replaceState(null,'',hash);
   (navigator.clipboard?navigator.clipboard.writeText(location.href):Promise.reject()).then(()=>toast('Link copied')).catch(()=>toast('Link is in the address bar'));
@@ -3379,10 +3395,38 @@ function shareStack(){
 function loadStackHash(){
   const m=location.hash.match(/^#s=(.+)$/);if(!m)return;
   try{const a=JSON.parse(decodeURIComponent(escape(atob(m[1]))));
-    STACK.layers=a.filter(x=>MODULES[x.m]).map(x=>{const l=mkLayer(x.m,x.p||undefined);Object.assign(l,{opacity:x.o,blend:x.b,showSource:x.s,select:x.sel,thr:x.t,pos:x.pos,size:x.z,seed:x.seed,visible:x.v});return l;});
+    STACK.layers=a.filter(x=>MODULES[x.m]).map(x=>{const l=mkLayer(x.m,x.p||undefined);Object.assign(l,{opacity:x.o,blend:x.b,showSource:x.s,select:x.sel,thr:x.t,pos:x.pos,size:x.z,seed:x.seed,visible:x.v});if(x.c)l.color=x.c;return l;});
     if(!STACK.layers.length)STACK.layers=[mkLayer('crtlab')];}catch(e){}
 }
 const presetsOf=id=>{try{return JSON.parse(localStorage.getItem('n0ise.p.'+id)||'[]');}catch(e){return[];}};
+
+/* ---- color treatment: separate from the effect ---- */
+function extractColors(k=5){
+  const cv=document.createElement('canvas');cv.width=cv.height=48;const g=cv.getContext('2d',{willReadFrequently:true});
+  try{g.drawImage(SRC.el,0,0,48,48);}catch(e){return null;}
+  const d=g.getImageData(0,0,48,48).data,px=[];for(let i=0;i<d.length;i+=4)px.push([d[i],d[i+1],d[i+2]]);
+  let cs=Array.from({length:k},(_,i)=>px[Math.floor((i+.5)*px.length/k)].slice());
+  for(let it=0;it<8;it++){const sum=cs.map(()=>[0,0,0,0]);
+    px.forEach(c=>{let b=0,bd=1e9;cs.forEach((m,i)=>{const e=(c[0]-m[0])**2+(c[1]-m[1])**2+(c[2]-m[2])**2;if(e<bd){bd=e;b=i;}});sum[b][0]+=c[0];sum[b][1]+=c[1];sum[b][2]+=c[2];sum[b][3]++;});
+    cs=cs.map((m,i)=>sum[i][3]?[sum[i][0]/sum[i][3],sum[i][1]/sum[i][3],sum[i][2]/sum[i][3]]:m);}
+  return cs.sort((a,b)=>(.299*a[0]+.587*a[1]+.114*a[2])-(.299*b[0]+.587*b[1]+.114*b[2])).map(rgbHex);
+}
+const COLOR_LABEL={original:'Original',mono:'Mono',duotone:'Duotone',gradient:'Gradient',palette:'Palette'};
+function colorRow(host,l){
+  const col=l.color||(l.color=JSON.parse(JSON.stringify(LAYER_DEFAULTS.color)));
+  const r=el('div','ir cr');r.appendChild(el('span','l','Color'));
+  const sel=document.createElement('select');COLOR_MODES.forEach(m=>{const o=document.createElement('option');o.value=m;o.textContent=COLOR_LABEL[m];sel.appendChild(o);});sel.value=col.mode;
+  sel.addEventListener('change',()=>{col.mode=sel.value;renderInspector();});r.appendChild(sel);host.appendChild(r);
+  if(col.mode!=='original'){
+    const a=accordion('Color treatment',true);
+    rowRange(a.b,'Amount',()=>col.amt,v=>col.amt=v,0,100,1);
+    if(col.mode!=='mono')palEditor(a.b,{k:'pal'},col,null);
+    if(col.mode!=='mono'){const w=el('div','pe'),ex=el('button','','Extract from image');ex.addEventListener('click',()=>{const c=extractColors(col.mode==='duotone'?2:5);if(c){col.pal=c;renderInspector();}else toast('Can’t read colors from this source');});
+      const dp=el('button','','Fewer colors');dp.addEventListener('click',()=>{col.pal=palDepth(col.pal,Math.max(2,col.pal.length-1));renderInspector();});w.append(ex,dp);a.b.appendChild(w);}
+    host.appendChild(a.d);
+  }
+}
+const recolors=o=>!!(o&&(o.pal&&o.pal!=='src'));
 function renderInspector(){
   renderStrip();
   const host=$i('insp');host.innerHTML='';
@@ -3401,13 +3445,21 @@ function renderInspector(){
   if(ix<STACK.layers.length-1)mk('Down',()=>{const a=STACK.layers;[a[ix+1],a[ix]]=[a[ix],a[ix+1]];STACK.sel=ix+1;renderInspector();});
   if(STACK.layers.length>1)mk('Delete',()=>{STACK.layers.splice(ix,1);STACK.sel=Math.max(0,ix-1);renderInspector();});
   host.appendChild(hd);
+  colorRow(host,l);
   /* presets */
   const pr=accordion('Presets',false);
   const pl=presetsOf(l.module),pw=el('div','pe');
   const sv=el('button','','Save preset');sv.addEventListener('click',()=>{const a=presetsOf(l.module);a.push({n:'Preset '+(a.length+1),p:JSON.parse(JSON.stringify(l.module==='crtlab'?P:l.params))});try{localStorage.setItem('n0ise.p.'+l.module,JSON.stringify(a.slice(-12)));}catch(e){}renderInspector();});
   pw.appendChild(sv);
   pl.forEach(x=>{const b=el('button','',x.n);b.addEventListener('click',()=>{if(l.module==='crtlab'){Object.assign(P,JSON.parse(JSON.stringify(x.p)));refreshUI();}else l.params=JSON.parse(JSON.stringify(x.p));renderInspector();});pw.appendChild(b);});
-  pr.b.appendChild(pw);host.appendChild(pr.d);
+  pr.b.appendChild(pw);
+  if(l.module==='crtlab'){
+    const grp=(t,items)=>{pr.b.appendChild(el('div','cl',t));const w=el('div','pe');items.forEach(([n,tag,fn])=>{const b=el('button','',n+(tag?' ◐':''));b.title=tag?'Also sets a color palette':'Keeps original colors';b.addEventListener('click',()=>{fn();snap();refreshUI();renderInspector();});w.appendChild(b);});pr.b.appendChild(w);};
+    grp('Looks',PROFILES.map(x=>[x[1],recolors(x[2]),()=>applyProfile(x[0])]));
+    grp('Chains',CHAINS.map(c=>[c[0],c[1].some((mid,i)=>stageModel(STAGES[i][0],mid)[2].pal),()=>applyStages(c[1])]));
+    pr.b.appendChild(el('div','cl','◐ = this preset also sets a color palette'));
+  }
+  host.appendChild(pr.d);
   /* transform */
   const tf=accordion('Transform',false);
   rowRange(tf.b,'Opacity',()=>l.opacity,v=>l.opacity=v,0,100,1);
@@ -3424,7 +3476,7 @@ function renderInspector(){
   }else{
     m.schema.sections.forEach((sec,i)=>{
       const a=accordion(sec.label,i<2);
-      sec.keys.forEach(k=>{const p=m.params.find(x=>x.k===k);if(p.t==='pal')palEditor(a.b,p,l.params,null);else rowParam(a.b,p,l.params,null);});
+      sec.keys.forEach(k=>{const p=m.params.find(x=>x.k===k);if(m.colorBound&&l.params.orig&&(p.t==='pal'||p.t==='color'||m.hideOnOrig.includes(k)))return;if(p.t==='pal')palEditor(a.b,p,l.params,null);else rowParam(a.b,p,l.params,null);});
       host.appendChild(a.d);});
   }
 }
