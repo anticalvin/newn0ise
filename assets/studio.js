@@ -2765,6 +2765,374 @@ function addPrimitive(k) {
   const m = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: 12170412, roughness: 0.55, metalness: 0.1 }));
   return registerObject(k, m, "mesh", { size: k === "Plane" ? 3 : 1.6 });
 }
+var AU = { ctx: null, an: null, el: null, node: null, mic: null, name: "", freq: new Uint8Array(512), wave: new Uint8Array(1024), bands: new Float32Array(64), level: 0, gain: 1, demo: true, playing: false };
+function auEnsure() {
+  if (AU.ctx) return;
+  AU.ctx = new (window.AudioContext || window.webkitAudioContext)();
+  AU.an = AU.ctx.createAnalyser();
+  AU.an.fftSize = 1024;
+  AU.an.smoothingTimeConstant = 0.6;
+  AU.freq = new Uint8Array(AU.an.frequencyBinCount);
+  AU.wave = new Uint8Array(AU.an.fftSize);
+}
+function auSource(kind) {
+  try {
+    if (AU.node) AU.node.disconnect();
+  } catch (e) {
+  }
+  try {
+    if (AU.mic) {
+      AU.mic.getTracks().forEach((t) => t.stop());
+      AU.mic = null;
+    }
+  } catch (e) {
+  }
+  AU.node = null;
+}
+async function loadAudio(file) {
+  auEnsure();
+  await AU.ctx.resume();
+  auSource();
+  if (AU.el) {
+    AU.el.pause();
+    URL.revokeObjectURL(AU.el.src);
+  }
+  const a = AU.el = new Audio();
+  a.src = URL.createObjectURL(file);
+  a.loop = true;
+  a.crossOrigin = "anonymous";
+  AU.node = AU.ctx.createMediaElementSource(a);
+  AU.node.connect(AU.an);
+  AU.an.connect(AU.ctx.destination);
+  AU.name = file.name;
+  AU.demo = false;
+  try {
+    await a.play();
+    AU.playing = true;
+  } catch (e) {
+    AU.playing = false;
+    toast("Press Play to start the audio.");
+  }
+  return a;
+}
+async function useMic() {
+  try {
+    auEnsure();
+    await AU.ctx.resume();
+    const s = await navigator.mediaDevices.getUserMedia({ audio: true });
+    if (AU.el) {
+      AU.el.pause();
+      AU.playing = false;
+    }
+    auSource();
+    AU.mic = s;
+    AU.node = AU.ctx.createMediaStreamSource(s);
+    AU.node.connect(AU.an);
+    try {
+      AU.an.disconnect(AU.ctx.destination);
+    } catch (e) {
+    }
+    AU.name = "Microphone";
+    AU.demo = false;
+    return true;
+  } catch (e) {
+    toast("Microphone unavailable here.");
+    return false;
+  }
+}
+function auFrame(t, dt) {
+  const B2 = AU.bands;
+  let lv = 0;
+  if (!AU.demo && AU.an) {
+    AU.an.getByteFrequencyData(AU.freq);
+    AU.an.getByteTimeDomainData(AU.wave);
+    const N = AU.freq.length;
+    for (let i = 0; i < 64; i++) {
+      const a = Math.floor(Math.pow(i / 64, 2.1) * N * 0.85), b = Math.max(a + 1, Math.floor(Math.pow((i + 1) / 64, 2.1) * N * 0.85));
+      let s = 0;
+      for (let k = a; k < b; k++) s += AU.freq[k];
+      const v = Math.min(1, s / (b - a) / 200 * AU.gain * (1 + i / 90));
+      B2[i] = Math.max(v, B2[i] * Math.pow(0.02, dt));
+      lv += v;
+    }
+  } else {
+    if (AU.wave.length !== 1024) AU.wave = new Uint8Array(1024);
+    for (let i = 0; i < 64; i++) {
+      const x = i / 64, v = Math.max(0, 0.55 * Math.exp(-x * 3) * (0.6 + 0.4 * Math.sin(t * 2.1)) + 0.35 * Math.pow(Math.max(0, Math.sin(t * 1.7 + x * 9)), 2) * (1 - x) + 0.12 * Math.sin(t * 5 + x * 30) ** 2 * x);
+      B2[i] = Math.max(v, B2[i] * Math.pow(0.02, dt));
+      lv += v;
+    }
+    for (let i = 0; i < 1024; i++) {
+      const x = i / 1024;
+      AU.wave[i] = 128 + 127 * (0.5 * Math.sin(x * 40 + t * 6) + 0.3 * Math.sin(x * 97 - t * 9) * Math.sin(t * 1.3)) * 0.8;
+    }
+  }
+  AU.level = lv / 64;
+}
+var heat = (u, o, i) => {
+  u = Math.max(0, Math.min(1, u));
+  o[i] = 1;
+  o[i + 1] = 0.24 + 0.59 * u;
+  o[i + 2] = 0.12 + 0.24 * u;
+};
+var VIZ_MODES = [["waterfall", "Waterfall"], ["radial", "Radial"], ["scope", "Scope"], ["ridges", "Ridges"], ["cymatics", "Cymatics"]];
+var VZ_BG = new THREE.Color(723724);
+function buildViz(o) {
+  const v = o.viz, root = o.root;
+  root.children.slice().forEach((c) => {
+    root.remove(c);
+    c.geometry && c.geometry.dispose();
+    c.material && c.material.dispose && c.material.dispose();
+    if (c.dispose && c.isInstancedMesh) c.dispose();
+  });
+  v.hist = null;
+  v.rows = 0;
+  v.acc = 0;
+  const fillMat = () => new THREE.MeshBasicMaterial({ color: VZ_BG, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1, side: THREE.DoubleSide });
+  if (v.mode === "waterfall") {
+    const R2 = 40, C2 = 64;
+    v.rows = R2;
+    v.hist = new Float32Array(R2 * C2);
+    const g = new THREE.PlaneGeometry(2.4, 1.8, C2 - 1, R2 - 1);
+    g.rotateX(-Math.PI / 2);
+    g.setAttribute("color", new THREE.BufferAttribute(new Float32Array(C2 * R2 * 3), 3));
+    const wire = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ vertexColors: true, wireframe: true, toneMapped: false }));
+    const fill = new THREE.Mesh(g, fillMat());
+    root.add(fill, wire);
+    v.g = g;
+    v.C = C2;
+    v.R = R2;
+  } else if (v.mode === "radial") {
+    const n = 64, g = new THREE.BoxGeometry(0.035, 1, 0.035);
+    g.translate(0, 0.5, 0);
+    const m = new THREE.InstancedMesh(g, new THREE.MeshBasicMaterial({ toneMapped: false }), n);
+    m.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(n * 3), 3);
+    m.frustumCulled = false;
+    root.add(m);
+    v.m = m;
+    v.n = n;
+    const ring = new THREE.Mesh(new THREE.RingGeometry(0.66, 0.668, 128), new THREE.MeshBasicMaterial({ color: 7829367, side: THREE.DoubleSide }));
+    ring.rotation.x = -Math.PI / 2;
+    root.add(ring);
+  } else if (v.mode === "scope") {
+    const L = 18, N = 256;
+    v.L = L;
+    v.N = N;
+    v.hist = new Float32Array(L * N);
+    v.lines = [];
+    for (let l = 0; l < L; l++) {
+      const g = new THREE.BufferGeometry();
+      g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(N * 3), 3));
+      const ln = new THREE.Line(g, new THREE.LineBasicMaterial({ color: 16777215, transparent: true, opacity: 1 - l / L, toneMapped: false }));
+      ln.frustumCulled = false;
+      root.add(ln);
+      v.lines.push(ln);
+    }
+  } else if (v.mode === "ridges") {
+    const R2 = 26, C2 = 64;
+    v.R = R2;
+    v.C = C2;
+    v.hist = new Float32Array(R2 * C2);
+    v.lines = [];
+    v.fills = [];
+    for (let r = 0; r < R2; r++) {
+      const lg = new THREE.BufferGeometry();
+      lg.setAttribute("position", new THREE.BufferAttribute(new Float32Array(C2 * 3), 3));
+      const ln = new THREE.Line(lg, new THREE.LineBasicMaterial({ color: 15921126, toneMapped: false }));
+      ln.frustumCulled = false;
+      const fg = new THREE.BufferGeometry();
+      fg.setAttribute("position", new THREE.BufferAttribute(new Float32Array(C2 * 2 * 3), 3));
+      const idx = [];
+      for (let i = 0; i < C2 - 1; i++) idx.push(i * 2, i * 2 + 1, i * 2 + 2, i * 2 + 1, i * 2 + 3, i * 2 + 2);
+      fg.setIndex(idx);
+      const fl = new THREE.Mesh(fg, fillMat());
+      fl.frustumCulled = false;
+      root.add(fl, ln);
+      v.lines.push(ln);
+      v.fills.push(fl);
+    }
+  } else {
+    const S2 = 110, n = S2 * S2, pos = new Float32Array(n * 3), col = new Float32Array(n * 3);
+    for (let j = 0; j < S2; j++) for (let i = 0; i < S2; i++) {
+      const k = j * S2 + i;
+      pos[k * 3] = (i / (S2 - 1) - 0.5) * 2;
+      pos[k * 3 + 2] = (j / (S2 - 1) - 0.5) * 2;
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    g.setAttribute("color", new THREE.BufferAttribute(col, 3));
+    const pts = new THREE.Points(g, new THREE.PointsMaterial({ size: 0.016, vertexColors: true, sizeAttenuation: true, toneMapped: false }));
+    pts.frustumCulled = false;
+    root.add(pts);
+    v.g = g;
+    v.S = S2;
+    v.nm = [3, 5];
+  }
+  const BX = { waterfall: [2.4, 1, 1.8, 0, 0.4, 0], radial: [1.6, 1.3, 1.6, 0, 0.6, 0], scope: [2.4, 1.2, 1.3, 0, 0.5, -0.6], ridges: [2.3, 1.1, 1.9, 0, 0.5, 0], cymatics: [2.1, 0.6, 2.1, 0, 0, 0] }[v.mode];
+  const bb = new THREE.Mesh(new THREE.BoxGeometry(BX[0], BX[1], BX[2]), new THREE.MeshBasicMaterial({ visible: false }));
+  bb.position.set(BX[3], BX[4], BX[5]);
+  bb.userData.noView = true;
+  root.add(bb);
+  o.holder.userData.vizMode = v.mode;
+  applyView();
+}
+function vizUpdate(o, t, dt) {
+  const v = o.viz, B2 = AU.bands, H = v.height;
+  if (v.mode === "waterfall" || v.mode === "ridges") {
+    v.acc += dt;
+    if (v.acc < 1 / 30) return;
+    v.acc = 0;
+    const C2 = v.C, R2 = v.R;
+    v.hist.copyWithin(C2, 0, (R2 - 1) * C2);
+    for (let i = 0; i < C2; i++) v.hist[i] = B2[i];
+  }
+  if (v.mode === "waterfall") {
+    const p = v.g.attributes.position, c = v.g.attributes.color, C2 = v.C, R2 = v.R;
+    for (let r = 0; r < R2; r++) for (let i = 0; i < C2; i++) {
+      const k = r * C2 + i, h = v.hist[k];
+      p.setY(k, h * H * (1 - r / R2 * 0.35));
+      heat(h * 1.4, c.array, k * 3);
+      const dim = (0.18 + 0.82 * Math.min(1, h * 2.2)) * (1 - r / R2 * 0.6);
+      c.array[k * 3] *= dim;
+      c.array[k * 3 + 1] *= dim;
+      c.array[k * 3 + 2] *= dim;
+    }
+    p.needsUpdate = true;
+    c.needsUpdate = true;
+  } else if (v.mode === "ridges") {
+    const C2 = v.C, R2 = v.R;
+    for (let r = 0; r < R2; r++) {
+      const lp = v.lines[r].geometry.attributes.position, fp = v.fills[r].geometry.attributes.position, z = -0.9 + r / (R2 - 1) * 1.8;
+      for (let i = 0; i < C2; i++) {
+        const x = (i / (C2 - 1) - 0.5) * 2.2, h = v.hist[r * C2 + i] * H * (1 - r / R2 * 0.2) * (1 - Math.pow(Math.abs(i / (C2 - 1) - 0.5) * 2, 3) * 0.5);
+        lp.setXYZ(i, x, h, z);
+        fp.setXYZ(i * 2, x, h, z);
+        fp.setXYZ(i * 2 + 1, x, -0.02, z);
+      }
+      lp.needsUpdate = true;
+      fp.needsUpdate = true;
+      v.lines[r].material.color.setScalar(1 - r / R2 * 0.7);
+    }
+  } else if (v.mode === "radial") {
+    const m = v.m, d = new THREE.Object3D(), c = m.instanceColor.array;
+    for (let i = 0; i < v.n; i++) {
+      const a = i / v.n * Math.PI * 2, h = 0.03 + B2[i] * H * 1.3;
+      d.position.set(Math.cos(a) * 0.7, 0, Math.sin(a) * 0.7);
+      d.rotation.set(0, -a, 0);
+      d.scale.set(1, h, 1);
+      d.updateMatrix();
+      m.setMatrixAt(i, d.matrix);
+      heat(B2[i] * 1.4, c, i * 3);
+    }
+    m.instanceMatrix.needsUpdate = true;
+    m.instanceColor.needsUpdate = true;
+  } else if (v.mode === "scope") {
+    v.acc += dt;
+    const N = v.N, L = v.L;
+    if (v.acc >= 1 / 24) {
+      v.acc = 0;
+      v.hist.copyWithin(N, 0, (L - 1) * N);
+      for (let i = 0; i < N; i++) v.hist[i] = (AU.wave[Math.floor(i / N * AU.wave.length)] - 128) / 128;
+    }
+    for (let l = 0; l < L; l++) {
+      const p = v.lines[l].geometry.attributes.position;
+      for (let i = 0; i < N; i++) p.setXYZ(i, (i / (N - 1) - 0.5) * 2.4, 0.5 + v.hist[l * N + i] * H * 0.6, -l * 0.07);
+      p.needsUpdate = true;
+    }
+  } else {
+    const S2 = v.S, p = v.g.attributes.position, c = v.g.attributes.color, lo = (B2[1] + B2[2] + B2[3]) / 3, mi = (B2[10] + B2[14] + B2[18]) / 3, hi = (B2[34] + B2[42] + B2[50]) / 3;
+    v.nm[0] += (2 + Math.round(lo * 6 + mi * 5) - v.nm[0]) * Math.min(1, dt * 2);
+    v.nm[1] += (3 + Math.round(mi * 8 + hi * 6) - v.nm[1]) * Math.min(1, dt * 2);
+    const n = v.nm[0] * Math.PI, m = v.nm[1] * Math.PI, amp = H * (0.25 + AU.level * 2.2);
+    for (let j = 0; j < S2; j++) for (let i = 0; i < S2; i++) {
+      const k = j * S2 + i, x = i / (S2 - 1) * 2 - 1, y = j / (S2 - 1) * 2 - 1;
+      const h = Math.cos(n * x) * Math.cos(m * y) - Math.cos(m * x) * Math.cos(n * y);
+      p.setY(k, h * amp * 0.5);
+      heat(1 - Math.min(1, Math.abs(h) * 1.2) + 0.05, c.array, k * 3);
+    }
+    p.needsUpdate = true;
+    c.needsUpdate = true;
+  }
+}
+function vizTick(t, dt) {
+  let any = false;
+  for (const o of S.objs) if (o.kind === "viz" && o.vis) {
+    any = true;
+    break;
+  }
+  if (!any) return;
+  auFrame(t, dt);
+  for (const o of S.objs) if (o.kind === "viz" && o.vis) vizUpdate(o, t, dt);
+}
+function addViz(mode = "waterfall") {
+  const g = new THREE.Group(), o = registerObject("Visualizer", g, "viz", { fit: false, meta: {} });
+  o.viz = { mode, height: 0.9 };
+  buildViz(o);
+  o.holder.position.y = 0.05;
+  o.holder.scale.setScalar(1.3);
+  S.needFrame = true;
+  refreshInspector();
+  bump();
+  return o;
+}
+function vizInspector(o) {
+  const v = o.viz, r = sec(inspEl, "Visualizer", AU.demo ? "demo signal" : AU.name);
+  chipRow(r, VIZ_MODES, (m) => v.mode === m, (m) => {
+    v.mode = m;
+    buildViz(o);
+    refreshInspector();
+  });
+  sliderRow(r, "Height", () => v.height, (x) => {
+    v.height = x;
+  }, 0.2, 2.5, 0.01);
+  sliderRow(r, "Input gain", () => AU.gain, (x) => {
+    AU.gain = x;
+  }, 0.3, 4, 0.05);
+  const row = el("div", "chips");
+  row.append(
+    btn("Import audio", "pri", () => {
+      const f = $2("#file");
+      f.accept = "audio/*,.mp3,.wav,.m4a,.ogg,.flac";
+      f.onchange = async () => {
+        await importFiles(f.files);
+        f.value = "";
+        f.accept = FILE_ACCEPT;
+        f.onchange = null;
+      };
+      f.click();
+    }),
+    btn("Microphone", "", async () => {
+      if (await useMic()) refreshInspector();
+    }),
+    btn(AU.demo ? "Demo signal on" : "Demo signal", "", () => {
+      AU.demo = true;
+      if (AU.el) {
+        AU.el.pause();
+        AU.playing = false;
+      }
+      auSource();
+      refreshInspector();
+    })
+  );
+  r.appendChild(row);
+  if (AU.el && !AU.demo) {
+    const pr = el("div", "chips");
+    const pb = btn(AU.el.paused ? "Play" : "Pause", "", () => {
+      if (AU.el.paused) {
+        AU.ctx.resume();
+        AU.el.play();
+      } else AU.el.pause();
+      AU.playing = !AU.el.paused;
+      refreshInspector();
+    });
+    pr.appendChild(pb);
+    r.appendChild(pr);
+    sliderRow(r, "Position", () => AU.el.duration ? AU.el.currentTime / AU.el.duration : 0, (x) => {
+      if (AU.el.duration) AU.el.currentTime = x * AU.el.duration;
+    }, 0, 1, 1e-3);
+  }
+  r.appendChild(el("div", "note", "Audio is analysed on this device. The look stack, masks and exports treat the visualizer like any other object."));
+}
 var manager = new THREE.LoadingManager();
 var fileMap = /* @__PURE__ */ new Map();
 manager.setURLModifier((u) => {
@@ -2818,6 +3186,13 @@ async function importOne(f) {
   const ext = extOf(f.name), type = f.type || "";
   if (type.startsWith("video/") || ["mp4", "mov", "webm", "m4v"].includes(ext)) {
     openScan("video", f);
+    return;
+  }
+  if (type.startsWith("audio/") || ["mp3", "wav", "m4a", "ogg", "flac", "aac", "opus"].includes(ext)) {
+    await loadAudio(f);
+    if (!S.objs.some((x) => x.kind === "viz")) addViz("waterfall");
+    setTab("scene");
+    toast("Playing " + f.name);
     return;
   }
   if (type.startsWith("image/") || ["png", "jpg", "jpeg", "webp", "gif", "bmp", "avif"].includes(ext)) {
@@ -3056,6 +3431,7 @@ function frame(ts) {
       hudLift2.style.transform = `translate3d(0,${-lift}px,0)`;
     }
     if (S.rest) restTick();
+    vizTick(t, dt);
     animTick(t);
     controls.autoRotate = S.spin;
     if (S.spin) bump();
@@ -5179,6 +5555,7 @@ function buildScenePane() {
   add.style.marginTop = "8px";
   add.appendChild(btn("Import files", "pri", () => $2("#file").click()));
   Object.keys(PRIMS).forEach((k) => add.appendChild(btn("+ " + k, "", () => addPrimitive(k))));
+  add.appendChild(btn("+ Visualizer", "", () => addViz("waterfall")));
   s1.appendChild(add);
   const note = el("div", "note", "Drop or import: glb, gltf (with its bin and textures), obj (+mtl), stl, ply (mesh, points or 3D Gaussian splat), splat, spz, ksplat, sog. Photos become relief. Videos open the turntable scanner.");
   s1.appendChild(note);
@@ -5423,6 +5800,7 @@ function refreshInspector(soft) {
     r.appendChild(el("div", "note", "Depth runs in your browser (WebGPU if available, otherwise WASM) and is cached per photo. Defaults stay subtle so the surface looks like the photo."));
   }
   if (o.kind === "relief" && o.meta.photo) buildCutSection(o);
+  if (o.kind === "viz" && o.viz) vizInspector(o);
   if (o.kind === "points" || o.kind === "splat") {
     const r = sec(inspEl, o.kind === "splat" ? "Splat" : "Points");
     if (o.kind === "points") {
@@ -5498,7 +5876,7 @@ function buildScanPane() {
   a.appendChild(xm);
   s.appendChild(el("div", "note", "Bring your own: for a splat made with Polycam, Luma, Brush or nerfstudio, export .ply, .splat or .spz and import it in Scene. Training new splats inside the browser isn\u2019t built in yet."));
 }
-var FILE_ACCEPT = ".glb,.gltf,.bin,.obj,.mtl,.stl,.ply,.splat,.spz,.ksplat,.sog,image/*,video/*";
+var FILE_ACCEPT = "audio/*,.mp3,.wav,.m4a,.ogg,.flac,.glb,.gltf,.bin,.obj,.mtl,.stl,.ply,.splat,.spz,.ksplat,.sog,image/*,video/*";
 function palGradient(p) {
   if (p.id === "src") return "linear-gradient(90deg,#ff5d5d,#ffcc4d,#4dd68c,#4d8bff)";
   if (!p.c) return "var(--raise)";
@@ -6001,6 +6379,6 @@ try {
 } catch (e) {
 }
 boot3d();
-window.__studio = { enterRest, leaveRest, restTick, setFx, autoDepth, buildDepth, restD, MATTERS, CUT, autoCut, refineMask, applyAlpha, S, N0, THREE, scene, camera, controls, renderer, importFiles, addPrimitive, sheet, SC, carve, surfaceNets, buildScan, makeRelief, pseudoDepth, photoToRelief, objById, selectObj, removeObj, bump, setTab, rebuildRelief, applyView, frameAll, exportImage, get rt() {
+window.__studio = { addViz, AU, buildViz, vizUpdate, enterRest, leaveRest, restTick, setFx, autoDepth, buildDepth, restD, MATTERS, CUT, autoCut, refineMask, applyAlpha, S, N0, THREE, scene, camera, controls, renderer, importFiles, addPrimitive, sheet, SC, carve, surfaceNets, buildScan, makeRelief, pseudoDepth, photoToRelief, objById, selectObj, removeObj, bump, setTab, rebuildRelief, applyView, frameAll, exportImage, get rt() {
   return rt;
 } };
