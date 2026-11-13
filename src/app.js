@@ -1,5 +1,6 @@
 import {toRecipe,fromRecipe,checkRecipe} from './recipe.js';
 import {CAMS,glyph,drawOverlay} from './cams.js';
+import {CAMSIM_PARAMS,CAMSIM_FRAG,SIMS} from './camsim.js';
 import {PERSON,startPerson,feedPerson,syntheticPerson,DRAWN,paintDrawn,clearDrawn,maskFor,resetMatteGL,MASK_DEFAULTS} from './matte.js';
 import {SIG,SIGNALS,signalValue,V,hooks,attachGL,createGL,VS,HEAD,$,clamp,lerp,TABS,CT,CTL,PALS,hexRGB,lum255,rgbHex,PROFILES,BASE,P,E,MODS,applyProfile,canvas,stage,gl,GLOK,noGL,PR,mkProg,mkProgAsync,initGL,mkRT,freeRT,bindRT,samp,draw,TEX,initLUT,SRC,srcDims,uploadSrc,setSource,fitCanvas,demoCanvas,testCanvas,RB,readDrop,audio,ST,STAGES,stageModel,CHAINS,applyStages,buildChainUI,refreshChainUI,computeE,T,POINTER,PAINTQ,SZ,exportCap,expDims,EMBED,EMB,layout,syncSrc,renderFrame,CTX,adaptQ} from './engine.js';
 {const _c=document.getElementById('gl');attachGL(_c,document.getElementById('stage'),createGL(_c));}
@@ -1421,6 +1422,7 @@ defineModule({id:'grain',family:'Film',name:'Film Burn',defaultLook:{paper:'#141
   params:[{k:'gr',label:'Grain',min:0,max:100,def:45,sec:'Film',hero:true},{k:'sz',label:'Grain size',min:1,max:8,def:2,step:.5,sec:'Film'},{k:'vig',label:'Vignette',min:0,max:100,def:50,sec:'Film',hero:true},{k:'lift',label:'Lift blacks',min:0,max:100,def:20,sec:'Film'},{k:'warm',label:'Warmth',min:-100,max:100,def:35,sec:'Film'},{k:'flk',label:'Flicker',min:0,max:100,def:25,sec:'Motion'}],
   frag:SS+`vec4 fx(vec2 uv){vec3 c=texture(uSrc,uv).rgb;float n=h21(floor(uv*uRes/(u_sz*S))+floor(uTime*24.)*7.3)-.5;c+=n*u_gr/100.*.5;c=mix(c,vec3(.12,.1,.09)+c*.88,u_lift/100.);
   c*=vec3(1.+u_warm/100.*.15,1.,1.-u_warm/100.*.2);float d=length(uv-.5);c*=1.-smoothstep(.3,.85,d)*u_vig/100.;c*=1.+(h11(floor(uTime*12.))-.5)*u_flk/100.*.25;return vec4(c,1.);}`});
+defineModule({id:'camsim',family:'Camera',name:'Camera Body',hidden:true,defaultLook:{paper:'#101010',ink:'#e8e8e8',palette:null},params:CAMSIM_PARAMS,frag:CAMSIM_FRAG});
 defineModule({id:'melt',family:'Warp',name:'Melt',defaultLook:{paper:'#101010',ink:'#e8d8c4',palette:null},
   params:[{k:'amt',label:'Drip',min:0,max:100,def:85,sec:'Melt',hero:true},{k:'cols',label:'Columns',min:4,max:120,def:22,step:1,sec:'Melt'},{k:'spd',label:'Speed',min:0,max:100,def:35,sec:'Motion',hero:true},{k:'lum',label:'Bright drips more',min:0,max:100,def:75,sec:'Melt'},{k:'tint',t:'color',label:'Tint',def:'#e8d8c4',sec:'Colour'},{k:'tmix',label:'Tint amount',min:0,max:100,def:100,sec:'Colour'}],
   frag:`vec4 fx0(vec2 uv){float id=floor(uv.x*u_cols);float ph=h11(id+uSeed)*6.283;float l=luma(texture(uSrc,vec2((id+.5)/u_cols,uv.y)).rgb);
@@ -2404,22 +2406,22 @@ async function openRoll(){
   const close=()=>{sh.remove();urls.forEach(URL.revokeObjectURL);};cl.addEventListener('click',close);
 }
 /* camera bodies (see cams.js): a Fuse recipe + frame shape + overlay, applied to the shared engine */
-let camIx=0,camStr=50,camSaved=null,camOvT=0,camRec0=0,camRecOn=false;
+let camIx=0,camStr=50,camText=false,camSaved=null,camOvT=0,camRec0=0,camRecOn=false;
 function applyCam(i,quiet){
   camIx=(i+CAMS.length)%CAMS.length;const c=CAMS[camIx];lsSet('n0ise.cam',c.id);
-  const l=mkLayer('fuse');for(let k=1;k<=4;k++){fuseSet(l,k,null);l.params['on'+k]=false;}
-  c.fx.forEach((id,k)=>{fuseSet(l,k+1,id);l.params['mx'+(k+1)]=c.mix[k]??100;});
-  Object.assign(l.params,{hue:0,sat:100,glow:0,split:0,grain:0,vig:0},c.fin);
-  l.camBase=[1,2,3,4].map(k=>l.params['i'+k]);
-  STACK.layers=[l];STACK.sel=0;P.aspect=c.aspect;V.sizeKey='';V.lastBKey='';
+  const layers=[];
+  if(c.fx&&c.fx.length){const l=mkLayer('fuse');for(let k=1;k<=4;k++){fuseSet(l,k,null);l.params['on'+k]=false;}
+    c.fx.forEach((id,k)=>{fuseSet(l,k+1,id);l.params['mx'+(k+1)]=c.mix[k]??100;});layers.push(l);}
+  const sl=mkLayer('camsim');Object.assign(sl.params,SIMS[c.sim]||{});layers.push(sl);
+  STACK.layers=layers;STACK.sel=layers.length-1;P.aspect=c.aspect;V.sizeKey='';V.lastBKey='';
   setCamStr(camStr);paintCamUI();if(!quiet)buzz(8);
 }
-function setCamStr(v){camStr=v;const l=STACK.layers[0];if(!l||l.module!=='fuse'||!l.camBase)return;[1,2,3,4].forEach(k=>{l.params['i'+k]=Math.max(0,Math.min(100,l.camBase[k-1]*v/50));l.params['m'+k]=Math.max(0,Math.min(100,(CAMFX[+l.params['f'+k]-1]?CAMFX[+l.params['f'+k]-1].m:45)*(.5+v/100)));});}
+function setCamStr(v){camStr=v;const l=STACK.layers.find(x=>x.module==='camsim');if(l)l.params.amt=v*2;}
 function drawCamOv(){
   const ov=$('#camov');if(!ov||!CAMMODE)return;const r=canvas.getBoundingClientRect(),st=$('#stage').getBoundingClientRect();
   const w=Math.round(r.width),h=Math.round(r.height);if(ov.width!==w||ov.height!==h){ov.width=w;ov.height=h;}
   ov.style.left=(r.left-st.left)+'px';ov.style.top=(r.top-st.top)+'px';ov.style.width=w+'px';ov.style.height=h+'px';
-  drawOverlay(ov.getContext('2d'),w,h,CAMS[camIx],{t:camRecOn?(performance.now()-camRec0)/1000:0,recOn:camRecOn});
+  drawOverlay(ov.getContext('2d'),w,h,CAMS[camIx],{text:camText,t:camRecOn?(performance.now()-camRec0)/1000:0,recOn:camRecOn});
 }
 function paintCamUI(){
   const st=$('#camstrip');if(!st)return;
@@ -2430,7 +2432,7 @@ function paintCamUI(){
   drawCamOv();
 }
 function composite(){const o=document.createElement('canvas');o.width=canvas.width;o.height=canvas.height;const g=o.getContext('2d');g.drawImage(canvas,0,0);
-  drawOverlay(g,o.width,o.height,CAMS[camIx],{keep:true,t:camRecOn?(performance.now()-camRec0)/1000:0,recOn:camRecOn});return o;}
+  drawOverlay(g,o.width,o.height,CAMS[camIx],{keep:true,text:camText,t:camRecOn?(performance.now()-camRec0)/1000:0,recOn:camRecOn});return o;}
 async function camShoot(){
   ST.clean=true;await frames2();const o=composite();ST.clean=false;
   const blob=await new Promise(r=>o.toBlob(r,'image/jpeg',.93));
@@ -2441,7 +2443,7 @@ async function camRecStart(){
   const mime=['video/mp4','video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm'].find(m=>MediaRecorder.isTypeSupported(m));if(!mime){toast('No recording format available');return null;}
   const cc=document.createElement('canvas');cc.width=canvas.width;cc.height=canvas.height;const g=cc.getContext('2d');
   camRec0=performance.now();camRecOn=true;ST.clean=true;let raf=0;
-  const loop=()=>{g.drawImage(canvas,0,0);drawOverlay(g,cc.width,cc.height,CAMS[camIx],{keep:true,t:(performance.now()-camRec0)/1000,recOn:true});raf=requestAnimationFrame(loop);};loop();
+  const loop=()=>{g.drawImage(canvas,0,0);drawOverlay(g,cc.width,cc.height,CAMS[camIx],{keep:true,text:camText,t:(performance.now()-camRec0)/1000,recOn:true});raf=requestAnimationFrame(loop);};loop();
   const cs=cc.captureStream(30);if(AUD.on&&AUD.dest)AUD.dest.stream.getAudioTracks().forEach(tk=>cs.addTrack(tk));
   const mr=new MediaRecorder(cs,{mimeType:mime,videoBitsPerSecond:6e6}),parts=[];
   mr.ondataavailable=e=>{if(e.data.size)parts.push(e.data);};
@@ -2462,8 +2464,9 @@ function buildCamUI(){
     btn('camgrid','Grid','Grid lines',e=>{camGrid=!camGrid;u.classList.toggle('grid',camGrid);e.currentTarget.setAttribute('aria-pressed',camGrid);}),
     btn('cammic','Mic','Let sound move the look',e=>{toggleMic();setTimeout(()=>e.currentTarget.setAttribute('aria-pressed',audio.on),600);}),
     btn('camauto','Auto','Change camera every few seconds',e=>{camAuto=!camAuto;e.currentTarget.setAttribute('aria-pressed',camAuto);clearInterval(camAutoT);if(camAuto)camAutoT=setInterval(()=>applyCam(camIx+1,true),4000);}),
+    btn('camtxt','Text','Show date and readout text',e=>{camText=!camText;lsSet('n0ise.camtext',camText);e.currentTarget.setAttribute('aria-pressed',camText);drawCamOv();}),
     btn('camfps','FPS','Show frame rate',e=>{camFps=!camFps;e.currentTarget.setAttribute('aria-pressed',camFps);}),
-    btn('camlab','Edit','Open this look in the editor',()=>{const keep=STACK.layers;closeCamera(true);STACK.layers=keep;STACK.sel=0;refreshUI();renderInspector();}));
+    btn('camlab','Edit','Open this look in the editor',()=>{const keep=STACK.layers;closeCamera(true);STACK.layers=keep;STACK.sel=keep.length-1;refreshUI();renderInspector();}));
   const ov=document.createElement('canvas');ov.id='camov';
   const bot=el('div','cambot'),info=el('div','caminfo');
   info.append(Object.assign(el('b','','Camera'),{id:'camname'}),Object.assign(el('span','','' ),{id:'camsub'}));
@@ -2496,7 +2499,7 @@ function buildCamUI(){
 async function openCamera(){
   await startCam(false);
   if(!(SRC.el instanceof HTMLVideoElement)||SRC.name!=='Camera')return;
-  camIx=Math.max(0,CAMS.findIndex(c=>c.id===lsGet('n0ise.cam','ccd')));
+  camIx=Math.max(0,CAMS.findIndex(c=>c.id===lsGet('n0ise.cam','cctv')));camText=!!lsGet('n0ise.camtext',false);{const tb=$('#camtxt');if(tb)tb.setAttribute('aria-pressed',camText);}
   camSaved={layers:STACK.layers,sel:STACK.sel,aspect:P.aspect};
   SRC.mirror=camFacing==='user';buildCamUI();CAMMODE=true;document.body.dataset.cam='1';
   applyCam(camIx,true);
