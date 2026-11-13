@@ -66,6 +66,8 @@ __export(engine_exports, {
   PROTECT: () => PROTECT,
   R: () => R,
   RB: () => RB,
+  SIG: () => SIG,
+  SIGNALS: () => SIGNALS,
   SRC: () => SRC,
   ST: () => ST,
   STAGES: () => STAGES,
@@ -135,6 +137,7 @@ __export(engine_exports, {
   rgbHex: () => rgbHex,
   samp: () => samp,
   setSource: () => setSource,
+  signalValue: () => signalValue,
   srcDims: () => srcDims,
   sstep: () => sstep,
   stage: () => stage,
@@ -1730,36 +1733,46 @@ function lifeStep(t, dt, add) {
   ST.ws += (ts - ST.ws) * Math.min(1, dt * 1.5);
   return [ST.wl, ST.ws];
 }
+var SIG = { level: 0, bass: 0, mid: 0, treble: 0, beat: 0, motion: 0 };
+var SIGNALS = [["sine", "Sine"], ["tri", "Triangle"], ["square", "Square"], ["saw", "Saw"], ["noise", "Noise"], ["audio", "Audio level"], ["bass", "Bass"], ["mid", "Mid"], ["treble", "Treble"], ["beat", "Beat"], ["motion", "Motion"], ["ramp", "Ramp"]];
+function signalValue(shape, t, rate) {
+  const ph = t * rate;
+  switch (shape) {
+    case "sine":
+      return Math.sin(ph * 6.2832);
+    case "tri":
+      return 1 - 4 * Math.abs(ph % 1 - 0.5);
+    case "square":
+      return ph % 1 < 0.5 ? 1 : -1;
+    case "saw":
+      return 2 * (ph % 1) - 1;
+    case "noise":
+      return noise1(ph * 3) * 2 - 1;
+    case "audio":
+      return SIG.level * 2 - 1;
+    case "bass":
+      return SIG.bass * 2 - 1;
+    case "mid":
+      return SIG.mid * 2 - 1;
+    case "treble":
+      return SIG.treble * 2 - 1;
+    case "beat":
+      return SIG.beat * 2 - 1;
+    case "motion":
+      return SIG.motion * 2 - 1;
+    case "ramp":
+      return ph % 1 * 2 - 1;
+    default:
+      return 0;
+  }
+}
 function computeE(t, dt) {
   Object.assign(E, P);
   for (const k of ["bit", "g", "s", "b", "m", "l", "gl"]) E["lay_" + k] = P.solo === "all" || P.solo === k;
   for (const m of MODS) {
     const c = CTL[m.target];
     if (!c || c.t !== "r") continue;
-    let w;
-    const ph = t * m.rate;
-    switch (m.shape) {
-      case "sine":
-        w = Math.sin(ph * 6.2832);
-        break;
-      case "tri":
-        w = 1 - 4 * Math.abs(ph % 1 - 0.5);
-        break;
-      case "square":
-        w = ph % 1 < 0.5 ? 1 : -1;
-        break;
-      case "saw":
-        w = 2 * (ph % 1) - 1;
-        break;
-      case "noise":
-        w = noise1(ph * 3) * 2 - 1;
-        break;
-      case "audio":
-        w = audio.level * 2 - 1;
-        break;
-      default:
-        w = 0;
-    }
+    const w = signalValue(m.shape, t, m.rate);
     E[m.target] = clamp(E[m.target] + w * (m.depth / 100) * (c.max - c.min) / 2, c.min, c.max);
   }
   const wx = P.weather / 100, seed = P.seed;

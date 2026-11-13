@@ -52,6 +52,8 @@ __export(engine_exports, {
   PROTECT: () => PROTECT,
   R: () => R,
   RB: () => RB,
+  SIG: () => SIG,
+  SIGNALS: () => SIGNALS,
   SRC: () => SRC,
   ST: () => ST,
   STAGES: () => STAGES,
@@ -121,6 +123,7 @@ __export(engine_exports, {
   rgbHex: () => rgbHex,
   samp: () => samp,
   setSource: () => setSource,
+  signalValue: () => signalValue,
   srcDims: () => srcDims,
   sstep: () => sstep,
   stage: () => stage,
@@ -1716,36 +1719,46 @@ function lifeStep(t, dt, add) {
   ST.ws += (ts - ST.ws) * Math.min(1, dt * 1.5);
   return [ST.wl, ST.ws];
 }
+var SIG = { level: 0, bass: 0, mid: 0, treble: 0, beat: 0, motion: 0 };
+var SIGNALS = [["sine", "Sine"], ["tri", "Triangle"], ["square", "Square"], ["saw", "Saw"], ["noise", "Noise"], ["audio", "Audio level"], ["bass", "Bass"], ["mid", "Mid"], ["treble", "Treble"], ["beat", "Beat"], ["motion", "Motion"], ["ramp", "Ramp"]];
+function signalValue(shape, t, rate) {
+  const ph = t * rate;
+  switch (shape) {
+    case "sine":
+      return Math.sin(ph * 6.2832);
+    case "tri":
+      return 1 - 4 * Math.abs(ph % 1 - 0.5);
+    case "square":
+      return ph % 1 < 0.5 ? 1 : -1;
+    case "saw":
+      return 2 * (ph % 1) - 1;
+    case "noise":
+      return noise1(ph * 3) * 2 - 1;
+    case "audio":
+      return SIG.level * 2 - 1;
+    case "bass":
+      return SIG.bass * 2 - 1;
+    case "mid":
+      return SIG.mid * 2 - 1;
+    case "treble":
+      return SIG.treble * 2 - 1;
+    case "beat":
+      return SIG.beat * 2 - 1;
+    case "motion":
+      return SIG.motion * 2 - 1;
+    case "ramp":
+      return ph % 1 * 2 - 1;
+    default:
+      return 0;
+  }
+}
 function computeE(t, dt) {
   Object.assign(E, P);
   for (const k of ["bit", "g", "s", "b", "m", "l", "gl"]) E["lay_" + k] = P.solo === "all" || P.solo === k;
   for (const m of MODS) {
     const c = CTL[m.target];
     if (!c || c.t !== "r") continue;
-    let w;
-    const ph = t * m.rate;
-    switch (m.shape) {
-      case "sine":
-        w = Math.sin(ph * 6.2832);
-        break;
-      case "tri":
-        w = 1 - 4 * Math.abs(ph % 1 - 0.5);
-        break;
-      case "square":
-        w = ph % 1 < 0.5 ? 1 : -1;
-        break;
-      case "saw":
-        w = 2 * (ph % 1) - 1;
-        break;
-      case "noise":
-        w = noise1(ph * 3) * 2 - 1;
-        break;
-      case "audio":
-        w = audio.level * 2 - 1;
-        break;
-      default:
-        w = 0;
-    }
+    const w = signalValue(m.shape, t, m.rate);
     E[m.target] = clamp(E[m.target] + w * (m.depth / 100) * (c.max - c.min) / 2, c.min, c.max);
   }
   const wx = P.weather / 100, seed = P.seed;
@@ -2294,6 +2307,65 @@ function adaptQ() {
   ST.lite = ST.autoQ < 0.6;
 }
 
+// src/project.js
+var PROJECT_VERSION = 1;
+function makeProject({ P: P2, seed = P2 && P2.seed || 7, size = [1280, 720], time = 0, fps = 30, sources = [], stack = [], masks = [] } = {}) {
+  return {
+    n0ise: "project",
+    version: PROJECT_VERSION,
+    seed,
+    size,
+    time,
+    fps,
+    sources,
+    stack,
+    masks,
+    engine: { P: JSON.parse(JSON.stringify(P2 || P)) }
+  };
+}
+
+// src/recipe.js
+var RECIPE_VERSION = 1;
+var clone = (o) => JSON.parse(JSON.stringify(o));
+function toRecipe({ name = "Recipe", P: P2, layers, MODULES: MODULES2, size = [1280, 720], fps = 30 }) {
+  const stack = layers.map((l) => ({
+    id: l.uid,
+    module: l.module,
+    select: { mode: l.select, thr: l.thr, mask: l.mask },
+    transform: { mix: l.opacity, blend: l.blend, pos: l.pos, size: l.size, seed: l.seed, visible: l.visible, solo: !!l.solo, color: l.color, params: l.module === "crtlab" ? null : l.params },
+    modulate: l.mods || []
+  }));
+  const gen = layers.length && MODULES2[layers[0].module] && MODULES2[layers[0].module].family === "Source";
+  const p = makeProject({ P: P2, seed: P2.seed, size, fps, sources: [gen ? { kind: "generator", stage: 0 } : { kind: "input" }], stack });
+  p.name = name;
+  p.recipe = RECIPE_VERSION;
+  p.output = { aspect: P2.aspect, quality: P2.quality, fcap: P2.fcap };
+  return p;
+}
+function checkRecipe(j) {
+  if (!j || j.n0ise !== "project" || !Array.isArray(j.stack)) throw new Error("That isn\u2019t a n0ise recipe or project file.");
+  if (j.version > PROJECT_VERSION) throw new Error("This file was saved by a newer version. Update the app to open it.");
+  return j;
+}
+function fromRecipe(j, { mkLayer: mkLayer2, MODULES: MODULES2 }) {
+  checkRecipe(j);
+  const skipped = [];
+  const layers = j.stack.filter((b) => {
+    if (!MODULES2[b.module]) {
+      skipped.push(b.module);
+      return false;
+    }
+    return true;
+  }).map((b) => {
+    const l = mkLayer2(b.module, b.transform && b.transform.params ? clone(b.transform.params) : void 0), t = b.transform || {}, s = b.select || {};
+    Object.assign(l, { opacity: t.mix ?? 100, blend: t.blend || "normal", pos: t.pos || [0, 0], size: t.size ?? 100, seed: t.seed || 0, visible: t.visible !== false, solo: !!t.solo, select: s.mode || "all", thr: s.thr ?? 50, mods: clone(b.modulate || []) });
+    if (t.color) l.color = clone(t.color);
+    if (s.mask) l.mask = clone(s.mask);
+    return l;
+  });
+  return { layers, P: j.engine && j.engine.P ? clone(j.engine.P) : null, skipped };
+}
+
 // src/matte.js
 var { V: V2, PR: PR2, mkProg: mkProg2, mkRT: mkRT2, freeRT: freeRT2, bindRT: bindRT2, samp: samp2, draw: draw2, SRC: SRC2, VS: VS2, HEAD: HEAD2 } = engine_exports;
 var PERSON = {
@@ -2608,7 +2680,7 @@ var MAPIMG = {};
 var registerModule = (m) => MODULES[m.id] = m;
 var COLOR_MODES = ["original", "mono", "duotone", "gradient", "palette"];
 var BLENDS = ["normal", "multiply", "screen", "additive", "difference", "overlay"];
-var LAYER_DEFAULTS = { color: { mode: "original", pal: ["#1a0f2e", "#ffd27a"], amt: 100 }, opacity: 100, blend: "normal", showSource: false, select: "all", mask: { src: "person", invert: false, feather: 20, grow: 0, snap: 35, lo: 0.5, hi: 1, tol: 0.35, col: "#2fa84f" }, thr: 50, pos: [0, 0], size: 100, seed: 0, visible: true };
+var LAYER_DEFAULTS = { color: { mode: "original", pal: ["#1a0f2e", "#ffd27a"], amt: 100 }, opacity: 100, blend: "normal", showSource: false, select: "all", mask: { src: "person", invert: false, feather: 20, grow: 0, snap: 35, lo: 0.5, hi: 1, tol: 0.35, col: "#2fa84f" }, thr: 50, pos: [0, 0], size: 100, seed: 0, visible: true, solo: false, mods: [] };
 var layerUid = 1;
 var mkLayer = (mod, params) => ({ uid: layerUid++, module: mod, params: params || (MODULES[mod] && MODULES[mod].defaults ? MODULES[mod].defaults() : {}), ...JSON.parse(JSON.stringify(LAYER_DEFAULTS)) });
 function crtSchema() {
@@ -4744,12 +4816,12 @@ defineModule({
   needsMask: true,
   defaultLook: { paper: "#101010", ink: "#ff7a3d", palette: null },
   params: [
-    { k: "cnt", label: "Echoes", min: 1, max: 8, def: 6, sec: "Trail", hero: true },
+    { k: "cnt", label: "Echoes", min: 1, max: 8, def: 7, sec: "Trail", hero: true },
     { k: "dly", label: "Delay (ms)", min: 30, max: 400, def: 110, sec: "Trail", hero: true },
-    { k: "fade", label: "Fade", min: 20, max: 95, def: 72, sec: "Trail" },
+    { k: "fade", label: "Fade", min: 20, max: 95, def: 82, sec: "Trail" },
     { k: "hue", label: "Colour shift", min: -180, max: 180, def: 38, sec: "Trail" },
     { k: "mode", t: "c", label: "Trail is", opts: ["Silhouette", "Ghost"], def: 0, sec: "Trail" },
-    { k: "dr", label: "Drift", min: 0, max: 100, def: 30, sec: "Trail" }
+    { k: "dr", label: "Drift", min: 0, max: 100, def: 55, sec: "Trail" }
   ],
   frag: `uniform sampler2D uAtlas;uniform float uHead;
 vec4 cell(int k,vec2 uv){float idx=mod(uHead-1.-float(k)+8.,8.);vec2 c=vec2(mod(idx,4.),floor(idx/4.));return texture(uAtlas,(c+clamp(uv,0.,1.))/vec2(4.,2.));}
@@ -4786,6 +4858,85 @@ vec4 fx(vec2 uv){vec3 col=texture(uSrc,uv).rgb;float m=smoothstep(.3,.7,texture(
     gl.viewport(0, 0, ECH.rt.w, ECH.rt.h);
     ECH.head = (i + 1) % 8;
   }
+});
+var GENP = (a, b) => [{ k: "ca", t: "color", label: "Ink", def: a, sec: "Colour" }, { k: "cb", t: "color", label: "Ground", def: b, sec: "Colour" }, { k: "pic", label: "Picture bends it", min: 0, max: 100, def: 0, sec: "Pattern" }];
+var GENF = `vec2 gp(vec2 uv){return (uv-.5)*vec2(uRes.x/uRes.y,1.);}float pl_(vec2 uv){return luma(texture(uSrc,uv).rgb);}`;
+defineModule({
+  id: "moire",
+  family: "Source",
+  name: "Moire",
+  defaultLook: { paper: "#f0e8d8", ink: "#1a1a1a", palette: null },
+  params: [
+    { k: "f", label: "Line density", min: 4, max: 120, def: 38, sec: "Pattern", hero: true },
+    { k: "ang", label: "Angle between", min: 0, max: 45, def: 6, step: 0.1, sec: "Pattern", hero: true },
+    { k: "spd", label: "Drift", min: 0, max: 100, def: 25, sec: "Motion" },
+    { k: "sh", label: "Edge sharpness", min: 0, max: 100, def: 60, sec: "Pattern" }
+  ].concat(GENP("#1a1a1a", "#f0e8d8")),
+  frag: SS + GENF + `vec4 fx(vec2 uv){vec2 p=gp(uv);float ph=pl_(uv)*u_pic/12.;float a=radians(u_ang)*(1.+.5*sin(uTime*u_spd*.02));
+  float g1=sin((p.x*cos(.2)+p.y*sin(.2))*u_f*6.283+ph),g2=sin((p.x*cos(.2+a)+p.y*sin(.2+a))*u_f*6.283*1.012+uTime*u_spd*.03);
+  float v=smoothstep(-.1-(1.-u_sh/100.)*.9,.1+(1.-u_sh/100.)*.9,g1*g2);return vec4(mix(u_cb,u_ca,v),1.);}`
+});
+defineModule({
+  id: "interf",
+  family: "Source",
+  name: "Interference",
+  defaultLook: { paper: "#16110e", ink: "#d9531e", palette: null },
+  params: [
+    { k: "n", label: "Sources", min: 2, max: 5, def: 3, step: 1, sec: "Pattern", hero: true },
+    { k: "f", label: "Wavelength", min: 4, max: 80, def: 22, sec: "Pattern", hero: true },
+    { k: "spd", label: "Speed", min: 0, max: 100, def: 35, sec: "Motion" },
+    { k: "orb", label: "Orbit size", min: 0, max: 100, def: 45, sec: "Motion" }
+  ].concat(GENP("#d9531e", "#16110e")),
+  frag: SS + GENF + `vec4 fx(vec2 uv){vec2 p=gp(uv);float ph=pl_(uv)*u_pic/10.,s=0.;
+  for(int i=0;i<5;i++){if(float(i)>=u_n)break;float a=float(i)*6.283/u_n+uTime*u_spd*.02;vec2 c=vec2(cos(a),sin(a*1.3))*u_orb/100.*.5;s+=sin(length(p-c)*u_f*6.283-uTime*u_spd*.15+ph);}
+  s/=u_n;float v=smoothstep(.0,.35,abs(s));return vec4(mix(u_ca,u_cb,v),1.);}`
+});
+defineModule({
+  id: "scanf",
+  family: "Source",
+  name: "Scan Field",
+  defaultLook: { paper: "#0d0b08", ink: "#e8a33c", palette: null },
+  params: [
+    { k: "ln", label: "Lines", min: 20, max: 400, def: 140, sec: "Pattern", hero: true },
+    { k: "bar", label: "Sweep bar", min: 0, max: 100, def: 55, sec: "Pattern", hero: true },
+    { k: "spd", label: "Sweep speed", min: 0, max: 100, def: 30, sec: "Motion" },
+    { k: "tear", label: "Tear", min: 0, max: 100, def: 25, sec: "Motion" },
+    { k: "nz", label: "Static", min: 0, max: 100, def: 20, sec: "Pattern" }
+  ].concat(GENP("#e8a33c", "#0d0b08")),
+  frag: SS + GENF + `vec4 fx(vec2 uv){float row=floor(uv.y*u_ln),tt=floor(uTime*8.);float sh=(h11(row+tt*3.7)-.5)*u_tear/100.*.12*step(.6,h11(row*1.7+tt));
+  vec2 q=vec2(uv.x+sh,uv.y);float ph=pl_(uv)*u_pic/100.;float line=.5+.5*cos(q.y*u_ln*6.283);float bar=exp(-pow((fract(q.y-uTime*u_spd*.03+ph)-.5)*6.,2.))*u_bar/100.;
+  float n=(h21(floor(q*vec2(uRes.x/3.,uRes.y/3.))+tt)-.5)*u_nz/100.;float v=clamp(line*.45+bar+n+.1,0.,1.);return vec4(mix(u_cb,u_ca,v),1.);}`
+});
+defineModule({
+  id: "osc",
+  family: "Source",
+  name: "Oscillator Field",
+  defaultLook: { paper: "#efe6d2", ink: "#c43a2f", palette: null },
+  params: [
+    { k: "a", label: "Frequency X", min: 1, max: 24, def: 5, step: 0.1, sec: "Pattern", hero: true },
+    { k: "b", label: "Frequency Y", min: 1, max: 24, def: 7, step: 0.1, sec: "Pattern", hero: true },
+    { k: "spd", label: "Phase speed", min: 0, max: 100, def: 30, sec: "Motion" },
+    { k: "th", label: "Line weight", min: 1, max: 60, def: 14, sec: "Pattern" }
+  ].concat(GENP("#c43a2f", "#efe6d2")),
+  frag: SS + GENF + `vec4 fx(vec2 uv){vec2 p=gp(uv)*3.1416;float ph=pl_(uv)*u_pic/8.,t=uTime*u_spd*.04;
+  float v=sin(p.x*u_a+t+ph)*cos(p.y*u_b-t*1.3)+sin(length(p)*u_a*.8-t);float d=abs(fract(v*1.5)-.5)*2.;float line=1.-smoothstep(u_th/100.,u_th/100.+.06,d);return vec4(mix(u_cb,u_ca,line),1.);}`
+});
+defineModule({
+  id: "nfield",
+  family: "Source",
+  name: "Noise Field",
+  defaultLook: { paper: "#efe6d2", ink: "#7a6a4f", palette: null },
+  params: [
+    { k: "sc", label: "Scale", min: 1, max: 30, def: 6, step: 0.1, sec: "Pattern", hero: true },
+    { k: "warp", label: "Warp", min: 0, max: 100, def: 60, sec: "Pattern", hero: true },
+    { k: "spd", label: "Flow", min: 0, max: 100, def: 25, sec: "Motion" },
+    { k: "lv", label: "Contour bands", min: 2, max: 24, def: 8, step: 1, sec: "Pattern" }
+  ].concat(GENP("#7a6a4f", "#efe6d2")),
+  frag: SS + GENF + `float vn(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(h21(i),h21(i+vec2(1,0)),f.x),mix(h21(i+vec2(0,1)),h21(i+vec2(1,1)),f.x),f.y);}
+float nfbm(vec2 p){float s=0.,a=.5;for(int i=0;i<4;i++){s+=vn(p)*a;p=p*2.03+7.1;a*=.5;}return s;}
+vec4 fx(vec2 uv){vec2 p=gp(uv)*u_sc,t=vec2(uTime*u_spd*.02,-uTime*u_spd*.013);float ph=pl_(uv)*u_pic/40.;
+  vec2 w=vec2(nfbm(p+t),nfbm(p-t+4.3))-.5;float v=nfbm(p+w*u_warp/25.+ph);float b=fract(v*u_lv);float e=smoothstep(.0,.08,b)*(1.-smoothstep(.12,.2,b));
+  return vec4(mix(u_cb,u_ca,clamp(v*.8+e*.5,0.,1.)),1.);}`
 });
 var STACK = { layers: [mkLayer("crtlab")], sel: 0, rt: {} };
 var F_COMP = HEAD + GLSL_LIB + `
@@ -4859,7 +5010,197 @@ function loadPerson(force) {
   startPerson();
   toast("Loading the person model (about 14 MB, kept on this device)\u2026", 4e3);
 }
+var MOT = { cv: null, g: null, prev: null, n: 0, v: 0 };
+function updateSignals(t) {
+  let sp = null, sc = 1;
+  if (audio.on && audio.data) {
+    sp = audio.data;
+    sc = 1 / 255;
+  } else if (AUD.on && AUD.sp) {
+    sp = AUD.sp;
+    sc = 1;
+  }
+  SIG.level = audio.level || 0;
+  if (sp) {
+    const N = sp.length, avg = (a, b) => {
+      let s = 0;
+      a = Math.floor(a * N);
+      b = Math.max(a + 1, Math.floor(b * N));
+      for (let i = a; i < b; i++) s += sp[i];
+      return Math.min(1, s / (b - a) * sc * 1.6);
+    };
+    const bs = avg(0, 0.08), md = avg(0.08, 0.4), tr = avg(0.4, 1);
+    const onset = bs - SIG.bass > 0.18;
+    SIG.bass += (bs - SIG.bass) * 0.5;
+    SIG.mid += (md - SIG.mid) * 0.5;
+    SIG.treble += (tr - SIG.treble) * 0.5;
+    SIG.beat = onset || AUD.beat ? 1 : SIG.beat * 0.82;
+  } else {
+    SIG.bass *= 0.9;
+    SIG.mid *= 0.9;
+    SIG.treble *= 0.9;
+    SIG.beat *= 0.82;
+  }
+  const el2 = SRC.el;
+  if (el2 && SRC.live && ++MOT.n % 3 === 0) {
+    if (!MOT.cv) {
+      MOT.cv = document.createElement("canvas");
+      MOT.cv.width = 32;
+      MOT.cv.height = 24;
+      MOT.g = MOT.cv.getContext("2d", { willReadFrequently: true });
+    }
+    try {
+      MOT.g.drawImage(el2, 0, 0, 32, 24);
+      const d = MOT.g.getImageData(0, 0, 32, 24).data;
+      if (MOT.prev) {
+        let s = 0;
+        for (let i = 0; i < d.length; i += 4) s += Math.abs(d[i] - MOT.prev[i]) + Math.abs(d[i + 1] - MOT.prev[i + 1]) + Math.abs(d[i + 2] - MOT.prev[i + 2]);
+        MOT.v = Math.min(1, s / (768 * 24) * 5);
+      }
+      MOT.prev = Uint8ClampedArray.from(d);
+    } catch (e) {
+    }
+  }
+  SIG.motion += (MOT.v - SIG.motion) * 0.3;
+}
+function modParams(l, m, t) {
+  if (!l.mods || !l.mods.length) return l.params;
+  const V0 = { ...l.params };
+  for (const md of l.mods) {
+    const p = m.params.find((x) => x.k === md.target);
+    if (!p || p.t !== "r" || typeof V0[p.k] !== "number") continue;
+    const w = signalValue(md.shape, t, md.rate);
+    V0[p.k] = Math.min(p.max, Math.max(p.min, V0[p.k] + w * (md.depth / 100) * (p.max - p.min) / 2));
+  }
+  return V0;
+}
 var MPREV = 0;
+function modulateSection(host, l, m) {
+  l.mods = l.mods || [];
+  const a = accordion("Modulate", l.mods.length > 0), tg = m.params.filter((p) => p.t === "r");
+  l.mods.forEach((md, i) => {
+    const r = el("div", "ir");
+    r.appendChild(el("span", "l", "Drive"));
+    const ts = document.createElement("select");
+    tg.forEach((p) => {
+      const o = document.createElement("option");
+      o.value = p.k;
+      o.textContent = p.label;
+      ts.appendChild(o);
+    });
+    ts.value = md.target;
+    ts.addEventListener("change", () => md.target = ts.value);
+    const ss = document.createElement("select");
+    SIGNALS.forEach(([v, n]) => {
+      const o = document.createElement("option");
+      o.value = v;
+      o.textContent = n;
+      ss.appendChild(o);
+    });
+    ss.value = md.shape;
+    ss.addEventListener("change", () => {
+      md.shape = ss.value;
+      if (["audio", "bass", "mid", "treble", "beat"].includes(md.shape) && !audio.on && !AUD.on) toggleMic();
+    });
+    const x = el("button", "btn", "\xD7");
+    x.setAttribute("aria-label", "Remove");
+    x.addEventListener("click", () => {
+      l.mods.splice(i, 1);
+      renderInspector();
+    });
+    r.append(ts, ss, x);
+    a.b.appendChild(r);
+    rowRange(a.b, "Rate", () => md.rate, (v) => md.rate = v, 0.05, 4, 0.05);
+    rowRange(a.b, "Depth", () => md.depth, (v) => md.depth = v, -100, 100, 1);
+  });
+  if (l.mods.length < 4 && tg.length) a.b.appendChild(Object.assign(el("button", "btn", "Add modulator"), { onclick: () => {
+    l.mods.push({ target: tg[0].k, shape: "sine", rate: 0.4, depth: 40 });
+    renderInspector();
+  } }));
+  if (!tg.length) a.b.appendChild(el("div", "cl", "This effect has no sliders to drive."));
+  host.appendChild(a.d);
+}
+var SPKEY = "n0ise.stackpresets";
+var loadStackPresets = () => {
+  try {
+    return JSON.parse(localStorage.getItem(SPKEY) || "[]");
+  } catch (e) {
+    return [];
+  }
+};
+var currentRecipe = (name) => toRecipe({ name, P, layers: STACK.layers, MODULES, size: [ST.DW || 1280, ST.DH || 720] });
+function applyRecipe(j) {
+  const r = fromRecipe(j, { mkLayer, MODULES });
+  if (r.P) {
+    Object.assign(P, r.P);
+  }
+  STACK.layers = r.layers.length ? r.layers : [mkLayer("crtlab")];
+  STACK.sel = 0;
+  V.sizeKey = "";
+  V.lastBKey = "";
+  snap();
+  refreshUI();
+  renderInspector();
+  if (r.skipped.length) toast("Skipped effects this version doesn\u2019t have: " + r.skipped.join(", "), 5e3);
+}
+function recipeSection(host) {
+  const a = accordion("Recipe", false);
+  const row = el("div", "chips");
+  row.append(
+    Object.assign(el("button", "btn", "Save as preset"), { onclick: () => {
+      const all = loadStackPresets();
+      const name = "Recipe " + (all.length + 1);
+      all.push({ id: "r" + Date.now(), name, j: currentRecipe(name) });
+      try {
+        localStorage.setItem(SPKEY, JSON.stringify(all.slice(-24)));
+        toast("Saved \u201C" + name + "\u201D");
+        renderInspector();
+      } catch (e) {
+        toast("This browser won\u2019t store presets");
+      }
+    } }),
+    Object.assign(el("button", "btn", "Download .json"), { onclick: () => {
+      const j = currentRecipe("n0ise recipe");
+      deliver(new Blob([JSON.stringify(j, null, 1)], { type: "application/json" }), "n0ise-recipe.json");
+    } }),
+    Object.assign(el("button", "btn", "Open file"), { onclick: () => {
+      const f = document.createElement("input");
+      f.type = "file";
+      f.accept = ".json,application/json";
+      f.onchange = async () => {
+        try {
+          applyRecipe(JSON.parse(await f.files[0].text()));
+          toast("Recipe loaded");
+        } catch (e) {
+          toast(String(e.message || e));
+        }
+      };
+      f.click();
+    } })
+  );
+  a.b.appendChild(row);
+  loadStackPresets().forEach((r) => {
+    const x = el("div", "ir");
+    const b = el("button", "btn", r.name);
+    b.addEventListener("click", () => {
+      try {
+        applyRecipe(r.j);
+      } catch (e) {
+        toast(String(e.message || e));
+      }
+    });
+    const d = el("button", "btn", "\xD7");
+    d.setAttribute("aria-label", "Delete preset");
+    d.addEventListener("click", () => {
+      localStorage.setItem(SPKEY, JSON.stringify(loadStackPresets().filter((q) => q.id !== r.id)));
+      renderInspector();
+    });
+    x.append(b, d);
+    a.b.appendChild(x);
+  });
+  a.b.appendChild(el("div", "cl", "A recipe holds the whole stack, its signals and the CRT settings. It is also a project file."));
+  host.appendChild(a.d);
+}
 function maskSection(host, l, m) {
   l.mask = l.mask || { ...MASK_DEFAULTS };
   const mk = l.mask, a = accordion("Mask", true);
@@ -4971,8 +5312,10 @@ function pnt(e) {
   paintDrawn((e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height);
 }
 function renderStack(t, dt) {
-  const vis = STACK.layers.filter((l) => l.visible && MODULES[l.module]);
+  const anySolo = STACK.layers.some((l) => l.solo && l.visible);
+  const vis = STACK.layers.filter((l) => l.visible && MODULES[l.module] && (!anySolo || l.solo));
   if (!vis.length) return;
+  updateSignals(t);
   const L0 = vis[0];
   if (vis.length === 1 && L0.opacity === 100 && L0.module === "crtlab" && L0.select === "all") {
     MODULES.crtlab.render(null, { t, dt, out: null });
@@ -5006,7 +5349,7 @@ function renderStack(t, dt) {
     } else {
       const mk = layerMask(l, m), mt = mk ? maskFor(mk, W, H, acc.tex) : null;
       LASTMASK[l.uid] = mt;
-      m.render(acc.tex, { t, dt, out: lay, layer: l, params: l.params, W, H, mask: mt });
+      m.render(acc.tex, { t, dt, out: lay, layer: l, params: modParams(l, m, t), W, H, mask: mt });
     }
     bindRT(tmp);
     cp.use();
@@ -5178,7 +5521,7 @@ var el = (tag, cls, html) => {
 var HIST = [];
 var REDO = [];
 var lastSnap = "";
-var stackState = () => STACK.layers.map((l) => ({ m: l.module, p: l.module === "crtlab" ? null : l.params, o: l.opacity, b: l.blend, s: l.showSource, sel: l.select, t: l.thr, pos: l.pos, z: l.size, seed: l.seed, v: l.visible, c: l.color, mk: l.mask }));
+var stackState = () => STACK.layers.map((l) => ({ m: l.module, p: l.module === "crtlab" ? null : l.params, o: l.opacity, b: l.blend, s: l.showSource, sel: l.select, t: l.thr, pos: l.pos, z: l.size, seed: l.seed, v: l.visible, c: l.color, mk: l.mask, so: l.solo, md: l.mods }));
 function snap() {
   const s = JSON.stringify({ p: P, l: stackState() });
   if (s !== lastSnap) {
@@ -5196,6 +5539,8 @@ function applySnap(s) {
     Object.assign(l, { opacity: x.o, blend: x.b, showSource: x.s, select: x.sel, thr: x.t, pos: x.pos, size: x.z, seed: x.seed, visible: x.v });
     if (x.c) l.color = x.c;
     if (x.mk) l.mask = x.mk;
+    l.solo = !!x.so;
+    l.mods = x.md || [];
     return l;
   });
   if (!STACK.layers.length) STACK.layers = [mkLayer("crtlab")];
@@ -5233,7 +5578,7 @@ var loadLooks = () => {
 };
 function saveLook() {
   const looks = loadLooks();
-  looks.push({ id: "look" + Date.now(), name: "Look " + (looks.length + 1), p: JSON.parse(JSON.stringify(P)) });
+  looks.push({ id: "look" + Date.now(), name: "Look " + (looks.length + 1), p: JSON.parse(JSON.stringify(P)), j: currentRecipe("Look " + (looks.length + 1)) });
   try {
     localStorage.setItem("n0ise.looks", JSON.stringify(looks.slice(-12)));
   } catch (e) {
@@ -5404,7 +5749,14 @@ function buildProfiles() {
   const items = PROFILES.map((p) => [p[0], p[1] + (recolors(p[2]) ? " \u25D0" : "")]).concat(loadLooks().map((l) => [l.id, "\u2605 " + l.name]));
   const row = chipRow(host, items, "profiles", (id) => {
     const look = loadLooks().find((l) => l.id === id);
-    if (look) {
+    if (look && look.j) {
+      try {
+        applyRecipe(look.j);
+        P.profile = id;
+      } catch (e) {
+        toast(String(e.message || e));
+      }
+    } else if (look) {
       Object.assign(P, JSON.parse(JSON.stringify(look.p)));
       P.profile = id;
     } else applyProfile(id);
@@ -5607,13 +5959,13 @@ function buildLabExtras() {
     const sel = el("select", "field");
     sel.innerHTML = opts.join("");
     const shp = el("select", "field");
-    shp.innerHTML = ["sine", "tri", "square", "saw", "noise", "audio"].map((s) => `<option value="${s}">${s}</option>`).join("");
+    shp.innerHTML = SIGNALS.map(([s, n]) => `<option value="${s}">${n}</option>`).join("");
     sel.addEventListener("change", () => {
       m.target = sel.value;
     });
     shp.addEventListener("change", () => {
       m.shape = shp.value;
-      if (m.shape === "audio" && !audio.on) toggleMic();
+      if (["audio", "bass", "mid", "treble", "beat"].includes(m.shape) && !audio.on && !AUD.on) toggleMic();
     });
     line.append(sel, shp);
     box.appendChild(line);
@@ -7885,7 +8237,12 @@ var TRAITS = {
   contour: ["edge-stroke", "outline", "source-dim", "static", "stroke"],
   sigbody: ["mask-gated", "dither-body", "amber-ink", "static", "grain"],
   bgrep: ["replace", "cut-out", "cream-blue", "drift", "flat"],
-  echo: ["ring-buffer", "trail", "orange-shift", "trail", "ghost"]
+  echo: ["ring-buffer", "trail", "orange-shift", "trail", "ghost"],
+  moire: ["product", "grating", "ink-cream", "drift", "none"],
+  interf: ["wave-sum", "rings", "orange-dark", "orbit", "none"],
+  scanf: ["band-sweep", "scanbars", "amber-dark", "sweep", "scan"],
+  osc: ["lissajous", "contours", "red-cream", "phase", "none"],
+  nfield: ["fbm-warp", "noise-bands", "olive-cream", "flow", "grain"]
 };
 function cyanFrac(cv) {
   const t = document.createElement("canvas");
@@ -8387,8 +8744,51 @@ function renderStrip() {
     const n = el("b", "", String(i + 1).padStart(2, "0"));
     const c = moduleThumb(l.module, 112, 60);
     c.style.height = "30px";
-    b.append(n, c, el("span", "", m.name));
+    b.append(n, c, el("span", "", m.name + (l.solo ? " \xB7 solo" : "")));
+    let drag = null;
+    b.addEventListener("pointerdown", (e) => {
+      drag = { x: e.clientX, i, moved: false };
+    });
+    b.addEventListener("pointermove", (e) => {
+      if (!drag) return;
+      if (!drag.moved && Math.abs(e.clientX - drag.x) > 10) {
+        drag.moved = true;
+        b.setPointerCapture(e.pointerId);
+        b.classList.add("drag");
+      }
+      if (drag.moved) b.style.transform = `translateX(${e.clientX - drag.x}px)`;
+    });
+    b.addEventListener("pointerup", (e) => {
+      if (!drag) return;
+      const d = drag;
+      drag = null;
+      b.style.transform = "";
+      b.classList.remove("drag");
+      if (!d.moved) return;
+      e.preventDefault();
+      b._swallow = true;
+      const kids = [...s.querySelectorAll(".ly")], xs = kids.map((k) => {
+        const r = k.getBoundingClientRect();
+        return r.left + r.width / 2;
+      });
+      let to = 0;
+      xs.forEach((cx, j) => {
+        if (e.clientX > cx) to = j;
+      });
+      to = Math.min(STACK.layers.length - 1, Math.max(0, to));
+      if (to !== d.i) {
+        const a2 = STACK.layers, [mv] = a2.splice(d.i, 1);
+        a2.splice(to, 0, mv);
+        STACK.sel = to;
+        snap();
+        renderInspector();
+      }
+    });
     b.addEventListener("click", () => {
+      if (b._swallow) {
+        b._swallow = false;
+        return;
+      }
       STACK.sel = i;
       INS.gallery = false;
       renderInspector();
@@ -8530,7 +8930,7 @@ function hslHex(h, s, l) {
   return rgbHex([f(0), f(8), f(4)]);
 }
 function shareStack() {
-  const data = STACK.layers.map((l) => ({ m: l.module, p: l.module === "crtlab" ? null : l.params, o: l.opacity, b: l.blend, s: l.showSource, sel: l.select, t: l.thr, pos: l.pos, z: l.size, seed: l.seed, v: l.visible, c: l.color, mk: l.mask }));
+  const data = STACK.layers.map((l) => ({ m: l.module, p: l.module === "crtlab" ? null : l.params, o: l.opacity, b: l.blend, s: l.showSource, sel: l.select, t: l.thr, pos: l.pos, z: l.size, seed: l.seed, v: l.visible, c: l.color, mk: l.mask, so: l.solo, md: l.mods }));
   const hash = "#s=" + btoa(unescape(encodeURIComponent(JSON.stringify(data))));
   history.replaceState(null, "", hash);
   (navigator.clipboard ? navigator.clipboard.writeText(location.href) : Promise.reject()).then(() => toast("Link copied")).catch(() => toast("Link is in the address bar"));
@@ -8545,6 +8945,8 @@ function loadStackHash() {
       Object.assign(l, { opacity: x.o, blend: x.b, showSource: x.s, select: x.sel, thr: x.t, pos: x.pos, size: x.z, seed: x.seed, visible: x.v });
       if (x.c) l.color = x.c;
       if (x.mk) l.mask = x.mk;
+      l.solo = !!x.so;
+      l.mods = x.md || [];
       return l;
     });
     if (!STACK.layers.length) STACK.layers = [mkLayer("crtlab")];
@@ -8839,6 +9241,13 @@ function renderInspector0() {
     l.visible = !l.visible;
     renderInspector();
   });
+  {
+    const sb = mk(l.solo ? "Unsolo" : "Solo", () => {
+      l.solo = !l.solo;
+      renderInspector();
+    });
+    sb.setAttribute("aria-pressed", !!l.solo);
+  }
   if (ix > 0) mk("Up", () => {
     const a = STACK.layers;
     [a[ix - 1], a[ix]] = [a[ix], a[ix - 1]];
@@ -8907,7 +9316,7 @@ function renderInspector0() {
   if (l.module === "fuse") fuseBar(host, l);
   host.appendChild(pr.d);
   const tf = accordion("Transform", false);
-  rowRange(tf.b, "Opacity", () => l.opacity, (v) => l.opacity = v, 0, 100, 1);
+  rowRange(tf.b, "Mix", () => l.opacity, (v) => l.opacity = v, 0, 100, 1);
   const bs = el("div", "ir");
   bs.appendChild(el("span", "l", "Blend"));
   const bsel = document.createElement("select");
@@ -8944,6 +9353,7 @@ function renderInspector0() {
   rowRange(tf.b, "Size", () => l.size, (v) => l.size = v, 20, 200, 1);
   rowRange(tf.b, "Seed", () => l.seed, (v) => l.seed = v, 0, 999, 1);
   host.appendChild(tf.d);
+  if (l.module !== "crtlab") modulateSection(host, l, m);
   if (l.module !== "crtlab" && (m.needsMask || MASKSEL.includes(l.select))) maskSection(host, l, m);
   if (l.module === "crtlab") {
     TABS.forEach(([tid, tn], i) => {
@@ -8966,6 +9376,7 @@ function renderInspector0() {
       host.appendChild(a.d);
     });
   }
+  recipeSection(host);
 }
 var buzz = (ms = 8) => {
   try {
@@ -9062,7 +9473,7 @@ var CAM_FAMILY = {
   tunnel: "Time",
   slit: "Time"
 };
-var UFAM_ORDER = ["Mix", "Color", "Y2K", "Film", "Signal / CRT", "Dither", "Print", "Pixel", "Glyph", "Lines", "Glitch", "Light", "Warp", "Time", "Face"];
+var UFAM_ORDER = ["Source", "Mix", "Color", "Y2K", "Film", "Signal / CRT", "Dither", "Print", "Pixel", "Glyph", "Lines", "Glitch", "Light", "Warp", "Time", "Face"];
 var camFam = (f) => f.face ? "Face" : f.custom || f.cat === "custom" ? "Mine" : CAM_FAMILY[f.id] || "Color";
 var modFam = (m) => RAIL_FAMILY[m.id] || m.family;
 var famRank = (f) => {
@@ -9705,4 +10116,4 @@ function wireSheet() {
   requestAnimationFrame(loop);
   if (new URLSearchParams(location.search).get("bench")) setTimeout(runBench, 600);
 })();
-window.__n0 = { runModuleGate, showSheet, STACK, mkLayer, MODULES, PERSON, DRAWN, setSource, syntheticPerson, renderStack, renderFrame, P, V, ST, SRC, TEX, maskFor, startPerson, loadPerson, renderInspector, layout };
+window.__n0 = { applyRecipe, currentRecipe, toRecipe, fromRecipe, modParams, updateSignals, SIG, runModuleGate, showSheet, STACK, mkLayer, MODULES, PERSON, DRAWN, setSource, syntheticPerson, renderStack, renderFrame, P, V, ST, SRC, TEX, maskFor, startPerson, loadPerson, renderInspector, layout };

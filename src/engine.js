@@ -1284,22 +1284,33 @@ function lifeStep(t,dt,add){
   ST.wl+=(tl-ST.wl)*Math.min(1,dt*1.2);ST.ws+=(ts-ST.ws)*Math.min(1,dt*1.5);
   return [ST.wl,ST.ws];
 }
+/* One signal bus for every modulator (CRT Lab's and every stage's): oscillators plus anything the page measures */
+const SIG={level:0,bass:0,mid:0,treble:0,beat:0,motion:0};
+const SIGNALS=[['sine','Sine'],['tri','Triangle'],['square','Square'],['saw','Saw'],['noise','Noise'],['audio','Audio level'],['bass','Bass'],['mid','Mid'],['treble','Treble'],['beat','Beat'],['motion','Motion'],['ramp','Ramp']];
+function signalValue(shape,t,rate){
+  const ph=t*rate;
+  switch(shape){
+    case'sine':return Math.sin(ph*6.2832);
+    case'tri':return 1-4*Math.abs(ph%1-.5);
+    case'square':return (ph%1)<.5?1:-1;
+    case'saw':return 2*(ph%1)-1;
+    case'noise':return noise1(ph*3)*2-1;
+    case'audio':return SIG.level*2-1;
+    case'bass':return SIG.bass*2-1;
+    case'mid':return SIG.mid*2-1;
+    case'treble':return SIG.treble*2-1;
+    case'beat':return SIG.beat*2-1;
+    case'motion':return SIG.motion*2-1;
+    case'ramp':return (ph%1)*2-1;
+    default:return 0;
+  }
+}
 function computeE(t,dt){
   Object.assign(E,P);
   for(const k of ['bit','g','s','b','m','l','gl'])E['lay_'+k]=P.solo==='all'||P.solo===k;
   for(const m of MODS){
     const c=CTL[m.target];if(!c||c.t!=='r')continue;
-    let w;
-    const ph=t*m.rate;
-    switch(m.shape){
-      case'sine':w=Math.sin(ph*6.2832);break;
-      case'tri':w=1-4*Math.abs(ph%1-.5);break;
-      case'square':w=(ph%1)<.5?1:-1;break;
-      case'saw':w=2*(ph%1)-1;break;
-      case'noise':w=noise1(ph*3)*2-1;break;
-      case'audio':w=audio.level*2-1;break;
-      default:w=0;
-    }
+    const w=signalValue(m.shape,t,m.rate);
     E[m.target]=clamp(E[m.target]+w*(m.depth/100)*(c.max-c.min)/2,c.min,c.max);
   }
   const wx=P.weather/100,seed=P.seed;
@@ -1565,4 +1576,4 @@ function adaptQ(){
   else if(V.fps>=tgt*.93&&ST.autoQ<1&&++ST.okN>=8){ST.autoQ=Math.min(1,ST.autoQ*1.08);ST.okN=0;}
   ST.lite=ST.autoQ<.6;
 }
-export {VS,HEAD,F_TONE,F_QUANT,F_GLITCH,F_SIGA,F_SIGB,F_CRT,F_PERSIST,F_BRIGHT,F_COPY,F_BLUR,F_FINAL,F_ORIG,VS_PAINT,F_PAINT,$,clamp,lerp,sstep,TABS,CT,R,C,B,CTL,PALS,hexRGB,lum255,rgbHex,PROFILES,BASE,P,PROTECT,E,MODS,LOOKKEYS,applyProfile,mulberry,_hw,hardware,canvas,stage,gl,GLOK,_ro,noGL,createGL,attachGL,vaoEmpty,vaoPaint,paintBuf,PR,compile,mkProg,mkProgAsync,wrapProg,initGL,mkTex,mkRT,freeRT,bindRT,tex,samp,draw,bayer,r8tex,blueNoise,TEX,initLUT,SRC,srcDims,uploadSrc,setSource,fitCanvas,demoCanvas,testCanvas,curPal,KER,KF,kern,POOL,pool,diffuse,CPU,cpuProcess,cpuSync,RB,readStart,readDrop,readFinish,finishLive,textCv,textCtx,updateText,noise1,audio,ST,powerShape,STAGES,stageModel,CHAINS,MACROS,applyStages,buildChainUI,refreshChainUI,EVT,lifeStep,computeE,T,POINTER,PAINTQ,METHOD_ID,PHOS_COL,ensureTargets,SZ,exportCap,expDims,EMBED,EMB,layout,syncSrc,renderFrame,peakFps,CTX,adaptQ};
+export {SIG,SIGNALS,signalValue,VS,HEAD,F_TONE,F_QUANT,F_GLITCH,F_SIGA,F_SIGB,F_CRT,F_PERSIST,F_BRIGHT,F_COPY,F_BLUR,F_FINAL,F_ORIG,VS_PAINT,F_PAINT,$,clamp,lerp,sstep,TABS,CT,R,C,B,CTL,PALS,hexRGB,lum255,rgbHex,PROFILES,BASE,P,PROTECT,E,MODS,LOOKKEYS,applyProfile,mulberry,_hw,hardware,canvas,stage,gl,GLOK,_ro,noGL,createGL,attachGL,vaoEmpty,vaoPaint,paintBuf,PR,compile,mkProg,mkProgAsync,wrapProg,initGL,mkTex,mkRT,freeRT,bindRT,tex,samp,draw,bayer,r8tex,blueNoise,TEX,initLUT,SRC,srcDims,uploadSrc,setSource,fitCanvas,demoCanvas,testCanvas,curPal,KER,KF,kern,POOL,pool,diffuse,CPU,cpuProcess,cpuSync,RB,readStart,readDrop,readFinish,finishLive,textCv,textCtx,updateText,noise1,audio,ST,powerShape,STAGES,stageModel,CHAINS,MACROS,applyStages,buildChainUI,refreshChainUI,EVT,lifeStep,computeE,T,POINTER,PAINTQ,METHOD_ID,PHOS_COL,ensureTargets,SZ,exportCap,expDims,EMBED,EMB,layout,syncSrc,renderFrame,peakFps,CTX,adaptQ};
