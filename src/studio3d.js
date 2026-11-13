@@ -155,7 +155,7 @@ function registerObject(name,root,kind,{fit=true,size=1.8,meta={},box=null}={}){
   if(S.objs.length===1||kind==='scan'||kind==='relief')S.needFrame=true;
   $('#empty').hidden=S.objs.length>0;
   renderObjList&&renderObjList();
-  bump();
+  bump();markDirty();
   return o;
 }
 function removeObj(id){
@@ -168,7 +168,7 @@ function removeObj(id){
   if(S.rest&&S.rest.id===id)leaveRest();
   if(S.sel===id)S.sel=null;
   setSelBox();$('#empty').hidden=S.objs.length>0;
-  renderObjList&&renderObjList();refreshInspector&&refreshInspector();bump();
+  renderObjList&&renderObjList();refreshInspector&&refreshInspector();bump();markDirty();
 }
 function selectObj(id){
   S.pivot=false;S.sel=id;const o=objById(id);if(o)S.fxTarget=id; // the look stays on the last picked object even after a tap on empty space
@@ -563,6 +563,7 @@ function is3dgsPly(buf){
 }
 async function importOne(f){
   const ext=extOf(f.name),type=f.type||'';
+  if(ext==='zip'||type==='application/zip'){try{const x=await loadProject(new Uint8Array(await f.arrayBuffer()));toast('Opened project: '+x.count+' object'+(x.count>1?'s':''));}catch(e){toast(String(e.message||e),5000);}return;}
   if(type.startsWith('video/')||['mp4','mov','webm','m4v'].includes(ext)){openScan('video',f);return;}
   if(type.startsWith('audio/')||['mp3','wav','m4a','ogg','flac','aac','opus'].includes(ext)){await loadAudio(f);if(!S.objs.some(x=>x.kind==='viz'))addViz('waterfall');setTab('scene');toast('Playing '+f.name);return;}
   if(type.startsWith('image/')||['png','jpg','jpeg','webp','gif','bmp','avif'].includes(ext)){await photoToRelief(f);return;}
@@ -1178,7 +1179,7 @@ function applyAlpha(m){
 }
 function setAlpha(o,a,by){
   const m=o.meta;m.alpha=a;if(by)m.cutBy=by;
-  applyAlpha(m);rebuildRelief(o);
+  applyAlpha(m);rebuildRelief(o);markDirty();
 }
 async function autoCut(o){
   const m=o.meta;if(m.cutting)return;m.cutting=true;m.cutErr='';
@@ -1770,6 +1771,7 @@ function buildScenePane(){
   add.appendChild(btn('Import files','pri',()=>$('#file').click()));
   Object.keys(PRIMS).forEach(k=>add.appendChild(btn('+ '+k,'',()=>addPrimitive(k))));
   add.appendChild(btn('+ Visualizer','',()=>addViz('waterfall')));
+  add.appendChild(btn('Save project','',saveProject));add.appendChild(btn('Open project','',()=>{const i=document.createElement('input');i.type='file';i.accept='.zip,application/zip';i.onchange=()=>i.files[0]&&importFiles([i.files[0]]);i.click();}));add.appendChild(btn('Copy look link','',lookLink));
   s1.appendChild(add);
   const note=el('div','note','Drop or import: glb, gltf (with its bin and textures), obj (+mtl), stl, ply (mesh, points or 3D Gaussian splat), splat, spz, ksplat, sog. Photos become relief. Videos open the turntable scanner.');s1.appendChild(note);
   inspEl=el('div');p.appendChild(inspEl);
@@ -1871,7 +1873,7 @@ function buildScanPane(){
 }
 
 /* ---------- LOOK pane ---------- */
-const FILE_ACCEPT='audio/*,.mp3,.wav,.m4a,.ogg,.flac,.glb,.gltf,.bin,.obj,.mtl,.stl,.ply,.splat,.spz,.ksplat,.sog,image/*,video/*';
+const FILE_ACCEPT='.zip,audio/*,.mp3,.wav,.m4a,.ogg,.flac,.glb,.gltf,.bin,.obj,.mtl,.stl,.ply,.splat,.spz,.ksplat,.sog,image/*,video/*';
 function palGradient(p){
   if(p.id==='src')return'linear-gradient(90deg,#ff5d5d,#ffcc4d,#4dd68c,#4d8bff)';
   if(!p.c)return'var(--raise)';
@@ -2043,4 +2045,117 @@ buildExportPane();wireSheet();
 setTab('scene');
 try{const sk=localStorage.getItem('n0ise.studio.skin');if(sk)document.documentElement.dataset.skin=sk;}catch(e){}
 boot3d();
-window.__studio={AUTO,autoStep,fxRandomise,fxEnsure,fxClear,FX3,SG,addViz,AU,buildViz,vizUpdate,enterRest,leaveRest,restTick,setFx,autoDepth,buildDepth,restD,MATTERS,CUT,autoCut,refineMask,applyAlpha,S,N0,THREE,scene,camera,controls,renderer,importFiles,addPrimitive,sheet,SC,carve,surfaceNets,buildScan,makeRelief,pseudoDepth,photoToRelief,objById,selectObj,removeObj,bump,setTab,rebuildRelief,applyView,frameAll,exportImage,get rt(){return rt;}};
+
+/* =====================================================================
+   Project: .zip file, autosave and look link. The zip is a plain stored archive (no compression library):
+   project.json plus, for each photo relief, its original photo (png), cut-out alpha (bytes) and depth map (float32).
+   Primitives and their transforms are saved too. Imported meshes, splats and scans are listed as not saved.
+   ===================================================================== */
+const crcT=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0;}return t;})();
+const crc32=b=>{let c=~0;for(let i=0;i<b.length;i++)c=crcT[(c^b[i])&255]^(c>>>8);return ~c>>>0;};
+function zipStore(files){
+  const enc=new TextEncoder(),parts=[],cd=[];let off=0,n=0;
+  for(const [name,data] of Object.entries(files)){
+    const nb=enc.encode(name),crc=crc32(data),lh=new DataView(new ArrayBuffer(30));
+    lh.setUint32(0,0x04034b50,true);lh.setUint16(4,20,true);lh.setUint16(6,0x0800,true);lh.setUint16(12,0x21,true);lh.setUint32(14,crc,true);lh.setUint32(18,data.length,true);lh.setUint32(22,data.length,true);lh.setUint16(26,nb.length,true);
+    parts.push(new Uint8Array(lh.buffer),nb,data);
+    const ch=new DataView(new ArrayBuffer(46));
+    ch.setUint32(0,0x02014b50,true);ch.setUint16(4,20,true);ch.setUint16(6,20,true);ch.setUint16(8,0x0800,true);ch.setUint16(14,0x21,true);ch.setUint32(16,crc,true);ch.setUint32(20,data.length,true);ch.setUint32(24,data.length,true);ch.setUint16(28,nb.length,true);ch.setUint32(42,off,true);
+    cd.push(new Uint8Array(ch.buffer),nb);off+=30+nb.length+data.length;n++;
+  }
+  const cds=cd.reduce((a,x)=>a+x.length,0),e=new DataView(new ArrayBuffer(22));
+  e.setUint32(0,0x06054b50,true);e.setUint16(8,n,true);e.setUint16(10,n,true);e.setUint32(12,cds,true);e.setUint32(16,off,true);
+  return new Blob([...parts,...cd,new Uint8Array(e.buffer)],{type:'application/zip'});
+}
+function zipRead(u8){
+  const dv=new DataView(u8.buffer,u8.byteOffset,u8.byteLength);let e=u8.length-22;
+  while(e>=0&&dv.getUint32(e,true)!==0x06054b50)e--;
+  if(e<0)throw new Error('That isn’t a zip file.');
+  const n=dv.getUint16(e+10,true);let p=dv.getUint32(e+16,true);const out={},dec=new TextDecoder();
+  for(let i=0;i<n;i++){
+    if(dv.getUint32(p,true)!==0x02014b50)throw new Error('The zip is damaged.');
+    const method=dv.getUint16(p+10,true),size=dv.getUint32(p+24,true),nl=dv.getUint16(p+28,true),xl=dv.getUint16(p+30,true),cl=dv.getUint16(p+32,true),lo=dv.getUint32(p+42,true);
+    const name=dec.decode(u8.subarray(p+46,p+46+nl));
+    if(method!==0)throw new Error('This zip was compressed by another tool. Open the project file saved by n0ise 3D.');
+    const ln=dv.getUint16(lo+26,true),lx=dv.getUint16(lo+28,true),st=lo+30+ln+lx;
+    out[name]=u8.subarray(st,st+size);p+=46+nl+xl+cl;
+  }
+  return out;
+}
+const PSKIP=new Set(['_st','stats','tris','maxSlope','slopeLim','cutting','cutErr','bdDirty','splatErr','quick']);
+const toPNG=cv=>new Promise(r=>cv.toBlob(r,'image/png')).then(b=>b.arrayBuffer()).then(a=>new Uint8Array(a));
+async function projectFiles(){
+  const files={},items=[],skipped=[];let i=0;
+  for(const o of S.objs){
+    const tr={p:o.holder.position.toArray(),r:[o.holder.rotation.x,o.holder.rotation.y,o.holder.rotation.z],s:o.holder.scale.toArray()};
+    const m=o.meta;
+    if(o.kind==='relief'&&m&&m.photo&&m.depth){
+      const id='r'+(i++);files[id+'.png']=await toPNG(m.photo);
+      files[id+'.depth']=new Uint8Array(m.depth.buffer.slice(m.depth.byteOffset,m.depth.byteOffset+m.depth.byteLength));
+      if(m.alpha){const a=new Uint8Array(m.alpha.length);for(let k=0;k<a.length;k++)a[k]=Math.round(clamp(m.alpha[k],0,1)*255);files[id+'.alpha']=a;}
+      const sc={};for(const [k,v] of Object.entries(m))if(['number','boolean','string'].includes(typeof v)&&!PSKIP.has(k))sc[k]=v;
+      items.push({kind:'relief',id,name:o.name,tr,vis:o.vis,dw:m.dw,dh:m.dh,meta:sc});
+    }else if(o.kind==='mesh'&&PRIMS[o.name]&&o.root.material&&o.root.material.color)items.push({kind:'prim',name:o.name,tr,vis:o.vis,color:o.root.material.color.getHex()});
+    else skipped.push(o.name);
+  }
+  const pj={n0ise:'studio',v:1,items,skipped,view:{view:S.view,bg:S.bg,env:S.env,grid:S.grid,fx:S.fx,mask:S.mask},cam:{p:camera.position.toArray(),t:controls.target.toArray()}};
+  files['project.json']=new TextEncoder().encode(JSON.stringify(pj));
+  return {files,skipped,count:items.length};
+}
+async function loadProject(u8){
+  const F=zipRead(u8);if(!F['project.json'])throw new Error('That zip has no n0ise project in it.');
+  const pj=JSON.parse(new TextDecoder().decode(F['project.json']));if(pj.n0ise!=='studio')throw new Error('That zip isn’t an n0ise 3D project.');
+  S.objs.slice().forEach(o=>removeObj(o.id));if(S.rest)leaveRest();
+  for(const it of pj.items){
+    let o;
+    if(it.kind==='relief'){
+      const bmp=await createImageBitmap(new Blob([F[it.id+'.png']],{type:'image/png'}));
+      const photo=document.createElement('canvas');photo.width=bmp.width;photo.height=bmp.height;const pg=photo.getContext('2d',{willReadFrequently:true});pg.drawImage(bmp,0,0);
+      const px=pg.getImageData(0,0,photo.width,photo.height).data,disp=document.createElement('canvas');disp.width=photo.width;disp.height=photo.height;disp.getContext('2d',{willReadFrequently:true}).drawImage(photo,0,0);
+      const d=F[it.id+'.depth'],depth=new Float32Array(d.buffer.slice(d.byteOffset,d.byteOffset+d.byteLength));
+      o=makeRelief(it.name,disp,depth,{dw:it.dw,dh:it.dh,photo,px});
+      Object.assign(o.meta,it.meta);
+      const al=F[it.id+'.alpha'];
+      if(al){const a=new Float32Array(al.length);for(let k=0;k<a.length;k++)a[k]=al[k]/255;o.meta.alpha0=Float32Array.from(a);setAlpha(o,a,o.meta.cutBy||'project');}else rebuildRelief(o);
+    }else if(it.kind==='prim'){o=addPrimitive(it.name);if(o.root.material)o.root.material.color.setHex(it.color);}
+    if(!o)continue;
+    o.holder.position.fromArray(it.tr.p);o.holder.rotation.set(...it.tr.r);o.holder.scale.fromArray(it.tr.s);o.vis=it.vis!==false;o.holder.visible=o.vis;
+  }
+  if(S.rest)leaveRest();
+  const v=pj.view||{};if(v.view)S.view=v.view;if(v.bg)S.bg=v.bg;if(typeof v.env==='number'){S.env=v.env;scene.environmentIntensity=v.env;}if(v.mask)Object.assign(S.mask,v.mask);if(typeof v.fx==='boolean')S.fx=v.fx;if(typeof v.grid==='boolean')S.grid=v.grid;
+  if(pj.cam){camera.position.fromArray(pj.cam.p);controls.target.fromArray(pj.cam.t);controls.update();S.needFrame=false;}
+  applyView();renderObjList&&renderObjList();refreshInspector&&refreshInspector();bump();
+  return {count:pj.items.length,skipped:pj.skipped||[]};
+}
+async function saveProject(){
+  const {files,skipped,count}=await projectFiles();if(!count){toast('Nothing to save yet. Add a photo or a shape first.');return;}
+  await deliver(zipStore(files),'n0ise-3d-project.zip');
+  if(skipped.length)toast('Saved. Not included (imported models): '+skipped.slice(0,3).join(', ')+(skipped.length>3?'…':''),6000);
+}
+/* autosave to this browser (IndexedDB), debounced after changes */
+const PDB=()=>new Promise((res,rej)=>{const q=indexedDB.open('n0ise-studio',1);q.onupgradeneeded=()=>q.result.createObjectStore('proj');q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error);});
+const idbPut=async(k,v)=>{const db=await PDB();return new Promise((res,rej)=>{const tx=db.transaction('proj','readwrite');tx.objectStore('proj').put(v,k);tx.oncomplete=res;tx.onerror=()=>rej(tx.error);});};
+const idbGet=async k=>{const db=await PDB();return new Promise((res,rej)=>{const r=db.transaction('proj').objectStore('proj').get(k);r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});};
+var autoT=0,restoring=false;
+function markDirty(){if(restoring||!window.indexedDB)return;clearTimeout(autoT);autoT=setTimeout(async()=>{
+  try{if(!S.objs.length)return;const {files,count}=await projectFiles();if(!count)return;const b=zipStore(files);await idbPut('last',{t:Date.now(),count,bytes:await b.arrayBuffer()});}catch(e){}},4000);}
+['pointerup','keyup','change'].forEach(ev=>addEventListener(ev,markDirty,true));
+addEventListener('pagehide',()=>{clearTimeout(autoT);});
+async function offerRestore(){
+  try{const r=await idbGet('last');if(!r||!r.count)return;
+    const b=document.createElement('div');b.className='restore';b.setAttribute('role','status');
+    b.innerHTML=`<span>Restore your last session? ${r.count} object${r.count>1?'s':''}, saved ${new Date(r.t).toLocaleString([], {dateStyle:'short',timeStyle:'short'})}</span>`;
+    const yes=el('button','btn pri','Restore'),no=el('button','btn','Dismiss');b.append(yes,no);document.body.appendChild(b);
+    const done=()=>{b.remove();};no.onclick=done;
+    yes.onclick=async()=>{done();restoring=true;try{const x=await loadProject(new Uint8Array(r.bytes));toast('Restored '+x.count+' object'+(x.count>1?'s':''));}catch(e){toast('Couldn’t restore: '+(e.message||e),5000);}restoring=false;};
+    setTimeout(done,20000);
+  }catch(e){}
+}
+/* look link: view, background, environment and mask settings as a URL */
+function lookLink(){const o={v:S.view,bg:S.bg,e:S.env,m:S.mask,f:S.fx};const u=location.href.split('#')[0]+'#look='+btoa(unescape(encodeURIComponent(JSON.stringify(o))));
+  history.replaceState(null,'',u);(navigator.clipboard?navigator.clipboard.writeText(u):Promise.reject()).then(()=>toast('Look link copied')).catch(()=>toast('Look link is in the address bar'));}
+function applyLookHash(){const m=location.hash.match(/^#look=(.+)$/);if(!m)return;try{const o=JSON.parse(decodeURIComponent(escape(atob(m[1]))));
+  if(o.v)S.view=o.v;if(o.bg)S.bg=o.bg;if(typeof o.e==='number'){S.env=o.e;scene.environmentIntensity=o.e;}if(o.m)Object.assign(S.mask,o.m);if(typeof o.f==='boolean')S.fx=o.f;applyView();bump();}catch(e){}}
+setTimeout(()=>{applyLookHash();offerRestore();},1200);
+
+window.__studio={zipStore,zipRead,projectFiles,loadProject,saveProject,AUTO,autoStep,fxRandomise,fxEnsure,fxClear,FX3,SG,addViz,AU,buildViz,vizUpdate,enterRest,leaveRest,restTick,setFx,autoDepth,buildDepth,restD,MATTERS,CUT,autoCut,refineMask,applyAlpha,S,N0,THREE,scene,camera,controls,renderer,importFiles,addPrimitive,sheet,SC,carve,surfaceNets,buildScan,makeRelief,pseudoDepth,photoToRelief,objById,selectObj,removeObj,bump,setTab,rebuildRelief,applyView,frameAll,exportImage,get rt(){return rt;}};

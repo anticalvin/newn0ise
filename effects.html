@@ -357,6 +357,23 @@ body[data-cam] #stage{box-sizing:border-box;padding:calc(56px + env(safe-area-in
 .camrow .camroll,.camrow .camswap{width:56px;height:56px;min-height:56px}
 @media (max-height:620px){.caminfo span,#camstr{display:none}.camt{min-height:52px}.camt svg{display:none}}
 @media (min-width:820px){.cambot{max-width:560px;left:50%;right:auto;transform:translateX(-50%);width:100%}}
+
+.camui.pro .cammoregrid,.camui.more .campro{display:none}
+.campro{display:none;position:absolute;left:8px;right:8px;bottom:calc(var(--campad,200px) + 6px);max-height:calc(100dvh - var(--campad,200px) - 80px);overflow-y:auto;background:rgba(10,10,10,.94);border:1px solid #3a3835;border-radius:3px;padding:6px 10px;pointer-events:auto;overscroll-behavior:contain}
+.camui.pro .campro{display:block}
+.prr{display:flex;flex-direction:column;gap:2px;padding:6px 0;border-bottom:1px solid #22201e}.prr:last-of-type{border-bottom:0}
+.prl{font:600 10px var(--lab);text-transform:uppercase;letter-spacing:.1em;color:#8d8a82}
+.prc{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.prchip{min-height:44px;padding:0 12px;border:1px solid #3a3835;background:#0a0a0a;color:#f2efe8;font:600 12px var(--lab);border-radius:3px}
+.prchip[aria-pressed=true]{background:#f2efe8;color:#0a0a0a}
+.prsl{display:flex;align-items:center;gap:10px;flex:1;min-width:150px}.prsl input{flex:1;min-width:0;height:44px;accent-color:var(--accent)}.prv{font:600 12px var(--lab);min-width:60px;text-align:right}
+.prnote{font:500 10.5px/1.4 var(--lab);color:#8d8a82;padding-top:6px}
+.camlevel{position:absolute;left:50%;top:50%;width:min(60%,260px);height:2px;background:#f2efe8;opacity:.85;transform:translate(-50%,-50%);pointer-events:none}
+.camlevel.ok{background:var(--accent)}
+#camhist{position:absolute;right:10px;top:calc(60px + env(safe-area-inset-top,0px));width:96px;height:36px;border:1px solid #3a3835;pointer-events:none}
+.camflash{position:fixed;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:50;transition:opacity .05s}.camflash.on{opacity:1}
+.camtop .cb{font-size:clamp(9.5px,2.7vw,12px)}
+.camtop .cb[aria-pressed=true],.cammoregrid .cb[aria-pressed=true]{background:#f2efe8;color:#0a0a0a}
 </style>
 </head>
 <body>
@@ -394,6 +411,6 @@ body[data-cam] #stage{box-sizing:border-box;padding:calc(56px + env(safe-area-in
   </main>
 </div>
 <input type="file" id="file" accept="image/*,video/*,audio/*,.mp3,.wav,.m4a,.ogg,.flac,.aac" hidden>
-<script type="module" src="assets/index.js?v=ac082345"></script>
+<script type="module" src="assets/index.js?v=870cca4b"></script>
 </body>
 </html>

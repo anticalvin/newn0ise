@@ -2198,12 +2198,19 @@ async function loadFile(f){
   im.src=u;
 }
 let camFacing='environment';
-async function startCam(flip){
-  if(flip)camFacing=camFacing==='environment'?'user':'environment';
+const CAMOPT={deviceId:'',w:1920,h:1080,fps:30};
+function camTrack(){const st=SRC.el&&SRC.el.srcObject;return st&&st.getVideoTracks&&st.getVideoTracks()[0]||null;}
+async function startCam(flip,opt){
+  if(flip){camFacing=camFacing==='environment'?'user':'environment';CAMOPT.deviceId='';}
+  if(opt)Object.assign(CAMOPT,opt);
   try{
-    const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:camFacing,width:{ideal:1280},height:{ideal:960}},audio:false});
+    const old=SRC.el&&SRC.el.srcObject;
+    const mk=async(strict)=>navigator.mediaDevices.getUserMedia({video:Object.assign(CAMOPT.deviceId?{deviceId:{exact:CAMOPT.deviceId}}:{facingMode:camFacing},{width:{ideal:CAMOPT.w},height:{ideal:CAMOPT.h},frameRate:{ideal:CAMOPT.fps}}),audio:false});
+    if(old&&old.getTracks)old.getTracks().forEach(t=>t.stop());
+    let stream;try{stream=await mk();}catch(e){if(CAMOPT.deviceId){CAMOPT.deviceId='';stream=await mk();}else throw e;}
     const v=document.createElement('video');v.playsInline=true;v.muted=true;v.srcObject=stream;await v.play();
     setSource(v,'Camera',true);refreshUI();
+    try{const t=stream.getVideoTracks()[0],st=t.getSettings();if(st.facingMode==='user')camFacing='user';else if(st.facingMode==='environment')camFacing='environment';}catch(e){}
   }catch(e){toast('Camera isn’t available here');}
 }
 /* ---------- GIF decode (animated playback) ---------- */
@@ -2414,7 +2421,7 @@ function applyCam(i,quiet){
     c.fx.forEach((id,k)=>{fuseSet(l,k+1,id);l.params['mx'+(k+1)]=c.mix[k]??100;});layers.push(l);}
   const sl=mkLayer('camsim');Object.assign(sl.params,SIMS[c.sim]||{});layers.push(sl);
   STACK.layers=layers;STACK.sel=layers.length-1;P.aspect=c.aspect;V.sizeKey='';V.lastBKey='';
-  setCamStr(camStr);paintCamUI();if(!quiet)buzz(8);
+  setCamStr(camStr);paintCamUI();applyPro();if(!quiet)buzz(8);
 }
 function setCamStr(v){camStr=v;const l=STACK.layers.find(x=>x.module==='camsim');if(l)l.params.amt=v*2;}
 function drawCamOv(){
@@ -2451,20 +2458,98 @@ async function camRecStart(){
     const name=stamp()+(mime.includes('mp4')?'.mp4':'.webm');await rollAdd(blob,name,true);openSheet(blob,name,true);};
   mr.start();return mr;
 }
+
+/* ---- camera Pro: lens, flash, zoom, exposure, white balance, focus, quality. Hardware controls where the browser exposes them
+   (Chrome/Android: most; iOS Safari: lens choice, resolution, frame rate, sometimes zoom), software ones everywhere else. ---- */
+const PRO={zoom:1,ev:0,wb:0,focus:-1,flash:'off',level:false,hist:false};
+let proCaps={},proSet={},proTilt=0;
+function readCaps(){const t=camTrack();proCaps={};proSet={};try{if(t&&t.getCapabilities)proCaps=t.getCapabilities();if(t&&t.getSettings)proSet=t.getSettings();}catch(e){}}
+async function hwSet(c){const t=camTrack();if(!t)return false;try{await t.applyConstraints({advanced:[c]});return true;}catch(e){return false;}}
+const camSim=()=>STACK.layers.find(x=>x.module==='camsim');
+const rng=(c,k)=>c&&c[k]&&typeof c[k].min==='number'?c[k]:null;
+async function applyPro(){
+  const sl=camSim();if(!sl)return;const base=(SIMS[CAMS[camIx].sim]||{}).ev||0,tw=(SIMS[CAMS[camIx].sim]||{}).temp||0;
+  let hz=false;const zr=rng(proCaps,'zoom');
+  if(zr)hz=await hwSet({zoom:Math.max(zr.min,Math.min(zr.max,PRO.zoom))});
+  sl.params.zoom=hz?1:PRO.zoom;
+  const er=rng(proCaps,'exposureCompensation');let he=false;if(er)he=await hwSet({exposureCompensation:Math.max(er.min,Math.min(er.max,PRO.ev))});
+  sl.params.ev=base+(he?0:PRO.ev*50);
+  if(PRO.wb){const kr=rng(proCaps,'colorTemperature');let hw=false;if(kr)hw=await hwSet({whiteBalanceMode:'manual',colorTemperature:Math.max(kr.min,Math.min(kr.max,PRO.wb))});
+    sl.params.temp=tw+(hw?0:Math.max(-100,Math.min(100,(PRO.wb-5600)/30)));}
+  else{sl.params.temp=tw;if(proCaps.whiteBalanceMode)hwSet({whiteBalanceMode:'continuous'});}
+  if(PRO.focus>=0&&rng(proCaps,'focusDistance'))hwSet({focusMode:'manual',focusDistance:PRO.focus});
+  else if(proCaps.focusMode&&proCaps.focusMode.includes('continuous'))hwSet({focusMode:'continuous'});
+}
+const flashBtnLabel=()=>PRO.flash==='off'?'Flash off':PRO.flash==='on'?'Flash on':'Torch';
+async function setFlash(mode){
+  PRO.flash=mode;const b=$('#camflashb');if(b){b.textContent=flashBtnLabel();b.setAttribute('aria-pressed',mode!=='off');}
+  if(proCaps.torch)await hwSet({torch:mode==='torch'});
+  if(mode==='torch'&&!proCaps.torch)toast('This browser can’t switch the torch. Flash will use a bright screen on the front camera.');
+}
+async function withFlash(fn){
+  if(PRO.flash==='off')return fn();
+  const sl=camSim(),keep=sl?{f:sl.params.flash,e:sl.params.ev,s:sl.params.shoulder}:null;let torch=false,screen=false;
+  if(PRO.flash==='on'){if(proCaps.torch)torch=await hwSet({torch:true});else if(camFacing==='user'){const f=$('#camflash');if(f){f.classList.add('on');screen=true;}}}
+  if(sl){sl.params.flash=Math.max(keep.f,66);sl.params.ev=keep.e+16;sl.params.shoulder=Math.max(keep.s,22);}
+  await new Promise(r=>setTimeout(r,torch?200:screen?160:70));
+  try{return await fn();}finally{
+    if(sl){sl.params.flash=keep.f;sl.params.ev=keep.e;sl.params.shoulder=keep.s;}
+    if(torch&&PRO.flash!=='torch')hwSet({torch:false});const f=$('#camflash');if(f)f.classList.remove('on');
+    const u=$('#camui');if(u){u.classList.add('flash');setTimeout(()=>u.classList.remove('flash'),140);}}
+}
+async function listLenses(){
+  try{const ds=(await navigator.mediaDevices.enumerateDevices()).filter(d=>d.kind==='videoinput');
+    return ds.map(d=>{const l=d.label||'';const n=/ultra/i.test(l)?'0.5× Ultra wide':/tele/i.test(l)?'Telephoto':/front|user|facetime/i.test(l)?'Front':/back|rear|environment|wide/i.test(l)?'Wide':l.replace(/camera/i,'').trim()||'Camera';
+      return{id:d.deviceId,name:n,front:/front|user|facetime/i.test(l)};});}catch(e){return[];}
+}
+async function renderPro(){
+  const box=$('#campro');if(!box)return;readCaps();box.innerHTML='';
+  const row=(label,...kids)=>{const r=el('div','prr');r.appendChild(el('span','prl',label));const w=el('div','prc');w.append(...kids);r.appendChild(w);box.appendChild(r);return r;};
+  const chip=(t,on,fn)=>{const b=el('button','prchip',t);b.setAttribute('aria-pressed',!!on);b.addEventListener('click',()=>{buzz(5);fn();});return b;};
+  const slider=(min,max,step,val,fn,fmt)=>{const w=el('div','prsl'),i=document.createElement('input');i.type='range';i.min=min;i.max=max;i.step=step;i.value=val;const v=el('span','prv',fmt(val));i.addEventListener('input',()=>{v.textContent=fmt(+i.value);fn(+i.value);});w.append(i,v);return w;};
+  const lens=(await listLenses()).filter(l=>l.name);
+  if(lens.length>1){const cur=proSet.deviceId;row('Lens',...lens.map(l=>chip(l.name,l.id===cur,async()=>{await startCam(false,{deviceId:l.id});SRC.mirror=camFacing==='user';await renderPro();applyCam(camIx,true);applyPro();})));}
+  const zr=rng(proCaps,'zoom');
+  row('Zoom '+(zr?'(lens)':'(digital)'),slider(zr?zr.min:1,zr?Math.min(zr.max,15):8,.1,PRO.zoom,v=>{PRO.zoom=v;applyPro();},v=>(+v).toFixed(1)+'×'));
+  row('Exposure',slider(-2,2,.1,PRO.ev,v=>{PRO.ev=v;applyPro();},v=>(v>0?'+':'')+(+v).toFixed(1)+' EV'));
+  const kr=rng(proCaps,'colorTemperature');
+  row('White balance'+(kr?'':' (soft)'),chip('Auto',!PRO.wb,()=>{PRO.wb=0;applyPro();renderPro();}),slider(kr?kr.min:2500,kr?kr.max:9000,100,PRO.wb||5600,v=>{PRO.wb=v;applyPro();},v=>Math.round(v)+'K'));
+  const fr=rng(proCaps,'focusDistance');if(fr)row('Focus',chip('Auto',PRO.focus<0,()=>{PRO.focus=-1;applyPro();renderPro();}),slider(fr.min,fr.max,(fr.max-fr.min)/50||.01,PRO.focus<0?fr.min:PRO.focus,v=>{PRO.focus=v;applyPro();},v=>(+v).toFixed(2)));
+  row('Flash',chip('Off',PRO.flash==='off',()=>{setFlash('off');renderPro();}),chip('On',PRO.flash==='on',()=>{setFlash('on');renderPro();}),chip('Torch'+(proCaps.torch?'':' ✕'),PRO.flash==='torch',()=>{setFlash('torch');renderPro();}));
+  const cur=(proSet.height||0);
+  row('Quality',...[[1280,720,'720p'],[1920,1080,'1080p'],[3840,2160,'4K']].map(([w,h,n])=>chip(n,CAMOPT.h===h,async()=>{await startCam(false,{w,h});SRC.mirror=camFacing==='user';await renderPro();applyCam(camIx,true);applyPro();})),
+    ...[30,60].map(f=>chip(f+' fps',CAMOPT.fps===f,async()=>{await startCam(false,{fps:f});SRC.mirror=camFacing==='user';await renderPro();applyCam(camIx,true);applyPro();})));
+  row('Aids',chip('Level',PRO.level,async()=>{PRO.level=!PRO.level;if(PRO.level)await startLevel();$('#camlevel').hidden=!PRO.level;renderPro();}),chip('Histogram',PRO.hist,()=>{PRO.hist=!PRO.hist;$('#camhist').hidden=!PRO.hist;renderPro();}));
+  const got=[];['zoom','torch','exposureCompensation','colorTemperature','focusDistance','iso','exposureTime'].forEach(k=>{if(proCaps[k])got.push(k==='exposureCompensation'?'exposure':k==='colorTemperature'?'white balance':k==='focusDistance'?'focus':k==='exposureTime'?'shutter':k);});
+  box.appendChild(el('div','prnote',(proSet.width?`Stream ${proSet.width}×${proSet.height}${proSet.frameRate?' at '+Math.round(proSet.frameRate)+' fps':''}. `:'')+(got.length?'Hardware controls here: '+got.join(', ')+'. ':'No hardware controls from this browser; zoom, exposure and white balance are applied in software. ')+'LiDAR depth isn’t available to web pages on iPhone.'));
+}
+let levelOn=false;
+async function startLevel(){
+  try{if(window.DeviceOrientationEvent&&DeviceOrientationEvent.requestPermission){const r=await DeviceOrientationEvent.requestPermission();if(r!=='granted'){toast('Motion access was declined');PRO.level=false;return;}}}catch(e){}
+  if(levelOn)return;levelOn=true;
+  addEventListener('deviceorientation',e=>{if(!PRO.level)return;const g=e.gamma||0,b=e.beta||0;const portrait=innerHeight>innerWidth;const a=portrait?g:(b*(window.orientation===90?-1:1));proTilt=a;const L=$('#camlevel');if(L){L.style.transform='translate(-50%,-50%) rotate('+(-a).toFixed(1)+'deg)';L.classList.toggle('ok',Math.abs(a)<1.2);}});
+}
+function histTick(){
+  const h=$('#camhist');if(!h||h.hidden||!CAMMODE)return;const g=h.getContext('2d'),t=histTick.c||(histTick.c=document.createElement('canvas'));t.width=64;t.height=48;const tg=t.getContext('2d',{willReadFrequently:true});
+  try{tg.drawImage(canvas,0,0,64,48);const d=tg.getImageData(0,0,64,48).data,b=new Float32Array(64);for(let i=0;i<d.length;i+=4)b[Math.min(63,(d[i]*.3+d[i+1]*.59+d[i+2]*.11)/4|0)]++;
+    const mx=Math.max(...b);g.clearRect(0,0,h.width,h.height);g.fillStyle='rgba(10,10,10,.7)';g.fillRect(0,0,h.width,h.height);g.fillStyle='#f2efe8';for(let i=0;i<64;i++){const v=b[i]/mx*(h.height-4);g.fillRect(i*2,h.height-v,2,v);}}catch(e){}
+}
 function buildCamUI(){
   if($('#camui'))return;const stage=$('#stage'),u=el('div','camui');u.id='camui';
   const btn=(id,txt,label,fn)=>{const b=el('button','cb',txt);b.id=id;b.setAttribute('aria-label',label);b.addEventListener('click',fn);return b;};
   const top=el('div','camtop');
-  top.append(btn('camx','✕','Close camera',closeCamera),btn('camflip','Flip','Flip camera',async()=>{await startCam(true);SRC.mirror=camFacing==='user';}),
+  top.append(btn('camx','✕','Close camera',closeCamera),btn('camflip','Flip','Flip camera',async()=>{await startCam(true);SRC.mirror=camFacing==='user';readCaps();applyCam(camIx,true);applyPro();}),
+    btn('camflashb','Flash off','Flash',()=>{setFlash(PRO.flash==='off'?'on':PRO.flash==='on'?(proCaps.torch?'torch':'off'):'off');}),
     btn('camasp','3:4','Frame shape',e=>{const o=['3:4','1:1','4:3','9:16','16:9','src'],i=(o.indexOf(P.aspect)+1)%o.length;P.aspect=o[i];V.sizeKey='';paintCamUI();}),
-    btn('camtim','Off','Self timer',e=>{camTimer=camTimer===0?3:camTimer===3?10:0;e.currentTarget.textContent=camTimer?camTimer+'s':'Off';}),
-    btn('cammore','More','More controls',e=>{const on=u.classList.toggle('more');e.currentTarget.setAttribute('aria-pressed',on);}));
+    btn('campb','Pro','Pro controls',e=>{const on=u.classList.toggle('pro');u.classList.remove('more');e.currentTarget.setAttribute('aria-pressed',on);if(on)renderPro();}),
+    btn('cammore','More','More controls',e=>{const on=u.classList.toggle('more');u.classList.remove('pro');$('#campb').setAttribute('aria-pressed',false);e.currentTarget.setAttribute('aria-pressed',on);}));
   const more=el('div','cammoregrid');
   more.append(btn('cammir','Mirror','Mirror preview',e=>{SRC.mirror=!SRC.mirror;SRC.lastVer=-1;e.currentTarget.setAttribute('aria-pressed',SRC.mirror);}),
     btn('camgrid','Grid','Grid lines',e=>{camGrid=!camGrid;u.classList.toggle('grid',camGrid);e.currentTarget.setAttribute('aria-pressed',camGrid);}),
     btn('cammic','Mic','Let sound move the look',e=>{toggleMic();setTimeout(()=>e.currentTarget.setAttribute('aria-pressed',audio.on),600);}),
     btn('camauto','Auto','Change camera every few seconds',e=>{camAuto=!camAuto;e.currentTarget.setAttribute('aria-pressed',camAuto);clearInterval(camAutoT);if(camAuto)camAutoT=setInterval(()=>applyCam(camIx+1,true),4000);}),
     btn('camtxt','Text','Show date and readout text',e=>{camText=!camText;lsSet('n0ise.camtext',camText);e.currentTarget.setAttribute('aria-pressed',camText);drawCamOv();}),
+    btn('camtim','Timer off','Self timer',e=>{camTimer=camTimer===0?3:camTimer===3?10:0;e.currentTarget.textContent=camTimer?'Timer '+camTimer+'s':'Timer off';}),
     btn('camfps','FPS','Show frame rate',e=>{camFps=!camFps;e.currentTarget.setAttribute('aria-pressed',camFps);}),
     btn('camlab','Edit','Open this look in the editor',()=>{const keep=STACK.layers;closeCamera(true);STACK.layers=keep;STACK.sel=keep.length-1;refreshUI();renderInspector();}));
   const ov=document.createElement('canvas');ov.id='camov';
@@ -2481,18 +2566,19 @@ function buildCamUI(){
   row.append(roll,sh,sw);
   bot.append(info,str,strip,row);
   const cd=el('div','camcount');cd.id='camcount';cd.hidden=true;const fp=el('div','camfpsv');fp.id='camfpsv';fp.hidden=true;
-  u.append(ov,top,more,bot,cd,fp,el('i','g1'),el('i','g2'),el('i','g3'),el('i','g4'));stage.appendChild(u);
+  const pro=el('div','campro');pro.id='campro';const lv=el('div','camlevel');lv.id='camlevel';lv.hidden=true;const hs=document.createElement('canvas');hs.id='camhist';hs.width=128;hs.height=48;hs.hidden=true;const sf=el('div','camflash');sf.id='camflash';
+  u.append(ov,lv,hs,sf,top,more,pro,bot,cd,fp,el('i','g1'),el('i','g2'),el('i','g3'),el('i','g4'));stage.appendChild(u);
   let hold=0,recording=false,mr=null;
   sh.addEventListener('pointerdown',e=>{e.preventDefault();try{sh.setPointerCapture(e.pointerId);}catch(_){}recording=false;hold=setTimeout(async()=>{recording=true;sh.classList.add('rec');buzz(20);mr=await camRecStart();if(!mr){recording=false;sh.classList.remove('rec');}},380);});
   const stopRec=()=>{if(mr){mr.stop();mr=null;}sh.classList.remove('rec');recording=false;};
   sh.addEventListener('pointerup',async()=>{clearTimeout(hold);if(recording){stopRec();return;}if(camBusy)return;camBusy=true;
     for(let n=camTimer;n>0;n--){cd.hidden=false;cd.textContent=n;buzz(8);await new Promise(r=>setTimeout(r,1000));}cd.hidden=true;
-    try{await camShoot();}finally{camBusy=false;}});
+    try{await withFlash(camShoot);}finally{camBusy=false;}});
   sh.addEventListener('pointercancel',()=>{clearTimeout(hold);if(recording)stopRec();});sh.addEventListener('contextmenu',e=>e.preventDefault());
   /* swipe the picture sideways to change camera */
   let sx=0,sy=0,sOn=false;stage.addEventListener('pointerdown',e=>{if(!CAMMODE||e.target.closest('button,input,.camstrip'))return;sOn=true;sx=e.clientX;sy=e.clientY;});
   stage.addEventListener('pointerup',e=>{if(!sOn)return;sOn=false;const dx=e.clientX-sx,dy=e.clientY-sy;if(Math.abs(dx)>70&&Math.abs(dx)>Math.abs(dy)*2&&!(window.__multi&&window.__multi()))applyCam(camIx+(dx<0?1:-1));});
-  setInterval(()=>{if(!CAMMODE)return;if(camFps){fp.hidden=false;fp.textContent=Math.round(V.fps)+' fps';}else fp.hidden=true;drawCamOv();},camRecOn?100:250);
+  setInterval(()=>{if(!CAMMODE)return;if(camFps){fp.hidden=false;fp.textContent=Math.round(V.fps)+' fps';}else fp.hidden=true;drawCamOv();histTick();},camRecOn?100:250);
   addEventListener('resize',()=>{if(CAMMODE)setTimeout(paintCamUI,60);});
   camThumbUpdate();
 }
@@ -2502,7 +2588,7 @@ async function openCamera(){
   camIx=Math.max(0,CAMS.findIndex(c=>c.id===lsGet('n0ise.cam','cctv')));camText=!!lsGet('n0ise.camtext',false);{const tb=$('#camtxt');if(tb)tb.setAttribute('aria-pressed',camText);}
   camSaved={layers:STACK.layers,sel:STACK.sel,aspect:P.aspect};
   SRC.mirror=camFacing==='user';buildCamUI();CAMMODE=true;document.body.dataset.cam='1';
-  applyCam(camIx,true);
+  readCaps();applyCam(camIx,true);
   const m=$('#cammir');if(m)m.setAttribute('aria-pressed',SRC.mirror);
   if(navigator.wakeLock)navigator.wakeLock.request('screen').then(w=>{CAMWAKE=w;}).catch(()=>{});
   camThumbUpdate();setTimeout(paintCamUI,120);

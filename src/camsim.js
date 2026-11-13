@@ -8,7 +8,7 @@ const R=(k,label,min,max,def,sec,extra)=>({k,label,min,max,def,sec,...extra});
 const C=(k,label,def,sec)=>({k,t:'color',label,def,sec});
 export const CAMSIM_PARAMS=[
   R('amt','Strength',0,200,100,'Body',{hero:true}),R('seed2','Variation',0,99,0,'Body'),
-  R('barrel','Barrel distortion',-60,100,0,'Lens'),R('soft','Softness',0,100,0,'Lens',{hero:true}),R('ca','Colour fringe',0,100,0,'Lens'),
+  R('zoom','Digital zoom',1,8,1,'Lens',{step:.1}),R('barrel','Barrel distortion',-60,100,0,'Lens'),R('soft','Softness',0,100,0,'Lens',{hero:true}),R('ca','Colour fringe',0,100,0,'Lens'),
   R('bloom','Bloom',0,100,0,'Lens'),R('bsize','Bloom size',0,100,40,'Lens'),R('bthr','Bloom threshold',0,100,60,'Lens'),C('btint','Bloom tint','#ffffff','Lens'),
   R('halo','Halation',0,100,0,'Lens'),R('vig','Vignette',0,100,0,'Lens'),R('tube','Tube mask',0,100,0,'Lens'),
   R('res','Sensor lines',60,1080,1080,'Sensor',{step:10,hero:true}),R('sharp','Sharpening halos',0,100,0,'Sensor'),
@@ -18,7 +18,7 @@ export const CAMSIM_PARAMS=[
   R('ev','Exposure',-100,100,0,'Exposure'),R('pump','Auto-exposure pump',0,100,0,'Exposure'),R('flash','Flash falloff',0,100,0,'Exposure'),
   R('shoulder','Highlight shoulder',0,100,0,'Exposure'),
   R('contrast','Contrast',-100,100,0,'Tone'),R('gamma','Midtones',-100,100,0,'Tone'),R('lift','Lifted blacks',0,100,0,'Tone'),C('lcol','Black tint','#808080','Tone'),
-  R('sat','Saturation',0,250,100,'Colour'),R('mono','Black and white',0,100,0,'Colour'),C('cast','Colour cast','#ffffff','Colour'),R('castamt','Cast amount',0,100,0,'Colour'),
+  R('temp','Warmth',-100,100,0,'Colour'),R('tint','Green / magenta',-100,100,0,'Colour'),R('sat','Saturation',0,250,100,'Colour'),R('mono','Black and white',0,100,0,'Colour'),C('cast','Colour cast','#ffffff','Colour'),R('castamt','Cast amount',0,100,0,'Colour'),
   R('heat','Thermal palette',0,100,0,'Colour'),
   R('bits','Bit depth',2,8,8,'Digital',{step:.5}),R('blocks','Compression blocks',0,100,0,'Digital'),
   R('weave','Gate weave',0,100,0,'Tape and gate'),R('skew','Rolling skew',0,100,0,'Tape and gate'),R('jitter','Line jitter',0,100,0,'Tape and gate'),R('head','Head switching',0,100,0,'Tape and gate'),
@@ -37,7 +37,7 @@ vec4 fx(vec2 uv){
   vec3 raw=sm(uv);
   vec2 p=uv-.5,pa=p*vec2(asp,1.);float r2=dot(pa,pa),rr=sqrt(r2);
   /* geometry: lens, gate, tape */
-  float bk=u_barrel/100.;p*=(1.+bk*r2*1.6)/(1.+bk*.28);
+  float bk=u_barrel/100.;p*=(1.+bk*r2*1.6)/(1.+bk*.28)/max(u_zoom,1.);
   p+=(vec2(h11(f24*1.7+sd),h11(f24*3.1+sd+4.))-.5)*u_weave/100.*.012;
   p.x+=(uv.y-.5)*u_skew/100.*.05*sin(uTime*1.3)+sin(uv.y*9.+uTime*2.)*u_skew/100.*.004;
   float ln=floor(uv.y*uRes.y/2.),bp=fract(uTime*.11),band=exp(-pow((uv.y-bp)*13.,2.));
@@ -74,6 +74,7 @@ vec4 fx(vec2 uv){
   c=(c-.45)*exp2(u_contrast/100.)+.45;c=pow(max(c,vec3(0.)),vec3(exp2(-u_gamma/100.)));
   float lf=u_lift/100.*.4;c=c*(1.-lf)+u_lcol*lf*1.4;
   /* colour */
+  c*=vec3(1.+u_temp/100.*.35,1.-u_tint/100.*.2,1.-u_temp/100.*.35);
   float l=dot(c,vec3(.299,.587,.114));c=mix(vec3(l),c,u_sat/100.);c=mix(c,vec3(l),u_mono/100.);
   c*=mix(vec3(1.),u_cast*1.15,u_castamt/100.);
   if(u_heat>0.)c=mix(c,heatmap(l*1.1),u_heat/100.);
