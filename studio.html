@@ -1546,7 +1546,7 @@ const noGL=msg=>{const e=$('#err');e.hidden=false;e.textContent=msg;};
 
 const stage=$('#stage'),canvas=$('#gl');
 const S={objs:[],sel:null,view:'shaded',fx:true,hold:false,grid:true,spin:false,gizmo:null,q:.8,
-  mask:{mode:0,focus:3,range:1.2,soft:.6,inv:false,amt:1},bg:'#0b0b0c',env:.5,liveUntil:0,ver:0};
+  mask:{mode:2,focus:3,range:1.2,soft:.6,inv:false,amt:1},bg:'#0b0b0c',env:.5,liveUntil:0,ver:0};
 let renderer=null,gl=null;
 try{
   renderer=new THREE.WebGLRenderer({canvas,antialias:false,alpha:false,preserveDrawingBuffer:true,powerPreference:'high-performance'});
@@ -1570,7 +1570,29 @@ const tc=new TransformControls(camera,canvas);tc.setSize(.8);
 const tcHelper=tc.getHelper?tc.getHelper():tc;scene.add(tcHelper);
 tcHelper.traverse(n=>{n.userData.noView=true;}); // the view modes must not swap the gizmo's own materials (Normal and Depth crashed it)
 tc.addEventListener('dragging-changed',e=>{controls.enabled=!e.value;});
-tc.addEventListener('objectChange',()=>{bump();refreshInspector&&refreshInspector(true);});
+const pivotH=new THREE.Object3D();scene.add(pivotH);
+/* move the origin of an object without moving its geometry: holder goes to the new world point, root takes the inverse */
+function setPivotWorld(o,P){
+  const h=o.holder,r=o.root;h.updateMatrixWorld(true);r.updateMatrixWorld(true);const oldW=r.matrixWorld.clone();
+  h.position.copy(h.parent?h.parent.worldToLocal(P.clone()):P);h.updateMatrixWorld(true);
+  new THREE.Matrix4().copy(h.matrixWorld).invert().multiply(oldW).decompose(r.position,r.quaternion,r.scale);
+  r.updateMatrixWorld(true);setSelBox();bump();
+}
+function setPivotMode(on){
+  const o=objById(S.sel);S.pivot=!!(on&&o);
+  if(S.pivot){if(S.rest)leaveRest();o.holder.updateMatrixWorld(true);pivotH.position.setFromMatrixPosition(o.holder.matrixWorld);tc.attach(pivotH);tc.setMode('translate');}
+  else{tc.detach();if(o&&S.gizmo){tc.attach(o.holder);tc.setMode(S.gizmo);}}
+  bump();
+}
+function pivotTo(o,where){
+  if(S.rest)leaveRest();
+  const b=holderBox(o.holder),P=new THREE.Vector3();
+  if(where==='origin')P.set(0,0,0);
+  else if(b.isEmpty())return;
+  else{b.getCenter(P);if(where==='base')P.y=b.min.y;}
+  setPivotWorld(o,P);if(S.pivot)pivotH.position.copy(P);
+}
+tc.addEventListener('objectChange',()=>{if(S.pivot&&tc.object===pivotH){const o=objById(S.sel);if(o)setPivotWorld(o,pivotH.position);}bump();refreshInspector&&refreshInspector(true);});
 let selBox=null;
 
 /* ---------- render targets ---------- */
@@ -1617,7 +1639,7 @@ const wiremat=new THREE.MeshBasicMaterial({color:0xffffff,wireframe:true});
 function applyView(){
   depthmat.depthPacking=THREE.BasicDepthPacking;
   scene.traverse(o=>{
-    if(!o.isMesh||o.userData.noView)return;
+    if(!o.isMesh||o.isSplatMesh||o.userData.noView)return;
     if(!o.userData._mat)o.userData._mat=o.material;
     const v=S.view;
     o.material=v==='shaded'?o.userData._mat:v==='clay'?claymat:v==='normal'?normmat:v==='depth'?depthmat:wiremat;
@@ -1666,7 +1688,7 @@ function removeObj(id){
   renderObjList&&renderObjList();refreshInspector&&refreshInspector();bump();
 }
 function selectObj(id){
-  S.sel=id;const o=objById(id);
+  S.pivot=false;S.sel=id;const o=objById(id);if(o)S.fxTarget=id; // the look stays on the last picked object even after a tap on empty space
   if(tc.object&&(!o||tc.object!==o.holder))tc.detach();
   if(o&&S.gizmo){tc.attach(o.holder);tc.setMode(S.gizmo);}
   setSelBox();
@@ -1824,14 +1846,14 @@ function ensureComp(){
   if(compProg)return;
   compProg=N0.GLH.mkProg(N0.GLH.HEAD+`
 uniform sampler2D uO,uF,uD,uM;
-uniform float uMode,uAmt,uFocus,uRange,uSoft,uInv,uCamN,uCamF,uHasD;
+uniform float uMode,uAmt,uFocus,uRange,uSoft,uInv,uCamN,uCamF,uHasD,uMA;
 uniform vec2 uPx;
 float lin(float d){return uCamN*uCamF/(uCamF-d*(uCamF-uCamN));}
 void main(){
   vec3 o3=texture(uO,vUv).rgb,f3=texture(uF,vUv).rgb;
   float m=1.;
   if(uMode>.5&&uMode<1.5){float z=lin(texture(uD,vUv).r);m=1.-smoothstep(uRange,uRange+uSoft,abs(z-uFocus));}
-  else if(uMode>1.5&&uMode<2.5){m=texture(uM,vUv).r;}
+  else if(uMode>1.5&&uMode<2.5){vec4 q=texture(uM,vUv);m=uMA>.5?q.a:q.r;}
   else if(uMode>2.5){
     float z0=lin(texture(uD,vUv).r);
     float e=max(max(abs(lin(texture(uD,vUv+vec2(uPx.x,0.)).r)-z0),abs(lin(texture(uD,vUv-vec2(uPx.x,0.)).r)-z0)),max(abs(lin(texture(uD,vUv+vec2(0.,uPx.y)).r)-z0),abs(lin(texture(uD,vUv-vec2(0.,uPx.y)).r)-z0)));
@@ -1843,13 +1865,15 @@ void main(){
 }
 const selMat=new THREE.MeshBasicMaterial({color:0xffffff,side:THREE.DoubleSide});
 function renderSelMask(){
-  const o=objById(S.sel);if(!o||!maskRT)return false;
+  const o=objById(S.fxTarget!=null?S.fxTarget:S.sel);if(!o||!maskRT){if(maskRT){renderer.setRenderTarget(maskRT);renderer.setClearColor(0x000000,0);renderer.clear();}S.maskA=0;return false;}
+  const isSp=o.kind==='splat'||(o.meta&&o.meta.mode==='splats');S.maskA=isSp?1:0;
   const vis=S.objs.map(x=>x.holder.visible);
   S.objs.forEach(x=>{x.holder.visible=x===o&&x.vis;});
   const gv=grid.visible,sbv=selBox?selBox.visible:false,tv=tcHelper.visible;
   grid.visible=false;if(selBox)selBox.visible=false;tcHelper.visible=false;
   const bgOld=scene.background,envOld=scene.environment;scene.environment=null;
-  scene.overrideMaterial=selMat;renderer.setRenderTarget(maskRT);renderer.setClearColor(0x000000,1);renderer.clear();renderer.render(scene,camera);
+  if(!isSp)scene.overrideMaterial=selMat; // splats can't take an override material: their own alpha is the mask
+  renderer.setRenderTarget(maskRT);renderer.setClearColor(0x000000,isSp?0:1);renderer.clear();renderer.render(scene,camera);
   scene.overrideMaterial=null;scene.environment=envOld;scene.background=bgOld;
   S.objs.forEach((x,i)=>{x.holder.visible=vis[i];});grid.visible=gv;if(selBox)selBox.visible=sbv;tcHelper.visible=tv;
   return true;
@@ -1876,7 +1900,7 @@ function frame(ts){
     if(selBox)selBox.update();
     grid.visible=S.grid&&!S.exporting;
     if(selBox)selBox.visible=!S.exporting&&S.sel!=null;
-    tcHelper.visible=!S.exporting&&!!S.gizmo&&S.sel!=null;
+    tcHelper.visible=!S.exporting&&!!(S.gizmo||S.pivot)&&S.sel!=null;
     bgCol.set(S.bg);
     renderer.setRenderTarget(rt);renderer.setClearColor(bgCol,1);renderer.clear();renderer.render(scene,camera);
     const wantMask=S.fx&&!S.hold&&S.mask.mode===2;
@@ -1893,7 +1917,7 @@ function frame(ts){
       gl.bindVertexArray(G.vao);G.bindRT(null);p.use();
       G.samp(p,'uO',0,cTex);G.samp(p,'uF',1,fxTex);G.samp(p,'uD',2,rtTex(rt.depthTexture));G.samp(p,'uM',3,rtTex(maskRT.texture));
       p.f('uMode',S.mask.mode);p.f('uAmt',S.mask.amt);p.f('uFocus',S.mask.focus);p.f('uRange',S.mask.range);p.f('uSoft',Math.max(.001,S.mask.soft));
-      p.f('uInv',S.mask.inv?1:0);p.f('uCamN',camera.near);p.f('uCamF',camera.far);p.v2('uPx',1/curW,1/curH);
+      p.f('uInv',S.mask.inv?1:0);p.f('uMA',S.maskA||0);p.f('uCamN',camera.near);p.f('uCamF',camera.far);p.v2('uPx',1/curW,1/curH);
       G.draw();gl.bindVertexArray(null);gl.useProgram(null);
     }else{
       N0.blit(cTex);
@@ -2077,11 +2101,51 @@ function buildNormalTex(m,shaped,cols,rows){
   if(!m.nmTex){m.nmTex=new THREE.CanvasTexture(c);m.nmTex.colorSpace=THREE.NoColorSpace;m.nmTex.anisotropy=4;}
   m.nmTex.needsUpdate=true;return m.nmTex;
 }
+
+/* ---------- photo → Gaussian splats ----------
+   One splat per grid cell of the relief (about one per 2 px). Position is the relief vertex (same rest-camera slide, so the photo is
+   identical at the rest view), colour is the photo, size is the cell footprint at that depth, the flat axis follows the depth normal,
+   opacity is the cut-out alpha. Output is a standard .splat buffer: 32 bytes per splat, y-down like files from other tools. */
+function buildSplatBytes(m){
+  const asp=m.w/m.h,cap=m.hq?420000:150000;
+  const cols=Math.max(16,Math.min(Math.round(m.w/2),Math.floor(Math.sqrt(cap*asp)))),rows=Math.max(8,Math.round(cols/asp));
+  let dp=m.depth;const dw=m.dw||m.w,dh=m.dh||m.h;if(m.smooth>0)dp=blurPlane(dp,dw,dh,m.smooth);
+  const sample=(u,v)=>{const x=clamp(u*(dw-1),0,dw-1),y=clamp(v*(dh-1),0,dh-1),x0=Math.floor(x),y0=Math.floor(y),x1=Math.min(dw-1,x0+1),y1=Math.min(dh-1,y0+1),fx=x-x0,fy=y-y0;
+    return lerp(lerp(dp[y0*dw+x0],dp[y0*dw+x1],fx),lerp(dp[y1*dw+x0],dp[y1*dw+x1],fx),fy);};
+  const D=restD(asp),N=cols*rows,zv=new Float32Array(N),useA=m.alpha&&!m.keepBg;
+  for(let j=0;j<rows;j++)for(let i=0;i<cols;i++){let d=sample(i/(cols-1),j/(rows-1));d=Math.pow(Math.max(0,d),m.gamma);d=.5+(d-.5)*(1-m.flat);zv[j*cols+i]=(d-.5)*m.scale;}
+  const cv=m.canvas,pix=cv.getContext('2d',{willReadFrequently:true}).getImageData(0,0,cv.width,cv.height).data;
+  const buf=new ArrayBuffer(N*32),f=new Float32Array(buf),u8=new Uint8Array(buf);let n=0;
+  const cx=asp/(cols-1),cy=1/(rows-1),q=new THREE.Quaternion(),zz=new THREE.Vector3(0,0,1),nv=new THREE.Vector3();
+  for(let j=0;j<rows;j++)for(let i=0;i<cols;i++){
+    const u=i/(cols-1),v=j/(rows-1),k=j*cols+i;
+    const a=useA?m.alpha[Math.round(v*(m.h-1))*m.w+Math.round(u*(m.w-1))]:1;if(a<.04)continue;
+    const z=zv[k],s=m.rest?(D-z)/D:1,x=(u-.5)*asp*s,y=(.5-v)*s;
+    const zl=zv[j*cols+Math.max(0,i-1)],zr=zv[j*cols+Math.min(cols-1,i+1)],zu=zv[Math.max(0,j-1)*cols+i],zd=zv[Math.min(rows-1,j+1)*cols+i];
+    nv.set(-(zr-zl)/(2*cx),(zd-zu)/(2*cy)*-1,1);nv.x*=1;nv.normalize();nv.lerp(zz,.45).normalize(); // soften steep normals so slopes don't turn into slivers
+    nv.set(nv.x,-nv.y,-nv.z);q.setFromUnitVectors(zz,nv); // into the y-down file frame
+    const sx=Math.max(cx,cy)*s*.9,o=n*8;
+    f[o]=x;f[o+1]=-y;f[o+2]=-z;f[o+3]=sx;f[o+4]=sx;f[o+5]=sx*.25;
+    const px=Math.min(cv.width-1,Math.round(u*(cv.width-1))),py=Math.min(cv.height-1,Math.round(v*(cv.height-1))),pi=(py*cv.width+px)*4,b=n*32+24;
+    u8[b]=pix[pi];u8[b+1]=pix[pi+1];u8[b+2]=pix[pi+2];u8[b+3]=Math.round(a*255);
+    u8[b+4]=clamp(Math.round(q.w*128+128),0,255);u8[b+5]=clamp(Math.round(q.x*128+128),0,255);u8[b+6]=clamp(Math.round(q.y*128+128),0,255);u8[b+7]=clamp(Math.round(q.z*128+128),0,255);
+    n++;
+  }
+  const bytes=new Uint8Array(buf,0,n*32);
+  // Spark decodes splat colours as sRGB and re-linearises them for this studio's render target, which isn't re-encoded on output.
+  // The copy shown here is pre-encoded to cancel that; the exported bytes keep the photo's own values.
+  const view=new Uint8Array(bytes),lut=new Uint8Array(256);for(let c=0;c<256;c++)lut[c]=Math.round(255*Math.pow(c/255,1/2.2));
+  for(let k=0;k<n;k++){const b=k*32+24;view[b]=lut[view[b]];view[b+1]=lut[view[b+1]];view[b+2]=lut[view[b+2]];}
+  return {bytes,view,count:n,cols,rows};
+}
+function exportPhotoSplat(o){const m=o.meta;if(!m.splat){toast('Switch to Splats first.');return;}
+  const b=m.splat.bytes;deliver(new Blob([b.buffer.slice(b.byteOffset,b.byteOffset+b.byteLength)],{type:'application/octet-stream'}),(o.name||'photo')+'.splat');}
 function rebuildRelief(o){
   const m=o.meta;if(!m||!m.canvas)return;
   const R=buildReliefGeometry(m),{g,cols,rows,tris}=R;
   if(!m.tex){m.tex=new THREE.CanvasTexture(m.canvas);m.tex.colorSpace=THREE.NoColorSpace; /* the studio's render target is not re-encoded on output, so keep the photo's own sRGB values untouched */ m.tex.anisotropy=renderer.capabilities.getMaxAnisotropy();}
-  o.root.children.slice().forEach(c=>{o.root.remove(c);c.geometry&&c.geometry.dispose();if(c.material&&c.material.dispose)c.material.dispose();});
+  const tok=m._st=(m._st||0)+1;
+  o.root.children.slice().forEach(c=>{o.root.remove(c);if(c.isSplatMesh){try{c.dispose();}catch(e){}return;}c.geometry&&c.geometry.dispose();if(c.material&&c.material.dispose)c.material.dispose();});
   const cut=!!(m.alpha&&!m.keepBg);
   const add=(geo,mat,order)=>{const n=new THREE.Mesh(geo,mat);n.userData._mat=mat;n.renderOrder=order||0;o.root.add(n);return n;};
   if(m.mode==='points'){
@@ -2106,6 +2170,17 @@ function rebuildRelief(o){
       const tex=m.keepBg?(L.plateTex||m.tex):L.fillTex;
       add(R.fill,new THREE.MeshBasicMaterial({...base,map:tex}),0);
     }
+  }
+  if(m.mode==='splats'){
+    const S2=buildSplatBytes(m);m.splat=S2;
+    ensureSpark().then(async({SplatMesh})=>{
+      if(m._st!==tok||m.mode!=='splats')return;
+      const sm=new SplatMesh({fileBytes:S2.view,fileName:'photo.splat'});sm.quaternion.set(1,0,0,0);
+      o.root.add(sm);try{await sm.initialized;}catch(e){m.splatErr=String(e&&e.message||e);toast('Splats failed: '+m.splatErr);}
+      if(m._st!==tok||m.mode!=='splats'){o.root.remove(sm);try{sm.dispose();}catch(e){}return;}
+      o.root.children.forEach(c=>{if(c!==sm&&c.isMesh)c.visible=false;}); // the surface stays for picking, the splats are what you see
+      bump();
+    }).catch(e=>{m.splatErr=String(e&&e.message||e);toast('Splats failed: '+m.splatErr);});
   }
   o.meta.stats=`${cols}×${rows}`;o.meta.tris=tris;o.meta.maxSlope=R.maxSlope;o.meta.slopeLim=R.lim;
   applyView();bump();
@@ -2144,7 +2219,7 @@ function makeRelief(name,cv,depth,{quick=false,dw,dh,photo=null,px=null}={}){
 /* ---------- subject cut-out (matting) ----------
    MATTERS is the swap point: each entry is {label, run(canvas,onProg) -> {data:Float32Array 0..1, w, h}}.
    modnet runs in matte.worker.js (WebGPU or WASM). fallback needs no model (border flood fill). */
-const BUILD='step4-fix1';
+const BUILD='step5-splats1';
 const CUT={on:localStorage.getItem('n0.autocut')!=='0',workerP:null,jobs:new Map(),seq:0};
 function resizeBilinear(s,sw,sh,dw,dh){
   if(sw===dw&&sh===dh)return s;
@@ -2882,7 +2957,11 @@ function refreshInspector(soft){
   const o=objById(S.sel);if(!o)return;
   const s=sec(inspEl,'Selected',o.name);
   const h=o.holder;
-  chipRow(s,[['','Orbit'],['translate','Move'],['rotate','Rotate'],['scale','Scale']],v=>(S.gizmo||'')===v,v=>{S.gizmo=v||null;if(S.gizmo){tc.attach(h);tc.setMode(S.gizmo);}else tc.detach();bump();});
+  chipRow(s,[['','Orbit'],['translate','Move'],['rotate','Rotate'],['scale','Scale']],v=>(S.gizmo||'')===v,v=>{S.pivot=false;S.gizmo=v||null;if(S.gizmo){tc.attach(h);tc.setMode(S.gizmo);}else tc.detach();bump();refreshInspector();});
+  const pv=el('div','chips'),pb=el('button','chip','Move pivot');pb.setAttribute('aria-pressed',!!S.pivot);
+  pb.addEventListener('click',()=>{setPivotMode(!S.pivot);pb.setAttribute('aria-pressed',!!S.pivot);});
+  pv.append(pb,btn('Pivot to centre','',()=>pivotTo(o,'center')),btn('Pivot to base','',()=>pivotTo(o,'base')),btn('Pivot to origin','',()=>pivotTo(o,'origin')));s.appendChild(pv);
+  s.appendChild(el('div','note','Drag the arrows to move the pivot. The model stays put; Rotate and Scale then work around the new point.'));
   const ax=['x','y','z'];
   ax.forEach(a=>inspSyncs.push(sliderRow(s,'Pos '+a.toUpperCase(),()=>h.position[a],v=>{h.position[a]=v;bump();},-6,6,.01).sync));
   inspSyncs.push(sliderRow(s,'Turn',()=>THREE.MathUtils.radToDeg(h.rotation.y),v=>{h.rotation.y=THREE.MathUtils.degToRad(v);bump();},-180,180,1,v=>Math.round(v)+'°').sync);
@@ -2898,7 +2977,8 @@ function refreshInspector(soft){
     sliderRow(r,'Smooth',()=>m.smooth,v=>{m.smooth=Math.round(v);rb();},0,8,1);
     sliderRow(r,'Tear edges',()=>m.tear,v=>{m.tear=v;rb();},0,1,.02);
     chipRow(r,[['draft','Draft'],['high','High']],v=>(m.hq?'high':'draft')===v,v=>{m.hq=v==='high';rebuildRelief(o);r.querySelector('.tri').textContent=triNote(m);});
-    chipRow(r,[['mesh','Surface'],['points','Points']],v=>m.mode===v,v=>{m.mode=v;rebuildRelief(o);});
+    chipRow(r,[['mesh','Surface'],['splats','Splats'],['points','Points']],v=>m.mode===v,v=>{m.mode=v;rebuildRelief(o);refreshInspector();});
+    if(m.mode==='splats'&&m.splat){r.appendChild(el('div','note',m.splat.count.toLocaleString()+' splats · 32 bytes each'));const ex=el('div','chips');ex.append(btn('Export .splat','',()=>exportPhotoSplat(o)));r.appendChild(ex);}
     sliderRow(r,'Point size',()=>m.pt,v=>{m.pt=v;rb();},.003,.04,.001);
     const row=el('div','chips');
     const tg=(label,key,onset)=>{const b=el('button','chip',label);b.setAttribute('aria-pressed',!!m[key]);b.addEventListener('click',()=>{m[key]=!m[key];b.setAttribute('aria-pressed',m[key]);(onset||rebuildRelief)(o);});return b;};
@@ -2920,7 +3000,7 @@ function refreshInspector(soft){
   if(o.kind==='points'||o.kind==='splat'){
     const r=sec(inspEl,o.kind==='splat'?'Splat':'Points');
     if(o.kind==='points'){const pm=o.root.material;sliderRow(r,'Point size',()=>pm.size,v=>{pm.size=v;bump();},.002,.06,.001);}
-    if(o.kind==='splat'){const fl=el('div','chips');const b=el('button','chip','Flip upside-down');b.addEventListener('click',()=>{o.root.rotation.x+=Math.PI;bump();});fl.appendChild(b);r.appendChild(fl);r.appendChild(el('div','note','Splats render with Spark. The look stack applies to the whole picture; Selected and Depth masks cover meshes and points, not splat depth.'));}
+    if(o.kind==='splat'){const fl=el('div','chips');const b=el('button','chip','Flip upside-down');b.addEventListener('click',()=>{o.root.rotation.x+=Math.PI;bump();});fl.appendChild(b);r.appendChild(fl);r.appendChild(el('div','note','Splats render with Spark. The look applies to the selected object; Depth band and Edges masks don’t see splat depth.'));}
   }
   const a=sec(inspEl);const ac=el('div','chips');
   ac.append(btn('Frame','',()=>{frameAll();}),btn('Hide',' ',()=>{o.vis=false;o.holder.visible=false;renderObjList();bump();}),btn('Delete','',()=>removeObj(o.id)));a.appendChild(ac);
@@ -2966,8 +3046,8 @@ function buildLookPane(){
   fxb.addEventListener('click',()=>{S.fx=!S.fx;fxb.setAttribute('aria-pressed',S.fx);fxb.textContent=S.fx?'FX on':'FX off';$('#bFx').setAttribute('aria-pressed',S.fx);bump();});
   top.appendChild(fxb);s0.appendChild(top);S.fxBtn=fxb;
   sliderRow(s0,'Amount',()=>S.mask.amt,v=>{S.mask.amt=v;bump();},0,1,.01);
-  s0.appendChild(el('div','sub','Apply the look to'));
-  chipRow(s0,[['0','Everything'],['1','Depth band'],['2','Selected'],['3','Edges']],v=>String(S.mask.mode)===v,v=>{S.mask.mode=+v;if(v==='1')S.mask.focus=controls.getDistance();syncMask();bump();});
+  s0.appendChild(el('div','sub','Apply the look to'));s0.appendChild(el('div','note','Selected is the default: pick an object and the look stays on it, the background stays clean.'));
+  chipRow(s0,[['2','Selected'],['0','Everything'],['1','Depth band'],['3','Edges']],v=>String(S.mask.mode)===v,v=>{S.mask.mode=+v;if(v==='1')S.mask.focus=controls.getDistance();syncMask();bump();});
   const mk=el('div');s0.appendChild(mk);
   function syncMask(){mk.innerHTML='';
     if(S.mask.mode===1){sliderRow(mk,'Focus',()=>S.mask.focus,v=>{S.mask.focus=v;bump();},.2,30,.05);sliderRow(mk,'Range',()=>S.mask.range,v=>{S.mask.range=v;bump();},.05,12,.05);}
