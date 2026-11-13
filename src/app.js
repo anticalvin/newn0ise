@@ -1,4 +1,5 @@
 import {toRecipe,fromRecipe,checkRecipe} from './recipe.js';
+import {CAMS,glyph,drawOverlay} from './cams.js';
 import {PERSON,startPerson,feedPerson,syntheticPerson,DRAWN,paintDrawn,clearDrawn,maskFor,resetMatteGL,MASK_DEFAULTS} from './matte.js';
 import {SIG,SIGNALS,signalValue,V,hooks,attachGL,createGL,VS,HEAD,$,clamp,lerp,TABS,CT,CTL,PALS,hexRGB,lum255,rgbHex,PROFILES,BASE,P,E,MODS,applyProfile,canvas,stage,gl,GLOK,noGL,PR,mkProg,mkProgAsync,initGL,mkRT,freeRT,bindRT,samp,draw,TEX,initLUT,SRC,srcDims,uploadSrc,setSource,fitCanvas,demoCanvas,testCanvas,RB,readDrop,audio,ST,STAGES,stageModel,CHAINS,applyStages,buildChainUI,refreshChainUI,computeE,T,POINTER,PAINTQ,SZ,exportCap,expDims,EMBED,EMB,layout,syncSrc,renderFrame,CTX,adaptQ} from './engine.js';
 {const _c=document.getElementById('gl');attachGL(_c,document.getElementById('stage'),createGL(_c));}
@@ -2402,46 +2403,109 @@ async function openRoll(){
   box.appendChild(grid);const cl=el('button','btn','Close');box.appendChild(cl);sh.appendChild(box);document.body.appendChild(sh);
   const close=()=>{sh.remove();urls.forEach(URL.revokeObjectURL);};cl.addEventListener('click',close);
 }
+/* camera bodies (see cams.js): a Fuse recipe + frame shape + overlay, applied to the shared engine */
+let camIx=0,camStr=50,camSaved=null,camOvT=0,camRec0=0,camRecOn=false;
+function applyCam(i,quiet){
+  camIx=(i+CAMS.length)%CAMS.length;const c=CAMS[camIx];lsSet('n0ise.cam',c.id);
+  const l=mkLayer('fuse');for(let k=1;k<=4;k++){fuseSet(l,k,null);l.params['on'+k]=false;}
+  c.fx.forEach((id,k)=>{fuseSet(l,k+1,id);l.params['mx'+(k+1)]=c.mix[k]??100;});
+  Object.assign(l.params,{hue:0,sat:100,glow:0,split:0,grain:0,vig:0},c.fin);
+  l.camBase=[1,2,3,4].map(k=>l.params['i'+k]);
+  STACK.layers=[l];STACK.sel=0;P.aspect=c.aspect;V.sizeKey='';V.lastBKey='';
+  setCamStr(camStr);paintCamUI();if(!quiet)buzz(8);
+}
+function setCamStr(v){camStr=v;const l=STACK.layers[0];if(!l||l.module!=='fuse'||!l.camBase)return;[1,2,3,4].forEach(k=>{l.params['i'+k]=Math.max(0,Math.min(100,l.camBase[k-1]*v/50));l.params['m'+k]=Math.max(0,Math.min(100,(CAMFX[+l.params['f'+k]-1]?CAMFX[+l.params['f'+k]-1].m:45)*(.5+v/100)));});}
+function drawCamOv(){
+  const ov=$('#camov');if(!ov||!CAMMODE)return;const r=canvas.getBoundingClientRect(),st=$('#stage').getBoundingClientRect();
+  const w=Math.round(r.width),h=Math.round(r.height);if(ov.width!==w||ov.height!==h){ov.width=w;ov.height=h;}
+  ov.style.left=(r.left-st.left)+'px';ov.style.top=(r.top-st.top)+'px';ov.style.width=w+'px';ov.style.height=h+'px';
+  drawOverlay(ov.getContext('2d'),w,h,CAMS[camIx],{t:camRecOn?(performance.now()-camRec0)/1000:0,recOn:camRecOn});
+}
+function paintCamUI(){
+  const st=$('#camstrip');if(!st)return;
+  [...st.children].forEach((b,i)=>{b.setAttribute('aria-pressed',i===camIx);});
+  const t=st.children[camIx];if(t&&!st._dragging)st.scrollTo({left:t.offsetLeft-(st.clientWidth-t.offsetWidth)/2,behavior:st._first?'smooth':'auto'});st._first=true;
+  const c=CAMS[camIx];$('#camname').textContent=c.name;$('#camsub').textContent=c.sub;const a=$('#camasp');if(a)a.textContent=P.aspect==='src'?'Full':P.aspect;
+  {const bt=$('.cambot'),app=document.querySelector('.app');if(bt&&app){app.style.setProperty('--stagepad','0px');app.style.setProperty('--campad',bt.offsetHeight+'px');V.sizeKey='';ST.freeze=0;}}
+  drawCamOv();
+}
+function composite(){const o=document.createElement('canvas');o.width=canvas.width;o.height=canvas.height;const g=o.getContext('2d');g.drawImage(canvas,0,0);
+  drawOverlay(g,o.width,o.height,CAMS[camIx],{keep:true,t:camRecOn?(performance.now()-camRec0)/1000:0,recOn:camRecOn});return o;}
+async function camShoot(){
+  ST.clean=true;await frames2();const o=composite();ST.clean=false;
+  const blob=await new Promise(r=>o.toBlob(r,'image/jpeg',.93));
+  if(blob){const u=$('#camui');u.classList.add('flash');setTimeout(()=>u.classList.remove('flash'),120);buzz(25);await rollAdd(blob,stamp()+'.jpg',false);}
+}
+async function camRecStart(){
+  if(!window.MediaRecorder){toast('Recording isn’t supported here');return null;}
+  const mime=['video/mp4','video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm'].find(m=>MediaRecorder.isTypeSupported(m));if(!mime){toast('No recording format available');return null;}
+  const cc=document.createElement('canvas');cc.width=canvas.width;cc.height=canvas.height;const g=cc.getContext('2d');
+  camRec0=performance.now();camRecOn=true;ST.clean=true;let raf=0;
+  const loop=()=>{g.drawImage(canvas,0,0);drawOverlay(g,cc.width,cc.height,CAMS[camIx],{keep:true,t:(performance.now()-camRec0)/1000,recOn:true});raf=requestAnimationFrame(loop);};loop();
+  const cs=cc.captureStream(30);if(AUD.on&&AUD.dest)AUD.dest.stream.getAudioTracks().forEach(tk=>cs.addTrack(tk));
+  const mr=new MediaRecorder(cs,{mimeType:mime,videoBitsPerSecond:6e6}),parts=[];
+  mr.ondataavailable=e=>{if(e.data.size)parts.push(e.data);};
+  mr.onstop=async()=>{cancelAnimationFrame(raf);camRecOn=false;ST.clean=false;const blob=new Blob(parts,{type:mime.split(';')[0]});
+    const name=stamp()+(mime.includes('mp4')?'.mp4':'.webm');await rollAdd(blob,name,true);openSheet(blob,name,true);};
+  mr.start();return mr;
+}
 function buildCamUI(){
   if($('#camui'))return;const stage=$('#stage'),u=el('div','camui');u.id='camui';
   const btn=(id,txt,label,fn)=>{const b=el('button','cb',txt);b.id=id;b.setAttribute('aria-label',label);b.addEventListener('click',fn);return b;};
   const top=el('div','camtop');
   top.append(btn('camx','✕','Close camera',closeCamera),btn('camflip','Flip','Flip camera',async()=>{await startCam(true);SRC.mirror=camFacing==='user';}),
-    btn('cammir','Mirror','Mirror preview',e=>{SRC.mirror=!SRC.mirror;SRC.lastVer=-1;e.currentTarget.setAttribute('aria-pressed',SRC.mirror);}),
+    btn('camasp','3:4','Frame shape',e=>{const o=['3:4','1:1','4:3','9:16','16:9','src'],i=(o.indexOf(P.aspect)+1)%o.length;P.aspect=o[i];V.sizeKey='';paintCamUI();}),
+    btn('camtim','Off','Self timer',e=>{camTimer=camTimer===0?3:camTimer===3?10:0;e.currentTarget.textContent=camTimer?camTimer+'s':'Off';}),
+    btn('cammore','More','More controls',e=>{const on=u.classList.toggle('more');e.currentTarget.setAttribute('aria-pressed',on);}));
+  const more=el('div','cammoregrid');
+  more.append(btn('cammir','Mirror','Mirror preview',e=>{SRC.mirror=!SRC.mirror;SRC.lastVer=-1;e.currentTarget.setAttribute('aria-pressed',SRC.mirror);}),
     btn('camgrid','Grid','Grid lines',e=>{camGrid=!camGrid;u.classList.toggle('grid',camGrid);e.currentTarget.setAttribute('aria-pressed',camGrid);}),
-    btn('camtim','Timer off','Timer',e=>{camTimer=camTimer===0?3:camTimer===3?10:0;e.currentTarget.textContent=camTimer?'Timer '+camTimer+'s':'Timer off';}),
-    btn('camasp','Aspect','Frame shape',e=>{const o=['src','9:16','3:4','1:1','4:3','16:9'],i=(o.indexOf(P.aspect)+1)%o.length;P.aspect=o[i];V.sizeKey='';e.currentTarget.textContent=o[i]==='src'?'Aspect':o[i];}),
-    btn('cammic','Mic','Let sound move the effect',e=>{toggleMic();setTimeout(()=>e.currentTarget.setAttribute('aria-pressed',audio.on),600);}),
-    btn('camauto','Auto','Change effect every few seconds',e=>{camAuto=!camAuto;e.currentTarget.setAttribute('aria-pressed',camAuto);clearInterval(camAutoT);if(camAuto)camAutoT=setInterval(()=>{const pool=fusePool();pickCam(pool[Math.random()*pool.length|0].id);},3500);}),
-    btn('camfps','FPS','Show frame rate',e=>{camFps=!camFps;e.currentTarget.setAttribute('aria-pressed',camFps);}));
-  const bot=el('div','cambot');
+    btn('cammic','Mic','Let sound move the look',e=>{toggleMic();setTimeout(()=>e.currentTarget.setAttribute('aria-pressed',audio.on),600);}),
+    btn('camauto','Auto','Change camera every few seconds',e=>{camAuto=!camAuto;e.currentTarget.setAttribute('aria-pressed',camAuto);clearInterval(camAutoT);if(camAuto)camAutoT=setInterval(()=>applyCam(camIx+1,true),4000);}),
+    btn('camfps','FPS','Show frame rate',e=>{camFps=!camFps;e.currentTarget.setAttribute('aria-pressed',camFps);}),
+    btn('camlab','Edit','Open this look in the editor',()=>{const keep=STACK.layers;closeCamera(true);STACK.layers=keep;STACK.sel=0;refreshUI();renderInspector();}));
+  const ov=document.createElement('canvas');ov.id='camov';
+  const bot=el('div','cambot'),info=el('div','caminfo');
+  info.append(Object.assign(el('b','','Camera'),{id:'camname'}),Object.assign(el('span','','' ),{id:'camsub'}));
+  const str=document.createElement('input');str.type='range';str.min=0;str.max=100;str.value=camStr;str.id='camstr';str.setAttribute('aria-label','Look strength');str.addEventListener('input',()=>setCamStr(+str.value));
+  const strip=el('div','camstrip');strip.id='camstrip';strip.setAttribute('role','listbox');strip.setAttribute('aria-label','Cameras');
+  CAMS.forEach((c,i)=>{const b=el('button','camt');b.setAttribute('role','option');b.innerHTML=glyph(c.glyph)+`<span>${c.name}</span>`;b.addEventListener('click',()=>{if(camIx!==i)applyCam(i);});strip.appendChild(b);});
+  let sT=0;strip.addEventListener('scroll',()=>{strip._dragging=true;clearTimeout(sT);sT=setTimeout(()=>{strip._dragging=false;const mid=strip.scrollLeft+strip.clientWidth/2;let best=0,bd=1e9;[...strip.children].forEach((t,i)=>{const d=Math.abs(t.offsetLeft+t.offsetWidth/2-mid);if(d<bd){bd=d;best=i;}});if(best!==camIx)applyCam(best);},110);},{passive:true});
+  const row=el('div','camrow');
   const roll=el('button','camroll','Roll');roll.id='camroll';roll.setAttribute('aria-label','Open roll');roll.addEventListener('click',openRoll);
   const sh=el('button','shutter');sh.id='shutter';sh.setAttribute('aria-label','Shutter. Tap for a photo, hold to record');
-  bot.append(roll,sh,el('span','camhint','Tap photo · hold video'));
+  const sw=el('button','cb camswap','Next');sw.setAttribute('aria-label','Next camera');sw.addEventListener('click',()=>applyCam(camIx+1));
+  row.append(roll,sh,sw);
+  bot.append(info,str,strip,row);
   const cd=el('div','camcount');cd.id='camcount';cd.hidden=true;const fp=el('div','camfpsv');fp.id='camfpsv';fp.hidden=true;
-  u.append(top,bot,cd,fp,el('i','g1'),el('i','g2'),el('i','g3'),el('i','g4'));stage.appendChild(u);
-  let hold=0,recording=false;
-  sh.addEventListener('pointerdown',e=>{e.preventDefault();try{sh.setPointerCapture(e.pointerId);}catch(_){}recording=false;hold=setTimeout(()=>{recording=true;sh.classList.add('rec');buzz(20);toggleRec();},380);});
-  const end=()=>{clearTimeout(hold);if(recording){recording=false;sh.classList.remove('rec');toggleRec();return;}};
-  sh.addEventListener('pointerup',async e=>{const was=recording;clearTimeout(hold);if(was){end();return;}if(camBusy)return;camBusy=true;
+  u.append(ov,top,more,bot,cd,fp,el('i','g1'),el('i','g2'),el('i','g3'),el('i','g4'));stage.appendChild(u);
+  let hold=0,recording=false,mr=null;
+  sh.addEventListener('pointerdown',e=>{e.preventDefault();try{sh.setPointerCapture(e.pointerId);}catch(_){}recording=false;hold=setTimeout(async()=>{recording=true;sh.classList.add('rec');buzz(20);mr=await camRecStart();if(!mr){recording=false;sh.classList.remove('rec');}},380);});
+  const stopRec=()=>{if(mr){mr.stop();mr=null;}sh.classList.remove('rec');recording=false;};
+  sh.addEventListener('pointerup',async()=>{clearTimeout(hold);if(recording){stopRec();return;}if(camBusy)return;camBusy=true;
     for(let n=camTimer;n>0;n--){cd.hidden=false;cd.textContent=n;buzz(8);await new Promise(r=>setTimeout(r,1000));}cd.hidden=true;
-    ST.clean=true;await frames2();const blob=await new Promise(r=>canvas.toBlob(r,'image/png'));ST.clean=false;
-    if(blob){u.classList.add('flash');setTimeout(()=>u.classList.remove('flash'),120);buzz(25);await rollAdd(blob,stamp()+'.png',false);}camBusy=false;});
-  sh.addEventListener('pointercancel',end);sh.addEventListener('contextmenu',e=>e.preventDefault());
-  setInterval(()=>{if(CAMMODE&&camFps){fp.hidden=false;fp.textContent=Math.round(V.fps)+' fps';}else fp.hidden=true;},500);
+    try{await camShoot();}finally{camBusy=false;}});
+  sh.addEventListener('pointercancel',()=>{clearTimeout(hold);if(recording)stopRec();});sh.addEventListener('contextmenu',e=>e.preventDefault());
+  /* swipe the picture sideways to change camera */
+  let sx=0,sy=0,sOn=false;stage.addEventListener('pointerdown',e=>{if(!CAMMODE||e.target.closest('button,input,.camstrip'))return;sOn=true;sx=e.clientX;sy=e.clientY;});
+  stage.addEventListener('pointerup',e=>{if(!sOn)return;sOn=false;const dx=e.clientX-sx,dy=e.clientY-sy;if(Math.abs(dx)>70&&Math.abs(dx)>Math.abs(dy)*2&&!(window.__multi&&window.__multi()))applyCam(camIx+(dx<0?1:-1));});
+  setInterval(()=>{if(!CAMMODE)return;if(camFps){fp.hidden=false;fp.textContent=Math.round(V.fps)+' fps';}else fp.hidden=true;drawCamOv();},camRecOn?100:250);
+  addEventListener('resize',()=>{if(CAMMODE)setTimeout(paintCamUI,60);});
   camThumbUpdate();
 }
 async function openCamera(){
   await startCam(false);
   if(!(SRC.el instanceof HTMLVideoElement)||SRC.name!=='Camera')return;
+  camIx=Math.max(0,CAMS.findIndex(c=>c.id===lsGet('n0ise.cam','ccd')));
+  camSaved={layers:STACK.layers,sel:STACK.sel,aspect:P.aspect};
   SRC.mirror=camFacing==='user';buildCamUI();CAMMODE=true;document.body.dataset.cam='1';
+  applyCam(camIx,true);
   const m=$('#cammir');if(m)m.setAttribute('aria-pressed',SRC.mirror);
   if(navigator.wakeLock)navigator.wakeLock.request('screen').then(w=>{CAMWAKE=w;}).catch(()=>{});
-  if(window.SHEET&&document.body.dataset.sheet!==undefined)try{SHEET.apply(1,true);}catch(e){}
-  camThumbUpdate();
+  camThumbUpdate();setTimeout(paintCamUI,120);
 }
 let CAMWAKE=null;
-function closeCamera(){CAMMODE=false;camAuto=false;clearInterval(camAutoT);delete document.body.dataset.cam;if(CAMWAKE){CAMWAKE.release().catch(()=>{});CAMWAKE=null;}if(rec)toggleRec();setSource(demoCanvas(),'Demo');refreshUI();}
+function closeCamera(keepSource){CAMMODE=false;camAuto=false;clearInterval(camAutoT);delete document.body.dataset.cam;{const u=$('#camui');if(u)u.classList.remove('more');}if(camSaved&&!keepSource){STACK.layers=camSaved.layers;STACK.sel=camSaved.sel;}if(camSaved){P.aspect=camSaved.aspect;V.sizeKey='';}if(window.SHEET&&SHEET.apply&&document.body.dataset.sheet!==undefined)try{SHEET.apply(1,true);}catch(e){}if(keepSource){if(CAMWAKE){CAMWAKE.release().catch(()=>{});CAMWAKE=null;}return;}if(CAMWAKE){CAMWAKE.release().catch(()=>{});CAMWAKE=null;}if(rec)toggleRec();setSource(demoCanvas(),'Demo');refreshUI();renderInspector();}
 let rec=null,chunks=[];
 let WAKE=null;
 function toggleRec(sec){
@@ -3293,6 +3357,7 @@ function wireSheet(){
   loadStackHash();loadFuseHash();wireMaskPaint();wireHero();wireTouch();wireSheet();renderInspector();
   requestAnimationFrame(loop);
   if(new URLSearchParams(location.search).get('bench'))setTimeout(runBench,600);
+  if(new URLSearchParams(location.search).get('cam'))setTimeout(()=>{openCamera();},500);
 })();
 /* test hook (read-only use from the console and tools/) */
-window.__n0={SHEET,applyRecipe,currentRecipe,toRecipe,fromRecipe,modParams,updateSignals,SIG,runModuleGate,showSheet,STACK,mkLayer,MODULES,PERSON,DRAWN,setSource,syntheticPerson,renderStack,renderFrame,P,V,ST,SRC,TEX,maskFor,startPerson,loadPerson,renderInspector,layout};
+window.__n0={openCamera,applyCam,CAMS,CAMFX,fxIndex,SHEET,applyRecipe,currentRecipe,toRecipe,fromRecipe,modParams,updateSignals,SIG,runModuleGate,showSheet,STACK,mkLayer,MODULES,PERSON,DRAWN,setSource,syntheticPerson,renderStack,renderFrame,P,V,ST,SRC,TEX,maskFor,startPerson,loadPerson,renderInspector,layout};

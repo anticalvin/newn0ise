@@ -634,7 +634,7 @@ let compProg=null;
 const FXE={frame:null,iw:null,src:document.createElement('canvas'),tex:null,ready:false};
 function fxLoad(){
   if(FXE.frame)return;const f=document.getElementById('fxif');FXE.frame=f;
-  f.addEventListener('load',()=>{FXE.iw=f.contentWindow;setTimeout(()=>{if(S.engine==='stack')rebuildLook();},1500);});f.src='index.html?embed=1';
+  f.addEventListener('load',()=>{FXE.iw=f.contentWindow;setTimeout(()=>{if(S.engine==='stack')rebuildLook();},1500);});f.src='effects.html?embed=1';
 }
 function fxOpen(){fxLoad();document.getElementById('fxov').classList.remove('bg');bump();}
 function fxClose(){document.getElementById('fxov').classList.add('bg');bump();}
