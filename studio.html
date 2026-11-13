@@ -96,6 +96,7 @@ details.acc>summary::after{content:"+";color:var(--mute)}details.acc[open]>summa
 details.acc>.in{padding:0 12px 10px}
 .sub{font:700 9px var(--lab);letter-spacing:.12em;text-transform:uppercase;color:var(--mute);padding:8px 0 2px}
 .field{width:100%;background:var(--raise);border:1px solid var(--line);border-radius:var(--rad);padding:6px 8px}
+.cutbar{position:absolute;left:50%;top:calc(var(--safe-t) + 56px);transform:translateX(-50%);width:min(320px,86%);background:var(--panel);border:1px solid var(--line);border-radius:var(--rad);padding:8px 10px;z-index:6;font:700 10px var(--lab);letter-spacing:.08em;text-transform:uppercase;color:var(--ink)}.cutbar .prog{margin:6px 0 0}.cutbar[hidden]{display:none}
 .prog{height:2px;background:var(--line);margin:6px 0}.prog i{display:block;height:100%;width:0;background:var(--accent)}
 
 /* scan modal */
@@ -1949,17 +1950,19 @@ function buildReliefGeometry(m){
   if(m.smooth>0)dp=blurPlane(dp,dw,dh,m.smooth);
   const sample=(u,v)=>{const x=clamp(u*(dw-1),0,dw-1),y=clamp(v*(dh-1),0,dh-1),x0=Math.floor(x),y0=Math.floor(y),x1=Math.min(dw-1,x0+1),y1=Math.min(dh-1,y0+1),fx=x-x0,fy=y-y0;
     return lerp(lerp(dp[y0*dw+x0],dp[y0*dw+x1],fx),lerp(dp[y1*dw+x0],dp[y1*dw+x1],fx),fy);};
-  const pos=new Float32Array(cols*rows*3),uv=new Float32Array(cols*rows*2),dd=new Float32Array(cols*rows);
+  const pos=new Float32Array(cols*rows*3),uv=new Float32Array(cols*rows*2),dd=new Float32Array(cols*rows),av=new Float32Array(cols*rows).fill(1),useA=m.alpha&&!m.keepBg;
   for(let j=0;j<rows;j++)for(let i=0;i<cols;i++){
     const u=i/(cols-1),v=j/(rows-1),d=sample(u,v),k=j*cols+i;
     dd[k]=d;pos[k*3]=(u-.5)*asp;pos[k*3+1]=.5-v;pos[k*3+2]=(d-.5)*m.scale;
     uv[k*2]=u;uv[k*2+1]=1-v;
+    if(useA)av[k]=m.alpha[Math.round(v*(m.h-1))*m.w+Math.round(u*(m.w-1))];
   }
   const idx=[];
   for(let j=0;j<rows-1;j++)for(let i=0;i<cols-1;i++){
     const a=j*cols+i,b=a+1,c=a+cols,d=c+1;
     const mx=Math.max(dd[a],dd[b],dd[c],dd[d]),mn=Math.min(dd[a],dd[b],dd[c],dd[d]);
     if(mx-mn>m.cut)continue;
+    if(useA&&Math.max(av[a],av[b],av[c],av[d])<.02)continue;
     idx.push(a,c,b,b,c,d);
   }
   const g=new THREE.BufferGeometry();
@@ -1982,7 +1985,7 @@ function rebuildRelief(o){
     g.setAttribute('color',new THREE.BufferAttribute(col,3));g.setIndex(null);
     node=new THREE.Points(g,new THREE.PointsMaterial({size:m.pt,sizeAttenuation:true,vertexColors:true}));
   }else{
-    const mat=m.lit?new THREE.MeshStandardMaterial({map:m.tex,roughness:.9,metalness:0,side:THREE.DoubleSide}):new THREE.MeshBasicMaterial({map:m.tex,side:THREE.DoubleSide});
+    const mat=m.lit?new THREE.MeshStandardMaterial({map:m.tex,roughness:.9,metalness:0,side:THREE.DoubleSide,transparent:!!(m.alpha&&!m.keepBg),alphaTest:m.alpha&&!m.keepBg?.02:0}):new THREE.MeshBasicMaterial({map:m.tex,side:THREE.DoubleSide,transparent:!!(m.alpha&&!m.keepBg),alphaTest:m.alpha&&!m.keepBg?.02:0});
     node=new THREE.Mesh(g,mat);node.userData._mat=mat;
   }
   o.root.add(node);o.meta.stats=`${cols}×${rows}`;
@@ -1991,32 +1994,255 @@ function rebuildRelief(o){
 async function photoToRelief(file){
   const bmp=await createImageBitmap(file,{imageOrientation:'from-image'});
   const k=Math.min(1,1280/Math.max(bmp.width,bmp.height));
-  const cv=document.createElement('canvas');cv.width=Math.max(2,Math.round(bmp.width*k));cv.height=Math.max(2,Math.round(bmp.height*k));
-  cv.getContext('2d').drawImage(bmp,0,0,cv.width,cv.height);
-  return makeRelief(file.name||'Photo',cv,pseudoDepth(cv),{quick:true});
+  const photo=document.createElement('canvas');photo.width=Math.max(2,Math.round(bmp.width*k));photo.height=Math.max(2,Math.round(bmp.height*k));
+  const pg=photo.getContext('2d',{willReadFrequently:true});pg.drawImage(bmp,0,0,photo.width,photo.height);
+  const w=photo.width,h=photo.height,px=pg.getImageData(0,0,w,h).data;
+  let tr=0;for(let i=3;i<px.length;i+=4)if(px[i]<250)tr++;
+  const disp=document.createElement('canvas');disp.width=w;disp.height=h;disp.getContext('2d',{willReadFrequently:true}).drawImage(photo,0,0);
+  // placeholder: the photo as a flat plane, swapped for the cut-out when it is ready
+  const o=makeRelief(file.name||'Photo',disp,new Float32Array(w*h).fill(.5),{quick:true,photo,px});
+  if(tr>w*h*.005){ // the file already carries real alpha: use it, skip the model
+    const a=new Float32Array(w*h);for(let i=0;i<a.length;i++)a[i]=px[i*4+3]/255;
+    o.meta.alpha0=Float32Array.from(a);setAlpha(o,a,'file alpha');o.meta.depth=pseudoDepth(photo);rebuildRelief(o);
+  }else if(CUT.on)autoCut(o);
+  return o;
 }
-function makeRelief(name,cv,depth,{quick=false,dw,dh}={}){
+function makeRelief(name,cv,depth,{quick=false,dw,dh,photo=null,px=null}={}){
   const g=new THREE.Group();
-  const meta={canvas:cv,w:cv.width,h:cv.height,depth,dw:dw||cv.width,dh:dh||cv.height,N:220,scale:.55,smooth:1,cut:.08,mode:'mesh',lit:false,pt:.012,quick};
+  const meta={canvas:cv,photo,px,alpha:null,keepBg:false,w:cv.width,h:cv.height,depth,dw:dw||cv.width,dh:dh||cv.height,N:220,scale:.55,smooth:1,cut:.08,mode:'mesh',lit:false,pt:.012,quick};
   const o=registerObject(baseName(name),g,'relief',{fit:false,meta});
   rebuildRelief(o);
   // sit on the ground, 1.8 units tall
   o.holder.scale.setScalar(1.8);o.holder.position.set(0,.9,0);
   frameAll();setTab&&setTab('scene');
-  toast(quick?'Placed as quick relief. Run AI depth for a real depth map.':'Relief built from the depth map.');
+  if(!photo)toast(quick?'Placed as quick relief. Run AI depth for a real depth map.':'Relief built from the depth map.');
   return o;
 }
+/* ---------- subject cut-out (matting) ----------
+   MATTERS is the swap point: each entry is {label, run(canvas,onProg) -> {data:Float32Array 0..1, w, h}}.
+   modnet runs in matte.worker.js (WebGPU or WASM). fallback needs no model (border flood fill). */
+const CUT={on:localStorage.getItem('n0.autocut')!=='0',workerP:null,jobs:new Map(),seq:0};
+function resizeBilinear(s,sw,sh,dw,dh){
+  if(sw===dw&&sh===dh)return s;
+  const o=new Float32Array(dw*dh),fx=sw>1?(sw-1)/Math.max(1,dw-1):0,fy=sh>1?(sh-1)/Math.max(1,dh-1):0;
+  for(let y=0;y<dh;y++){const sy=y*fy,y0=Math.floor(sy),y1=Math.min(sh-1,y0+1),ty=sy-y0;
+    for(let x=0;x<dw;x++){const sx=x*fx,x0=Math.floor(sx),x1=Math.min(sw-1,x0+1),tx=sx-x0;
+      o[y*dw+x]=(s[y0*sw+x0]*(1-tx)+s[y0*sw+x1]*tx)*(1-ty)+(s[y1*sw+x0]*(1-tx)+s[y1*sw+x1]*tx)*ty;}}
+  return o;
+}
+function guidedFilter(I,p,w,h,r,eps){
+  const n=w*h,Ip=new Float32Array(n),II=new Float32Array(n);
+  for(let i=0;i<n;i++){Ip[i]=I[i]*p[i];II[i]=I[i]*I[i];}
+  const mI=blurPlane(I,w,h,r),mp=blurPlane(p,w,h,r),cIp=blurPlane(Ip,w,h,r),cII=blurPlane(II,w,h,r);
+  const a=new Float32Array(n),b=new Float32Array(n);
+  for(let i=0;i<n;i++){const v=cII[i]-mI[i]*mI[i];a[i]=(cIp[i]-mI[i]*mp[i])/(v+eps);b[i]=mp[i]-a[i]*mI[i];}
+  const ma=blurPlane(a,w,h,r),mb=blurPlane(b,w,h,r),q=new Float32Array(n);
+  for(let i=0;i<n;i++)q[i]=clamp(ma[i]*I[i]+mb[i],0,1);
+  return q;
+}
+/* label connected components where bin===v. returns {lab,sizes,border} */
+function labelComps(bin,w,h,v){
+  const n=w*h,lab=new Int32Array(n).fill(-1),sizes=[],border=[],st=new Int32Array(n);
+  for(let s=0;s<n;s++){
+    if(bin[s]!==v||lab[s]>=0)continue;
+    const id=sizes.length;let sp=0,cnt=0,bd=0;st[sp++]=s;lab[s]=id;
+    while(sp){const i=st[--sp];cnt++;const x=i%w,y=(i-x)/w;
+      if(x===0||y===0||x===w-1||y===h-1)bd=1;
+      if(x>0&&bin[i-1]===v&&lab[i-1]<0){lab[i-1]=id;st[sp++]=i-1;}
+      if(x<w-1&&bin[i+1]===v&&lab[i+1]<0){lab[i+1]=id;st[sp++]=i+1;}
+      if(y>0&&bin[i-w]===v&&lab[i-w]<0){lab[i-w]=id;st[sp++]=i-w;}
+      if(y<h-1&&bin[i+w]===v&&lab[i+w]<0){lab[i+w]=id;st[sp++]=i+w;}}
+    sizes.push(cnt);border.push(bd);
+  }
+  return {lab,sizes,border};
+}
+/* probability map (any size) -> sharp full-res alpha following the photo's edges */
+function refineMask(prob,pw,ph,px,w,h){
+  const n=w*h;let a=resizeBilinear(prob,pw,ph,w,h);
+  const I=new Float32Array(n);for(let i=0;i<n;i++)I[i]=(.299*px[i*4]+.587*px[i*4+1]+.114*px[i*4+2])/255;
+  a=guidedFilter(I,a,w,h,Math.max(3,Math.round(Math.max(w,h)/160)),1e-3);
+  for(let i=0;i<n;i++)a[i]=clamp((a[i]-.32)/.36,0,1);           // sharpen the edge ramp
+  cleanAlpha(a,w,h);
+  const f=blurPlane(a,w,h,1);for(let i=0;i<n;i++)a[i]=f[i];     // ~1-2 px feather
+  return a;
+}
+function cleanAlpha(a,w,h){
+  const n=w*h,bin=new Uint8Array(n);for(let i=0;i<n;i++)bin[i]=a[i]>.5?1:0;
+  const fg=labelComps(bin,w,h,1),big=Math.max(0,...fg.sizes),minI=Math.max(n*.003,big*.04);
+  const bg=labelComps(bin,w,h,0);
+  for(let i=0;i<n;i++){
+    if(bin[i]){if(fg.sizes[fg.lab[i]]<minI)a[i]=0;}
+    else{const c=bg.lab[i];if(!bg.border[c]&&bg.sizes[c]<n*.008)a[i]=1;}
+  }
+}
+/* pull edge colour from the inside of the subject so no background halo remains */
+function decontaminate(px,a,w,h){
+  const n=w*h,out=new Uint8ClampedArray(px),core=new Uint8Array(n);
+  for(let i=0;i<n;i++)core[i]=a[i]>=.96?1:0;
+  for(let pass=0;pass<2;pass++){const c=core.slice();
+    for(let y=1;y<h-1;y++)for(let x=1;x<w-1;x++){const i=y*w+x;if(!core[i])continue;
+      if(!core[i-1]||!core[i+1]||!core[i-w]||!core[i+w])c[i]=0;}
+    core.set(c);}
+  const reach=blurPlane(a,w,h,4),todo=[];
+  for(let i=0;i<n;i++)if(!core[i]&&reach[i]>.002)todo.push(i);
+  for(let it=0;it<6&&todo.length;it++){
+    const add=[],rest=[];
+    for(const i of todo){const x=i%w,y=(i-x)/w;let r=0,g=0,b=0,k=0;
+      for(let j=-1;j<=1;j++){const yy=y+j;if(yy<0||yy>=h)continue;
+        for(let q=-1;q<=1;q++){const xx=x+q;if(xx<0||xx>=w)continue;const m=yy*w+xx;if(core[m]){r+=out[m*4];g+=out[m*4+1];b+=out[m*4+2];k++;}}}
+      if(k){out[i*4]=r/k;out[i*4+1]=g/k;out[i*4+2]=b/k;add.push(i);}else rest.push(i);}
+    for(const i of add)core[i]=1;
+    todo.length=0;for(const i of rest)todo.push(i);
+  }
+  for(let i=0;i<n;i++)out[i*4+3]=Math.round(a[i]*255);
+  return out;
+}
+/* colour region grow, used by the no-model fallback and by tap-to-pick */
+function growRegion(px,w,h,seeds,tolStep,tolSeed,ref){
+  const n=w*h,m=new Uint8Array(n),st=new Int32Array(n);let sp=0;
+  const D=(i,j)=>{const r=px[i*4]-px[j*4],g=px[i*4+1]-px[j*4+1],b=px[i*4+2]-px[j*4+2];return Math.sqrt(r*r+g*g+b*b);};
+  const Dr=i=>{const r=px[i*4]-ref[0],g=px[i*4+1]-ref[1],b=px[i*4+2]-ref[2];return Math.sqrt(r*r+g*g+b*b);};
+  for(const s of seeds){if(!m[s]&&Dr(s)<tolSeed){m[s]=1;st[sp++]=s;}}
+  while(sp){const i=st[--sp],x=i%w,y=(i-x)/w;
+    for(const j of [x>0?i-1:-1,x<w-1?i+1:-1,y>0?i-w:-1,y<h-1?i+w:-1]){
+      if(j<0||m[j])continue;if(D(i,j)<tolStep&&Dr(j)<tolSeed){m[j]=1;st[sp++]=j;}}}
+  return m;
+}
+function floodMask(px,w,h){
+  const ch=[[],[],[]],seeds=[];
+  const add=i=>{seeds.push(i);for(let c=0;c<3;c++)ch[c].push(px[i*4+c]);};
+  for(let x=0;x<w;x++){add(x);add((h-1)*w+x);}for(let y=0;y<h;y++){add(y*w);add(y*w+w-1);}
+  const ref=ch.map(a=>a.sort((p,q)=>p-q)[a.length>>1]);
+  const m=growRegion(px,w,h,seeds,12,64,ref),p=new Float32Array(w*h);
+  for(let i=0;i<w*h;i++)p[i]=m[i]?0:1;
+  return {data:p,w,h};
+}
+function runMatte(key,cv,onProg){
+  const k=Math.min(1,1024/Math.max(cv.width,cv.height)),w=Math.max(2,Math.round(cv.width*k)),h=Math.max(2,Math.round(cv.height*k));
+  const c=document.createElement('canvas');c.width=w;c.height=h;const g=c.getContext('2d',{willReadFrequently:true});g.drawImage(cv,0,0,w,h);
+  const rgba=g.getImageData(0,0,w,h).data.buffer;
+  if(!CUT.worker){CUT.worker=new Worker('matte.worker.js?v=6',{type:'module'});
+    CUT.worker.onmessage=e=>{const d=e.data,j=CUT.jobs.get(d.id);if(!j)return;
+      if(d.type==='progress')j.onProg(d.p,'loading');else if(d.type==='stage')j.onProg(1,d.status);
+      else if(d.type==='done'){CUT.jobs.delete(d.id);CUT.backend=d.backend;j.res(d);}else if(d.type==='error'){CUT.jobs.delete(d.id);j.rej(new Error(d.message));}};
+    CUT.worker.onerror=e=>{CUT.jobs.forEach(j=>j.rej(new Error('worker failed')));CUT.jobs.clear();CUT.worker=null;};}
+  return new Promise((res,rej)=>{const id=++CUT.seq;CUT.jobs.set(id,{res,rej,onProg});CUT.worker.postMessage({id,type:'run',model:key,cpu:!!CUT.cpu,rgba,w,h},[rgba]);});
+}
+const MATTERS={
+  birefnet:{label:'BiRefNet-lite',run:(cv,p)=>runMatte('birefnet',cv,p)},
+  modnet:{label:'MODNet',run:(cv,p)=>runMatte('modnet',cv,p)},
+  u2netp:{label:'U²-Net-p',run:(cv,p)=>runMatte('u2netp',cv,p)},
+  u2net:{label:'U²-Net',run:(cv,p)=>runMatte('u2net',cv,p)},
+  fallback:{label:'edge fill',run(cv){const w=cv.width,h=cv.height,px=cv.getContext('2d',{willReadFrequently:true}).getImageData(0,0,w,h).data;return Promise.resolve(floodMask(px,w,h));}}
+};
+CUT.model=localStorage.getItem('n0.cutmodel')||'auto'; // auto | birefnet | modnet
+const cutOrder=()=>{const f=CUT.model==='auto'?'u2netp':CUT.model;return [f,'u2netp','fallback'].filter((x,i,a)=>a.indexOf(x)===i);};
+function cutStatus(text,p){
+  let b=$('#cutbar');
+  if(!text){if(b)b.hidden=true;return;}
+  if(!b){b=el('div','cutbar','<span></span><div class="prog"><i></i></div>');b.id='cutbar';stage.appendChild(b);}
+  b.hidden=false;b.firstChild.textContent=text;b.querySelector('i').style.width=(p==null?100:Math.round(p*100))+'%';
+}
+function applyAlpha(m){
+  const cv=m.canvas,ctx=cv.getContext('2d');
+  if(m.keepBg||!m.alpha)ctx.putImageData(new ImageData(new Uint8ClampedArray(m.px),m.w,m.h),0,0);
+  else ctx.putImageData(new ImageData(decontaminate(m.px,m.alpha,m.w,m.h),m.w,m.h),0,0);
+  if(m.tex)m.tex.needsUpdate=true;
+}
+function setAlpha(o,a,by){
+  const m=o.meta;m.alpha=a;if(by)m.cutBy=by;
+  applyAlpha(m);rebuildRelief(o);
+}
+async function autoCut(o){
+  const m=o.meta;if(m.cutting)return;m.cutting=true;
+  const t0=performance.now();
+  try{
+    let r,by,a;
+    for(const key of cutOrder()){
+      try{
+        cutStatus(key==='fallback'?'Cutting out subject…':'Loading cut-out model…',key==='fallback'?null:0);
+        r=await MATTERS[key].run(m.photo,(p,s)=>{if(s==='cutting')cutStatus('Cutting out subject…');else cutStatus(`Loading cut-out model… ${Math.round(p*100)}%`,p);});
+        by=MATTERS[key].label;break;
+      }catch(e){console.warn('matting '+key+' failed',e);}
+    }
+    if(!objById(o.id))return;
+    a=refineMask(r.data,r.w,r.h,m.px,m.w,m.h);
+    let cov=0;for(let i=0;i<a.length;i++)cov+=a[i];cov/=a.length;
+    if((cov<.02||cov>.97)&&by!=='edge fill'){by='edge fill';const f=await MATTERS.fallback.run(m.photo);a=refineMask(f.data,f.w,f.h,m.px,m.w,m.h);cov=0;for(let i=0;i<a.length;i++)cov+=a[i];cov/=a.length;}
+    if(cov<.02||cov>.97){toast('Couldn’t separate a subject. Use Refine to paint it.',4500);m.alpha=null;m.cutBy='none';return;}
+    m.alpha0=Float32Array.from(a);m.ms=Math.round(performance.now()-t0);
+    setAlpha(o,a,by);
+    if(m.quick){m.depth=pseudoDepth(m.photo);rebuildRelief(o);}
+    toast('Subject cut out ('+by+')');
+  }finally{m.cutting=false;cutStatus(null);if(S.sel===o.id)refreshInspector();}
+}
+function buildCutSection(o){
+  const m=o.meta,r=sec(inspEl,'Cut-out',m.cutting?'working…':(m.cutBy||'none'));
+  const chips=el('div','chips');
+  const kb=el('button','chip','Keep background');kb.setAttribute('aria-pressed',!!m.keepBg);
+  kb.onclick=()=>{m.keepBg=!m.keepBg;kb.setAttribute('aria-pressed',m.keepBg);applyAlpha(m);rebuildRelief(o);};
+  const ab=el('button','chip','Auto-cut on drop');ab.setAttribute('aria-pressed',CUT.on);
+  ab.onclick=()=>{CUT.on=!CUT.on;localStorage.setItem('n0.autocut',CUT.on?'1':'0');ab.setAttribute('aria-pressed',CUT.on);};
+  chips.append(kb,ab);r.appendChild(chips);
+  chipRow(r,[['auto','Auto'],['modnet','People'],['u2net','Accurate']],v=>CUT.model===v,v=>{CUT.model=v;localStorage.setItem('n0.cutmodel',v);});
+  const acts=el('div','chips');
+  acts.append(
+    btn('Re-run','',()=>autoCut(o)),
+    btn('Reset cut','',()=>{if(m.alpha0){setAlpha(o,Float32Array.from(m.alpha0));refreshInspector();}else toast('Nothing to reset yet.');}),
+    btn('Undo auto-cut','',()=>{m.alpha=null;m.cutBy='none';applyAlpha(m);rebuildRelief(o);refreshInspector();}),
+    btn(m.refine?'Close refine':'Refine','',()=>{m.refine=!m.refine;refreshInspector();}));
+  r.appendChild(acts);
+  if(m.refine)refineEditor(r,o);
+}
+function refineEditor(parent,o){
+  const m=o.meta,st=m.rs||(m.rs={mode:'add',size:18,feather:.5}),n=m.w*m.h;
+  chipRow(parent,[['add','Add'],['erase','Erase'],['pick','Tap to pick']],v=>st.mode===v,v=>{st.mode=v;});
+  sliderRow(parent,'Size',()=>st.size,v=>{st.size=v;},4,80,1);
+  sliderRow(parent,'Feather',()=>st.feather,v=>{st.feather=v;},0,1,.05);
+  const k=Math.min(1,640/Math.max(m.w,m.h)),pw=Math.round(m.w*k),ph=Math.round(m.h*k);
+  const cv=el('canvas');cv.width=pw;cv.height=ph;
+  cv.style.cssText='width:100%;display:block;touch-action:none;border:1px solid var(--line);border-radius:2px;margin-top:6px;cursor:crosshair';
+  const ctx=cv.getContext('2d'),img=ctx.createImageData(pw,ph);
+  const draw=()=>{const d=img.data;
+    for(let y=0;y<ph;y++)for(let x=0;x<pw;x++){const si=Math.min(m.h-1,Math.round(y/k))*m.w+Math.min(m.w-1,Math.round(x/k)),a=m.alpha?m.alpha[si]:1,f=.28+.72*a,j=(y*pw+x)*4;
+      d[j]=m.px[si*4]*f;d[j+1]=m.px[si*4+1]*f;d[j+2]=m.px[si*4+2]*f;d[j+3]=255;}
+    ctx.putImageData(img,0,0);};
+  let raf=0;const sched=()=>{if(!raf)raf=requestAnimationFrame(()=>{raf=0;draw();});};
+  const pt=e=>{const b=cv.getBoundingClientRect();return [clamp(Math.round((e.clientX-b.left)/b.width*(m.w-1)),0,m.w-1),clamp(Math.round((e.clientY-b.top)/b.height*(m.h-1)),0,m.h-1)];};
+  const ensure=()=>{m.keepBg=false;if(!m.alpha){m.alpha=new Float32Array(n).fill(st.mode==='erase'?1:0);if(!m.cutBy||m.cutBy==='none')m.cutBy='manual';}};
+  const stamp=(x,y)=>{const R=st.size/k,F=Math.max(.02,st.feather),a=m.alpha,add=st.mode==='add';
+    for(let j=Math.max(0,Math.floor(y-R));j<=Math.min(m.h-1,Math.ceil(y+R));j++)for(let i=Math.max(0,Math.floor(x-R));i<=Math.min(m.w-1,Math.ceil(x+R));i++){
+      const d=Math.hypot(i-x,j-y)/R;if(d>=1)continue;const w=d<=1-F?1:(1-d)/F,q=j*m.w+i;
+      a[q]=add?Math.max(a[q],w):a[q]*(1-w);}};
+  const commit=()=>{applyAlpha(m);rebuildRelief(o);};
+  let down=false,last=null;
+  cv.addEventListener('pointerdown',e=>{
+    e.preventDefault();cv.setPointerCapture(e.pointerId);const [x,y]=pt(e);ensure();
+    if(st.mode==='pick'){
+      const i=y*m.w+x;
+      if(m.alpha[i]>.5){const bin=new Uint8Array(n);for(let j=0;j<n;j++)bin[j]=m.alpha[j]>.5?1:0;const L=labelComps(bin,m.w,m.h,1),keep=L.lab[i];for(let j=0;j<n;j++)if(bin[j]&&L.lab[j]!==keep)m.alpha[j]=0;}
+      else{const reg=growRegion(m.px,m.w,m.h,[i],14,40,[m.px[i*4],m.px[i*4+1],m.px[i*4+2]]);for(let j=0;j<n;j++)if(reg[j])m.alpha[j]=1;const f=blurPlane(m.alpha,m.w,m.h,1);m.alpha.set(f);}
+      draw();commit();return;}
+    down=true;last=[x,y];stamp(x,y);sched();});
+  cv.addEventListener('pointermove',e=>{if(!down)return;const [x,y]=pt(e),R=st.size/k,dx=x-last[0],dy=y-last[1],L=Math.hypot(dx,dy),s=Math.max(1,Math.ceil(L/(R/3)));
+    for(let t=1;t<=s;t++)stamp(last[0]+dx*t/s,last[1]+dy*t/s);last=[x,y];sched();});
+  const up=()=>{if(!down)return;down=false;commit();};
+  cv.addEventListener('pointerup',up);cv.addEventListener('pointercancel',up);
+  draw();parent.appendChild(cv);
+  parent.appendChild(el('div','note','Add paints the subject back, Erase removes it, Tap to pick keeps the part you tap (or adds a similar-coloured area).'));
+}
+
 let tfP=null;
 async function aiDepth(o,onProg){
   const m=o.meta;
-  const tf=await (tfP||(tfP=import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.2/dist/transformers.web.min.js')));
+  const tf=await (tfP||(tfP=import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.2/dist/transformers.min.js')));
   tf.env.allowLocalModels=false;
-  const id='onnx-community/depth-anything-v2-small';
+  const id='onnx-community/depth-anything-v2-small'; // Apache-2.0 (the base/large V2 models are non-commercial)
   const mk=async(device,dtype)=>tf.pipeline('depth-estimation',id,{device,dtype,progress_callback:p=>{if(onProg&&p&&p.progress!=null)onProg(p.progress/100,p.status||'');}});
   let pipe;
   try{pipe=await mk(navigator.gpu?'webgpu':'wasm',navigator.gpu?'fp16':'q8');}
   catch(e){console.warn('depth: first backend failed',e);pipe=await mk('wasm','q8');}
-  const blob=await new Promise(r=>m.canvas.toBlob(r,'image/jpeg',.92));
+  const blob=await new Promise(r=>(m.photo||m.canvas).toBlob(r,'image/jpeg',.92));
   const url=URL.createObjectURL(blob);
   let out;try{out=await pipe(url);}finally{URL.revokeObjectURL(url);}
   const t=out.predicted_depth,dims=t.dims,dh=dims[dims.length-2],dw=dims[dims.length-1];
@@ -2472,6 +2698,7 @@ function refreshInspector(soft){
     r.append(ai,prog);
     r.appendChild(el('div','note','AI depth runs in your browser (WebGPU if available, otherwise WASM). The first run downloads the model, then it is cached.'));
   }
+  if(o.kind==='relief'&&o.meta.photo)buildCutSection(o);
   if(o.kind==='points'||o.kind==='splat'){
     const r=sec(inspEl,o.kind==='splat'?'Splat':'Points');
     if(o.kind==='points'){const pm=o.root.material;sliderRow(r,'Point size',()=>pm.size,v=>{pm.size=v;bump();},.002,.06,.001);}
@@ -2667,7 +2894,7 @@ buildExportPane();wireSheet();
 setTab('scene');
 try{const sk=localStorage.getItem('n0ise.studio.skin');if(sk)document.documentElement.dataset.skin=sk;}catch(e){}
 boot3d();
-window.__studio={S,N0,THREE,scene,camera,controls,renderer,importFiles,addPrimitive,sheet,SC,carve,surfaceNets,buildScan,makeRelief,pseudoDepth,photoToRelief,objById,selectObj,removeObj,bump,setTab,rebuildRelief,applyView,frameAll,exportImage,get rt(){return rt;}};
+window.__studio={MATTERS,CUT,autoCut,refineMask,applyAlpha,S,N0,THREE,scene,camera,controls,renderer,importFiles,addPrimitive,sheet,SC,carve,surfaceNets,buildScan,makeRelief,pseudoDepth,photoToRelief,objById,selectObj,removeObj,bump,setTab,rebuildRelief,applyView,frameAll,exportImage,get rt(){return rt;}};
 </script>
 </body>
 </html>
