@@ -2632,6 +2632,10 @@ var depthmat = new THREE.MeshDepthMaterial();
 var wiremat = new THREE.MeshBasicMaterial({ color: 16777215, wireframe: true });
 function applyView() {
   depthmat.depthPacking = THREE.BasicDepthPacking;
+  try {
+    fxApplyPatches();
+  } catch (e) {
+  }
   scene.traverse((o) => {
     if (!o.isMesh || o.isSplatMesh || o.userData.noView) return;
     if (!o.userData._mat) o.userData._mat = o.material;
@@ -2771,7 +2775,9 @@ function auEnsure() {
   AU.ctx = new (window.AudioContext || window.webkitAudioContext)();
   AU.an = AU.ctx.createAnalyser();
   AU.an.fftSize = 1024;
-  AU.an.smoothingTimeConstant = 0.6;
+  AU.an.smoothingTimeConstant = 0.55;
+  AU.an.minDecibels = -92;
+  AU.an.maxDecibels = -4;
   AU.freq = new Uint8Array(AU.an.frequencyBinCount);
   AU.wave = new Uint8Array(AU.an.fftSize);
 }
@@ -2847,14 +2853,26 @@ function auFrame(t, dt) {
     AU.an.getByteFrequencyData(AU.freq);
     AU.an.getByteTimeDomainData(AU.wave);
     const N = AU.freq.length;
+    if (!AU.bpk) {
+      AU.bpk = new Float32Array(64).fill(0.2);
+      AU.bmin = new Float32Array(64);
+      AU.prev = new Float32Array(64);
+    }
+    let flux = 0;
     for (let i = 0; i < 64; i++) {
       const a = Math.floor(Math.pow(i / 64, 2.1) * N * 0.85), b = Math.max(a + 1, Math.floor(Math.pow((i + 1) / 64, 2.1) * N * 0.85));
       let s = 0;
       for (let k = a; k < b; k++) s += AU.freq[k];
-      const v = Math.min(1, s / (b - a) / 200 * AU.gain * (1 + i / 90));
+      const raw = s / (b - a) / 255;
+      AU.bpk[i] = Math.max(raw, AU.bpk[i] * Math.pow(0.5, dt / 4));
+      AU.bmin[i] = Math.min(raw, AU.bmin[i] + dt * 0.03);
+      if (i < 14) flux += Math.max(0, raw - AU.prev[i]);
+      AU.prev[i] = raw;
+      const v = Math.min(1, Math.pow(Math.max(0, raw - AU.bmin[i]) / Math.max(0.08, AU.bpk[i] - AU.bmin[i]), 2.6) * AU.gain * (raw > 0.02 ? 1 : raw / 0.02));
       B2[i] = Math.max(v, B2[i] * Math.pow(0.02, dt));
       lv += v;
     }
+    AU.flux = flux;
   } else {
     if (AU.wave.length !== 1024) AU.wave = new Uint8Array(1024);
     for (let i = 0; i < 64; i++) {
@@ -2875,7 +2893,7 @@ var heat = (u, o, i) => {
   o[i + 1] = 0.24 + 0.59 * u;
   o[i + 2] = 0.12 + 0.24 * u;
 };
-var VIZ_MODES = [["waterfall", "Waterfall"], ["radial", "Radial"], ["scope", "Scope"], ["ridges", "Ridges"], ["cymatics", "Cymatics"]];
+var VIZ_MODES = [["waterfall", "Waterfall"], ["radial", "Radial"], ["scope", "Scope"], ["ridges", "Ridges"], ["cymatics", "Cymatics"], ["helix", "Helix"], ["bars", "Bar grid"], ["fountain", "Fountain"]];
 var VZ_BG = new THREE.Color(723724);
 function buildViz(o) {
   const v = o.viz, root = o.root;
@@ -2951,6 +2969,35 @@ function buildViz(o) {
       v.lines.push(ln);
       v.fills.push(fl);
     }
+  } else if (v.mode === "helix") {
+    const n = 128, g = new THREE.BoxGeometry(0.05, 0.05, 0.05), m = new THREE.InstancedMesh(g, new THREE.MeshBasicMaterial({ toneMapped: false }), n);
+    m.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(n * 3), 3);
+    m.frustumCulled = false;
+    root.add(m);
+    v.m = m;
+    v.n = n;
+  } else if (v.mode === "bars") {
+    const G = 18, n = G * G, g = new THREE.BoxGeometry(0.09, 1, 0.09);
+    g.translate(0, 0.5, 0);
+    const mm = new THREE.InstancedMesh(g, new THREE.MeshBasicMaterial({ toneMapped: false }), n);
+    mm.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(n * 3), 3);
+    mm.frustumCulled = false;
+    root.add(mm);
+    v.m = mm;
+    v.G = G;
+    v.hist = new Float32Array(G * G);
+  } else if (v.mode === "fountain") {
+    const n = 1800, pos = new Float32Array(n * 3), col = new Float32Array(n * 3);
+    v.vel = new Float32Array(n * 3);
+    v.life = new Float32Array(n).fill(-1);
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    g.setAttribute("color", new THREE.BufferAttribute(col, 3));
+    const pts = new THREE.Points(g, new THREE.PointsMaterial({ size: 0.022, vertexColors: true, sizeAttenuation: true, toneMapped: false }));
+    pts.frustumCulled = false;
+    root.add(pts);
+    v.g = g;
+    v.n = n;
   } else {
     const S2 = 110, n = S2 * S2, pos = new Float32Array(n * 3), col = new Float32Array(n * 3);
     for (let j = 0; j < S2; j++) for (let i = 0; i < S2; i++) {
@@ -2968,7 +3015,7 @@ function buildViz(o) {
     v.S = S2;
     v.nm = [3, 5];
   }
-  const BX = { waterfall: [2.4, 1, 1.8, 0, 0.4, 0], radial: [1.6, 1.3, 1.6, 0, 0.6, 0], scope: [2.4, 1.2, 1.3, 0, 0.5, -0.6], ridges: [2.3, 1.1, 1.9, 0, 0.5, 0], cymatics: [2.1, 0.6, 2.1, 0, 0, 0] }[v.mode];
+  const BX = { waterfall: [2.4, 1, 1.8, 0, 0.4, 0], radial: [1.6, 1.3, 1.6, 0, 0.6, 0], scope: [2.4, 1.2, 1.3, 0, 0.5, -0.6], ridges: [2.3, 1.1, 1.9, 0, 0.5, 0], cymatics: [2.1, 0.6, 2.1, 0, 0, 0], helix: [1.5, 2.2, 1.5, 0, 1, 0], bars: [1.8, 1.2, 1.8, 0, 0.5, 0], fountain: [2, 2.4, 2, 0, 1.1, 0] }[v.mode];
   const bb = new THREE.Mesh(new THREE.BoxGeometry(BX[0], BX[1], BX[2]), new THREE.MeshBasicMaterial({ visible: false }));
   bb.position.set(BX[3], BX[4], BX[5]);
   bb.userData.noView = true;
@@ -3039,6 +3086,69 @@ function vizUpdate(o, t, dt) {
       for (let i = 0; i < N; i++) p.setXYZ(i, (i / (N - 1) - 0.5) * 2.4, 0.5 + v.hist[l * N + i] * H * 0.6, -l * 0.07);
       p.needsUpdate = true;
     }
+  } else if (v.mode === "helix") {
+    const m = v.m, d = new THREE.Object3D(), c = m.instanceColor.array;
+    for (let i = 0; i < v.n; i++) {
+      const k = i / v.n, a = k * Math.PI * 8 + t * 0.8 + i % 2 * Math.PI, b = B2[Math.floor(k * 63)], r = 0.45 + b * 0.35 * H;
+      d.position.set(Math.cos(a) * r, k * 2.1, Math.sin(a) * r);
+      d.rotation.set(a, a * 0.5, 0);
+      d.scale.setScalar(0.45 + b * H * 1.5);
+      d.updateMatrix();
+      m.setMatrixAt(i, d.matrix);
+      heat(b * 1.5 + 0.15, c, i * 3);
+    }
+    m.instanceMatrix.needsUpdate = true;
+    m.instanceColor.needsUpdate = true;
+  } else if (v.mode === "bars") {
+    v.acc += dt;
+    const G = v.G;
+    if (v.acc >= 1 / 20) {
+      v.acc = 0;
+      v.hist.copyWithin(G, 0, (G - 1) * G);
+      for (let i = 0; i < G; i++) {
+        const a = Math.floor(Math.pow(i / G, 1.6) * 60);
+        v.hist[i] = B2[a];
+      }
+    }
+    const m = v.m, d = new THREE.Object3D(), c = m.instanceColor.array;
+    for (let r = 0; r < G; r++) for (let i = 0; i < G; i++) {
+      const k = r * G + i, h = 0.02 + v.hist[k] * H * 1.05 * (1 - r / G * 0.4);
+      d.position.set((i / (G - 1) - 0.5) * 1.7, 0, (r / (G - 1) - 0.5) * 1.7);
+      d.scale.set(1, h, 1);
+      d.updateMatrix();
+      m.setMatrixAt(k, d.matrix);
+      heat(v.hist[k] * 1.5, c, k * 3);
+      const f = 1 - r / G * 0.5;
+      c[k * 3] *= f;
+      c[k * 3 + 1] *= f;
+      c[k * 3 + 2] *= f;
+    }
+    m.instanceMatrix.needsUpdate = true;
+    m.instanceColor.needsUpdate = true;
+  } else if (v.mode === "fountain") {
+    const p = v.g.attributes.position, c = v.g.attributes.color, vel = v.vel, life = v.life, n = v.n, bass = (B2[0] + B2[1] + B2[2] + B2[3]) / 4, emit = Math.floor(8 + bass * 70 * H);
+    let em = 0;
+    for (let i = 0; i < n; i++) {
+      if (life[i] <= 0 && em < emit) {
+        em++;
+        const a = Math.random() * 6.283, sp = 0.15 + Math.random() * 0.35;
+        p.setXYZ(i, 0, 0, 0);
+        vel[i * 3] = Math.cos(a) * sp * 0.6;
+        vel[i * 3 + 1] = 1.1 + bass * 2.2 * H + Math.random() * 0.8;
+        vel[i * 3 + 2] = Math.sin(a) * sp * 0.6;
+        life[i] = 1.2 + Math.random() * 1.2;
+      }
+      if (life[i] > 0) {
+        life[i] -= dt;
+        vel[i * 3 + 1] -= 1.9 * dt;
+        p.setXYZ(i, p.getX(i) + vel[i * 3] * dt, Math.max(0, p.getY(i) + vel[i * 3 + 1] * dt), p.getZ(i) + vel[i * 3 + 2] * dt);
+        heat(life[i] / 1.8 + 0.1, c.array, i * 3);
+      } else {
+        p.setY(i, -9);
+      }
+    }
+    p.needsUpdate = true;
+    c.needsUpdate = true;
   } else {
     const S2 = v.S, p = v.g.attributes.position, c = v.g.attributes.color, lo = (B2[1] + B2[2] + B2[3]) / 3, mi = (B2[10] + B2[14] + B2[18]) / 3, hi = (B2[34] + B2[42] + B2[50]) / 3;
     v.nm[0] += (2 + Math.round(lo * 6 + mi * 5) - v.nm[0]) * Math.min(1, dt * 2);
@@ -3053,16 +3163,6 @@ function vizUpdate(o, t, dt) {
     p.needsUpdate = true;
     c.needsUpdate = true;
   }
-}
-function vizTick(t, dt) {
-  let any = false;
-  for (const o of S.objs) if (o.kind === "viz" && o.vis) {
-    any = true;
-    break;
-  }
-  if (!any) return;
-  auFrame(t, dt);
-  for (const o of S.objs) if (o.kind === "viz" && o.vis) vizUpdate(o, t, dt);
 }
 function addViz(mode = "waterfall") {
   const g = new THREE.Group(), o = registerObject("Visualizer", g, "viz", { fit: false, meta: {} });
@@ -3132,6 +3232,355 @@ function vizInspector(o) {
     }, 0, 1, 1e-3);
   }
   r.appendChild(el("div", "note", "Audio is analysed on this device. The look stack, masks and exports treat the visualizer like any other object."));
+}
+var FX3 = [
+  ["spin", "Spin", "x"],
+  ["tumble", "Tumble", "x"],
+  ["float", "Float", "x"],
+  ["pulse", "Pulse", "x"],
+  ["shake", "Shake", "x"],
+  ["orbit", "Orbit", "x"],
+  ["sway", "Sway", "x"],
+  ["squash", "Squash", "x"],
+  ["swing", "Swing", "x"],
+  ["wave", "Wave", "d"],
+  ["twist", "Twist", "d"],
+  ["bend", "Bend", "d"],
+  ["noise", "Noise", "d"],
+  ["inflate", "Inflate", "d"],
+  ["ripple", "Ripple", "d"],
+  ["melt", "Melt", "d"],
+  ["glitch", "Glitch", "d"],
+  ["spikes", "Spikes", "d"],
+  ["squeeze", "Squeeze", "d"]
+];
+var FXK = Object.fromEntries(FX3.map((e, i) => [e[0], { kind: e[2], label: e[1], ty: e[2] === "d" ? FX3.filter((q) => q[2] === "d").findIndex((q) => q[0] === e[0]) + 1 : 0 }]));
+var FXSRC = [["none", "Always"], ["level", "Level"], ["bass", "Bass"], ["mid", "Mid"], ["treble", "Treble"], ["beat", "Beat"]];
+var SG = { level: 0, bass: 0, mid: 0, treble: 0, beat: 0 };
+function sigUpdate(t, dt) {
+  const B2 = AU.bands, av = (a, b) => {
+    let s = 0;
+    for (let i = a; i < b; i++) s += B2[i];
+    return Math.min(1, s / (b - a) * 0.9);
+  };
+  SG.level = Math.min(1, AU.level * 3.2);
+  SG.bass = av(0, 6);
+  SG.mid = av(8, 26);
+  SG.treble = av(30, 64);
+  const bs = SG.bass, fl = AU.demo ? Math.max(0, bs - (AU._bs || 0)) * 3 : AU.flux || 0;
+  AU._bs = bs;
+  AU._fa = (AU._fa || 0) + (fl - (AU._fa || 0)) * Math.min(1, dt * 2.5);
+  if (fl > AU._fa * 1.7 + 0.04 && t - (AU._bt || -1) > 0.24) {
+    AU.beat = 1;
+    AU._bt = t;
+    AU.beats = (AU.beats || 0) + 1;
+  }
+  AU.beat = (AU.beat || 0) * Math.pow(4e-3, dt);
+  SG.beat = AU.beat;
+}
+var fxW = (s) => s.src === "none" ? 1 : SG[s.src] * 1.7;
+function fxEnsure(o) {
+  o.fx = o.fx || [];
+  while (o.fx.length < 3) o.fx.push({ id: "", amt: 0.5, speed: 1, src: "none", ph: 0 });
+  return o.fx;
+}
+var DEF_GLSL = `
+uniform float uT,uR;uniform vec4 uD[3];
+float dh(vec3 p){return fract(sin(dot(p,vec3(12.9898,78.233,37.719)))*43758.5453);}
+float dn(vec3 p){vec3 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(mix(dh(i),dh(i+vec3(1,0,0)),f.x),mix(dh(i+vec3(0,1,0)),dh(i+vec3(1,1,0)),f.x),f.y),mix(mix(dh(i+vec3(0,0,1)),dh(i+vec3(1,0,1)),f.x),mix(dh(i+vec3(0,1,1)),dh(i+vec3(1,1,1)),f.x),f.y),f.z);}
+vec3 defo(vec3 p,vec3 n){
+  for(int i=0;i<3;i++){float ty=uD[i].x;if(ty<.5)continue;float a=uD[i].y,t=uD[i].z,R=uR;
+    if(ty<1.5)p.y+=sin(p.x/R*5.+t*3.)*a*R*.2;
+    else if(ty<2.5){float k=p.y/R*a*2.6,c=cos(k),s=sin(k);p.xz=mat2(c,-s,s,c)*p.xz;}
+    else if(ty<3.5){float k=a*.9*sin(t);p.y+=(p.x/R)*(p.x/R)*a*R*.6*sin(t+1.);float c=cos(p.y/R*k),s=sin(p.y/R*k);p.xy=mat2(c,-s,s,c)*p.xy;}
+    else if(ty<4.5)p+=n*(dn(p/R*3.+t)-.5)*a*R*.9;
+    else if(ty<5.5)p+=n*a*R*.3*(.55+.45*sin(t*2.));
+    else if(ty<6.5)p+=n*sin(length(p)/R*10.-t*4.)*a*R*.12;
+    else if(ty<7.5)p.y-=a*R*.5*(.5+.5*sin(p.x/R*3.+p.z/R*2.+t*2.))*clamp(.5-p.y/R*.5,0.,1.);
+    else if(ty<8.5)p.x+=step(.72,dh(vec3(floor(p.y/R*14.),floor(t*4.),1.)))*(dh(vec3(floor(p.y/R*14.),floor(t*4.),2.))-.5)*a*R*.9;
+    else if(ty<9.5)p+=n*pow(max(0.,dn(p/R*4.+t*.5)-.35)*1.6,2.)*a*R*1.6;
+    else p.xz*=1.-a*.55*(.5+.5*sin(p.y/R*3.+t*2.));
+  }
+  return p;}`;
+function fxPatch(mesh) {
+  let mat = mesh.userData._mat || mesh.material;
+  if (mat.isShaderMaterial || mesh.isSplatMesh || mesh.userData.noView || !mesh.geometry) return;
+  if (!mat.userData.defU) {
+    mat = mat.clone();
+    mesh.userData._mat = mat;
+    if (!mesh.geometry.boundingSphere) mesh.geometry.computeBoundingSphere();
+    mat.userData.defU = { uT: { value: 0 }, uR: { value: Math.max(1e-3, mesh.geometry.boundingSphere ? mesh.geometry.boundingSphere.radius : 1) }, uD: { value: [new THREE.Vector4(), new THREE.Vector4(), new THREE.Vector4()] } };
+    mat.onBeforeCompile = (sh) => {
+      Object.assign(sh.uniforms, mat.userData.defU);
+      sh.vertexShader = sh.vertexShader.replace("#include <common>", "#include <common>\n" + DEF_GLSL).replace("#include <begin_vertex>", "vec3 transformed=defo(position,normal);");
+    };
+    mat.customProgramCacheKey = () => "n0def1";
+    mat.needsUpdate = true;
+    if (S.view === "shaded") mesh.material = mat;
+  }
+}
+function fxApplyPatches() {
+  for (const o of S.objs) {
+    if (!o.fx || !o.fx.some((s) => s.id && FXK[s.id] && FXK[s.id].kind === "d")) continue;
+    o.holder.traverse((n) => {
+      if (n.isMesh) fxPatch(n);
+    });
+  }
+}
+function fxTick(t, dt) {
+  for (const o of S.objs) {
+    if (!o.fx || !o.fx.some((s) => s.id)) continue;
+    const h = o.holder, ap = o._ap;
+    if (!o._base || ap && (Math.abs(h.position.x - ap.p[0]) > 1e-5 || Math.abs(h.position.y - ap.p[1]) > 1e-5 || Math.abs(h.position.z - ap.p[2]) > 1e-5 || Math.abs(h.rotation.x - ap.r[0]) > 1e-5 || Math.abs(h.rotation.y - ap.r[1]) > 1e-5 || Math.abs(h.rotation.z - ap.r[2]) > 1e-5 || Math.abs(h.scale.x - ap.s[0]) > 1e-5 || Math.abs(h.scale.y - ap.s[1]) > 1e-5)) {
+      o._base = { p: h.position.toArray(), r: [h.rotation.x, h.rotation.y, h.rotation.z], s: h.scale.toArray() };
+    }
+    const b = o._base, P3 = [0, 0, 0], R2 = [0, 0, 0], Sc = [1, 1, 1];
+    let dIx = 0;
+    const meshes = [];
+    if (o.fx.some((s) => s.id && FXK[s.id] && FXK[s.id].kind === "d")) h.traverse((n) => {
+      if (n.isMesh && n.material && n.material.userData && n.material.userData.defU) meshes.push(n);
+    });
+    const dv = [new THREE.Vector4(), new THREE.Vector4(), new THREE.Vector4()];
+    for (const s of o.fx) {
+      if (!s.id || !FXK[s.id]) continue;
+      const w = fxW(s), a = s.amt, K = FXK[s.id];
+      s.ph += dt * s.speed * (0.3 + w * 0.7);
+      const ph = s.ph;
+      if (K.kind === "d") {
+        if (dIx < 3) {
+          dv[dIx++].set(K.ty, a * (s.src === "none" ? 1 : Math.min(1.6, w)), ph * 2.2, 0);
+        }
+        continue;
+      }
+      switch (s.id) {
+        case "spin":
+          R2[1] += ph * 2.4 * a;
+          break;
+        case "tumble":
+          R2[0] += ph * 1.1 * a;
+          R2[1] += ph * 1.7 * a;
+          R2[2] += ph * 0.6 * a;
+          break;
+        case "float":
+          P3[1] += Math.sin(ph * 3) * a * 0.28 * (s.src === "none" ? 1 : Math.min(1.5, w));
+          break;
+        case "pulse": {
+          const k = 1 + a * 0.4 * (s.src === "none" ? Math.sin(ph * 5) * 0.5 + 0.5 : Math.min(1.5, w));
+          Sc[0] *= k;
+          Sc[1] *= k;
+          Sc[2] *= k;
+          break;
+        }
+        case "shake": {
+          const m = a * 0.09 * (s.src === "none" ? 0.5 : Math.min(1.5, w));
+          P3[0] += (Math.sin(ph * 53) + Math.sin(ph * 31)) * 0.5 * m;
+          P3[1] += (Math.sin(ph * 47) + Math.sin(ph * 29)) * 0.5 * m;
+          P3[2] += Math.sin(ph * 61) * m * 0.5;
+          break;
+        }
+        case "orbit":
+          P3[0] += Math.cos(ph * 2) * a * 0.9;
+          P3[2] += Math.sin(ph * 2) * a * 0.9;
+          break;
+        case "sway":
+          R2[2] += Math.sin(ph * 2.2) * a * 0.55;
+          break;
+        case "squash": {
+          const k = Math.sin(ph * 5) * a * 0.35 * (s.src === "none" ? 1 : Math.min(1.5, w));
+          Sc[1] *= 1 + k;
+          Sc[0] *= 1 - k * 0.5;
+          Sc[2] *= 1 - k * 0.5;
+          break;
+        }
+        case "swing":
+          R2[0] += Math.sin(ph * 2) * a * 0.9;
+          break;
+      }
+    }
+    h.position.set(b.p[0] + P3[0], b.p[1] + P3[1], b.p[2] + P3[2]);
+    h.rotation.set(b.r[0] + R2[0], b.r[1] + R2[1], b.r[2] + R2[2]);
+    h.scale.set(b.s[0] * Sc[0], b.s[1] * Sc[1], b.s[2] * Sc[2]);
+    o._ap = { p: h.position.toArray(), r: [h.rotation.x, h.rotation.y, h.rotation.z], s: h.scale.toArray() };
+    for (const m of meshes) {
+      const u = m.material.userData.defU;
+      u.uT.value = t;
+      for (let i = 0; i < 3; i++) u.uD.value[i].copy(dv[i]);
+    }
+    if (S.sel === o.id && selBox) selBox.update();
+  }
+}
+function fxClear(o) {
+  if (o._base && o._ap) {
+    const h = o.holder, b = o._base;
+    h.position.fromArray(b.p);
+    h.rotation.set(b.r[0], b.r[1], b.r[2]);
+    h.scale.fromArray(b.s);
+  }
+  o._base = null;
+  o._ap = null;
+  o.fx = [];
+  o.holder.traverse((n) => {
+    if (n.isMesh && n.material && n.material.userData && n.material.userData.defU) for (let i = 0; i < 3; i++) n.material.userData.defU.uD.value[i].set(0, 0, 0, 0);
+  });
+  bump();
+}
+var pickR = (a) => a[Math.floor(Math.random() * a.length)];
+function fxRandomise(o, n = 2) {
+  fxEnsure(o);
+  const xs = FX3.filter((e) => e[2] === "x").map((e) => e[0]), ds = FX3.filter((e) => e[2] === "d").map((e) => e[0]);
+  o.fx.forEach((s) => {
+    s.id = "";
+  });
+  const roll = (id, i) => {
+    o.fx[i] = { id, amt: 0.3 + Math.random() * 0.55, speed: 0.5 + Math.random() * 1.6, src: pickR(["bass", "level", "beat", "mid", "none"]), ph: 0 };
+  };
+  roll(pickR(xs), 0);
+  if (n > 1 && o.kind !== "splat") roll(pickR(ds), 1);
+  if (n > 2) roll(pickR(xs.concat(ds)), 2);
+  o._base = null;
+  fxApplyPatches();
+  bump();
+}
+var AUTO = { on: false, every: 8, viz: true, fx: true, cam: true, look: false, last: 0, tAcc: 0, n: 0, dist: 0 };
+function autoStep() {
+  AUTO.n++;
+  if (AUTO.viz) S.objs.filter((o) => o.kind === "viz").forEach((o) => {
+    const i = VIZ_MODES.findIndex((m) => m[0] === o.viz.mode);
+    o.viz.mode = VIZ_MODES[(i + 1 + (Math.random() < 0.35 ? 1 : 0)) % VIZ_MODES.length][0];
+    buildViz(o);
+  });
+  if (AUTO.fx) S.objs.forEach((o) => {
+    if (o.kind === "viz" && Math.random() < 0.5) return;
+    fxRandomise(o, Math.random() < 0.5 ? 2 : 3);
+  });
+  if (AUTO.cam && !S.rest) {
+    controls.autoRotate = true;
+    controls.autoRotateSpeed = (Math.random() < 0.5 ? -1 : 1) * (1.2 + Math.random() * 4);
+    S.spin = true;
+    const off = camera.position.clone().sub(controls.target);
+    AUTO.dist = Math.min(9, Math.max(3.6, off.length() * (0.75 + Math.random() * 0.6)));
+    off.y += (Math.random() - 0.4) * 0.8;
+    camera.position.copy(controls.target).add(off);
+  }
+  if (AUTO.look && S.fx) {
+    const ids = N0.PROFILES.map((p) => p[0]).filter((id) => id !== "none");
+    N0.applyProfile(pickR(ids));
+    N0.P.pal = "src";
+  }
+  if (S.sel != null) refreshInspector();
+  bump();
+}
+function autoTick(t, dt) {
+  if (!AUTO.on) return;
+  const playing = !AU.demo && AU.el && !AU.el.paused || AU.mic;
+  if (playing) {
+    const b = AU.beats || 0;
+    if (b - AUTO.last >= AUTO.every) {
+      AUTO.last = b;
+      autoStep();
+    }
+  } else {
+    AUTO.tAcc += dt;
+    if (AUTO.tAcc > AUTO.every * 0.5) {
+      AUTO.tAcc = 0;
+      autoStep();
+    }
+  }
+  if (AUTO.cam && AUTO.dist && !S.rest) {
+    const off = camera.position.clone().sub(controls.target), l = off.length();
+    if (Math.abs(l - AUTO.dist) > 0.02) {
+      off.setLength(l + (AUTO.dist - l) * Math.min(1, dt * 0.8));
+      camera.position.copy(controls.target).add(off);
+    }
+  }
+}
+function av3Tick(t, dt) {
+  const need = AUTO.on || S.objs.some((o) => o.kind === "viz" || o.fx && o.fx.some((s) => s.id));
+  if (!need) return;
+  auFrame(t, dt);
+  sigUpdate(t, dt);
+  for (const o of S.objs) if (o.kind === "viz" && o.vis) vizUpdate(o, t, dt);
+  fxApplyPatches();
+  fxTick(t, dt);
+  autoTick(t, dt);
+}
+function fxInspector(o) {
+  const r = sec(inspEl, "Effects", o.fx && o.fx.some((s) => s.id) ? "on" : "");
+  fxEnsure(o);
+  o.fx.forEach((s, i) => {
+    const row = el("div", "row");
+    const sel = el("select", "field");
+    sel.innerHTML = '<option value="">None</option>' + FX3.filter((e) => o.kind === "splat" ? e[2] === "x" : true).map((e) => `<option value="${e[0]}">${e[1]}${e[2] === "d" ? " (deform)" : ""}</option>`).join("");
+    sel.value = s.id;
+    sel.addEventListener("change", () => {
+      s.id = sel.value;
+      o._base = null;
+      fxApplyPatches();
+      refreshInspector();
+    });
+    row.appendChild(sel);
+    const src = el("select", "field");
+    src.innerHTML = FXSRC.map((q) => `<option value="${q[0]}">${q[1]}</option>`).join("");
+    src.value = s.src;
+    src.addEventListener("change", () => {
+      s.src = src.value;
+    });
+    row.appendChild(src);
+    r.appendChild(row);
+    if (s.id) {
+      sliderRow(r, "Amount", () => s.amt, (v) => {
+        s.amt = v;
+      }, 0, 1, 0.01);
+      sliderRow(r, "Speed", () => s.speed, (v) => {
+        s.speed = v;
+      }, 0.1, 4, 0.05);
+    }
+  });
+  const c = el("div", "chips");
+  c.append(btn("Randomise", "pri", () => {
+    fxRandomise(o, 3);
+    refreshInspector();
+  }), btn("Clear", "", () => {
+    fxClear(o);
+    refreshInspector();
+  }));
+  r.appendChild(c);
+  r.appendChild(el("div", "note", "Motion effects move the object. Deform effects bend the surface in Shaded view. Pick an audio source to make an effect follow the music, or Always to run it on its own."));
+}
+function autoPanel(p) {
+  const a = sec(p, "Auto");
+  const on = btn(AUTO.on ? "Auto on" : "Auto off", "pri", () => {
+    AUTO.on = !AUTO.on;
+    AUTO.last = AU.beats || 0;
+    if (!AUTO.on) {
+      controls.autoRotate = false;
+      S.spin = false;
+    }
+    on.textContent = AUTO.on ? "Auto on" : "Auto off";
+    on.setAttribute("aria-pressed", AUTO.on);
+    bump();
+  });
+  on.setAttribute("aria-pressed", AUTO.on);
+  const top = el("div", "chips");
+  top.appendChild(on);
+  top.appendChild(btn("Next now", "", () => autoStep()));
+  a.appendChild(top);
+  chipRow(a, [["4", "Every 4 beats"], ["8", "8 beats"], ["16", "16 beats"], ["32", "32 beats"]], (v) => String(AUTO.every) === v, (v) => {
+    AUTO.every = +v;
+  });
+  const tg = (label, key2) => {
+    const b = el("button", "chip", label);
+    b.setAttribute("aria-pressed", AUTO[key2]);
+    b.addEventListener("click", () => {
+      AUTO[key2] = !AUTO[key2];
+      b.setAttribute("aria-pressed", AUTO[key2]);
+    });
+    return b;
+  };
+  const row = el("div", "chips");
+  row.append(tg("Visualizer", "viz"), tg("Effects", "fx"), tg("Camera", "cam"), tg("Look", "look"));
+  a.appendChild(row);
+  a.appendChild(el("div", "note", "On the beat of the song (or every few seconds with no audio) Auto switches visualizer modes, re-rolls the effects on every object, moves the camera and can swap the look."));
 }
 var manager = new THREE.LoadingManager();
 var fileMap = /* @__PURE__ */ new Map();
@@ -3431,7 +3880,7 @@ function frame(ts) {
       hudLift2.style.transform = `translate3d(0,${-lift}px,0)`;
     }
     if (S.rest) restTick();
-    vizTick(t, dt);
+    av3Tick(t, dt);
     animTick(t);
     controls.autoRotate = S.spin;
     if (S.spin) bump();
@@ -5561,6 +6010,7 @@ function buildScenePane() {
   s1.appendChild(note);
   inspEl = el("div");
   p.appendChild(inspEl);
+  autoPanel(p);
   const s3 = sec(p, "Stage");
   sliderRow(s3, "Environment", () => S.env, (v) => {
     S.env = v;
@@ -5801,6 +6251,7 @@ function refreshInspector(soft) {
   }
   if (o.kind === "relief" && o.meta.photo) buildCutSection(o);
   if (o.kind === "viz" && o.viz) vizInspector(o);
+  fxInspector(o);
   if (o.kind === "points" || o.kind === "splat") {
     const r = sec(inspEl, o.kind === "splat" ? "Splat" : "Points");
     if (o.kind === "points") {
@@ -6379,6 +6830,6 @@ try {
 } catch (e) {
 }
 boot3d();
-window.__studio = { addViz, AU, buildViz, vizUpdate, enterRest, leaveRest, restTick, setFx, autoDepth, buildDepth, restD, MATTERS, CUT, autoCut, refineMask, applyAlpha, S, N0, THREE, scene, camera, controls, renderer, importFiles, addPrimitive, sheet, SC, carve, surfaceNets, buildScan, makeRelief, pseudoDepth, photoToRelief, objById, selectObj, removeObj, bump, setTab, rebuildRelief, applyView, frameAll, exportImage, get rt() {
+window.__studio = { AUTO, autoStep, fxRandomise, fxEnsure, fxClear, FX3, SG, addViz, AU, buildViz, vizUpdate, enterRest, leaveRest, restTick, setFx, autoDepth, buildDepth, restD, MATTERS, CUT, autoCut, refineMask, applyAlpha, S, N0, THREE, scene, camera, controls, renderer, importFiles, addPrimitive, sheet, SC, carve, surfaceNets, buildScan, makeRelief, pseudoDepth, photoToRelief, objById, selectObj, removeObj, bump, setTab, rebuildRelief, applyView, frameAll, exportImage, get rt() {
   return rt;
 } };

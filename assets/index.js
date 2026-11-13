@@ -4938,6 +4938,141 @@ vec4 fx(vec2 uv){vec2 p=gp(uv)*u_sc,t=vec2(uTime*u_spd*.02,-uTime*u_spd*.013);fl
   vec2 w=vec2(nfbm(p+t),nfbm(p-t+4.3))-.5;float v=nfbm(p+w*u_warp/25.+ph);float b=fract(v*u_lv);float e=smoothstep(.0,.08,b)*(1.-smoothstep(.12,.2,b));
   return vec4(mix(u_cb,u_ca,clamp(v*.8+e*.5,0.,1.)),1.);}`
 });
+var FXC = (k, l, d, sec = "Centre") => ({ k, label: l, min: 0, max: 100, def: d, sec });
+defineModule({
+  id: "kaleido",
+  family: "Warp",
+  name: "Kaleidoscope",
+  defaultLook: { paper: "#101010", ink: "#ffb347", palette: null },
+  params: [{ k: "seg", label: "Segments", min: 2, max: 16, def: 6, step: 1, sec: "Mirror", hero: true }, { k: "rot", label: "Rotation", min: 0, max: 360, def: 0, sec: "Mirror" }, { k: "zoom", label: "Zoom", min: 20, max: 300, def: 100, sec: "Mirror", hero: true }, { k: "spin", label: "Spin", min: -100, max: 100, def: 20, sec: "Motion" }, FXC("cx", "Centre X", 50), FXC("cy", "Centre Y", 50)],
+  frag: `vec4 fx(vec2 uv){vec2 p=(uv-vec2(u_cx,u_cy)/100.)*vec2(uRes.x/uRes.y,1.);float a=atan(p.y,p.x)+radians(u_rot)+uTime*u_spin*.01,r=length(p)*100./u_zoom;float s=6.2832/u_seg;a=mod(a,s);a=abs(a-s*.5);vec2 q=vec2(cos(a),sin(a))*r;
+  return texture(uSrc,clamp(q/vec2(uRes.x/uRes.y,1.)+vec2(u_cx,u_cy)/100.,0.,1.));}`
+});
+defineModule({
+  id: "mirror",
+  family: "Warp",
+  name: "Mirror Tiles",
+  defaultLook: { paper: "#101010", ink: "#e8d8c4", palette: null },
+  params: [{ k: "mode", t: "c", label: "Mirror", opts: ["Left to right", "Top to bottom", "Four ways", "Diagonal"], def: 2, sec: "Mirror", hero: true }, { k: "tiles", label: "Tiles", min: 1, max: 8, def: 2, step: 1, sec: "Mirror", hero: true }, { k: "off", label: "Offset", min: -50, max: 50, def: 0, sec: "Mirror" }, { k: "sw", label: "Slide", min: 0, max: 100, def: 10, sec: "Motion" }],
+  frag: `vec4 fx(vec2 uv){vec2 p=fract(uv*u_tiles+vec2(u_off/100.+uTime*u_sw*.004,0.));int m=int(u_mode+.5);
+  if(m==0)p.x=abs(p.x*2.-1.);else if(m==1)p.y=abs(p.y*2.-1.);else if(m==2)p=abs(p*2.-1.);else{p=abs(p*2.-1.);if(p.x<p.y)p=p.yx;}
+  return texture(uSrc,clamp(p,0.,1.));}`
+});
+defineModule({
+  id: "chroma",
+  family: "Optical",
+  name: "Chromatic Split",
+  defaultLook: { paper: "#101010", ink: "#ff9d3a", palette: null },
+  params: [{ k: "amt", label: "Split", min: 0, max: 100, def: 35, sec: "Split", hero: true }, { k: "ang", label: "Angle", min: 0, max: 360, def: 20, sec: "Split" }, { k: "rad", label: "From centre", min: 0, max: 100, def: 60, sec: "Split", hero: true }, { k: "gl", label: "Glow", min: 0, max: 100, def: 25, sec: "Light" }, { k: "wob", label: "Wobble", min: 0, max: 100, def: 20, sec: "Motion" }],
+  frag: SS + `vec4 fx(vec2 uv){vec2 d=(uv-.5);float a=radians(u_ang)+uTime*u_wob*.02;vec2 dir=mix(vec2(cos(a),sin(a)),normalize(d+1e-4),u_rad/100.)*u_amt/100.*.03*(.4+length(d)*2.*u_rad/100.);
+  vec3 c=vec3(texture(uSrc,uv+dir).r,texture(uSrc,uv).g,texture(uSrc,uv-dir).b);vec3 g=(texture(uSrc,uv+dir*3.).rgb+texture(uSrc,uv-dir*3.).rgb)*.5;return vec4(c+max(g-.5,0.)*u_gl/60.,1.);}`
+});
+defineModule({
+  id: "slicer",
+  family: "Glitch",
+  name: "Glitch Slices",
+  defaultLook: { paper: "#101010", ink: "#ff6a3d", palette: null },
+  params: [{ k: "n", label: "Slices", min: 3, max: 80, def: 16, step: 1, sec: "Slices", hero: true }, { k: "sh", label: "Shift", min: 0, max: 100, def: 85, sec: "Slices", hero: true }, { k: "rate", label: "Rate", min: 0, max: 100, def: 50, sec: "Motion" }, { k: "rgb", label: "RGB split", min: 0, max: 100, def: 80, sec: "Slices" }, { k: "vert", t: "b", label: "Vertical slices", def: false, sec: "Slices" }, { k: "tint", t: "color", label: "Tint", def: "#ff6a3d", sec: "Colour" }, { k: "tmix", label: "Tint amount", min: 0, max: 100, def: 45, sec: "Colour" }],
+  frag: `vec4 fx0(vec2 uv){float tt=floor(uTime*u_rate*.2),ax=u_vert>.5?uv.x:uv.y;float id=floor(ax*u_n);float on=step(.25,h11(id*1.31+tt*5.7+uSeed));float sh=(h11(id+tt*3.3+uSeed)-.5)*u_sh/100.*.4*on;
+  vec2 o=u_vert>.5?vec2(0.,sh):vec2(sh,0.);float sp=u_rgb/100.*.02*on;vec2 sd=u_vert>.5?vec2(0.,sp):vec2(sp,0.);
+  return vec4(texture(uSrc,uv+o+sd).r,texture(uSrc,uv+o).g,texture(uSrc,uv+o-sd).b,1.);}
+vec4 fx(vec2 uv){vec4 c=fx0(uv);float l=luma(c.rgb);return vec4(mix(c.rgb,u_tint*(.12+l*1.55),u_tmix/100.),1.);}`
+});
+defineModule({
+  id: "swirl",
+  family: "Warp",
+  name: "Swirl",
+  defaultLook: { paper: "#101010", ink: "#e8d8c4", palette: null },
+  params: [{ k: "str", label: "Twist", min: -100, max: 100, def: 95, sec: "Twist", hero: true }, { k: "rad", label: "Radius", min: 5, max: 100, def: 90, sec: "Twist", hero: true }, { k: "pul", label: "Pulse", min: 0, max: 100, def: 30, sec: "Motion" }, FXC("cx", "Centre X", 50), FXC("cy", "Centre Y", 50), { k: "tint", t: "color", label: "Tint", def: "#c4562a", sec: "Colour" }, { k: "tmix", label: "Tint amount", min: 0, max: 100, def: 70, sec: "Colour" }],
+  frag: `vec4 fx0(vec2 uv){vec2 c=vec2(u_cx,u_cy)/100.,p=(uv-c)*vec2(uRes.x/uRes.y,1.);float r=length(p),R=u_rad/100.*.7;float k=smoothstep(R,0.,r);float a=k*k*u_str/100.*6.283*(1.+u_pul/100.*sin(uTime*1.5));
+  p=mat2(cos(a),-sin(a),sin(a),cos(a))*p;return texture(uSrc,clamp(p/vec2(uRes.x/uRes.y,1.)+c,0.,1.));}
+vec4 fx(vec2 uv){vec4 c=fx0(uv);float l=luma(c.rgb);return vec4(mix(c.rgb,u_tint*(.12+l*1.55),u_tmix/100.),1.);}`
+});
+defineModule({
+  id: "ripple",
+  family: "Warp",
+  name: "Ripple",
+  defaultLook: { paper: "#101010", ink: "#e8d8c4", palette: null },
+  params: [{ k: "f", label: "Wavelength", min: 3, max: 80, def: 24, sec: "Wave", hero: true }, { k: "amp", label: "Height", min: 0, max: 100, def: 35, sec: "Wave", hero: true }, { k: "spd", label: "Speed", min: 0, max: 100, def: 40, sec: "Motion" }, { k: "sh", label: "Shine", min: 0, max: 100, def: 30, sec: "Light" }, FXC("cx", "Centre X", 50), FXC("cy", "Centre Y", 50)],
+  frag: `vec4 fx(vec2 uv){vec2 c=vec2(u_cx,u_cy)/100.,p=(uv-c)*vec2(uRes.x/uRes.y,1.);float r=length(p);float w=sin(r*u_f*6.283-uTime*u_spd*.1)*exp(-r*1.4);vec2 d=normalize(p+1e-4)*w*u_amt/100.*.04;
+  vec3 col=texture(uSrc,clamp(uv+d/vec2(uRes.x/uRes.y,1.),0.,1.)).rgb;col+=max(w,0.)*u_sh/100.*.3;return vec4(col,1.);}`.replace("u_amt", "u_amp")
+});
+defineModule({
+  id: "zoomblur",
+  family: "Light",
+  name: "Zoom Blur",
+  defaultLook: { paper: "#101010", ink: "#ffd9a0", palette: null },
+  params: [{ k: "amt", label: "Length", min: 0, max: 100, def: 45, sec: "Blur", hero: true }, { k: "gl", label: "Bright streaks", min: 0, max: 100, def: 50, sec: "Blur", hero: true }, { k: "pul", label: "Pulse", min: 0, max: 100, def: 25, sec: "Motion" }, FXC("cx", "Centre X", 50), FXC("cy", "Centre Y", 50)],
+  frag: `vec4 fx(vec2 uv){vec2 c=vec2(u_cx,u_cy)/100.,d=(uv-c)*u_amt/100.*.25*(1.+u_pul/100.*sin(uTime*2.));vec3 s=vec3(0.);float w=0.;
+  for(int i=0;i<18;i++){float k=float(i)/17.;vec3 t=texture(uSrc,clamp(uv-d*k,0.,1.)).rgb;float b=1.+u_gl/100.*3.*smoothstep(.6,1.,luma(t));s+=t*b*(1.-k*.5);w+=1.-k*.5;}return vec4(s/w,1.);}`
+});
+defineModule({
+  id: "fisheye",
+  family: "Optical",
+  name: "Lens Bulge",
+  defaultLook: { paper: "#101010", ink: "#e8d8c4", palette: null },
+  params: [{ k: "str", label: "Bulge", min: -100, max: 100, def: 55, sec: "Lens", hero: true }, { k: "vig", label: "Vignette", min: 0, max: 100, def: 45, sec: "Lens", hero: true }, { k: "ca", label: "Edge fringe", min: 0, max: 100, def: 35, sec: "Lens" }, { k: "br", label: "Breathe", min: 0, max: 100, def: 20, sec: "Motion" }],
+  frag: `vec4 fx(vec2 uv){vec2 p=(uv-.5)*2.;float r2=dot(p,p),k=u_str/100.*(1.+u_br/100.*.3*sin(uTime));vec2 q=p*(1.+k*r2*.6);vec2 o=p*r2*u_ca/100.*.02;
+  vec3 c=vec3(texture(uSrc,clamp(q*.5+.5+o,0.,1.)).r,texture(uSrc,clamp(q*.5+.5,0.,1.)).g,texture(uSrc,clamp(q*.5+.5-o,0.,1.)).b);
+  float v=1.-smoothstep(.4,1.5,r2)*u_vig/100.;if(max(abs(q.x),abs(q.y))>1.)c=vec3(0.);return vec4(c*v,1.);}`
+});
+defineModule({
+  id: "neonedge",
+  family: "Light",
+  name: "Edge Light",
+  defaultLook: { paper: "#0c0a08", ink: "#ffb347", palette: null },
+  params: [{ k: "thr", label: "Sensitivity", min: 0, max: 100, def: 35, sec: "Edges", hero: true }, { k: "w", label: "Width", min: 1, max: 12, def: 2.5, step: 0.5, sec: "Edges" }, { k: "glow", label: "Glow", min: 0, max: 100, def: 55, sec: "Edges", hero: true }, { k: "dim", label: "Picture", min: 0, max: 100, def: 12, sec: "Edges" }, { k: "col", t: "color", label: "Edge colour", def: "#ffb347", sec: "Edges" }, { k: "rainbow", label: "Colour from picture", min: 0, max: 100, def: 0, sec: "Edges" }],
+  frag: SS + `vec4 fx(vec2 uv){vec2 t=u_w*S/uRes;float tl=luma(texture(uSrc,uv+vec2(-t.x,-t.y)).rgb),tc=luma(texture(uSrc,uv+vec2(0.,-t.y)).rgb),tr=luma(texture(uSrc,uv+vec2(t.x,-t.y)).rgb),l=luma(texture(uSrc,uv+vec2(-t.x,0.)).rgb),r=luma(texture(uSrc,uv+vec2(t.x,0.)).rgb),bl=luma(texture(uSrc,uv+vec2(-t.x,t.y)).rgb),bc=luma(texture(uSrc,uv+vec2(0.,t.y)).rgb),br=luma(texture(uSrc,uv+vec2(t.x,t.y)).rgb);
+  float gx=-tl-2.*l-bl+tr+2.*r+br,gy=-tl-2.*tc-tr+bl+2.*bc+br;float e=length(vec2(gx,gy));e=smoothstep(u_thr/100.*.6,u_thr/100.*.6+.35,e);
+  vec3 src=texture(uSrc,uv).rgb;vec3 ec=mix(u_col,src*1.6,u_rainbow/100.);return vec4(src*u_dim/100.+ec*e*(1.+u_glow/100.),1.);}`
+});
+defineModule({
+  id: "gradmap",
+  family: "Color",
+  name: "Gradient Map",
+  defaultLook: { paper: "#2b1408", ink: "#ffe3b0", palette: null },
+  params: [{ k: "c1", t: "color", label: "Shadows", def: "#2b1408", sec: "Colours", hero: true }, { k: "c2", t: "color", label: "Midtones", def: "#c4562a", sec: "Colours" }, { k: "c3", t: "color", label: "Highlights", def: "#ffe3b0", sec: "Colours" }, { k: "mid", label: "Midpoint", min: 10, max: 90, def: 50, sec: "Tone", hero: true }, { k: "con", label: "Contrast", min: -50, max: 100, def: 20, sec: "Tone" }, { k: "cyc", label: "Cycle", min: 0, max: 100, def: 0, sec: "Motion" }],
+  frag: `vec4 fx(vec2 uv){float l=luma(texture(uSrc,uv).rgb);l=clamp((l-.5)*(1.+u_con/100.)+.5,0.,1.);l=fract(l+uTime*u_cyc*.02)*step(.001,u_cyc)+l*(1.-step(.001,u_cyc));float m=u_mid/100.;
+  vec3 c=l<m?mix(u_c1,u_c2,l/m):mix(u_c2,u_c3,(l-m)/(1.-m));return vec4(c,1.);}`
+});
+defineModule({
+  id: "contourl",
+  family: "Lines",
+  name: "Contour Lines",
+  defaultLook: { paper: "#efe6d2", ink: "#3a2a1a", palette: null },
+  params: [{ k: "n", label: "Levels", min: 3, max: 40, def: 14, step: 1, sec: "Lines", hero: true }, { k: "th", label: "Line weight", min: 1, max: 80, def: 22, sec: "Lines", hero: true }, { k: "ink", t: "color", label: "Ink", def: "#3a2a1a", sec: "Colour" }, { k: "paper", t: "color", label: "Paper", def: "#efe6d2", sec: "Colour" }, { k: "fill", label: "Keep picture", min: 0, max: 100, def: 0, sec: "Colour" }, { k: "flow", label: "Flow", min: 0, max: 100, def: 20, sec: "Motion" }],
+  frag: `vec4 fx(vec2 uv){vec3 s=texture(uSrc,uv).rgb;float l=luma(s)*u_n+uTime*u_flow*.02;float d=abs(fract(l)-.5)*2.;float line=1.-smoothstep(u_th/100.,u_th/100.+.1,d);
+  vec3 base=mix(u_paper,s,u_fill/100.);return vec4(mix(base,u_ink,line),1.);}`
+});
+defineModule({
+  id: "tiles",
+  family: "Pixel",
+  name: "Mosaic Tiles",
+  defaultLook: { paper: "#101010", ink: "#e8d8c4", palette: null },
+  params: [{ k: "sz", label: "Tile size", min: 4, max: 120, def: 28, sec: "Tiles", hero: true }, { k: "gap", label: "Grout", min: 0, max: 60, def: 14, sec: "Tiles", hero: true }, { k: "jit", label: "Jitter", min: 0, max: 100, def: 25, sec: "Tiles" }, { k: "rnd", label: "Rounding", min: 0, max: 100, def: 35, sec: "Tiles" }, { k: "bev", label: "Bevel", min: 0, max: 100, def: 40, sec: "Light" }],
+  frag: SS + `vec4 fx(vec2 uv){float s=u_sz*S;vec2 p=uv*uRes/s,id=floor(p),f=fract(p)-.5;vec2 j=(h22(id+uSeed)-.5)*u_jit/100.*.5;vec3 c=texture(uSrc,(id+.5+j)*s/uRes).rgb;
+  float g=u_gap/100.*.5,r=u_rnd/100.*.5;vec2 q=abs(f)-(.5-g-r);float d=length(max(q,0.))-r;float m=1.-smoothstep(-.02,.03,d);
+  float bev=1.+u_bev/100.*.5*(-f.x*.6-f.y*.6+smoothstep(0.,-.3,d)*.0);return vec4(c*bev*m,1.);}`
+});
+defineModule({
+  id: "grain",
+  family: "Film",
+  name: "Film Burn",
+  defaultLook: { paper: "#14100c", ink: "#e8c08a", palette: null },
+  params: [{ k: "gr", label: "Grain", min: 0, max: 100, def: 45, sec: "Film", hero: true }, { k: "sz", label: "Grain size", min: 1, max: 8, def: 2, step: 0.5, sec: "Film" }, { k: "vig", label: "Vignette", min: 0, max: 100, def: 50, sec: "Film", hero: true }, { k: "lift", label: "Lift blacks", min: 0, max: 100, def: 20, sec: "Film" }, { k: "warm", label: "Warmth", min: -100, max: 100, def: 35, sec: "Film" }, { k: "flk", label: "Flicker", min: 0, max: 100, def: 25, sec: "Motion" }],
+  frag: SS + `vec4 fx(vec2 uv){vec3 c=texture(uSrc,uv).rgb;float n=h21(floor(uv*uRes/(u_sz*S))+floor(uTime*24.)*7.3)-.5;c+=n*u_gr/100.*.5;c=mix(c,vec3(.12,.1,.09)+c*.88,u_lift/100.);
+  c*=vec3(1.+u_warm/100.*.15,1.,1.-u_warm/100.*.2);float d=length(uv-.5);c*=1.-smoothstep(.3,.85,d)*u_vig/100.;c*=1.+(h11(floor(uTime*12.))-.5)*u_flk/100.*.25;return vec4(c,1.);}`
+});
+defineModule({
+  id: "melt",
+  family: "Warp",
+  name: "Melt",
+  defaultLook: { paper: "#101010", ink: "#e8d8c4", palette: null },
+  params: [{ k: "amt", label: "Drip", min: 0, max: 100, def: 85, sec: "Melt", hero: true }, { k: "cols", label: "Columns", min: 4, max: 120, def: 22, step: 1, sec: "Melt" }, { k: "spd", label: "Speed", min: 0, max: 100, def: 35, sec: "Motion", hero: true }, { k: "lum", label: "Bright drips more", min: 0, max: 100, def: 75, sec: "Melt" }, { k: "tint", t: "color", label: "Tint", def: "#e8d8c4", sec: "Colour" }, { k: "tmix", label: "Tint amount", min: 0, max: 100, def: 100, sec: "Colour" }],
+  frag: `vec4 fx0(vec2 uv){float id=floor(uv.x*u_cols);float ph=h11(id+uSeed)*6.283;float l=luma(texture(uSrc,vec2((id+.5)/u_cols,uv.y)).rgb);
+  float d=(.5+.5*sin(uTime*u_spd*.05+ph))*u_amt/100.*.25*(1.-u_lum/100.+u_lum/100.*l*1.6);return texture(uSrc,vec2(uv.x,clamp(uv.y+d,0.,1.)));}
+vec4 fx(vec2 uv){vec4 c=fx0(uv);float l=luma(c.rgb);return vec4(mix(c.rgb,u_tint*(.12+l*1.55),u_tmix/100.),1.);}`
+});
 var STACK = { layers: [mkLayer("crtlab")], sel: 0, rt: {} };
 var F_COMP = HEAD + GLSL_LIB + `
 uniform int uCM;uniform float uCA;
@@ -8238,6 +8373,20 @@ var TRAITS = {
   sigbody: ["mask-gated", "dither-body", "amber-ink", "static", "grain"],
   bgrep: ["replace", "cut-out", "cream-blue", "drift", "flat"],
   echo: ["ring-buffer", "trail", "orange-shift", "trail", "ghost"],
+  kaleido: ["mirror-fold", "radial-mirror", "source", "spin", "none"],
+  mirror: ["mirror-fold", "tile-mirror", "source", "slide", "none"],
+  chroma: ["channel-offset", "fringe", "source", "wobble", "glow"],
+  slicer: ["row-shift", "slices", "source-rgb", "glitch", "none"],
+  swirl: ["polar-twist", "spiral", "source", "pulse", "none"],
+  ripple: ["radial-wave", "rings", "source", "wave", "shine"],
+  zoomblur: ["radial-average", "streaks", "source", "pulse", "glow"],
+  fisheye: ["lens-warp", "bulge", "source", "breathe", "vignette"],
+  neonedge: ["sobel", "edge-lines", "amber-ink", "static", "glow"],
+  gradmap: ["luma-ramp", "tone-bands", "three-stop", "cycle", "flat"],
+  contourl: ["luma-bands", "topo-lines", "ink-paper", "flow", "paper"],
+  tiles: ["block-average", "rounded-grid", "source", "static", "bevel"],
+  grain: ["lift-warm", "none", "warm-film", "flicker", "grain"],
+  melt: ["column-drip", "vertical-smear", "source", "drip", "none"],
   moire: ["product", "grating", "ink-cream", "drift", "none"],
   interf: ["wave-sum", "rings", "orange-dark", "orbit", "none"],
   scanf: ["band-sweep", "scanbars", "amber-dark", "sweep", "scan"],
@@ -9473,7 +9622,7 @@ var CAM_FAMILY = {
   tunnel: "Time",
   slit: "Time"
 };
-var UFAM_ORDER = ["Source", "Mix", "Color", "Y2K", "Film", "Signal / CRT", "Dither", "Print", "Pixel", "Glyph", "Lines", "Glitch", "Light", "Warp", "Time", "Face"];
+var UFAM_ORDER = ["Source", "Subject", "Mix", "Color", "Y2K", "Film", "Signal / CRT", "Dither", "Print", "Pixel", "Glyph", "Lines", "Glitch", "Light", "Warp", "Time", "Face"];
 var camFam = (f) => f.face ? "Face" : f.custom || f.cat === "custom" ? "Mine" : CAM_FAMILY[f.id] || "Color";
 var modFam = (m) => RAIL_FAMILY[m.id] || m.family;
 var famRank = (f) => {
