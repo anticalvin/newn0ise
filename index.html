@@ -295,6 +295,8 @@ body[data-lefty] .float.br{right:auto;left:8px}body[data-lefty] .float.bl{left:a
 .rtile span{display:block;font:600 9.5px var(--lab);text-transform:uppercase;letter-spacing:.04em;padding:5px 5px 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rtile[aria-pressed=true]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
 .rtile[aria-pressed=true] span{color:var(--accent)}
+.btn.lnk{display:inline-flex;align-items:center;justify-content:center;text-decoration:none;color:inherit}
+:root[data-embed] #open,:root[data-embed] #cam,:root[data-embed] #rec,:root[data-embed] #studiobtn,:root[data-embed] #srcchip,:root[data-embed] #save,:root[data-embed] .chipb{display:none!important}
 .railtabs{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;padding:0 10px;margin:0 0 2px}.railtabs::-webkit-scrollbar{display:none}
 .railtabs button{flex:none;min-height:36px;padding:0 10px;border:0;background:none;color:var(--mute);font:600 10px var(--lab);letter-spacing:.12em;text-transform:uppercase;border-bottom:2px solid transparent}
 .railtabs button[aria-pressed=true]{color:var(--ink);border-bottom-color:var(--accent)}
@@ -309,6 +311,7 @@ body[data-lefty] .float.br{right:auto;left:8px}body[data-lefty] .float.bl{left:a
     <div class="mark">n<b>0</b>ise</div>
     <div class="acts">
       <button class="btn ic" id="undo" title="Undo" aria-label="Undo">↶</button><button class="btn ic" id="redo" title="Redo" aria-label="Redo">↷</button>
+      <a class="btn lnk" id="studiobtn" href="studio.html" title="3D studio: apply effects to a model or scan">Studio</a>
       <button class="btn" id="open">Open</button>
       <button class="btn" id="cam">Camera</button>
       <button class="btn rec" id="rec" aria-pressed="false">Rec</button>
@@ -1682,6 +1685,9 @@ function exportCap(){const mt=gl.getParameter(gl.MAX_TEXTURE_SIZE);return Math.m
 function expDims(cw,ch,mul){const dpr=Math.min(2,window.devicePixelRatio||1);let DW=Math.round(cw*dpr*mul),DH=Math.round(ch*dpr*mul);
   const cap=ST.expCap||exportCap(),m=Math.max(DW,DH);if(m>cap){DW=Math.round(DW*cap/m);DH=Math.round(DH*cap/m);}
   const px=DW*DH;if(px>2.4e7){const k=Math.sqrt(2.4e7/px);DW=Math.round(DW*k);DH=Math.round(DH*k);}return[DW&~1,DH&~1];}
+/* embed mode (studio.html): the parent hands in a canvas each frame and gets the rendered result back */
+const EMBED=/[?&]embed=1/.test(location.search);if(EMBED)document.documentElement.dataset.embed='1';
+const EMB={w:0,h:0,ok:false};
 function layout(){
   const srcAsp=ST.ovr?ST.ovr.w/ST.ovr.h:SRC.w/SRC.h;
   let asp=srcAsp;
@@ -1693,6 +1699,7 @@ function layout(){
   let DW=Math.round(cw*dpr*q),DH=Math.round(ch*dpr*q);
   if(ST.expMul>=1){[DW,DH]=expDims(cw,ch,ST.expMul);}
   else{const m=Math.max(DW,DH);if(m>1800){DW=Math.round(DW*1800/m);DH=Math.round(DH*1800/m);}}
+  if(EMBED&&EMB.w){DW=EMB.w;DH=EMB.h;}
   DW=Math.max(160,DW&~1);DH=Math.max(120,DH&~1);
   if(cw!==SZ.cw||ch!==SZ.ch){canvas.style.width=cw+'px';canvas.style.height=ch+'px';SZ.cw=cw;SZ.ch=ch;}
   if(canvas.width!==DW||canvas.height!==DH){canvas.width=DW;canvas.height=DH;}
@@ -3194,9 +3201,16 @@ function renderStack(t,dt){
   }
   bindRT(null);PR.copy.use();samp(PR.copy,'uT',0,acc.tex);draw();
 }
+window.__embedReady=()=>EMBED&&GLOK&&!DEAD&&!CTX.lost;
+window.__embedRender=function(cv,w,h,t,dt){
+  if(!window.__embedReady())return null;
+  EMB.w=w;EMB.h=h;
+  if(SRC.el!==cv){setSource(cv,'Studio',true);}else uploadSrc();
+  renderStack(t,dt);frameNo++;return canvas;
+};
 function loop(now){
   requestAnimationFrame(loop);
-  if(window.__benching)return;
+  if(window.__benching||(EMBED&&document.hidden))return;
   if(document.hidden||!GLOK||CTX.lost||DEAD)return;
   const cap=+P.fcap;
   if(cap&&now-lastRenderMs<1000/cap-4)return;
@@ -3538,7 +3552,7 @@ function audFrame(){
   audio.level=Math.min(1,a.lvl*1.4);
   for(let i=0;i<64;i++)a.sp[i]=magAt(a,i/63);
   const nowT=performance.now();a.bavg=lerpA(a.bavg,a.bass,.04);a.beat=a.bass>a.bavg*1.28+.07&&nowT-a.lastBeat>170;if(a.beat)a.lastBeat=nowT;
-  if(a.auto&&(nowT-a.autoT>15000||(a.beat&&a.bass>.8&&nowT-a.autoT>7000))){a.cur=(a.cur+1+Math.floor(Math.random()*4))%(AUD_MODES.length-1);a.autoT=nowT;a.s={};a.g.fillStyle='#000';a.g.fillRect(0,0,1024,768);const m=$('#audmode');if(m)m.textContent='Auto · '+AUD_MODES[a.cur];}
+  if(a.auto&&(nowT-a.autoT>15000||(a.beat&&a.bass>.8&&nowT-a.autoT>7000))){a.cur=(a.cur+1+Math.floor(Math.random()*4))%(AUD_MODES.length-1);a.autoT=nowT;a.s={};a.g.fillStyle='#000';a.g.fillRect(0,0,1024,768);const m=$('#audmode');if(m)m.textContent='Auto · '+AUD_MODES[a.cur];if(a.fxAuto)randomEffect();}
   AUD_DRAW[a.auto?a.cur:a.mode](a,a.g,1024,768);
 }
 const binAt=u=>Math.min(1023,Math.floor(1+Math.pow(u,2)*640));
@@ -3650,7 +3664,10 @@ function setAudMode(i){
   if(a.auto){a.cur=Math.floor(Math.random()*(N-1));a.autoT=performance.now();}
   a.g.globalCompositeOperation='source-over';a.g.globalAlpha=1;a.g.fillStyle='#000';a.g.fillRect(0,0,1024,768);
   const m=$('#audmode');if(m)m.textContent=a.auto?'Auto':AUD_MODES[a.mode];
+  if(a.fxAuto&&a.on&&!a.quiet)randomEffect();
 }
+/* auto cycle effects: every time the visualizer changes, jump to a random effect (never a face effect) */
+function randomEffect(){try{const cur=effectId(layer()),l=effectList().filter(e=>e.id!==cur);if(!l.length)return;const e=l[Math.random()*l.length|0];pickEffect(e.id);toast(e.name,1200);}catch(err){console.warn(err);}}
 function buildAudUI(){
   let bar=$('#audbar');if(bar){bar.hidden=false;return;}
   bar=el('div','audbar');bar.id='audbar';
@@ -3663,10 +3680,11 @@ function buildAudUI(){
   const pv=b('‹','Previous visualizer',()=>{setAudMode(AUD.mode-1);buzz(8);});
   const ls=b('☰','Choose a visualizer',()=>{let p=$('#audlist');if(p){p.remove();return;}p=el('div','audlist');p.id='audlist';
     AUD_MODES.forEach((n,i)=>{const x=el('button','cb',n);x.setAttribute('aria-pressed',i===AUD.mode);x.addEventListener('click',()=>{setAudMode(i);p.remove();buzz(8);});p.appendChild(x);});$('#stage').appendChild(p);});
+  const fxb=b('FX ⟳','Auto cycle effects with each visualizer change',()=>{AUD.fxAuto=!AUD.fxAuto;fxb.setAttribute('aria-pressed',AUD.fxAuto);toast(AUD.fxAuto?'Effects change with the visualizer':'Effects stay put',1400);if(AUD.fxAuto)randomEffect();buzz(8);});fxb.id='audfx';fxb.setAttribute('aria-pressed',!!AUD.fxAuto);fxb.title='Auto cycle effects';
   const gn=document.createElement('input');gn.type='range';gn.min=.4;gn.max=3;gn.step=.05;gn.value=AUD.gain;gn.id='audgain';gn.setAttribute('aria-label','Sensitivity');gn.addEventListener('input',()=>{AUD.gain=+gn.value;});
   const gl=el('span','audtm','Gain');
   const cl=b('✕','Remove the audio source',()=>{stopAudio();setSource(demoCanvas(),'Demo');refreshUI();});
-  const r1=el('div','audrow'),r2=el('div','audrow');r1.append(pp,seek,tm);r2.append(pv,md,ls,gl,gn,cl);bar.append(r1,r2);$('#stage').appendChild(bar);
+  const r1=el('div','audrow'),r2=el('div','audrow');r1.append(pp,seek,tm);r2.append(pv,md,ls,fxb,gl,gn,cl);bar.append(r1,r2);$('#stage').appendChild(bar);
   const fmt=s=>{s=Math.max(0,s|0);return(s/60|0)+':'+String(s%60).padStart(2,'0');};
   const upd=()=>{if(!AUD.on)return;pp.textContent=AUD.el.paused?'▶':'❚❚';if(AUD.el.duration&&document.activeElement!==seek)seek.value=AUD.el.currentTime/AUD.el.duration*1000;tm.textContent=fmt(AUD.el.currentTime)+' / '+fmt(AUD.el.duration||0);};
   setInterval(upd,300);upd();
