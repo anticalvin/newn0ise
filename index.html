@@ -230,7 +230,7 @@ body[data-sheet] .stage{margin-bottom:0}
 body[data-sheet] .dock{position:fixed;left:0;right:0;bottom:var(--kb,0px);height:var(--sheet,86vh);margin:0!important;border-radius:var(--rad) var(--rad) 0 0!important;z-index:15;
   transform:translateY(var(--ty,0px));will-change:transform;box-shadow:0 -1px 0 var(--line);padding-bottom:env(safe-area-inset-bottom,0px)}
 body[data-sheet] .grab{display:block}
-body[data-sheet] .insp{padding-bottom:calc(var(--ty,0px) + 32px + env(safe-area-inset-bottom,0px))}
+
 .scrub{display:flex;align-items:center;gap:10px;padding:0 14px;height:42px}
 .scrub .sl{flex:none;width:92px;font:600 9.5px var(--lab);letter-spacing:.14em;color:var(--mute);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .scrub .sv{flex:none;width:38px;font:600 11px var(--lab);text-align:right}
@@ -301,8 +301,21 @@ body[data-lefty] .float.br{right:auto;left:8px}body[data-lefty] .float.bl{left:a
 .railtabs button{flex:none;min-height:36px;padding:0 10px;border:0;background:none;color:var(--mute);font:600 10px var(--lab);letter-spacing:.12em;text-transform:uppercase;border-bottom:2px solid transparent}
 .railtabs button[aria-pressed=true]{color:var(--ink);border-bottom-color:var(--accent)}
 .railnext{position:absolute;right:0;top:50px;bottom:6px;width:44px;border:0;border-left:1px solid var(--line);background:var(--panel);color:var(--ink);font:400 26px var(--lab);cursor:pointer}
-@media (orientation:landscape) and (max-height:520px){body[data-side] .dock{overflow:hidden}body[data-side] .insp{padding-bottom:24px}body[data-side] .stage{margin:0}}
+@media (orientation:landscape) and (max-height:520px){body[data-side] .insp{padding-bottom:24px}body[data-side] .stage{margin:0}}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+
+/* ---- one column, no sideways scrolling: everything wraps; on a phone the whole sheet scrolls and never rises past halfway ---- */
+.tabs,.chips,.strip,.gal .cats,.railtabs{flex-wrap:wrap;overflow:visible}
+.chips{padding:2px 14px 6px}.railtabs{gap:2px 2px;padding:0 10px 6px}.railtabs button{min-height:36px}
+.rail{flex-direction:column;gap:14px;overflow:visible;padding:0 10px 10px;scroll-snap-type:none}
+.rg{scroll-snap-align:none}.rgt{display:grid;grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:6px}.rtile{width:auto}
+.railnext{display:none!important}
+body[data-sheet] .dock,body[data-side] .dock{overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+body[data-sheet] .dock>*,body[data-side] .dock>*{flex:none}
+body[data-sheet] .insp,body[data-side] .insp{overflow:visible;padding-bottom:calc(40px + env(safe-area-inset-bottom,0px))}
+body[data-sheet] .grab{position:sticky;top:0;z-index:3;background:var(--panel)}
+body[data-sheet] main{transition:padding-bottom .26s cubic-bezier(.2,.8,.2,1)}
+@media (prefers-reduced-motion:reduce){body[data-sheet] main{transition:none}}
 </style>
 </head>
 <body>
@@ -340,6 +353,6 @@ body[data-lefty] .float.br{right:auto;left:8px}body[data-lefty] .float.bl{left:a
   </main>
 </div>
 <input type="file" id="file" accept="image/*,video/*,audio/*,.mp3,.wav,.m4a,.ogg,.flac,.aac" hidden>
-<script type="module" src="assets/index.js?v=e047e0f6"></script>
+<script type="module" src="assets/index.js?v=bac71a8a"></script>
 </body>
 </html>

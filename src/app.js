@@ -3080,7 +3080,7 @@ function wireTouch(){
   /* first-run coach: one dismissable card, three tips */
   if(!lsGet('n0ise.coach',false)&&(document.body.dataset.sheet!==undefined||innerWidth<700)){
     const c=el('div','coach glass',`<b>Quick gestures</b><span>Drag the art to shape the effect</span><span>Hold the art to compare the original</span><span>Two-finger tap undoes, three-finger swipe changes effect</span>`);
-    const b=el('button','','Got it');b.addEventListener('click',()=>{lsSet('n0ise.coach',true);c.remove();});c.appendChild(b);stage.appendChild(c);
+    const b=el('button','','Got it');b.addEventListener('click',()=>{lsSet('n0ise.coach',true);c.remove();});c.appendChild(b);stage.appendChild(c);const gone=()=>{lsSet('n0ise.coach',true);c.remove();};setTimeout(gone,6000);canvas.addEventListener('pointerdown',gone,{once:true});
   }
 }
 function toggleLefty(){const on=document.body.dataset.lefty===undefined;if(on)document.body.dataset.lefty='1';else delete document.body.dataset.lefty;lsSet('n0ise.lefty',on);toast(on?'Left-handed layout':'Right-handed layout');}
@@ -3146,8 +3146,7 @@ function renderPeek(){
   const oldW=host.querySelector('.railwrap');
   const press=(rl)=>{const ts=[...rl.querySelectorAll('.rtile')];ts.forEach(t=>t.setAttribute('aria-pressed',t._fx?camOn(l,t._fx):t._rec?false:t._id===l.module));
     if(ts.some(t=>t._fx&&t.getAttribute('aria-pressed')==='true'))ts.forEach(t=>{if(!t._fx&&t._id==='fuse')t.setAttribute('aria-pressed',false);});
-    if(RAIL.cur!==curId){RAIL.cur=curId;const s=rl.querySelector('[aria-pressed=true]');if(s){const rr=rl.getBoundingClientRect(),sr=s.getBoundingClientRect();
-      if(sr.left<rr.left||sr.right>rr.right-48)rl.scrollTo({left:Math.max(0,rl.scrollLeft+sr.left-rr.left-12),behavior:'smooth'});}}};
+    if(RAIL.cur!==curId){RAIL.cur=curId;const s=rl.querySelector('[aria-pressed=true]');if(s&&document.body.dataset.sheet===undefined&&document.body.dataset.side===undefined){/* in the sheet the tile stays where it is: scrolling the list under the user's thumb is worse than a highlight */}}};
   if(oldW&&oldW._sig===sig){press(oldW._rail);return;}
   const prevScroll=oldW?oldW._rail.scrollLeft:null;if(oldW)oldW.remove();
   const wrap=el('div','railwrap'),rail=el('div','rail');wrap._sig=sig;
@@ -3156,7 +3155,7 @@ function renderPeek(){
    const fav=lsGet('n0ise.fav',[]).map(mk).filter(Boolean),rcn=lsGet('n0ise.recent',[]).map(mk).filter(Boolean);
    const recs=loadRecipes();if(recs.length)groups['Mine']=recs.map(r=>({id:'recipe:'+r.id,name:r.name,rec:r})).concat(groups['Mine']||[]);
    if(fav.length)groups['★ Favorites']=fav;if(rcn.length)groups['Recent']=rcn;}
-  const io='IntersectionObserver' in window?new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){const t=e.target;io.unobserve(t);requestAnimationFrame(()=>{if(!t._id)return;const c=cachedThumb(t._id);c.className='rt';t.replaceChild(c,t.firstChild);});}}),{root:rail,rootMargin:'0px 200px'}):null;
+  const io='IntersectionObserver' in window?new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){const t=e.target;io.unobserve(t);requestAnimationFrame(()=>{if(!t._id)return;const c=cachedThumb(t._id);c.className='rt';t.replaceChild(c,t.firstChild);});}}),{root:$i('dock'),rootMargin:'300px 0px'}):null;
   RAIL_ORDER.filter(f=>groups[f]).concat(Object.keys(groups).filter(f=>!RAIL_ORDER.includes(f))).forEach(f=>{
     const g=el('div','rg');g.dataset.f=f;g.appendChild(el('div','rgl',f));const row=el('div','rgt');
     groups[f].forEach(x=>{
@@ -3168,30 +3167,26 @@ function renderPeek(){
       t.addEventListener('click',()=>{if(lpDone)return;if(x.rec){loadRecipeLayer(x.rec);}else pickEffect(x.id);buzz(5);});
       row.appendChild(t);io?io.observe(t):(t.replaceChild(Object.assign(cachedThumb(x.id),{className:'rt'}),ph));});
     g.appendChild(row);rail.appendChild(g);});
-  const nx=el('button','railnext','›');nx.setAttribute('aria-label','Next category');
-  nx.addEventListener('click',()=>{const gs=[...rail.querySelectorAll('.rg')],x=rail.scrollLeft+8,n=gs.find(g=>g.offsetLeft>x+4)||gs[0];rail.scrollTo({left:n.offsetLeft-8,behavior:'smooth'});});
   const tabs=el('div','railtabs');wrap._rail=rail;
-  [...rail.querySelectorAll('.rg')].forEach(g=>{const b=el('button','',g.dataset.f.replace('★ ','★'));b.addEventListener('click',()=>{rail.scrollTo({left:Math.max(0,g.offsetLeft-8),behavior:'smooth'});});b._g=g;tabs.appendChild(b);});
-  let rf=0;const syncTabs=()=>{rf=0;const x=rail.scrollLeft+14;let cur=null;[...tabs.children].forEach(b=>{if(b._g.offsetLeft<=x)cur=b;});if(!cur)cur=tabs.firstChild;
-    [...tabs.children].forEach(b=>b.setAttribute('aria-pressed',b===cur));if(cur){const tr=tabs.getBoundingClientRect(),cr=cur.getBoundingClientRect();if(cr.left<tr.left||cr.right>tr.right)tabs.scrollLeft+=cr.left-tr.left-12;}};
-  rail.addEventListener('scroll',()=>{if(!rf)rf=requestAnimationFrame(syncTabs);},{passive:true});
-  wrap.append(tabs,rail,nx);host.appendChild(wrap);requestAnimationFrame(syncTabs);
-  press(rail);RAIL.cur=curId;
-  if(prevScroll!=null)rail.scrollLeft=prevScroll;else{const sel=rail.querySelector('[aria-pressed=true]');if(sel){const rr=rail.getBoundingClientRect(),sr=sel.getBoundingClientRect();rail.scrollLeft=Math.max(0,rail.scrollLeft+sr.left-rr.left-12);}}
+  [...rail.querySelectorAll('.rg')].forEach(g=>{const b=el('button','',g.dataset.f.replace('★ ','★'));b.addEventListener('click',()=>{const d=$i('dock'),top=g.getBoundingClientRect().top-d.getBoundingClientRect().top+d.scrollTop-(tabs.getBoundingClientRect().height+4);d.scrollTo({top:Math.max(0,top),behavior:'smooth'});});b._g=g;tabs.appendChild(b);});
+  wrap.append(tabs,rail);host.appendChild(wrap);
+  press(rail);
   RAIL.cur=curId;
 }
 const RAIL={cur:''};
-const SHEET={s:1,vis:()=>[26,222,Math.round(innerHeight*.46),Math.round(innerHeight*.86)]};
+/* the sheet never rises past halfway: the art keeps the top half, the sheet's own content scrolls */
+const SHEET={s:1,vis:()=>{const h=Math.round(innerHeight*.5);return[26,Math.min(222,h-60),h,h];}};
 function wireSheet(){
   const dock=$i('dock'),grab=$i('grab'),app=document.querySelector('.app');
   const mqS=matchMedia('(max-width:640px),(pointer:coarse) and (max-width:900px)'),mqL=matchMedia('(orientation:landscape) and (max-height:520px)');
-  const full=()=>Math.round(innerHeight*.88);
+  const full=()=>Math.round(innerHeight*.5),mainEl=document.querySelector('main');
+  const live=ty=>{ST.freeze=performance.now()+520;app.style.setProperty('--stagepad',Math.max(0,full()-ty)+'px');};
   const apply=(s,anim=true)=>{SHEET.s=s;const v=SHEET.vis()[s];dock.style.setProperty('--sheet',full()+'px');dock.style.transition=anim?'transform .26s cubic-bezier(.2,.8,.2,1)':'none';
-    dock.style.setProperty('--ty',(full()-v)+'px');app.style.setProperty('--stagepad',v+'px');dock.dataset.state=['hidden','peek','half','full'][s];if(s>=2)renderInspector();};
+    ST.freeze=performance.now()+520;mainEl.style.transition='';dock.style.setProperty('--ty',(full()-v)+'px');app.style.setProperty('--stagepad',v+'px');dock.dataset.state=['hidden','peek','half','full'][s];if(s>=2)renderInspector();};
   SHEET.apply=apply;
   let y0=0,t0=0,ty0=0,drag=false,moved=false;
   grab.addEventListener('pointerdown',e=>{drag=true;moved=false;y0=e.clientY;t0=performance.now();ty0=parseFloat(dock.style.getPropertyValue('--ty'))||0;grab.setPointerCapture(e.pointerId);dock.style.transition='none';});
-  grab.addEventListener('pointermove',e=>{if(!drag)return;if(Math.abs(e.clientY-y0)>4)moved=true;dock.style.setProperty('--ty',Math.max(0,Math.min(full()-SHEET.vis()[0],ty0+e.clientY-y0))+'px');});
+  grab.addEventListener('pointermove',e=>{if(!drag)return;if(Math.abs(e.clientY-y0)>4)moved=true;mainEl.style.transition='none';const ty=Math.max(0,Math.min(full()-SHEET.vis()[0],ty0+e.clientY-y0));dock.style.setProperty('--ty',ty+'px');live(ty);});
   const settle=(cy)=>{const ty=parseFloat(dock.style.getPropertyValue('--ty')),v=(cy-y0)/Math.max(1,performance.now()-t0),shown=full()-ty-v*140;
     let best=0,bd=1e9;SHEET.vis().forEach((f,i)=>{const d=Math.abs(f-shown);if(d<bd){bd=d;best=i;}});apply(best);buzz(6);};
   grab.addEventListener('pointerup',e=>{if(!drag)return;drag=false;
@@ -3203,20 +3198,20 @@ function wireSheet(){
   const NODRAG='input,textarea,select,canvas,svg,.l,.grab,[contenteditable]';
   dock.addEventListener('touchstart',e=>{
     if(document.body.dataset.sheet===undefined||e.touches.length!==1||e.target.closest(NODRAG)||getSelection().toString()){bt=null;return;}
-    const t=e.touches[0],insp=e.target.closest('.insp');bt={x:t.clientX,y:t.clientY,insp,lock:0};},{passive:true});
+    const t=e.touches[0];bt={x:t.clientX,y:t.clientY,lock:0};},{passive:true});
   dock.addEventListener('touchmove',e=>{
     if(!bt||e.touches.length!==1)return;const t=e.touches[0],dx=t.clientX-bt.x,dy=t.clientY-bt.y;
     if(!bt.lock){
       if(Math.hypot(dx,dy)<8)return;
-      const vert=Math.abs(dy)>Math.abs(dx)*1.2,atTop=!bt.insp||bt.insp.scrollTop<=0;
-      if(vert&&((dy>0&&atTop)||(dy<0&&!bt.insp&&SHEET.s<3))){bt.lock=1;y0=t.clientY;t0=performance.now();ty0=parseFloat(dock.style.getPropertyValue('--ty'))||0;dock.style.transition='none';}
+      const vert=Math.abs(dy)>Math.abs(dx)*1.2,atTop=dock.scrollTop<=0;
+      if(vert&&((dy>0&&atTop)||(dy<0&&SHEET.s<2))){bt.lock=1;y0=t.clientY;t0=performance.now();ty0=parseFloat(dock.style.getPropertyValue('--ty'))||0;dock.style.transition='none';mainEl.style.transition='none';}
       else{bt.lock=-1;return;}}
     if(bt.lock!==1)return;
     if(e.cancelable)e.preventDefault();
-    dock.style.setProperty('--ty',Math.max(0,Math.min(full()-SHEET.vis()[0],ty0+t.clientY-y0))+'px');},{passive:false});
+    {const ty=Math.max(0,Math.min(full()-SHEET.vis()[0],ty0+t.clientY-y0));dock.style.setProperty('--ty',ty+'px');live(ty);}},{passive:false});
   const tEnd=e=>{if(bt&&bt.lock===1){const t=e.changedTouches[0];settle(t?t.clientY:y0);}bt=null;};
   dock.addEventListener('touchend',tEnd);dock.addEventListener('touchcancel',tEnd);
-  grab.addEventListener('keydown',e=>{if(e.key==='ArrowUp')apply(Math.min(3,SHEET.s+1));if(e.key==='ArrowDown')apply(Math.max(0,SHEET.s-1));});
+  grab.addEventListener('keydown',e=>{if(e.key==='ArrowUp')apply(Math.min(2,SHEET.s+1));if(e.key==='ArrowDown')apply(Math.max(0,SHEET.s-1));});
   grab.tabIndex=0;grab.setAttribute('role','button');
   /* keyboard: lift the sheet above the virtual keyboard */
   const vv=window.visualViewport;
@@ -3254,4 +3249,4 @@ function wireSheet(){
   if(new URLSearchParams(location.search).get('bench'))setTimeout(runBench,600);
 })();
 /* test hook (read-only use from the console and tools/) */
-window.__n0={applyRecipe,currentRecipe,toRecipe,fromRecipe,modParams,updateSignals,SIG,runModuleGate,showSheet,STACK,mkLayer,MODULES,PERSON,DRAWN,setSource,syntheticPerson,renderStack,renderFrame,P,V,ST,SRC,TEX,maskFor,startPerson,loadPerson,renderInspector,layout};
+window.__n0={SHEET,applyRecipe,currentRecipe,toRecipe,fromRecipe,modParams,updateSignals,SIG,runModuleGate,showSheet,STACK,mkLayer,MODULES,PERSON,DRAWN,setSource,syntheticPerson,renderStack,renderFrame,P,V,ST,SRC,TEX,maskFor,startPerson,loadPerson,renderInspector,layout};

@@ -89,7 +89,7 @@ function makeTargets(w,h){
 const ro=new ResizeObserver(()=>{needResize=true;});ro.observe(stage);
 function resize(){
   const r=stage.getBoundingClientRect();if(r.width<10||r.height<10)return;
-  const dpr=Math.min(2,window.devicePixelRatio||1);
+  const dpr=Math.min(matchMedia('(pointer:coarse)').matches?1.5:2,window.devicePixelRatio||1); // phones: fewer pixels, steadier frame rate
   let W=Math.round(r.width*dpr*S.q),H=Math.round(r.height*dpr*S.q);
   const cap=S.big?3600:1800,m=Math.max(W,H);if(m>cap){W=Math.round(W*cap/m);H=Math.round(H*cap/m);}
   W=Math.max(160,W&~1);H=Math.max(160,H&~1);
@@ -1669,13 +1669,13 @@ const mqDesk=matchMedia('(min-width:900px)');
 /* ---------- bottom sheet: one rAF spring, transform only ---------- */
 const sheet={
   h:0,hv:0,ht:0,drag:false,idx:2,fullH:600,last:-1,
-  snaps(){const H=window.innerHeight;return[Math.round(66+(parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--safe-b'))||0)),Math.round(Math.min(250,H*.3)),Math.round(H*.52),Math.round(H*.86)];},
+  snaps(){const H=window.innerHeight;return[Math.round(66+(parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--safe-b'))||0)),Math.round(Math.min(250,H*.3)),Math.round(H*.5),Math.round(H*.5)];}, // never past halfway: the art keeps the top half and the panel scrolls
   coverPx(){return mqDesk.matches?0:this.h;},
   setIdx(i,instant){const s=this.snaps();this.idx=clamp(i,0,3);this.ht=s[this.idx];if(instant){this.h=this.ht;this.hv=0;}},
   nearest(h,v){const s=this.snaps(),p=h+v*.16;let b=0,bd=1e9;s.forEach((x,i)=>{const d=Math.abs(x-p);if(d<bd){bd=d;b=i;}});return b;},
   update(dt){
     if(mqDesk.matches){sheetEl.style.removeProperty('--fullh');return;}
-    const full=Math.round(window.innerHeight*.88);
+    const full=Math.round(window.innerHeight*.5);
     if(full!==this.fullH){this.fullH=full;sheetEl.style.setProperty('--fullh',full+'px');}
     if(this.h===0&&!this.inited){this.setIdx(1,true);this.inited=true;}
     if(!this.drag){

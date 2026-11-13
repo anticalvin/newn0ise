@@ -1372,6 +1372,7 @@ function layout(){
   else{const m=Math.max(DW,DH);if(m>1800){DW=Math.round(DW*1800/m);DH=Math.round(DH*1800/m);}}
   if(EMB.w){DW=EMB.w;DH=EMB.h;}
   DW=Math.max(160,DW&~1);DH=Math.max(120,DH&~1);
+  if(ST.freeze>performance.now()&&ST.DW&&ST.DH&&!ST.expMul&&!EMB.w){DW=ST.DW;DH=ST.DH;} // while the sheet moves the picture only scales with CSS; the buffer is rebuilt once it settles
   if(!stage){SZ.cw=cw;SZ.ch=ch;}
   if(cw!==SZ.cw||ch!==SZ.ch){canvas.style.width=cw+'px';canvas.style.height=ch+'px';SZ.cw=cw;SZ.ch=ch;}
   if(canvas.width!==DW||canvas.height!==DH){canvas.width=DW;canvas.height=DH;}

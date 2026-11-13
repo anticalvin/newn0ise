@@ -130,6 +130,9 @@ details.acc>.in{padding:0 12px 10px}
 #fxov .fxtop b{font:700 11px var(--lab);letter-spacing:.12em;text-transform:uppercase}
 #fxov .fxtop span{font:500 10px var(--lab);color:var(--mute);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #fxov iframe{flex:1;min-height:0;width:100%;border:0;background:var(--bg)}
+
+/* no sideways scrolling anywhere: rows wrap */
+.chips{flex-wrap:wrap;overflow:visible}
 </style>
 </head>
 <body>
@@ -162,6 +165,6 @@ details.acc>.in{padding:0 12px 10px}
 <input type="file" id="file" multiple hidden accept="audio/*,.mp3,.wav,.m4a,.ogg,.flac,.glb,.gltf,.bin,.obj,.mtl,.stl,.ply,.splat,.spz,.ksplat,.sog,image/*,video/*">
 <section id="scan" hidden></section>
 <div id="fxov" class="bg"><div class="fxtop"><b>Effects</b><span>Pick and tune effects. They apply to the selected object only.</span><button class="btn pri" id="fxdone">Done</button></div><iframe id="fxif" title="n0ise effects" allow="autoplay"></iframe></div>
-<script type="module" src="assets/studio.js?v=15802b76"></script>
+<script type="module" src="assets/studio.js?v=5f2169df"></script>
 </body>
 </html>
