@@ -18,7 +18,7 @@ Nothing here is vendored. Versions are pinned and each is more than two weeks ol
 | U-2-Net (`BritishWerewolf/U-2-Net`) | "Accurate" cut-out | Apache-2.0 | `c08042b4…c5c` | 176 MB |
 | MODNet (`Xenova/modnet`) | "People" cut-out (portrait matting) | Apache-2.0 | `fa2fa546…333fca12` | ~26 MB q8 |
 | BiRefNet-lite (`onnx-community/BiRefNet_lite-ONNX`) | Optional, needs WebGPU with enough storage buffers | MIT | `de15b22b…e3ac1` | 115 MB fp16 |
-| Depth Anything V2 Small (`onnx-community/depth-anything-v2-small`) | AI depth | Apache-2.0 | `4472b736…ca1b` (code loads `main`) | ~25 MB |
+| Depth Anything V2 Small (`onnx-community/depth-anything-v2-small`) | AI depth, runs automatically after the cut-out, result cached per photo in IndexedDB | Apache-2.0 | `4472b736…ca1b` (code loads `main`) | ~25 MB |
 
 ## Deliberately not used
 - RMBG-1.4 / RMBG-2.0: non-commercial licence.

@@ -96,7 +96,9 @@ details.acc>summary::after{content:"+";color:var(--mute)}details.acc[open]>summa
 details.acc>.in{padding:0 12px 10px}
 .sub{font:700 9px var(--lab);letter-spacing:.12em;text-transform:uppercase;color:var(--mute);padding:8px 0 2px}
 .field{width:100%;background:var(--raise);border:1px solid var(--line);border-radius:var(--rad);padding:6px 8px}
-.cutbar{position:absolute;left:50%;top:calc(var(--safe-t) + 56px);transform:translateX(-50%);width:min(320px,86%);background:var(--panel);border:1px solid var(--line);border-radius:var(--rad);padding:8px 10px;z-index:6;font:700 10px var(--lab);letter-spacing:.08em;text-transform:uppercase;color:var(--ink)}.cutbar .prog{margin:6px 0 0}.cutbar[hidden]{display:none}
+.cutbar{position:absolute;left:50%;top:calc(var(--safe-t) + 56px);transform:translateX(-50%);width:min(320px,86%);background:var(--panel);border:1px solid var(--line);border-radius:var(--rad);padding:8px 10px;z-index:6;font:700 10px var(--lab);letter-spacing:.08em;text-transform:uppercase;color:var(--ink)}.cutbar .prog{margin:6px 0 0}
+#wipe{position:absolute;pointer-events:none;z-index:4;overflow:hidden}#wipe img{position:absolute;inset:0;width:100%;height:100%;display:block}#wipe i{position:absolute;top:0;bottom:0;width:2px;margin-left:-1px;background:var(--ink)}
+#wipebar{position:absolute;left:50%;bottom:calc(var(--safe-b) + 14px);transform:translateX(-50%);display:flex;align-items:center;gap:8px;z-index:5;font:700 9px var(--lab);letter-spacing:.1em;text-transform:uppercase;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:var(--rad);padding:6px 10px}#wipebar input{width:min(160px,28vw)}#wipe[hidden],#wipebar[hidden]{display:none}.cutbar[hidden]{display:none}
 .prog{height:2px;background:var(--line);margin:6px 0}.prog i{display:block;height:100%;width:0;background:var(--accent)}
 
 /* scan modal */
@@ -1638,6 +1640,7 @@ function registerObject(name,root,kind,{fit=true,size=1.8,meta={},box=null}={}){
     if(!bb.isEmpty()&&!nb.isEmpty())holder.position.x=bb.max.x+(nb.max.x-nb.min.x)/2+.3-((nb.max.x+nb.min.x)/2-holder.position.x);
   }
   world.add(holder);
+  if(kind!=='relief'&&S.rest)leaveRest();
   const o={id:++idc,name,kind,holder,root,vis:true,meta};
   holder.userData.objId=o.id;
   S.objs.push(o);
@@ -1656,6 +1659,7 @@ function removeObj(id){
   world.remove(o.holder);
   o.holder.traverse(n=>{if(n.geometry)n.geometry.dispose();if(n.material&&n.material.dispose&&!n.userData._shared){const ms=Array.isArray(n.material)?n.material:[n.material];ms.forEach(m=>{if(m.map)m.map.dispose();m.dispose();});}if(n.dispose&&n.isSplatMesh)n.dispose();});
   S.objs.splice(i,1);
+  if(S.rest&&S.rest.id===id)leaveRest();
   if(S.sel===id)S.sel=null;
   setSelBox();$('#empty').hidden=S.objs.length>0;
   renderObjList&&renderObjList();refreshInspector&&refreshInspector();bump();
@@ -1673,6 +1677,7 @@ function setSelBox(){
   selBox=new THREE.BoxHelper(o.holder,0xff5a1f);scene.add(selBox);
 }
 function frameAll(){
+  if(S.rest&&objById(S.rest.id)&&S.rest.cage){enterRest(objById(S.rest.id));return;}
   const b=new THREE.Box3();S.objs.forEach(o=>{if(o.vis)b.union(holderBox(o.holder));});
   if(b.isEmpty()){controls.target.set(0,.9,0);return;}
   const c=b.getCenter(new THREE.Vector3()),r=b.getSize(new THREE.Vector3()).length()*.5||1;
@@ -1864,6 +1869,7 @@ function frame(ts){
     applyViewOffset();
     if(S.needFrame){S.needFrame=false;frameAll();}
     const lift=Math.round(sheet.coverPx());if(lift!==S._lift){S._lift=lift;hudLift.style.transform=`translate3d(0,${-lift}px,0)`;hudLift2.style.transform=`translate3d(0,${-lift}px,0)`;}
+    if(S.rest)restTick();
     controls.autoRotate=S.spin;if(S.spin)bump();
     controls.update(dt);
     if(selBox)selBox.update();
@@ -1944,36 +1950,41 @@ function pseudoDepth(cv){
   }
   return normalize01(o);
 }
+const REST_HFOV=50;
+const restD=asp=>(asp/2)/Math.tan(THREE.MathUtils.degToRad(REST_HFOV/2)); // plane distance (plane height = 1) for a 50° horizontal view of the photo
 function buildReliefGeometry(m){
-  const asp=m.w/m.h,cols=m.N,rows=Math.max(8,Math.round(m.N/asp));
+  const asp=m.w/m.h,cap=m.hq?420000:150000;
+  const cols=Math.max(16,Math.min(Math.round(m.w/2),Math.floor(Math.sqrt(cap/2*asp)))),rows=Math.max(8,Math.round(cols/asp));
   let dp=m.depth;const dw=m.dw||m.w,dh=m.dh||m.h;
   if(m.smooth>0)dp=blurPlane(dp,dw,dh,m.smooth);
   const sample=(u,v)=>{const x=clamp(u*(dw-1),0,dw-1),y=clamp(v*(dh-1),0,dh-1),x0=Math.floor(x),y0=Math.floor(y),x1=Math.min(dw-1,x0+1),y1=Math.min(dh-1,y0+1),fx=x-x0,fy=y-y0;
     return lerp(lerp(dp[y0*dw+x0],dp[y0*dw+x1],fx),lerp(dp[y1*dw+x0],dp[y1*dw+x1],fx),fy);};
-  const pos=new Float32Array(cols*rows*3),uv=new Float32Array(cols*rows*2),dd=new Float32Array(cols*rows),av=new Float32Array(cols*rows).fill(1),useA=m.alpha&&!m.keepBg;
+  const D=restD(asp),pos=new Float32Array(cols*rows*3),uv=new Float32Array(cols*rows*2),dd=new Float32Array(cols*rows),av=new Float32Array(cols*rows).fill(1),useA=m.alpha&&!m.keepBg;
   for(let j=0;j<rows;j++)for(let i=0;i<cols;i++){
-    const u=i/(cols-1),v=j/(rows-1),d=sample(u,v),k=j*cols+i;
-    dd[k]=d;pos[k*3]=(u-.5)*asp;pos[k*3+1]=.5-v;pos[k*3+2]=(d-.5)*m.scale;
+    const u=i/(cols-1),v=j/(rows-1),k=j*cols+i;
+    let d=sample(u,v);d=Math.pow(Math.max(0,d),m.gamma);d=.5+(d-.5)*(1-m.flat);
+    const z=(d-.5)*m.scale,s=m.rest?(D-z)/D:1;   // rest: slide each vertex along its view ray, so the photo looks identical from the rest camera
+    dd[k]=d;pos[k*3]=(u-.5)*asp*s;pos[k*3+1]=(.5-v)*s;pos[k*3+2]=z;
     uv[k*2]=u;uv[k*2+1]=1-v;
     if(useA)av[k]=m.alpha[Math.round(v*(m.h-1))*m.w+Math.round(u*(m.w-1))];
   }
-  const idx=[];
+  const idx=new Uint32Array((cols-1)*(rows-1)*6);let n=0;
   for(let j=0;j<rows-1;j++)for(let i=0;i<cols-1;i++){
     const a=j*cols+i,b=a+1,c=a+cols,d=c+1;
     const mx=Math.max(dd[a],dd[b],dd[c],dd[d]),mn=Math.min(dd[a],dd[b],dd[c],dd[d]);
-    if(mx-mn>m.cut)continue;
+    if((mx-mn)*m.scale>m.cut*.55)continue;   // tear where depth jumps (units: scene height)
     if(useA&&Math.max(av[a],av[b],av[c],av[d])<.02)continue;
-    idx.push(a,c,b,b,c,d);
+    idx[n++]=a;idx[n++]=c;idx[n++]=b;idx[n++]=b;idx[n++]=c;idx[n++]=d;
   }
   const g=new THREE.BufferGeometry();
   g.setAttribute('position',new THREE.BufferAttribute(pos,3));g.setAttribute('uv',new THREE.BufferAttribute(uv,2));
-  g.setIndex(idx);g.computeVertexNormals();
-  return {g,cols,rows};
+  g.setIndex(new THREE.BufferAttribute(idx.slice(0,n),1));if(m.lit||m.mode==='points')g.computeVertexNormals();
+  return {g,cols,rows,tris:n/3};
 }
 function rebuildRelief(o){
   const m=o.meta;if(!m||!m.canvas)return;
-  const {g,cols,rows}=buildReliefGeometry(m);
-  if(!m.tex){m.tex=new THREE.CanvasTexture(m.canvas);m.tex.colorSpace=THREE.SRGBColorSpace;m.tex.anisotropy=4;}
+  const {g,cols,rows,tris}=buildReliefGeometry(m);
+  if(!m.tex){m.tex=new THREE.CanvasTexture(m.canvas);m.tex.colorSpace=THREE.NoColorSpace; /* the studio's render target is not re-encoded on output, so keep the photo's own sRGB values untouched */ m.tex.anisotropy=renderer.capabilities.getMaxAnisotropy();}
   o.root.children.slice().forEach(c=>{o.root.remove(c);c.geometry&&c.geometry.dispose();if(c.material&&c.material.dispose)c.material.dispose();});
   let node;
   if(m.mode==='points'){
@@ -1985,31 +1996,35 @@ function rebuildRelief(o){
     g.setAttribute('color',new THREE.BufferAttribute(col,3));g.setIndex(null);
     node=new THREE.Points(g,new THREE.PointsMaterial({size:m.pt,sizeAttenuation:true,vertexColors:true}));
   }else{
-    const mat=m.lit?new THREE.MeshStandardMaterial({map:m.tex,roughness:.9,metalness:0,side:THREE.DoubleSide,transparent:!!(m.alpha&&!m.keepBg),alphaTest:m.alpha&&!m.keepBg?.02:0}):new THREE.MeshBasicMaterial({map:m.tex,side:THREE.DoubleSide,transparent:!!(m.alpha&&!m.keepBg),alphaTest:m.alpha&&!m.keepBg?.02:0});
+    const mat=m.lit?new THREE.MeshStandardMaterial({map:m.tex,roughness:.9,metalness:0,side:THREE.DoubleSide,transparent:!!(m.alpha&&!m.keepBg),alphaTest:m.alpha&&!m.keepBg?.02:0}):new THREE.MeshBasicMaterial({map:m.tex,toneMapped:false,side:THREE.DoubleSide,transparent:!!(m.alpha&&!m.keepBg),alphaTest:m.alpha&&!m.keepBg?.02:0});
     node=new THREE.Mesh(g,mat);node.userData._mat=mat;
   }
-  o.root.add(node);o.meta.stats=`${cols}×${rows}`;
+  o.root.add(node);o.meta.stats=`${cols}×${rows}`;o.meta.tris=tris;
   applyView();bump();
 }
 async function photoToRelief(file){
   const bmp=await createImageBitmap(file,{imageOrientation:'from-image'});
-  const k=Math.min(1,1280/Math.max(bmp.width,bmp.height));
+  const k=Math.min(1,2048/Math.max(bmp.width,bmp.height));
   const photo=document.createElement('canvas');photo.width=Math.max(2,Math.round(bmp.width*k));photo.height=Math.max(2,Math.round(bmp.height*k));
   const pg=photo.getContext('2d',{willReadFrequently:true});pg.drawImage(bmp,0,0,photo.width,photo.height);
   const w=photo.width,h=photo.height,px=pg.getImageData(0,0,w,h).data;
   let tr=0;for(let i=3;i<px.length;i+=4)if(px[i]<250)tr++;
   const disp=document.createElement('canvas');disp.width=w;disp.height=h;disp.getContext('2d',{willReadFrequently:true}).drawImage(photo,0,0);
-  // placeholder: the photo as a flat plane, swapped for the cut-out when it is ready
+  // placeholder: the photo as a flat plane, swapped for the cut-out and depth when ready
   const o=makeRelief(file.name||'Photo',disp,new Float32Array(w*h).fill(.5),{quick:true,photo,px});
-  if(tr>w*h*.005){ // the file already carries real alpha: use it, skip the model
-    const a=new Float32Array(w*h);for(let i=0;i<a.length;i++)a[i]=px[i*4+3]/255;
-    o.meta.alpha0=Float32Array.from(a);setAlpha(o,a,'file alpha');o.meta.depth=pseudoDepth(photo);rebuildRelief(o);
-  }else if(CUT.on)autoCut(o);
+  setFx(false);enterRest(o);
+  (async()=>{
+    if(tr>w*h*.005){ // the file already carries real alpha: use it, skip the model
+      const a=new Float32Array(w*h);for(let i=0;i<a.length;i++)a[i]=px[i*4+3]/255;
+      o.meta.alpha0=Float32Array.from(a);setAlpha(o,a,'file alpha');
+    }else if(CUT.on)await autoCut(o);
+    if(CUT.depthOn&&objById(o.id))await autoDepth(o);
+  })();
   return o;
 }
 function makeRelief(name,cv,depth,{quick=false,dw,dh,photo=null,px=null}={}){
   const g=new THREE.Group();
-  const meta={canvas:cv,photo,px,alpha:null,keepBg:false,w:cv.width,h:cv.height,depth,dw:dw||cv.width,dh:dh||cv.height,N:220,scale:.55,smooth:1,cut:.08,mode:'mesh',lit:false,pt:.012,quick};
+  const meta={canvas:cv,photo,px,alpha:null,keepBg:false,w:cv.width,h:cv.height,depth,dw:dw||cv.width,dh:dh||cv.height,N:220,scale:.3,gamma:1,flat:0,hq:!matchMedia('(pointer:coarse)').matches,rest:!!photo,smooth:1,cut:.08,mode:'mesh',lit:false,pt:.012,quick};
   const o=registerObject(baseName(name),g,'relief',{fit:false,meta});
   rebuildRelief(o);
   // sit on the ground, 1.8 units tall
@@ -2117,16 +2132,16 @@ function floodMask(px,w,h){
   for(let i=0;i<w*h;i++)p[i]=m[i]?0:1;
   return {data:p,w,h};
 }
-function runMatte(key,cv,onProg){
+function runMatte(key,cv,onProg,type='run'){
   const k=Math.min(1,1024/Math.max(cv.width,cv.height)),w=Math.max(2,Math.round(cv.width*k)),h=Math.max(2,Math.round(cv.height*k));
   const c=document.createElement('canvas');c.width=w;c.height=h;const g=c.getContext('2d',{willReadFrequently:true});g.drawImage(cv,0,0,w,h);
   const rgba=g.getImageData(0,0,w,h).data.buffer;
-  if(!CUT.worker){CUT.worker=new Worker('matte.worker.js?v=6',{type:'module'});
+  if(!CUT.worker){CUT.worker=new Worker('matte.worker.js?v=7',{type:'module'});
     CUT.worker.onmessage=e=>{const d=e.data,j=CUT.jobs.get(d.id);if(!j)return;
       if(d.type==='progress')j.onProg(d.p,'loading');else if(d.type==='stage')j.onProg(1,d.status);
       else if(d.type==='done'){CUT.jobs.delete(d.id);CUT.backend=d.backend;j.res(d);}else if(d.type==='error'){CUT.jobs.delete(d.id);j.rej(new Error(d.message));}};
     CUT.worker.onerror=e=>{CUT.jobs.forEach(j=>j.rej(new Error('worker failed')));CUT.jobs.clear();CUT.worker=null;};}
-  return new Promise((res,rej)=>{const id=++CUT.seq;CUT.jobs.set(id,{res,rej,onProg});CUT.worker.postMessage({id,type:'run',model:key,cpu:!!CUT.cpu,rgba,w,h},[rgba]);});
+  return new Promise((res,rej)=>{const id=++CUT.seq;CUT.jobs.set(id,{res,rej,onProg});CUT.worker.postMessage({id,type,model:key,cpu:!!CUT.cpu,rgba,w,h},[rgba]);});
 }
 const MATTERS={
   birefnet:{label:'BiRefNet-lite',run:(cv,p)=>runMatte('birefnet',cv,p)},
@@ -2148,6 +2163,7 @@ function applyAlpha(m){
   if(m.keepBg||!m.alpha)ctx.putImageData(new ImageData(new Uint8ClampedArray(m.px),m.w,m.h),0,0);
   else ctx.putImageData(new ImageData(decontaminate(m.px,m.alpha,m.w,m.h),m.w,m.h),0,0);
   if(m.tex)m.tex.needsUpdate=true;
+  applyDepthMask(m);
 }
 function setAlpha(o,a,by){
   const m=o.meta;m.alpha=a;if(by)m.cutBy=by;
@@ -2172,7 +2188,8 @@ async function autoCut(o){
     if(cov<.02||cov>.97){toast('Couldn’t separate a subject. Use Refine to paint it.',4500);m.alpha=null;m.cutBy='none';return;}
     m.alpha0=Float32Array.from(a);m.ms=Math.round(performance.now()-t0);
     setAlpha(o,a,by);
-    if(m.quick){m.depth=pseudoDepth(m.photo);rebuildRelief(o);}
+    if(m.raw)buildDepth(m);
+    rebuildRelief(o);
     toast('Subject cut out ('+by+')');
   }finally{m.cutting=false;cutStatus(null);if(S.sel===o.id)refreshInspector();}
 }
@@ -2232,22 +2249,99 @@ function refineEditor(parent,o){
   parent.appendChild(el('div','note','Add paints the subject back, Erase removes it, Tap to pick keeps the part you tap (or adds a similar-coloured area).'));
 }
 
-let tfP=null;
-async function aiDepth(o,onProg){
-  const m=o.meta;
-  const tf=await (tfP||(tfP=import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.2/dist/transformers.min.js')));
-  tf.env.allowLocalModels=false;
-  const id='onnx-community/depth-anything-v2-small'; // Apache-2.0 (the base/large V2 models are non-commercial)
-  const mk=async(device,dtype)=>tf.pipeline('depth-estimation',id,{device,dtype,progress_callback:p=>{if(onProg&&p&&p.progress!=null)onProg(p.progress/100,p.status||'');}});
-  let pipe;
-  try{pipe=await mk(navigator.gpu?'webgpu':'wasm',navigator.gpu?'fp16':'q8');}
-  catch(e){console.warn('depth: first backend failed',e);pipe=await mk('wasm','q8');}
-  const blob=await new Promise(r=>(m.photo||m.canvas).toBlob(r,'image/jpeg',.92));
-  const url=URL.createObjectURL(blob);
-  let out;try{out=await pipe(url);}finally{URL.revokeObjectURL(url);}
-  const t=out.predicted_depth,dims=t.dims,dh=dims[dims.length-2],dw=dims[dims.length-1];
-  m.depth=normalize01(Float32Array.from(t.data));m.dw=dw;m.dh=dh;m.quick=false;
-  rebuildRelief(o);
+/* ---------- depth: model in the worker, cached per image, shaped inside the subject mask ---------- */
+CUT.depthOn=localStorage.getItem('n0.autodepth')!=='0';
+const IDB={db:null,open(){return this.db||(this.db=new Promise((res,rej)=>{const r=indexedDB.open('n0studio',1);r.onupgradeneeded=()=>r.result.createObjectStore('depth');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);}));},
+  async get(k){try{const db=await this.open();return await new Promise(res=>{const q=db.transaction('depth').objectStore('depth').get(k);q.onsuccess=()=>res(q.result);q.onerror=()=>res(null);});}catch(e){return null;}},
+  async put(k,v){try{const db=await this.open();db.transaction('depth','readwrite').objectStore('depth').put(v,k);}catch(e){}}};
+function imgKey(m){let h=2166136261;const d=m.px;for(let i=0;i<d.length;i+=1013){h^=d[i];h=Math.imul(h,16777619);}return 'da2s-'+m.w+'x'+m.h+'-'+(h>>>0).toString(36);}
+async function autoDepth(o,{force=false}={}){
+  const m=o.meta;if(m.depthing)return;m.depthing=true;const t0=performance.now();
+  try{
+    const key=imgKey(m);let raw=force?null:await IDB.get(key);
+    if(raw){m.depthBy='Depth Anything V2 (cached)';}
+    else{
+      cutStatus('Loading depth model…',0);
+      try{
+        const r=await runMatte('depth',m.photo,(p,s)=>{if(s==='cutting')cutStatus('Estimating depth…');else cutStatus(`Loading depth model… ${Math.round(p*100)}%`,p);},'depth');
+        raw={data:r.data,w:r.w,h:r.h};IDB.put(key,raw);m.depthBy='Depth Anything V2';
+      }catch(e){console.warn('depth model failed',e);raw={data:pseudoDepth(m.photo),w:m.w,h:m.h};m.depthBy='quick (no model)';toast('Depth model couldn’t load. Using a quick relief.',4500);}
+    }
+    if(!objById(o.id))return;
+    m.raw=raw;buildDepth(m);m.quick=false;m.depthMs=Math.round(performance.now()-t0);
+    rebuildRelief(o);
+  }finally{m.depthing=false;cutStatus(null);if(S.sel===o.id)refreshInspector();}
+}
+/* model depth -> full-res, edges snapped to the photo (guided filter), range normalised inside the subject only */
+function buildDepth(m){
+  const {data,w:rw,h:rh}=m.raw,w=m.w,h=m.h,n=w*h;
+  let d=resizeBilinear(data,rw,rh,w,h);
+  const I=new Float32Array(n),px=m.px;for(let i=0;i<n;i++)I[i]=(.299*px[i*4]+.587*px[i*4+1]+.114*px[i*4+2])/255;
+  d=guidedFilter(I,d,w,h,Math.max(4,Math.round(Math.max(w,h)/220)),2e-3);
+  const a=m.alpha,vals=[];
+  for(let i=0;i<n;i+=5)if(!a||a[i]>.5)vals.push(d[i]);
+  if(vals.length<50)for(let i=0;i<n;i+=5)vals.push(d[i]);
+  vals.sort((p,q)=>p-q);
+  const L=vals[Math.floor(.02*(vals.length-1))],H=vals[Math.floor(.98*(vals.length-1))],r=Math.max(1e-6,H-L),dn=new Float32Array(n);
+  for(let i=0;i<n;i++)dn[i]=clamp((d[i]-L)/r,0,1);
+  m.dn=dn;applyDepthMask(m);
+}
+/* outside the subject the surface eases to a flat plane; the subject edge extends outward a little so no cliff forms */
+function applyDepthMask(m){
+  if(!m.dn)return;const n=m.dn.length,a=m.alpha,o=(m.depth&&m.depth.length===n&&m.depth!==m.dn)?m.depth:new Float32Array(n);
+  if(!a){o.set(m.dn);}
+  else{
+    const r=Math.max(3,Math.round(Math.max(m.w,m.h)/150)),na=new Float32Array(n);
+    for(let i=0;i<n;i++)na[i]=m.dn[i]*a[i];
+    const bn=blurPlane(na,m.w,m.h,r),ba=blurPlane(a,m.w,m.h,r);
+    for(let i=0;i<n;i++){const ext=ba[i]>.01?bn[i]/ba[i]*Math.min(1,ba[i]*6):0;o[i]=ext*(1-a[i])+m.dn[i]*a[i];}
+  }
+  m.depth=o;m.dw=m.w;m.dh=m.h;
+}
+
+/* ---------- rest view: the default camera reproduces the photo; orbit is caged to ±25° ---------- */
+const CAGE=THREE.MathUtils.degToRad(25);
+function setFx(on){
+  S.fx=on;const b=$('#bFx');if(b)b.setAttribute('aria-pressed',on);
+  if(S.fxBtn){S.fxBtn.setAttribute('aria-pressed',on);S.fxBtn.textContent=on?'FX on':'FX off';}bump();
+}
+function setCage(on){
+  const c=controls;
+  if(on){c.enablePan=false;c.minAzimuthAngle=-CAGE;c.maxAzimuthAngle=CAGE;c.minPolarAngle=Math.PI/2-CAGE;c.maxPolarAngle=Math.PI/2+CAGE;}
+  else{c.enablePan=true;c.minAzimuthAngle=-Infinity;c.maxAzimuthAngle=Infinity;c.minPolarAngle=0;c.maxPolarAngle=Math.PI;c.rotateSpeed=1;c.minDistance=.3;c.maxDistance=60;}
+}
+function enterRest(o){
+  if(!o||!o.meta.rest)return;
+  S.rest={id:o.id,cage:true};S.needFrame=false;
+  const m=o.meta,Dw=restD(m.w/m.h)*o.holder.scale.x,c=o.holder.position;
+  controls.target.copy(c);camera.position.set(c.x,c.y,c.z+Dw);camera.up.set(0,1,0);
+  controls.minDistance=Dw*.6;controls.maxDistance=Dw*1.6;
+  camera.near=Math.max(.01,Dw/100);camera.far=Dw*60;
+  setCage(true);restTick(true);controls.update();bump();
+  ensureWipe();
+}
+function leaveRest(){if(!S.rest)return;S.rest=null;setCage(false);const w=$('#wipe');if(w)w.hidden=true;const b=$('#wipebar');if(b)b.hidden=true;}
+function restTick(force){
+  const R=S.rest,o=R&&objById(R.id);if(!o){if(R)leaveRest();return;}
+  const m=o.meta,asp=m.w/m.h,D=restD(asp),stW=stage.clientWidth,stH=stage.clientHeight;if(!stW||!stH)return;
+  const lift=Math.round(sheet.coverPx()),Hv=Math.max(60,stH-lift),hp=Math.min(Hv,stW/asp),wp=hp*asp;
+  const vf=THREE.MathUtils.radToDeg(2*Math.atan(.5*stH/(D*hp)));
+  if(force||Math.abs(vf-camera.fov)>.005){camera.fov=vf;camera.updateProjectionMatrix();}
+  const w=$('#wipe');
+  if(w){w.hidden=false;w.style.left=(stW-wp)/2+'px';w.style.top=(Hv-hp)/2+'px';w.style.width=wp+'px';w.style.height=hp+'px';
+    if(w._for!==m){w._for=m;w.querySelector('img').src=m.photo.toDataURL('image/jpeg',.95);}}
+  const bar=$('#wipebar');if(bar)bar.hidden=false;
+  if(R.cage){ // soft resistance: rotation slows as it nears the edge of the cage
+    const az=Math.abs(controls.getAzimuthalAngle())/CAGE,po=Math.abs(controls.getPolarAngle()-Math.PI/2)/CAGE,pr=clamp((Math.max(az,po)-.55)/.45,0,1);
+    controls.rotateSpeed=1-.75*pr*pr;
+  }
+}
+function ensureWipe(){
+  if($('#wipe'))return;
+  const w=el('div','','<img alt=""><i></i>');w.id='wipe';w.hidden=true;stage.appendChild(w);
+  const bar=el('div','','<span>Photo</span><input type="range" min="0" max="100" value="0" aria-label="Compare photo with 3D"><span>3D</span>');bar.id='wipebar';bar.hidden=true;stage.appendChild(bar);
+  const inp=bar.querySelector('input'),apply=()=>{const v=+inp.value;w.querySelector('img').style.clipPath=`inset(0 ${100-v}% 0 0)`;w.querySelector('i').style.left=v+'%';w.querySelector('i').style.display=v>0&&v<100?'block':'none';};
+  inp.addEventListener('input',apply);apply();
 }
 
 /* ---------- turntable scan: silhouette carving ---------- */
@@ -2668,6 +2762,7 @@ function renderObjList(){
   });
 }
 let reliefT=0;
+const triNote=m=>m.tris?`${m.stats} grid · ${Math.round(m.tris/1000)}k triangles`:'';
 function refreshInspector(soft){
   if(soft){inspSyncs.forEach(f=>f());return;}
   if(!inspEl)return;inspEl.innerHTML='';inspSyncs=[];
@@ -2681,22 +2776,27 @@ function refreshInspector(soft){
   inspSyncs.push(sliderRow(s,'Size',()=>h.scale.x,v=>{h.scale.setScalar(v);bump();},.05,6,.01).sync);
   if(o.kind==='relief'){
     const m=o.meta,rb=()=>{clearTimeout(reliefT);reliefT=setTimeout(()=>rebuildRelief(o),60);};
-    const r=sec(inspEl,'Relief',m.quick?'quick depth':'AI depth');
-    sliderRow(r,'Depth',()=>m.scale,v=>{m.scale=v;rb();},.02,1.6,.01);
+    const r=sec(inspEl,'Relief',m.depthing?'working…':(m.depthBy||'flat'));
+    sliderRow(r,'Depth',()=>m.scale,v=>{m.scale=v;rb();},0,1,.01);
+    sliderRow(r,'Curve',()=>m.gamma,v=>{m.gamma=v;rb();},.4,2.5,.05);
+    sliderRow(r,'Flatten',()=>m.flat,v=>{m.flat=v;rb();},0,1,.02);
     sliderRow(r,'Smooth',()=>m.smooth,v=>{m.smooth=Math.round(v);rb();},0,8,1);
     sliderRow(r,'Tear edges',()=>m.cut,v=>{m.cut=v;rb();},.01,.5,.01);
-    sliderRow(r,'Density',()=>m.N,v=>{m.N=Math.round(v/20)*20;rb();},80,400,20);
+    chipRow(r,[['draft','Draft'],['high','High']],v=>(m.hq?'high':'draft')===v,v=>{m.hq=v==='high';rebuildRelief(o);r.querySelector('.tri').textContent=triNote(m);});
     chipRow(r,[['mesh','Surface'],['points','Points']],v=>m.mode===v,v=>{m.mode=v;rebuildRelief(o);});
     sliderRow(r,'Point size',()=>m.pt,v=>{m.pt=v;rb();},.003,.04,.001);
-    const lit=el('div','chips');const lb=el('button','chip','Lit');lb.setAttribute('aria-pressed',m.lit);lb.addEventListener('click',()=>{m.lit=!m.lit;lb.setAttribute('aria-pressed',m.lit);rebuildRelief(o);});lit.appendChild(lb);r.appendChild(lit);
-    const prog=el('div','prog','<i></i>');prog.hidden=true;
-    const ai=btn('Run AI depth','pri',async()=>{
-      ai.disabled=true;prog.hidden=false;toast('Loading depth model…',60000);
-      try{await aiDepth(o,(p)=>{prog.firstChild.style.width=Math.round(p*100)+'%';});toast('AI depth applied');refreshInspector();}
-      catch(e){console.error(e);toast('Depth model couldn’t load here ('+(e.message||e).toString().slice(0,60)+'). The quick relief stays.',6000);}
-      ai.disabled=false;prog.hidden=true;});
-    r.append(ai,prog);
-    r.appendChild(el('div','note','AI depth runs in your browser (WebGPU if available, otherwise WASM). The first run downloads the model, then it is cached.'));
+    const row=el('div','chips');
+    const lb=el('button','chip','Lit');lb.setAttribute('aria-pressed',m.lit);lb.addEventListener('click',()=>{m.lit=!m.lit;lb.setAttribute('aria-pressed',m.lit);rebuildRelief(o);});
+    const ad=el('button','chip','Auto depth');ad.setAttribute('aria-pressed',CUT.depthOn);ad.addEventListener('click',()=>{CUT.depthOn=!CUT.depthOn;localStorage.setItem('n0.autodepth',CUT.depthOn?'1':'0');ad.setAttribute('aria-pressed',CUT.depthOn);});
+    row.append(lb,ad,btn('Re-run depth','',()=>autoDepth(o,{force:true})));r.appendChild(row);
+    if(m.rest){
+      const vw=el('div','chips');
+      const un=el('button','chip','Unlock orbit');un.setAttribute('aria-pressed',!!(S.rest&&!S.rest.cage));
+      un.addEventListener('click',()=>{if(!S.rest||S.rest.id!==o.id){enterRest(o);}if(S.rest.cage){S.rest.cage=false;setCage(false);}else{enterRest(o);}un.setAttribute('aria-pressed',!S.rest.cage);});
+      vw.append(btn('Original view','',()=>{enterRest(o);un.setAttribute('aria-pressed',false);}),un);r.appendChild(vw);
+    }
+    r.appendChild(el('div','note tri',triNote(m)));
+    r.appendChild(el('div','note','Depth runs in your browser (WebGPU if available, otherwise WASM) and is cached per photo. Defaults stay subtle so the surface looks like the photo.'));
   }
   if(o.kind==='relief'&&o.meta.photo)buildCutSection(o);
   if(o.kind==='points'||o.kind==='splat'){
@@ -2894,7 +2994,7 @@ buildExportPane();wireSheet();
 setTab('scene');
 try{const sk=localStorage.getItem('n0ise.studio.skin');if(sk)document.documentElement.dataset.skin=sk;}catch(e){}
 boot3d();
-window.__studio={MATTERS,CUT,autoCut,refineMask,applyAlpha,S,N0,THREE,scene,camera,controls,renderer,importFiles,addPrimitive,sheet,SC,carve,surfaceNets,buildScan,makeRelief,pseudoDepth,photoToRelief,objById,selectObj,removeObj,bump,setTab,rebuildRelief,applyView,frameAll,exportImage,get rt(){return rt;}};
+window.__studio={enterRest,leaveRest,restTick,setFx,autoDepth,buildDepth,restD,MATTERS,CUT,autoCut,refineMask,applyAlpha,S,N0,THREE,scene,camera,controls,renderer,importFiles,addPrimitive,sheet,SC,carve,surfaceNets,buildScan,makeRelief,pseudoDepth,photoToRelief,objById,selectObj,removeObj,bump,setTab,rebuildRelief,applyView,frameAll,exportImage,get rt(){return rt;}};
 </script>
 </body>
 </html>

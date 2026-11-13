@@ -50,10 +50,29 @@ async function runRaw(id,key,rgba,w,h){
   for(let i=0;i<S*S;i++)data[i]=(y[i]-lo)/Math.max(1e-6,hi-lo);
   post({type:'done',id,w:S,h:S,data,backend:'wasm'},[data.buffer]);
 }
+const DEPTH_REPO='onnx-community/depth-anything-v2-small'; // Apache-2.0
+let dpipe=null,dBackend='';
+async function runDepth(id,rgba,w,h){
+  if(!tf){tf=await import(TF_URL);tf.env.allowLocalModels=false;}
+  const progress_callback=p=>{if(p&&p.progress!=null)post({type:'progress',id,p:p.progress/100,status:'loading'});};
+  const mk=(device,dtype)=>tf.pipeline('depth-estimation',DEPTH_REPO,{device,dtype,progress_callback});
+  if(!dpipe){
+    if(self.navigator&&navigator.gpu){try{dpipe=await mk('webgpu','fp16');dBackend='webgpu';}catch(e){dpipe=null;}}
+    if(!dpipe){dpipe=await mk('wasm','q8');dBackend='wasm';}
+  }
+  post({type:'stage',id,status:'cutting'});
+  const img=new tf.RawImage(new Uint8ClampedArray(rgba),w,h,4).rgb();
+  let out;
+  try{out=await dpipe(img);}
+  catch(err){if(dBackend!=='webgpu')throw err;dpipe=await mk('wasm','q8');dBackend='wasm';out=await dpipe(img);}
+  const t=out.predicted_depth,d=t.dims,data=Float32Array.from(t.data);
+  post({type:'done',id,w:d[d.length-1],h:d[d.length-2],data,backend:dBackend},[data.buffer]);
+}
 self.onmessage=async e=>{
   const {id,type,rgba,w,h,model:key='modnet',cpu}=e.data;
-  if(type!=='run')return;
+  if(type!=='run'&&type!=='depth')return;
   try{
+    if(type==='depth')return await runDepth(id,rgba,w,h);
     if(RAW[key])return await runRaw(id,key,rgba,w,h);
     let L=await load(id,key,cpu);
     post({type:'stage',id,status:'cutting'});
