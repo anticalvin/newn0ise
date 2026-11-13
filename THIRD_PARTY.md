@@ -36,3 +36,13 @@ Nothing here is vendored. Versions are pinned and each is more than two weeks ol
 | Tool | Version | Licence | Use |
 |---|---|---|---|
 | esbuild | 0.25.5 | MIT (verified in the package's LICENSE.md) | bundles `src/` into `assets/index.js` and `assets/studio.js`. Dev dependency only; three.js and Spark stay on their pinned CDN URLs via the import map. |
+
+## Subject matte (Step 1)
+
+| Item | Version | Licence | Use |
+|---|---|---|---|
+| @mediapipe/tasks-vision | 1.2.0 (published 2026-10-27), from jsDelivr | Apache-2.0 (`license` field of the package's package.json, read from the pinned version) | Image Segmenter for live person matting, in `seg.worker.js` (module worker, GPU delegate with CPU fallback). WASM files from the same pinned package (about 14 MB, cached by the browser). |
+| selfie_segmenter.tflite (float16, folder `1`) | `https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/float16/1/selfie_segmenter.tflite` | Apache-2.0 per Google's MediaPipe model documentation. **The model card PDF could not be machine-read here, so confirm the licence text before launch.** | Default person model, 256 px input, about 0.25 MB |
+| selfie_multiclass_256x256.tflite (float32, folder `1`) | `https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_multiclass_256x256/float32/1/selfie_multiclass_256x256.tflite` | same as above, same caveat | Optional "Detailed" model, about 16 MB |
+
+Model files are fetched once, kept with the Cache API (`n0ise-models-v1`) with visible progress, and are never uploaded anywhere: frames stay on the device. On mobile data (Save-Data, cellular, 2G/3G) the page asks before downloading.

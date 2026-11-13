@@ -1,4 +1,141 @@
+var __defProp = Object.defineProperty;
+var __export = (target, all) => {
+  for (var name in all)
+    __defProp(target, name, { get: all[name], enumerable: true });
+};
+
 // src/engine.js
+var engine_exports = {};
+__export(engine_exports, {
+  $: () => $,
+  B: () => B,
+  BASE: () => BASE,
+  C: () => C,
+  CHAINS: () => CHAINS,
+  CPU: () => CPU,
+  CT: () => CT,
+  CTL: () => CTL,
+  CTX: () => CTX,
+  E: () => E,
+  EMB: () => EMB,
+  EMBED: () => EMBED,
+  EVT: () => EVT,
+  F_BLUR: () => F_BLUR,
+  F_BRIGHT: () => F_BRIGHT,
+  F_COPY: () => F_COPY,
+  F_CRT: () => F_CRT,
+  F_FINAL: () => F_FINAL,
+  F_GLITCH: () => F_GLITCH,
+  F_ORIG: () => F_ORIG,
+  F_PAINT: () => F_PAINT,
+  F_PERSIST: () => F_PERSIST,
+  F_QUANT: () => F_QUANT,
+  F_SIGA: () => F_SIGA,
+  F_SIGB: () => F_SIGB,
+  F_TONE: () => F_TONE,
+  GLOK: () => GLOK,
+  HEAD: () => HEAD,
+  KER: () => KER,
+  KF: () => KF,
+  LOOKKEYS: () => LOOKKEYS,
+  MACROS: () => MACROS,
+  METHOD_ID: () => METHOD_ID,
+  MODS: () => MODS,
+  P: () => P,
+  PAINTQ: () => PAINTQ,
+  PALS: () => PALS,
+  PHOS_COL: () => PHOS_COL,
+  POINTER: () => POINTER,
+  POOL: () => POOL,
+  PR: () => PR,
+  PROFILES: () => PROFILES,
+  PROTECT: () => PROTECT,
+  R: () => R,
+  RB: () => RB,
+  SRC: () => SRC,
+  ST: () => ST,
+  STAGES: () => STAGES,
+  SZ: () => SZ,
+  T: () => T,
+  TABS: () => TABS,
+  TEX: () => TEX,
+  V: () => V,
+  VS: () => VS,
+  VS_PAINT: () => VS_PAINT,
+  _hw: () => _hw,
+  _ro: () => _ro,
+  adaptQ: () => adaptQ,
+  applyProfile: () => applyProfile,
+  applyStages: () => applyStages,
+  attachGL: () => attachGL,
+  audio: () => audio,
+  bayer: () => bayer,
+  bindRT: () => bindRT,
+  blueNoise: () => blueNoise,
+  buildChainUI: () => buildChainUI,
+  canvas: () => canvas,
+  clamp: () => clamp,
+  compile: () => compile,
+  computeE: () => computeE,
+  cpuProcess: () => cpuProcess,
+  cpuSync: () => cpuSync,
+  createGL: () => createGL,
+  curPal: () => curPal,
+  demoCanvas: () => demoCanvas,
+  diffuse: () => diffuse,
+  draw: () => draw,
+  ensureTargets: () => ensureTargets,
+  expDims: () => expDims,
+  exportCap: () => exportCap,
+  finishLive: () => finishLive,
+  fitCanvas: () => fitCanvas,
+  freeRT: () => freeRT,
+  gl: () => gl,
+  hardware: () => hardware,
+  hexRGB: () => hexRGB,
+  hooks: () => hooks,
+  initGL: () => initGL,
+  initLUT: () => initLUT,
+  kern: () => kern,
+  layout: () => layout,
+  lerp: () => lerp,
+  lifeStep: () => lifeStep,
+  lum255: () => lum255,
+  mkProg: () => mkProg,
+  mkProgAsync: () => mkProgAsync,
+  mkRT: () => mkRT,
+  mkTex: () => mkTex,
+  mulberry: () => mulberry,
+  noGL: () => noGL,
+  noise1: () => noise1,
+  paintBuf: () => paintBuf,
+  peakFps: () => peakFps,
+  pool: () => pool,
+  powerShape: () => powerShape,
+  r8tex: () => r8tex,
+  readDrop: () => readDrop,
+  readFinish: () => readFinish,
+  readStart: () => readStart,
+  refreshChainUI: () => refreshChainUI,
+  renderFrame: () => renderFrame,
+  rgbHex: () => rgbHex,
+  samp: () => samp,
+  setSource: () => setSource,
+  srcDims: () => srcDims,
+  sstep: () => sstep,
+  stage: () => stage,
+  stageModel: () => stageModel,
+  syncSrc: () => syncSrc,
+  testCanvas: () => testCanvas,
+  tex: () => tex,
+  textCtx: () => textCtx,
+  textCv: () => textCv,
+  updateText: () => updateText,
+  uploadSrc: () => uploadSrc,
+  vaoEmpty: () => vaoEmpty,
+  vaoPaint: () => vaoPaint,
+  wrapProg: () => wrapProg
+});
 var V = { sizeKey: "", pIdx: 0, frameNo: 0, lastBKey: "", fps: 60, fpsAcc: 0, fpsN: 0, infoStr: "", lastT: 0, lastRenderMs: 0, errN: 0, DEAD: false, HDR: false, palCache: { key: "", v: null }, textKey: "" };
 var hooks = { AUD: { on: false }, stopAudio() {
 }, group() {
@@ -1282,28 +1419,28 @@ function cpuProcess(raw, w, h, pal, method, str, bias, depth, quantTex) {
   gl.bindTexture(gl.TEXTURE_2D, quantTex);
   gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, out);
 }
-function cpuSync(rt, pal, method, str, bias, depth, quantRT) {
-  const raw = pool("raw", rt.w * rt.h * 4, Uint8Array);
-  gl.bindFramebuffer(gl.FRAMEBUFFER, rt.fbo);
-  gl.readPixels(0, 0, rt.w, rt.h, gl.RGBA, gl.UNSIGNED_BYTE, raw);
-  cpuProcess(raw, rt.w, rt.h, pal, method, str, bias, depth, quantRT.tex);
+function cpuSync(rt2, pal, method, str, bias, depth, quantRT) {
+  const raw = pool("raw", rt2.w * rt2.h * 4, Uint8Array);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, rt2.fbo);
+  gl.readPixels(0, 0, rt2.w, rt2.h, gl.RGBA, gl.UNSIGNED_BYTE, raw);
+  cpuProcess(raw, rt2.w, rt2.h, pal, method, str, bias, depth, quantRT.tex);
 }
 var RB = { pbo: null, size: 0, sync: null, w: 0, h: 0 };
-function readStart(rt) {
-  const size = rt.w * rt.h * 4;
+function readStart(rt2) {
+  const size = rt2.w * rt2.h * 4;
   if (!RB.pbo) RB.pbo = gl.createBuffer();
-  gl.bindFramebuffer(gl.FRAMEBUFFER, rt.fbo);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, rt2.fbo);
   gl.bindBuffer(gl.PIXEL_PACK_BUFFER, RB.pbo);
   if (RB.size !== size) {
     gl.bufferData(gl.PIXEL_PACK_BUFFER, size, gl.STREAM_READ);
     RB.size = size;
   }
-  gl.readPixels(0, 0, rt.w, rt.h, gl.RGBA, gl.UNSIGNED_BYTE, 0);
+  gl.readPixels(0, 0, rt2.w, rt2.h, gl.RGBA, gl.UNSIGNED_BYTE, 0);
   gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
   RB.sync = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0);
   gl.flush();
-  RB.w = rt.w;
-  RB.h = rt.h;
+  RB.w = rt2.w;
+  RB.h = rt2.h;
 }
 function readDrop() {
   if (RB.sync) {
@@ -2157,6 +2294,310 @@ function adaptQ() {
   ST.lite = ST.autoQ < 0.6;
 }
 
+// src/matte.js
+var { V: V2, PR: PR2, mkProg: mkProg2, mkRT: mkRT2, freeRT: freeRT2, bindRT: bindRT2, samp: samp2, draw: draw2, SRC: SRC2, VS: VS2, HEAD: HEAD2 } = engine_exports;
+var PERSON = {
+  worker: null,
+  state: "idle",
+  err: "",
+  model: "selfie",
+  backend: "",
+  prog: 0,
+  bytes: 0,
+  mb: 0,
+  w: 0,
+  h: 0,
+  ema: null,
+  hold: null,
+  out: null,
+  tex: null,
+  ver: 0,
+  inflight: false,
+  fps: 0,
+  ms: 0,
+  flicker: 0,
+  cap: 256,
+  synthetic: false,
+  smooth: { on: true, a: 0.5, lo: 0.38, hi: 0.62, mix: 0.6 }
+};
+var _n = 0;
+var _t0 = 0;
+var _sent = 0;
+function startPerson(model) {
+  if (PERSON.worker && PERSON.state !== "error" && (!model || model === PERSON.model)) return;
+  if (PERSON.worker) {
+    PERSON.worker.terminate();
+    PERSON.worker = null;
+  }
+  if (model) PERSON.model = model;
+  PERSON.state = "loading";
+  PERSON.err = "";
+  PERSON.prog = 0;
+  const w = PERSON.worker = new Worker("seg.worker.js?v=1", { type: "module" });
+  w.onmessage = (e) => {
+    const m = e.data;
+    if (m.type === "progress") {
+      PERSON.prog = m.p;
+      PERSON.bytes = m.bytes;
+    } else if (m.type === "ready") {
+      PERSON.state = "ready";
+      PERSON.backend = m.backend;
+    } else if (m.type === "error") {
+      PERSON.state = "error";
+      PERSON.err = m.message;
+      PERSON.inflight = false;
+    } else if (m.type === "mask") {
+      PERSON.inflight = false;
+      ingest(m.data, m.w, m.h, performance.now());
+    }
+  };
+  w.onerror = (e) => {
+    PERSON.state = "error";
+    PERSON.err = String(e.message || "worker failed");
+    PERSON.inflight = false;
+  };
+  w.postMessage({ type: "init", model: PERSON.model });
+}
+function ingest(raw, w, h, now2) {
+  const n = w * h;
+  if (PERSON.w !== w || PERSON.h !== h || !PERSON.ema) {
+    PERSON.w = w;
+    PERSON.h = h;
+    PERSON.ema = new Float32Array(n);
+    PERSON.hold = new Uint8Array(n);
+    PERSON.out = new Uint8Array(n);
+    for (let i = 0; i < n; i++) PERSON.ema[i] = raw[i] / 255;
+  }
+  const S = PERSON.smooth, E2 = PERSON.ema, H = PERSON.hold, O = PERSON.out;
+  let ch = 0;
+  for (let i = 0; i < n; i++) {
+    const r = raw[i] / 255;
+    let v;
+    if (S.on) {
+      const d = r - E2[i], a = Math.min(1, S.a + Math.abs(d) * 1.2);
+      E2[i] += d * a;
+      v = E2[i];
+      if (v > S.hi) H[i] = 1;
+      else if (v < S.lo) H[i] = 0;
+      v = v * (1 - S.mix) + H[i] * S.mix;
+      v = v < 0.3 ? 0 : v > 0.7 ? 1 : (v - 0.3) / 0.4;
+      v = v * v * (3 - 2 * v);
+    } else v = r;
+    const b = Math.round(v * 255);
+    ch += Math.abs(b - O[i]);
+    O[i] = b;
+  }
+  PERSON.flicker += (ch / n / 255 - PERSON.flicker) * 0.2;
+  const gl2 = gl;
+  if (!PERSON.tex) {
+    PERSON.tex = gl2.createTexture();
+    gl2.bindTexture(gl2.TEXTURE_2D, PERSON.tex);
+    gl2.texParameteri(gl2.TEXTURE_2D, gl2.TEXTURE_MIN_FILTER, gl2.LINEAR);
+    gl2.texParameteri(gl2.TEXTURE_2D, gl2.TEXTURE_MAG_FILTER, gl2.LINEAR);
+    gl2.texParameteri(gl2.TEXTURE_2D, gl2.TEXTURE_WRAP_S, gl2.CLAMP_TO_EDGE);
+    gl2.texParameteri(gl2.TEXTURE_2D, gl2.TEXTURE_WRAP_T, gl2.CLAMP_TO_EDGE);
+  }
+  gl2.bindTexture(gl2.TEXTURE_2D, PERSON.tex);
+  gl2.pixelStorei(gl2.UNPACK_ALIGNMENT, 1);
+  gl2.pixelStorei(gl2.UNPACK_FLIP_Y_WEBGL, true);
+  gl2.texImage2D(gl2.TEXTURE_2D, 0, gl2.R8, w, h, 0, gl2.RED, gl2.UNSIGNED_BYTE, O);
+  gl2.pixelStorei(gl2.UNPACK_FLIP_Y_WEBGL, false);
+  gl2.pixelStorei(gl2.UNPACK_ALIGNMENT, 4);
+  PERSON.ver++;
+  PERSON.ms += (now2 - _sent - PERSON.ms) * 0.2;
+  if (!_t0) _t0 = now2;
+  _n++;
+  if (now2 - _t0 > 1e3) {
+    PERSON.fps = _n * 1e3 / (now2 - _t0);
+    _n = 0;
+    _t0 = now2;
+  }
+}
+function feedPerson() {
+  if (PERSON.synthetic || PERSON.state !== "ready" || PERSON.inflight) return;
+  const el2 = SRC2.el;
+  if (!el2) return;
+  if (el2 instanceof HTMLVideoElement && el2.readyState < 2) return;
+  const src = SRC2.mirror && SRC2.mcv ? SRC2.mcv : el2;
+  const [sw, sh] = srcDims(src);
+  if (!sw || !sh) return;
+  const k = PERSON.cap / Math.max(sw, sh), w = Math.max(16, Math.round(sw * k)), h = Math.max(16, Math.round(sh * k));
+  PERSON.inflight = true;
+  _sent = performance.now();
+  createImageBitmap(src, { resizeWidth: w, resizeHeight: h, resizeQuality: "low" }).then((bm) => PERSON.worker.postMessage({ type: "frame", bitmap: bm, ts: Math.round(performance.now()) }, [bm])).catch(() => {
+    PERSON.inflight = false;
+  });
+}
+function syntheticPerson(on = true, phase = 0) {
+  PERSON.synthetic = on;
+  if (!on) return;
+  const w = 128, h = 96, o = new Uint8Array(w * h), ox = 0.1 * Math.sin(phase * 0.9);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const dx = (x / w - 0.5 - ox) / 0.26, dy = (y / h - 0.55) / 0.4, hd = ((x / w - 0.5 - ox) / 0.12) ** 2 + ((y / h - 0.22) / 0.14) ** 2;
+    o[y * w + x] = dx * dx + dy * dy < 1 || hd < 1 ? 255 : 0;
+  }
+  PERSON.w = w;
+  PERSON.h = h;
+  PERSON.ema = null;
+  ingest(o, w, h, performance.now());
+}
+var _blank = null;
+function blankTex() {
+  if (_blank) return _blank;
+  const gl2 = gl;
+  _blank = gl2.createTexture();
+  gl2.bindTexture(gl2.TEXTURE_2D, _blank);
+  gl2.pixelStorei(gl2.UNPACK_ALIGNMENT, 1);
+  gl2.texImage2D(gl2.TEXTURE_2D, 0, gl2.R8, 1, 1, 0, gl2.RED, gl2.UNSIGNED_BYTE, new Uint8Array([0]));
+  gl2.pixelStorei(gl2.UNPACK_ALIGNMENT, 4);
+  return _blank;
+}
+var DRAWN = { cv: document.createElement("canvas"), tex: null, dirty: true, on: false, size: 0.06, erase: false };
+DRAWN.cv.width = 256;
+DRAWN.cv.height = 256;
+DRAWN.cv.getContext("2d").fillStyle = "#000";
+DRAWN.cv.getContext("2d").fillRect(0, 0, 256, 256);
+function paintDrawn(u, v) {
+  const g = DRAWN.cv.getContext("2d");
+  g.fillStyle = DRAWN.erase ? "#000" : "#fff";
+  g.beginPath();
+  g.arc(u * 256, v * 256, DRAWN.size * 256, 0, 7);
+  g.fill();
+  DRAWN.dirty = true;
+}
+function clearDrawn(v = 0) {
+  const g = DRAWN.cv.getContext("2d");
+  g.fillStyle = v ? "#fff" : "#000";
+  g.fillRect(0, 0, 256, 256);
+  DRAWN.dirty = true;
+}
+function drawnTex() {
+  const gl2 = gl;
+  if (!DRAWN.tex) {
+    DRAWN.tex = gl2.createTexture();
+    gl2.bindTexture(gl2.TEXTURE_2D, DRAWN.tex);
+    gl2.texParameteri(gl2.TEXTURE_2D, gl2.TEXTURE_MIN_FILTER, gl2.LINEAR);
+    gl2.texParameteri(gl2.TEXTURE_2D, gl2.TEXTURE_MAG_FILTER, gl2.LINEAR);
+    gl2.texParameteri(gl2.TEXTURE_2D, gl2.TEXTURE_WRAP_S, gl2.CLAMP_TO_EDGE);
+    gl2.texParameteri(gl2.TEXTURE_2D, gl2.TEXTURE_WRAP_T, gl2.CLAMP_TO_EDGE);
+    DRAWN.dirty = true;
+  }
+  if (DRAWN.dirty) {
+    gl2.bindTexture(gl2.TEXTURE_2D, DRAWN.tex);
+    gl2.pixelStorei(gl2.UNPACK_FLIP_Y_WEBGL, true);
+    gl2.texImage2D(gl2.TEXTURE_2D, 0, gl2.RGBA8, gl2.RGBA, gl2.UNSIGNED_BYTE, DRAWN.cv);
+    gl2.pixelStorei(gl2.UNPACK_FLIP_Y_WEBGL, false);
+    DRAWN.dirty = false;
+  }
+  return DRAWN.tex;
+}
+var F_SEL = HEAD2 + `uniform sampler2D uSrc,uPerson,uDrawn;uniform int uMode;uniform float uLo,uHi,uTol,uSrcAsp,uScrAsp;uniform vec3 uCol;
+float L3(vec3 c){return dot(c,vec3(.299,.587,.114));}
+void main(){
+  float r=uScrAsp/uSrcAsp;vec2 s=r>1.?vec2(1.,1./r):vec2(r,1.);vec2 suv=(vUv-.5)*s+.5;
+  vec3 c=texture(uSrc,vUv).rgb;float m=1.;
+  if(uMode==0)m=texture(uPerson,suv).r;
+  else if(uMode==1){float l=L3(c);m=smoothstep(uLo-.03,uLo+.03,l)*(1.-smoothstep(uHi-.03,uHi+.03,l));}
+  else if(uMode==2){float d=distance(c,uCol);m=1.-smoothstep(uTol*.7,uTol,d);}
+  else if(uMode==3)m=texture(uDrawn,vUv).r;
+  o=vec4(vec3(m),1.);}`;
+var F_BLUR2 = HEAD2 + `uniform sampler2D uT;uniform vec2 uDir;uniform float uR;
+void main(){float s=0.,w=0.;for(int i=-6;i<=6;i++){float x=float(i)/6.;float k=exp(-x*x*2.2);s+=texture(uT,vUv+uDir*x*uR).r*k;w+=k;}o=vec4(vec3(s/w),1.);}`;
+var F_POST = HEAD2 + `uniform sampler2D uT,uSrc;uniform vec2 uTexel;uniform float uGrow,uSoft,uInv,uSnap;
+float L3(vec3 c){return dot(c,vec3(.299,.587,.114));}
+void main(){
+  float m=texture(uT,vUv).r;
+  if(uSnap>.001){ // edge snap: joint bilateral on the photo's own luma, so the matte follows hair and fingers
+    float l0=L3(texture(uSrc,vUv).rgb),s=0.,w=0.;
+    for(int j=-2;j<=2;j++)for(int i=-2;i<=2;i++){vec2 o2=vec2(float(i),float(j))*uTexel*2.;float k=exp(-pow((L3(texture(uSrc,vUv+o2).rgb)-l0)/(.08+.2*(1.-uSnap)),2.));s+=texture(uT,vUv+o2).r*k;w+=k;}
+    m=mix(m,s/w,uSnap);}
+  float mid=.5-uGrow*.45,e=max(uSoft,.04);
+  m=smoothstep(mid-e,mid+e,m);
+  if(uInv>.5)m=1.-m;
+  o=vec4(vec3(m),1.);}`;
+var P_SEL;
+var P_BLUR;
+var P_POST;
+var RTS = {};
+function rt(name, w, h) {
+  const r = RTS[name];
+  if (r && r.w === w && r.h === h) return r;
+  if (r) freeRT2(r);
+  return RTS[name] = mkRT2(w, h, {});
+}
+function resetMatteGL() {
+  Object.keys(RTS).forEach((k) => {
+    try {
+      freeRT2(RTS[k]);
+    } catch (e) {
+    }
+    delete RTS[k];
+  });
+  P_SEL = P_BLUR = P_POST = null;
+  PERSON.tex = null;
+  DRAWN.tex = null;
+  _blank = null;
+}
+var MASK_DEFAULTS = { src: "person", invert: false, feather: 20, grow: 0, snap: 35, lo: 0.5, hi: 1, tol: 0.35, col: "#2fa84f" };
+function maskFor(mk, W, H, base, { reuse = true } = {}) {
+  mk = mk || MASK_DEFAULTS;
+  const gl2 = gl;
+  P_SEL = P_SEL || mkProg2(VS2, F_SEL);
+  P_BLUR = P_BLUR || mkProg2(VS2, F_BLUR2);
+  P_POST = P_POST || mkProg2(VS2, F_POST);
+  const mode = { person: 0, luma: 1, color: 2, drawn: 3 }[mk.src] ?? 4;
+  const a = rt("a", W, H), b = rt("b", W, H), c = rt("c", W, H);
+  gl2.bindVertexArray(vaoEmpty);
+  gl2.disable(gl2.BLEND);
+  bindRT2(a);
+  const s = P_SEL;
+  s.use();
+  samp2(s, "uSrc", 0, base);
+  samp2(s, "uPerson", 1, PERSON.tex || blankTex());
+  samp2(s, "uDrawn", 2, drawnTex());
+  s.i("uMode", mode);
+  s.f("uLo", mk.lo);
+  s.f("uHi", mk.hi);
+  s.f("uTol", mk.tol);
+  const cc = hexRGB(mk.col || "#2fa84f");
+  s.v3("uCol", cc[0] / 255, cc[1] / 255, cc[2] / 255);
+  s.f("uSrcAsp", SRC2.w / Math.max(1, SRC2.h));
+  s.f("uScrAsp", W / H);
+  draw2();
+  const fr = Math.max(0, mk.feather || 0) * W / 1e3;
+  let src = a;
+  if (fr > 0.5) {
+    bindRT2(b);
+    P_BLUR.use();
+    samp2(P_BLUR, "uT", 0, a.tex);
+    P_BLUR.v2("uDir", 1 / W, 0);
+    P_BLUR.f("uR", fr);
+    draw2();
+    bindRT2(c);
+    P_BLUR.use();
+    samp2(P_BLUR, "uT", 0, b.tex);
+    P_BLUR.v2("uDir", 0, 1 / H);
+    P_BLUR.f("uR", fr);
+    draw2();
+    src = c;
+  }
+  const out = src === c ? b : c;
+  bindRT2(out);
+  const p = P_POST;
+  p.use();
+  samp2(p, "uT", 0, src.tex);
+  samp2(p, "uSrc", 1, base);
+  p.v2("uTexel", 1 / W, 1 / H);
+  p.f("uGrow", (mk.grow || 0) / 100);
+  p.f("uSoft", fr > 0.5 ? 0.12 : 0.06);
+  p.f("uInv", mk.invert ? 1 : 0);
+  p.f("uSnap", mode === 0 ? (mk.snap || 0) / 100 : 0);
+  draw2();
+  gl2.bindVertexArray(null);
+  gl2.useProgram(null);
+  return out.tex;
+}
+
 // src/app.js
 {
   const _c = document.getElementById("gl");
@@ -2167,7 +2608,7 @@ var MAPIMG = {};
 var registerModule = (m) => MODULES[m.id] = m;
 var COLOR_MODES = ["original", "mono", "duotone", "gradient", "palette"];
 var BLENDS = ["normal", "multiply", "screen", "additive", "difference", "overlay"];
-var LAYER_DEFAULTS = { color: { mode: "original", pal: ["#1a0f2e", "#ffd27a"], amt: 100 }, opacity: 100, blend: "normal", showSource: false, select: "all", thr: 50, pos: [0, 0], size: 100, seed: 0, visible: true };
+var LAYER_DEFAULTS = { color: { mode: "original", pal: ["#1a0f2e", "#ffd27a"], amt: 100 }, opacity: 100, blend: "normal", showSource: false, select: "all", mask: { src: "person", invert: false, feather: 20, grow: 0, snap: 35, lo: 0.5, hi: 1, tol: 0.35, col: "#2fa84f" }, thr: 50, pos: [0, 0], size: 100, seed: 0, visible: true };
 var layerUid = 1;
 var mkLayer = (mod, params) => ({ uid: layerUid++, module: mod, params: params || (MODULES[mod] && MODULES[mod].defaults ? MODULES[mod].defaults() : {}), ...JSON.parse(JSON.stringify(LAYER_DEFAULTS)) });
 function crtSchema() {
@@ -2332,6 +2773,7 @@ function defineModule(d) {
     id: d.id,
     family: d.family,
     name: d.name,
+    needsMask: !!d.needsMask,
     colorBound: !!d.colorBound,
     hideOnOrig: d.hideOnOrig || [],
     engine: d.engine || "gpu",
@@ -2429,16 +2871,16 @@ function defineModule(d) {
           throw new Error(d.id + " shader: " + String(e.message).split("\n").slice(0, 3).join(" | "));
         }
       }
-      const pr = ctx.sync && ent && ent.h.prog || m.prog, V2 = ctx.params || ctx.layer && ctx.layer.params || m.defaults();
+      const pr = ctx.sync && ent && ent.h.prog || m.prog, V3 = ctx.params || ctx.layer && ctx.layer.params || m.defaults();
       bindRT(ctx.out);
       pr.use();
       samp(pr, "uSrc", 0, inTex);
       ctx.inTex = inTex;
       pr.v2("uRes", ctx.W, ctx.H);
       pr.f("uTime", ctx.t);
-      pr.f("uSeed", (ctx.layer ? ctx.layer.seed : 0) + (V2.seed || 0));
+      pr.f("uSeed", (ctx.layer ? ctx.layer.seed : 0) + (V3.seed || 0));
       for (const p of params) {
-        const v = V2[p.k];
+        const v = V3[p.k];
         if (p.t === "color") {
           const c = hexRGB(v || "#000000");
           pr.v3("u_" + p.k, c[0] / 255, c[1] / 255, c[2] / 255);
@@ -2460,9 +2902,9 @@ function defineModule(d) {
         } else if (p.t === "image") {
         } else pr.f("u_" + p.k, p.t === "b" ? v ? 1 : 0 : +v);
       }
-      if (d.bind) d.bind(pr, V2, ctx);
+      if (d.bind) d.bind(pr, V3, ctx);
       draw();
-      if (d.after) d.after(pr, V2, ctx);
+      if (d.after) d.after(pr, V3, ctx);
     },
     thumbnail() {
       return null;
@@ -2611,11 +3053,11 @@ vec4 fx(vec2 uv){
   float gv=0.;for(int i=0;i<6;i++){float a=float(i)*1.047;gv+=luma(texture(uSrc,uv+vec2(cos(a),sin(a))*6.*S/uRes).rgb);}
   col+=uPal[int(n)-1]*u_glow/100.*smoothstep(.45,1.,gv/6.)*.45;
   return vec4(col,1.);}`,
-  bind(pr, V2, ctx) {
-    const m = +V2.method;
+  bind(pr, V3, ctx) {
+    const m = +V3.method;
     if (m >= 7) {
-      const n = Math.max(2, (V2.pal || []).length), cell = Math.max(1, V2.cell * ctx.H / 600);
-      const tex2 = cpuDiffuse(ctx.inTex, ctx.W, ctx.H, cell, n, m, V2.seed);
+      const n = Math.max(2, (V3.pal || []).length), cell = Math.max(1, V3.cell * ctx.H / 600);
+      const tex2 = cpuDiffuse(ctx.inTex, ctx.W, ctx.H, cell, n, m, V3.seed);
       bindRT(ctx.out);
       pr.use();
       samp(pr, "uSrc", 0, ctx.inTex);
@@ -2655,8 +3097,8 @@ vec4 fx(vec2 uv){
   vec3 bg=u_transp>.5?texture(uSrc,uv).rgb*.25:u_bg;
   vec3 col=mix(bg,ink*sc,a);col+=ink*.25*u_scan/100.*a*a;
   return vec4(col,1.);}`,
-  bind(pr, V2) {
-    const sets = [GLYPH_SETS.ramp, GLYPH_SETS.letters, GLYPH_SETS.binary, GLYPH_SETS.blocks, GLYPH_SETS.dots], at = GLYPH.atlas(sets[+V2.set]);
+  bind(pr, V3) {
+    const sets = [GLYPH_SETS.ramp, GLYPH_SETS.letters, GLYPH_SETS.binary, GLYPH_SETS.blocks, GLYPH_SETS.dots], at = GLYPH.atlas(sets[+V3.set]);
     gl.activeTexture(gl.TEXTURE1);
     gl.bindTexture(gl.TEXTURE_2D, at.tex);
     pr.i("uAux", 1);
@@ -2983,7 +3425,7 @@ defineModule({
     { k: "csp", label: "Chroma split", min: 0, max: 100, def: 25, sec: "Chroma" },
     { k: "flip", t: "b", label: "Flip vertical", def: false, sec: "Chroma" }
   ],
-  bind(pr, V2, ctx) {
+  bind(pr, V3, ctx) {
     const t = MAPIMG[ctx.layer && ctx.layer.uid];
     pr.f("uHasImg", t ? 1 : 0);
     if (t) {
@@ -3196,7 +3638,7 @@ function fuseParams() {
     { k: "vig", label: "Vignette", min: 0, max: 100, def: 0, sec: "Finish" }
   ]);
 }
-var fuseFxs = (V2) => [1, 2, 3, 4].map((s) => +V2["f" + s] > 0 ? CAMFX[+V2["f" + s] - 1] : null);
+var fuseFxs = (V3) => [1, 2, 3, 4].map((s) => +V3["f" + s] > 0 ? CAMFX[+V3["f" + s] - 1] : null);
 function fuseFrag(fxs) {
   const used = [...new Set(fxs.filter(Boolean))];
   let s = `#define u_time uTime
@@ -3315,20 +3757,20 @@ var fusePrev = (w, h) => {
   const k = w + "x" + h;
   return FUSE_PREV[k] || (FUSE_PREV[k] = mkRT(w, h, { hdr: true }));
 };
-var fuseCost = (V2) => fuseFxs(V2).reduce((a, f, i) => a + (f && V2["on" + (i + 1)] ? fxCost(f) : 0), 0);
+var fuseCost = (V3) => fuseFxs(V3).reduce((a, f, i) => a + (f && V3["on" + (i + 1)] ? fxCost(f) : 0), 0);
 defineModule({
   id: "fuse",
   family: "Camera",
   name: "Fuse",
   params: fuseParams(),
-  dyn: (V2) => {
-    const fx = fuseFxs(V2);
+  dyn: (V3) => {
+    const fx = fuseFxs(V3);
     return { key: fx.map((f) => f ? f.id : "-").join(), frag: fuseFrag(fx) };
   },
-  bind(pr, V2, ctx) {
+  bind(pr, V3, ctx) {
     samp(pr, "u_prev", 2, fusePrev(ctx.W, ctx.H).tex);
     samp(pr, "u_mask", 3, fmaskTex());
-    if (fuseFxs(V2).some((f) => f && f.face)) {
+    if (fuseFxs(V3).some((f) => f && f.face)) {
       if (!ctx.sync) faceTick();
       pr.f("u_fok", FACE.ok ? 1 : 0);
       pr.v4("u_face", ...FACE.face);
@@ -3338,16 +3780,16 @@ defineModule({
     }
     pr.f("u_aud", audio.on ? audio.level : 0);
   },
-  after(pr, V2, ctx) {
+  after(pr, V3, ctx) {
     if (!ctx.out || !ctx.out.tex) return;
-    if (fuseFxs(V2).some((f) => f && f.hist)) {
+    if (fuseFxs(V3).some((f) => f && f.hist)) {
       const c = PR.copy;
       bindRT(fusePrev(ctx.W, ctx.H));
       c.use();
       samp(c, "uT", 0, ctx.out.tex);
       draw();
     }
-    if (+V2.glow > 0 || +V2.split > 0) {
+    if (+V3.glow > 0 || +V3.split > 0) {
       const tmp = histRT("fin", ctx.W, ctx.H), c = PR.copy;
       bindRT(tmp);
       c.use();
@@ -3358,8 +3800,8 @@ defineModule({
       f.use();
       samp(f, "uT", 0, tmp.tex);
       f.v2("uRes", ctx.W, ctx.H);
-      f.f("uGlow", V2.glow / 100);
-      f.f("uSplit", V2.split / 100);
+      f.f("uGlow", V3.glow / 100);
+      f.f("uSplit", V3.split / 100);
       f.f("uS", ctx.H / 600);
       draw();
     }
@@ -4175,11 +4617,174 @@ vec4 fx(vec2 uv){
   float keep=u_hold/100.*(1.-smoothstep(.3,.8,diff));
   float ifr=u_iframe>0.?step(fract(uTime/u_iframe),.03):0.;
   return vec4(mix(cur,hold,keep*(1.-ifr)),1.);}`,
-  bind(pr, V2, ctx) {
+  bind(pr, V3, ctx) {
     histBind(pr, "mosh", ctx);
   },
-  after(pr, V2, ctx) {
+  after(pr, V3, ctx) {
     histSave("mosh", ctx);
+  }
+});
+var AUXBIND = (pr, ctx) => {
+  samp(pr, "uAux", 1, ctx.mask || TEX.src);
+};
+defineModule({
+  id: "solid",
+  family: "Subject",
+  name: "Solid",
+  needsMask: true,
+  defaultLook: { paper: "#a4532f", ink: "#ead8c4", palette: null },
+  params: [
+    { k: "sub", t: "color", label: "Subject colour", def: "#ead8c4", sec: "Colours" },
+    { k: "bg", t: "color", label: "Background colour", def: "#a4532f", sec: "Colours" },
+    { k: "soft", label: "Edge softness", min: 0, max: 100, def: 25, sec: "Shape", hero: true },
+    { k: "keep", label: "Keep shading", min: 0, max: 100, def: 20, sec: "Shape", hero: true },
+    { k: "flip", t: "b", label: "Swap colours", def: false, sec: "Colours" }
+  ],
+  frag: `vec4 fx(vec2 uv){float m=texture(uAux,uv).r;float s=u_soft/200.+.02;m=smoothstep(.5-s,.5+s,m);
+  float l=luma(texture(uSrc,uv).rgb),k=u_keep/100.;vec3 sc=u_sub*mix(1.,.5+.9*l,k),bc=u_bg*mix(1.,.5+.9*l,k*.6);
+  if(u_flip>.5){vec3 t=sc;sc=bc;bc=t;}return vec4(mix(bc,sc,m),1.);}`,
+  bind(pr, V3, ctx) {
+    AUXBIND(pr, ctx);
+  }
+});
+defineModule({
+  id: "contour",
+  family: "Subject",
+  name: "Contour",
+  needsMask: true,
+  defaultLook: { paper: "#101010", ink: "#f2efe6", palette: null },
+  params: [
+    { k: "wid", label: "Stroke width", min: 1, max: 40, def: 6, step: 0.5, sec: "Stroke", hero: true },
+    { k: "col", t: "color", label: "Stroke colour", def: "#f2efe6", sec: "Stroke" },
+    { k: "glow", label: "Glow", min: 0, max: 100, def: 45, sec: "Stroke", hero: true },
+    { k: "side", t: "c", label: "Stroke sits", opts: ["Outside", "Centred", "Inside"], def: 0, sec: "Stroke" },
+    { k: "fill", t: "c", label: "Picture", opts: ["Source", "Dimmed", "Flat dark"], def: 1, sec: "Picture" }
+  ],
+  frag: SS + `float M(vec2 p){return texture(uAux,p).r;}
+vec4 fx(vec2 uv){vec2 px=1./uRes;float w=u_wid*S*.5;float m=M(uv),mx=0.,mn=1.;
+  for(int i=0;i<16;i++){float a=float(i)*.3927;float v=M(uv+vec2(cos(a),sin(a))*w*px);mx=max(mx,v);mn=min(mn,v);}
+  float e;int sd=int(u_side+.5);
+  if(sd==0)e=smoothstep(.35,.65,mx)*(1.-smoothstep(.35,.65,m));else if(sd==1)e=smoothstep(.35,.65,mx)*(1.-smoothstep(.35,.65,mn));else e=smoothstep(.35,.65,m)*(1.-smoothstep(.35,.65,mn));
+  float g=0.;for(int i=0;i<16;i++){float a=float(i)*.3927+.2;g+=M(uv+vec2(cos(a),sin(a))*w*px*5.)+M(uv+vec2(cos(a),sin(a))*w*px*9.)*.5;}
+  g/=24.;float glow=u_glow/100.*g*(1.-smoothstep(.35,.65,m));
+  vec3 src=texture(uSrc,uv).rgb;int f=int(u_fill+.5);vec3 base=f==0?src:f==1?src*.18:vec3(.03);
+  return vec4(base+u_col*glow*.9+(u_col-base)*e,1.);}`,
+  bind(pr, V3, ctx) {
+    AUXBIND(pr, ctx);
+  }
+});
+defineModule({
+  id: "sigbody",
+  family: "Subject",
+  name: "Signal Body",
+  needsMask: true,
+  defaultLook: { paper: "#101010", ink: "#ffb347", palette: null },
+  params: [
+    { k: "fxn", t: "c", label: "Effect", opts: ["Static", "Scanlines", "Dither", "Tear", "Posterise"], def: 2, sec: "Signal", hero: true },
+    { k: "where", t: "c", label: "Applies", opts: ["Inside the subject", "Outside the subject"], def: 0, sec: "Signal" },
+    { k: "amt", label: "Amount", min: 0, max: 100, def: 85, sec: "Signal", hero: true },
+    { k: "scl", label: "Scale", min: 2, max: 80, def: 24, sec: "Signal" },
+    { k: "spd", label: "Speed", min: 0, max: 100, def: 40, sec: "Signal" },
+    { k: "tint", t: "color", label: "Ink", def: "#ffb347", sec: "Signal" }
+  ],
+  frag: SS + `vec4 fx(vec2 uv){vec3 c=texture(uSrc,uv).rgb;float m=texture(uAux,uv).r;m=smoothstep(.3,.7,m);if(u_where>.5)m=1.-m;
+  float sc=max(1.,u_scl*S/4.),tt=floor(uTime*u_spd*.12);vec2 p=uv*uRes/sc;vec3 r=c;int f=int(u_fxn+.5);float l=luma(c);
+  if(f==0){float n=h21(floor(p)+tt*7.13+uSeed);r=c*(.45+.6*n)+u_tint*(n-.5)*.5;}
+  else if(f==1){r=c*(.4+.6*(.5+.5*sin(uv.y*uRes.y/sc*PI*2.+tt)))+u_tint*.06;}
+  else if(f==2){float n=fract(dot(floor(p),vec2(.754877,.569840))+tt*.37);r=mix(vec3(.05,.045,.04),u_tint,step(n,l));}
+  else if(f==3){float sh=(h11(floor(uv.y*uRes.y/(sc*2.))+tt*3.1+uSeed)-.5)*.18*step(.55,h11(floor(uv.y*uRes.y/(sc*2.))*1.7+tt));r=texture(uSrc,uv+vec2(sh,0.)).rgb;r.r=texture(uSrc,uv+vec2(sh*1.4,0.)).r;r.b=texture(uSrc,uv+vec2(sh*.6,0.)).b;}
+  else{r=floor(c*4.+.5)/4.;r=mix(r,r*u_tint*1.6,.35);}
+  return vec4(mix(c,r,m*u_amt/100.),1.);}`,
+  bind(pr, V3, ctx) {
+    AUXBIND(pr, ctx);
+  }
+});
+defineModule({
+  id: "bgrep",
+  family: "Subject",
+  name: "Background Replace",
+  needsMask: true,
+  defaultLook: { paper: "#e8d8c4", ink: "#9a4a2c", palette: null },
+  params: [
+    { k: "bm", t: "c", label: "Background", opts: ["Colour", "Gradient", "Stripes", "Noise field", "Image"], def: 1, sec: "Background", hero: true },
+    { k: "ca", t: "color", label: "Colour A", def: "#e8d8c4", sec: "Background" },
+    { k: "cb", t: "color", label: "Colour B", def: "#9a4a2c", sec: "Background" },
+    { k: "scl", label: "Scale", min: 5, max: 100, def: 40, sec: "Background" },
+    { k: "spd", label: "Speed", min: 0, max: 100, def: 25, sec: "Background" },
+    { k: "soft", label: "Edge softness", min: 0, max: 100, def: 30, sec: "Subject" },
+    { k: "img", t: "image", label: "Image", sec: "Background" }
+  ],
+  frag: SS + `uniform sampler2D uBgImg;uniform float uHasImg;
+float vn(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(h21(i),h21(i+vec2(1,0)),f.x),mix(h21(i+vec2(0,1)),h21(i+vec2(1,1)),f.x),f.y);}
+vec4 fx(vec2 uv){float m=texture(uAux,uv).r;float s=u_soft/200.+.02;m=smoothstep(.5-s,.5+s,m);vec3 c=texture(uSrc,uv).rgb;
+  int f=int(u_bm+.5);float tt=uTime*u_spd*.02;vec3 bg=u_ca;
+  if(f==1){float g=.5+.5*sin((uv.y*1.4+uv.x*.6)*PI*(u_scl/30.)+tt*3.);bg=mix(u_ca,u_cb,g);}
+  else if(f==2){float st=step(.5,fract((uv.x*uRes.x/uRes.y+uv.y*.4)*u_scl/6.+tt));bg=mix(u_ca,u_cb,st);}
+  else if(f==3){float n=vn(uv*vec2(uRes.x/uRes.y,1.)*u_scl/8.+tt)*.65+vn(uv*vec2(uRes.x/uRes.y,1.)*u_scl/3.-tt)*.35;bg=mix(u_ca,u_cb,smoothstep(.25,.75,n));}
+  else if(f==4&&uHasImg>.5)bg=texture(uBgImg,vec2(uv.x,1.-uv.y)).rgb;
+  return vec4(mix(bg,c,m),1.);}`,
+  bind(pr, V3, ctx) {
+    AUXBIND(pr, ctx);
+    const t = MAPIMG[ctx.layer && ctx.layer.uid];
+    pr.f("uHasImg", t ? 1 : 0);
+    if (t) {
+      gl.activeTexture(gl.TEXTURE3);
+      gl.bindTexture(gl.TEXTURE_2D, t);
+      pr.i("uBgImg", 3);
+      gl.activeTexture(gl.TEXTURE0);
+    }
+  }
+});
+var ECH = { rt: null, head: 0, last: -9, key: "", prog: null };
+var F_ECAP = HEAD + `uniform sampler2D uC,uM;void main(){o=vec4(texture(uC,vUv).rgb,texture(uM,vUv).r);}`;
+defineModule({
+  id: "echo",
+  family: "Subject",
+  name: "Echo",
+  needsMask: true,
+  defaultLook: { paper: "#101010", ink: "#ff7a3d", palette: null },
+  params: [
+    { k: "cnt", label: "Echoes", min: 1, max: 8, def: 6, sec: "Trail", hero: true },
+    { k: "dly", label: "Delay (ms)", min: 30, max: 400, def: 110, sec: "Trail", hero: true },
+    { k: "fade", label: "Fade", min: 20, max: 95, def: 72, sec: "Trail" },
+    { k: "hue", label: "Colour shift", min: -180, max: 180, def: 38, sec: "Trail" },
+    { k: "mode", t: "c", label: "Trail is", opts: ["Silhouette", "Ghost"], def: 0, sec: "Trail" },
+    { k: "dr", label: "Drift", min: 0, max: 100, def: 30, sec: "Trail" }
+  ],
+  frag: `uniform sampler2D uAtlas;uniform float uHead;
+vec4 cell(int k,vec2 uv){float idx=mod(uHead-1.-float(k)+8.,8.);vec2 c=vec2(mod(idx,4.),floor(idx/4.));return texture(uAtlas,(c+clamp(uv,0.,1.))/vec2(4.,2.));}
+vec4 fx(vec2 uv){vec3 col=texture(uSrc,uv).rgb;float m=smoothstep(.3,.7,texture(uAux,uv).r);
+  for(int k=7;k>=0;k--){if(float(k)>=u_cnt)continue;float age=float(k+1);
+    vec4 e=cell(k,uv+vec2(0.,1.)*u_dr/100.*.012*age);float a=e.a*pow(u_fade/100.,age);
+    vec3 ec=u_mode<.5?hueRot(vec3(1.,.5,.18),radians(u_hue)*age)*(.55+.55*luma(e.rgb)):hueRot(e.rgb,radians(u_hue)*age);
+    col=mix(col,ec,a*(1.-m));}
+  return vec4(col,1.);}`,
+  bind(pr, V3, ctx) {
+    AUXBIND(pr, ctx);
+    const W = ctx.W, H = ctx.H, cw = Math.max(32, W >> 1), ch = Math.max(32, H >> 1), key = cw + "x" + ch;
+    if (!ECH.rt || ECH.key !== key) {
+      if (ECH.rt) freeRT(ECH.rt);
+      ECH.rt = mkRT(cw * 4, ch * 2, {});
+      ECH.key = key;
+      ECH.head = 0;
+      ECH.last = -9;
+    }
+    samp(pr, "uAtlas", 2, ECH.rt.tex);
+    pr.f("uHead", ECH.head);
+  },
+  after(pr, V3, ctx) {
+    const dly = V3.dly / 1e3;
+    if (!window.__benching && ctx.t - ECH.last < dly && ctx.t >= ECH.last) return;
+    ECH.last = ctx.t;
+    const cw = ECH.rt.w / 4, ch = ECH.rt.h / 2, i = ECH.head, cp = ECH.prog || (ECH.prog = mkProg(VS, F_ECAP));
+    bindRT(ECH.rt);
+    gl.viewport(i % 4 * cw, (i / 4 | 0) * ch, cw, ch);
+    cp.use();
+    samp(cp, "uC", 0, ctx.inTex);
+    samp(cp, "uM", 1, ctx.mask || ctx.inTex);
+    draw();
+    gl.viewport(0, 0, ECH.rt.w, ECH.rt.h);
+    ECH.head = (i + 1) % 8;
   }
 });
 var STACK = { layers: [mkLayer("crtlab")], sel: 0, rt: {} };
@@ -4188,7 +4793,7 @@ uniform int uCM;uniform float uCA;
 vec3 treat(vec3 c){if(uCM==0)return c;float l=luma(c);vec3 r;
   if(uCM==1)r=vec3(l);else if(uCM==2)r=mix(uPal[0],uPal[max(uPalN-1,0)],l);else if(uCM==3)r=palSmooth(l);else r=palNearest(c);
   return mix(c,r,uCA);}
-uniform sampler2D uBase,uLay;
+uniform sampler2D uBase,uLay,uMaskT;
 uniform vec2 uTexel,uPos;
 uniform float uOpa,uSize,uThr,uShow;
 uniform int uBlend,uSel;
@@ -4204,6 +4809,7 @@ void main(){
            +abs(L3(texture(uBase,vUv+vec2(0.,uTexel.y)).rgb)-L3(texture(uBase,vUv-vec2(0.,uTexel.y)).rgb));
     m*=smoothstep(uThr*.5,uThr*.5+.08,e);
   }else if(uSel==2){m*=smoothstep(uThr-.04,uThr+.04,L3(b));}
+  else if(uSel==3){m*=texture(uMaskT,vUv).r;}
   vec3 r;
   if(uBlend==1)r=b*l;
   else if(uBlend==2)r=1.-(1.-b)*(1.-l);
@@ -4223,6 +4829,147 @@ function stackRT(name, w, h) {
   }
   return r;
 }
+var MASKSEL = ["subject", "background", "color", "drawn"];
+var LASTMASK = {};
+function layerMask(l, m) {
+  const base = l.mask || MASK_DEFAULTS;
+  let mk = null;
+  if (l.select === "subject") mk = { ...base, src: "person" };
+  else if (l.select === "background") mk = { ...base, src: "person", invert: !base.invert };
+  else if (l.select === "color") mk = { ...base, src: "color" };
+  else if (l.select === "drawn") mk = { ...base, src: "drawn" };
+  else if (m && m.needsMask) mk = { ...base };
+  if (mk && mk.src === "person" && !PERSON.synthetic && PERSON.state === "idle") loadPerson(false);
+  return mk;
+}
+var mobileData = () => {
+  const c = navigator.connection;
+  return !!(c && (c.saveData || c.type === "cellular" || /(^|-)2g|3g/.test(c.effectiveType || "")));
+};
+function loadPerson(force) {
+  if (PERSON.state !== "idle" && PERSON.state !== "error") return;
+  if (!force && mobileData()) {
+    if (!PERSON._warned) {
+      PERSON._warned = 1;
+      toast("The person model is about 14 MB and you\u2019re on mobile data. Use \u201CLoad person model\u201D in the Mask section.", 6e3);
+    }
+    return;
+  }
+  PERSON.state = "starting";
+  startPerson();
+  toast("Loading the person model (about 14 MB, kept on this device)\u2026", 4e3);
+}
+var MPREV = 0;
+function maskSection(host, l, m) {
+  l.mask = l.mask || { ...MASK_DEFAULTS };
+  const mk = l.mask, a = accordion("Mask", true);
+  const eff = l.select === "all" ? mk.src : l.select === "color" ? "color" : l.select === "drawn" ? "drawn" : "person";
+  if (l.select === "all") {
+    const r = el("div", "ir");
+    r.appendChild(el("span", "l", "Matte from"));
+    const sel = document.createElement("select");
+    [["person", "Person"], ["luma", "Luma range"], ["color", "Colour key"], ["drawn", "Drawn"]].forEach(([v, n]) => {
+      const o = document.createElement("option");
+      o.value = v;
+      o.textContent = n;
+      sel.appendChild(o);
+    });
+    sel.value = mk.src;
+    sel.addEventListener("change", () => {
+      mk.src = sel.value;
+      renderInspector();
+    });
+    r.appendChild(sel);
+    a.b.appendChild(r);
+  }
+  if (eff === "person") {
+    const st = el("div", "cl", "");
+    const upd = () => {
+      st.textContent = PERSON.synthetic ? "Using the built-in test matte." : PERSON.state === "ready" ? `Person model ready \xB7 ${PERSON.backend}${PERSON.fps ? " \xB7 " + PERSON.fps.toFixed(0) + " fps" : ""}` : PERSON.state === "error" ? "Person model error: " + PERSON.err : PERSON.state === "idle" ? "Person model not loaded." : `Loading the person model\u2026 ${Math.round(PERSON.prog * 100)}%`;
+    };
+    upd();
+    a.b.appendChild(st);
+    const iv = setInterval(() => {
+      if (!st.isConnected) {
+        clearInterval(iv);
+        return;
+      }
+      upd();
+    }, 500);
+    if (PERSON.state === "idle" || PERSON.state === "error") a.b.appendChild(Object.assign(el("button", "btn", "Load person model (about 14 MB)"), { onclick: () => {
+      PERSON.state = "idle";
+      loadPerson(true);
+    } }));
+    const mr = el("div", "ir");
+    mr.appendChild(el("span", "l", "Model"));
+    const ms = document.createElement("select");
+    [["selfie", "Fast (selfie)"], ["multi", "Detailed (multiclass, 16 MB)"]].forEach(([v, n]) => {
+      const o = document.createElement("option");
+      o.value = v;
+      o.textContent = n;
+      ms.appendChild(o);
+    });
+    ms.value = PERSON.model;
+    ms.addEventListener("change", () => {
+      PERSON.model = ms.value;
+      PERSON.state = "starting";
+      startPerson(ms.value);
+    });
+    mr.appendChild(ms);
+    a.b.appendChild(mr);
+    rowParam(a.b, { k: "on", t: "b", label: "Smooth over time" }, PERSON.smooth, null);
+  }
+  if (eff === "luma") {
+    rowRange(a.b, "From", () => Math.round(mk.lo * 100), (v) => mk.lo = v / 100, 0, 100, 1);
+    rowRange(a.b, "To", () => Math.round(mk.hi * 100), (v) => mk.hi = v / 100, 0, 100, 1);
+  }
+  if (eff === "color") {
+    rowParam(a.b, { k: "col", t: "color", label: "Key colour" }, mk, null);
+    rowRange(a.b, "Tolerance", () => Math.round(mk.tol * 100), (v) => mk.tol = v / 100, 2, 100, 1);
+  }
+  if (eff === "drawn") {
+    rowParam(a.b, { k: "on", t: "b", label: "Paint on the picture" }, DRAWN, null);
+    rowParam(a.b, { k: "erase", t: "b", label: "Erase" }, DRAWN, null);
+    rowRange(a.b, "Brush", () => Math.round(DRAWN.size * 200), (v) => DRAWN.size = v / 200, 2, 40, 1);
+    a.b.appendChild(Object.assign(el("button", "btn", "Clear"), { onclick: () => clearDrawn(0) }));
+  }
+  rowParam(a.b, { k: "invert", t: "b", label: "Invert" }, mk, null);
+  rowRange(a.b, "Feather", () => mk.feather, (v) => mk.feather = v, 0, 80, 1);
+  rowRange(a.b, "Grow / shrink", () => mk.grow, (v) => mk.grow = v, -100, 100, 1);
+  if (eff === "person") rowRange(a.b, "Edge snap", () => mk.snap, (v) => mk.snap = v, 0, 100, 1);
+  const pv = el("div", "ir");
+  pv.appendChild(el("span", "l", "Preview mask"));
+  const cb = document.createElement("input");
+  cb.type = "checkbox";
+  cb.checked = MPREV === l.uid;
+  cb.addEventListener("change", () => {
+    MPREV = cb.checked ? l.uid : 0;
+  });
+  pv.appendChild(cb);
+  a.b.appendChild(pv);
+  host.appendChild(a.d);
+}
+canvas.addEventListener("pointerdown", (e) => {
+  if (!DRAWN.on) return;
+  e.stopImmediatePropagation();
+  e.preventDefault();
+  canvas.setPointerCapture(e.pointerId);
+  canvas._paint = true;
+  pnt(e);
+}, true);
+canvas.addEventListener("pointermove", (e) => {
+  if (canvas._paint && DRAWN.on) {
+    e.stopImmediatePropagation();
+    pnt(e);
+  }
+}, true);
+canvas.addEventListener("pointerup", () => {
+  canvas._paint = false;
+}, true);
+function pnt(e) {
+  const r = canvas.getBoundingClientRect();
+  paintDrawn((e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height);
+}
 function renderStack(t, dt) {
   const vis = STACK.layers.filter((l) => l.visible && MODULES[l.module]);
   if (!vis.length) return;
@@ -4234,6 +4981,7 @@ function renderStack(t, dt) {
   computeE(t, dt);
   ST.eT = t;
   syncSrc();
+  feedPerson();
   const lo = layout(), W = lo.DW, H = lo.DH;
   ST.DW = W;
   ST.DH = H;
@@ -4255,18 +5003,26 @@ function renderStack(t, dt) {
       } finally {
         ST.ovr = null;
       }
-    } else m.render(acc.tex, { t, dt, out: lay, layer: l, params: l.params, W, H });
+    } else {
+      const mk = layerMask(l, m), mt = mk ? maskFor(mk, W, H, acc.tex) : null;
+      LASTMASK[l.uid] = mt;
+      m.render(acc.tex, { t, dt, out: lay, layer: l, params: l.params, W, H, mask: mt });
+    }
     bindRT(tmp);
     cp.use();
     samp(cp, "uBase", 0, acc.tex);
     samp(cp, "uLay", 1, lay.tex);
+    {
+      const mk = MASKSEL.includes(l.select) && l.module !== "crtlab" ? LASTMASK[l.uid] : null;
+      samp(cp, "uMaskT", 2, mk || acc.tex);
+    }
     cp.v2("uTexel", 1 / W, 1 / H);
     cp.v2("uPos", l.pos[0] / 100, l.pos[1] / 100);
     cp.f("uOpa", l.opacity / 100);
     cp.f("uSize", l.size / 100);
     cp.f("uThr", l.thr / 100);
     cp.f("uShow", l.showSource ? 1 : 0);
-    const bi = BLENDS.indexOf(l.blend), si = ["all", "edges", "luma"].indexOf(l.select);
+    const bi = BLENDS.indexOf(l.blend), si = MASKSEL.includes(l.select) ? 3 : ["all", "edges", "luma"].indexOf(l.select);
     cp.i("uBlend", Math.max(0, bi));
     cp.i("uSel", Math.max(0, si));
     const col = l.color || LAYER_DEFAULTS.color, cmi = Math.max(0, COLOR_MODES.indexOf(col.mode));
@@ -4290,9 +5046,17 @@ function renderStack(t, dt) {
     STACK.rt.a = acc;
     STACK.rt.b = tmp;
   }
+  let outTex = acc.tex;
+  if (MPREV) {
+    const pl = STACK.layers.find((x) => x.uid === MPREV);
+    if (pl) {
+      const mk = layerMask(pl, MODULES[pl.module]);
+      if (mk) outTex = maskFor(mk, W, H, acc.tex);
+    }
+  }
   bindRT(null);
   PR.copy.use();
-  samp(PR.copy, "uT", 0, acc.tex);
+  samp(PR.copy, "uT", 0, outTex);
   draw();
 }
 window.__embedReady = () => EMBED && GLOK && !V.DEAD && !CTX.lost;
@@ -4362,6 +5126,7 @@ canvas.addEventListener("webglcontextrestored", () => {
     initGL();
     initLUT();
     Object.keys(T).forEach((k) => delete T[k]);
+    resetMatteGL();
     PR.fin = null;
     Object.values(MODULES).forEach((m) => {
       m.prog = null;
@@ -4413,7 +5178,7 @@ var el = (tag, cls, html) => {
 var HIST = [];
 var REDO = [];
 var lastSnap = "";
-var stackState = () => STACK.layers.map((l) => ({ m: l.module, p: l.module === "crtlab" ? null : l.params, o: l.opacity, b: l.blend, s: l.showSource, sel: l.select, t: l.thr, pos: l.pos, z: l.size, seed: l.seed, v: l.visible, c: l.color }));
+var stackState = () => STACK.layers.map((l) => ({ m: l.module, p: l.module === "crtlab" ? null : l.params, o: l.opacity, b: l.blend, s: l.showSource, sel: l.select, t: l.thr, pos: l.pos, z: l.size, seed: l.seed, v: l.visible, c: l.color, mk: l.mask }));
 function snap() {
   const s = JSON.stringify({ p: P, l: stackState() });
   if (s !== lastSnap) {
@@ -4430,6 +5195,7 @@ function applySnap(s) {
     const l = mkLayer(x.m, x.p || void 0);
     Object.assign(l, { opacity: x.o, blend: x.b, showSource: x.s, select: x.sel, thr: x.t, pos: x.pos, size: x.z, seed: x.seed, visible: x.v });
     if (x.c) l.color = x.c;
+    if (x.mk) l.mask = x.mk;
     return l;
   });
   if (!STACK.layers.length) STACK.layers = [mkLayer("crtlab")];
@@ -6669,7 +7435,7 @@ async function openProjects() {
   const cl = el("button", "btn", "Close");
   cl.addEventListener("click", close);
   box.appendChild(cl);
-  const draw2 = async () => {
+  const draw3 = async () => {
     list.innerHTML = "";
     const items = await projList();
     if (!items.length) list.appendChild(el("p", "", "Nothing saved yet. Your work autosaves as you edit."));
@@ -6688,7 +7454,7 @@ async function openProjects() {
       });
       dl.addEventListener("click", async () => {
         await projTx("readwrite", (s) => s.delete(it.id));
-        draw2();
+        draw3();
       });
       r.append(im, nm, ld);
       if (!it.auto) r.appendChild(dl);
@@ -6700,12 +7466,12 @@ async function openProjects() {
       await projPut({ name: name.value.trim() || "Version " + (/* @__PURE__ */ new Date()).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }), ts: Date.now(), state: projState(), thumb: projThumb() });
       name.value = "";
       toast("Version saved");
-      draw2();
+      draw3();
     } catch (e) {
       toast("This browser won\u2019t store projects");
     }
   });
-  draw2();
+  draw3();
 }
 function resetAll() {
   Object.assign(P, JSON.parse(JSON.stringify(BASE)));
@@ -7088,6 +7854,162 @@ async function runBench() {
   root.querySelector("#bres").innerHTML = `<p>${res.tooClose ? "FAIL" : "PASS"}: ${res.tooClose} pair(s) closer than ${thr}. ${res.items} looks in ${res.seconds}s.</p><pre>${res.closest.map((p) => p.join("  ")).join("\n")}</pre>`;
   prog.textContent = "done";
 }
+function showSheet(sheet) {
+  const d = document.createElement("div");
+  d.style.cssText = "position:fixed;inset:0;z-index:99;background:#222;overflow:auto";
+  sheet.style.cssText = "width:100%;display:block";
+  d.appendChild(sheet);
+  document.body.appendChild(d);
+}
+var TRAITS = {
+  dither: ["ordered", "grid", "gameboy", "static", "none"],
+  ascii: ["luma-glyph", "glyph", "red-black", "static", "scan"],
+  epsilon: ["additive-glow", "glow", "warm", "static", "none"],
+  orb: ["gaussian", "blob", "retro-rainbow", "drift", "scan"],
+  linemod: ["luma-width", "line", "lime-mono", "wobble", "none"],
+  cmyk: ["subtractive", "rosette-grid", "cmyk-cream", "static", "paper"],
+  shapes: ["additive-channel", "shape-grid", "rgb-black", "static", "paper"],
+  stipple: ["probabilistic", "stipple", "bw-paper", "static", "paper"],
+  pixelmania: ["avg-block", "quadtree", "image", "static", "bevel"],
+  displace: ["warp", "warp", "source", "flow", "none"],
+  crusher: ["led", "bead-grid", "synth", "wobble", "bead"],
+  patmerge: ["select", "sdf-blob", "pink-gray", "static", "none"],
+  multithr: ["threshold", "bitmap", "bw", "static", "grain"],
+  crtlab: ["crt-chain", "scanline-mask", "source", "flicker", "scan"],
+  psort: ["rank-sort", "runs", "source", "static", "streak"],
+  riso: ["multiply-overprint", "halftone-angles", "spot-inks", "static", "paper"],
+  engrave: ["line-width", "hatch", "ink-paper", "static", "none"],
+  seccam: ["crushed-levels", "interlace", "mono-green", "jitter", "overlay"],
+  mosh: ["block-hold", "block-motion", "source", "smear", "none"],
+  solid: ["flat-fill", "silhouette", "duotone-cream", "static", "flat"],
+  contour: ["edge-stroke", "outline", "source-dim", "static", "stroke"],
+  sigbody: ["mask-gated", "dither-body", "amber-ink", "static", "grain"],
+  bgrep: ["replace", "cut-out", "cream-blue", "drift", "flat"],
+  echo: ["ring-buffer", "trail", "orange-shift", "trail", "ghost"]
+};
+function cyanFrac(cv) {
+  const t = document.createElement("canvas");
+  t.width = 96;
+  t.height = 72;
+  const g = t.getContext("2d", { willReadFrequently: true });
+  g.drawImage(cv, 0, 0, 96, 72);
+  const d = g.getImageData(0, 0, 96, 72).data;
+  let n = 0;
+  for (let i = 0; i < d.length; i += 4) {
+    const r = d[i] / 255, gg = d[i + 1] / 255, b = d[i + 2] / 255, mx = Math.max(r, gg, b), mn = Math.min(r, gg, b), dl = mx - mn;
+    if (mx < 0.15 || dl / mx < 0.25) continue;
+    let h;
+    if (mx === r) h = ((gg - b) / dl + 6) % 6;
+    else if (mx === gg) h = (b - r) / dl + 2;
+    else h = (r - gg) / dl + 4;
+    h *= 60;
+    if (h >= 165 && h <= 255) n++;
+  }
+  return n / (96 * 72);
+}
+function hueShift(srcCv, outCv) {
+  const rd = (cv) => {
+    let w = cv.width, h = cv.height, cur = cv;
+    while (w > 24) {
+      w = Math.max(24, w >> 1);
+      h = Math.max(18, h >> 1);
+      const t2 = document.createElement("canvas");
+      t2.width = w;
+      t2.height = h;
+      t2.getContext("2d").drawImage(cur, 0, 0, w, h);
+      cur = t2;
+    }
+    const t = document.createElement("canvas");
+    t.width = 24;
+    t.height = 18;
+    const g = t.getContext("2d", { willReadFrequently: true });
+    g.drawImage(cur, 0, 0, 24, 18);
+    return g.getImageData(0, 0, 24, 18).data;
+  };
+  const a = rd(srcCv), b = rd(outCv);
+  let sum = 0, n = 0;
+  const hsv = (d, i) => {
+    const r = d[i] / 255, g = d[i + 1] / 255, bl = d[i + 2] / 255, mx = Math.max(r, g, bl), mn = Math.min(r, g, bl), dl = mx - mn;
+    if (mx < 0.2 || dl / mx < 0.25) return null;
+    let h;
+    if (mx === r) h = ((g - bl) / dl + 6) % 6;
+    else if (mx === g) h = (bl - r) / dl + 2;
+    else h = (r - g) / dl + 4;
+    return h * 60;
+  };
+  for (let i = 0; i < a.length; i += 4) {
+    const x = hsv(a, i), y = hsv(b, i);
+    if (x === null || y === null) continue;
+    let d = Math.abs(x - y);
+    if (d > 180) d = 360 - d;
+    sum += d;
+    n++;
+  }
+  return n > 12 ? sum / n : null;
+}
+function runModuleGate(thr = 0.08) {
+  const ids = Object.keys(MODULES).filter((i) => !MODULES[i].hidden && TRAITS[i]);
+  const names = ["face", "animal", "text", "gradient"], TW = 200, TH2 = 150, srcs = benchSources().filter((x) => names.includes(x[0]));
+  const sheet = document.createElement("canvas");
+  sheet.width = TW * srcs.length;
+  sheet.height = TH2 * ids.length;
+  const sg = sheet.getContext("2d");
+  const feats = [], errs = [], cyan = {}, hue = {};
+  let BT = 5, all = 0, allN = 0;
+  window.__benching = true;
+  const saved = STACK.layers;
+  PERSON.synthetic = true;
+  ids.forEach((id, r) => {
+    feats[r] = [];
+    let cs = 0, hs = 0, hn = 0;
+    if (id === "crtlab") {
+      BT = 5;
+      ST.lastDeg = 0;
+      V.sizeKey = "";
+      V.lastBKey = "";
+    }
+    srcs.forEach((s, c) => {
+      setSource(s[1], "B");
+      STACK.layers = [mkLayer(id)];
+      try {
+        for (let i = 0; i < 4; i++) {
+          syntheticPerson(true, i);
+          renderStack(BT += 1 / 60, 1 / 60);
+          V.frameNo++;
+        }
+        sg.drawImage(canvas, c * TW, r * TH2, TW, TH2);
+        feats[r].push(bFeat(canvas));
+        cs += cyanFrac(canvas);
+        const hh = hueShift(s[1], canvas);
+        if (hh !== null) {
+          hs += hh;
+          hn++;
+        }
+      } catch (e) {
+        errs.push(id + ": " + String(e.message).slice(0, 160));
+      }
+    });
+    cyan[id] = +(cs / srcs.length).toFixed(3);
+    hue[id] = hn ? +(hs / hn).toFixed(1) : null;
+    all += cs;
+    allN += srcs.length;
+  });
+  STACK.layers = saved;
+  PERSON.synthetic = false;
+  const pairs = [], traitFail = [];
+  for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) {
+    let d = 0;
+    for (let c = 0; c < srcs.length; c++) d += bDist(feats[i][c], feats[j][c]);
+    pairs.push([+(d / srcs.length).toFixed(3), ids[i], ids[j]]);
+    const diff = TRAITS[ids[i]].filter((v, k) => v !== TRAITS[ids[j]][k]).length;
+    if (diff < 2) traitFail.push([ids[i], ids[j], diff]);
+  }
+  pairs.sort((a, b) => a[0] - b[0]);
+  const res = { modules: ids.length, distThreshold: thr, tooClose: pairs.filter((p) => p[0] < thr), closest: pairs.slice(0, 6), traitFail, cyanAll: +(all / allN).toFixed(3), cyan, hue, errs };
+  res.hueFail = Object.entries(hue).filter(([k, v]) => v !== null && v > 35).map(([k, v]) => k);
+  res.pass = !errs.length && !res.tooClose.length && !traitFail.length && res.cyanAll <= 0.15 && !res.hueFail.length;
+  return { res, sheet };
+}
 var IDENT = { patdith: "#f4efe1", contour: "#e6c07b", ridge: "#f2efe6", crtlab: "#ff5a1f", fuse: "#ff5c8a", psort: "#e8b04a", riso: "#ff48b0", engrave: "#c9b27c", seccam: "#8fbf7a", mosh: "#d65a5a", dither: "#8bac0f", ascii: "#ff2a2a", epsilon: "#ffb347", orb: "#ff2a6d", linemod: "#d8ff3a", cmyk: "#e6007e", shapes: "#ffd60a", stipple: "#f4efe1", pixelmania: "#ff9a1f", displace: "#c9c9c9", crusher: "#ff6a00", patmerge: "#ff6fae", multithr: "#f7f3ea" };
 var INS = { gallery: false, cat: "All" };
 var $i = (id) => document.getElementById(id);
@@ -7153,12 +8075,12 @@ function rowRange(host, label, get, set, min, max, step, def) {
   return paint;
 }
 var LAYER_ID = () => layer().uid;
-function rowParam(host, p, V2, onchange) {
+function rowParam(host, p, V3, onchange) {
   const set = (x) => {
-    V2[p.k] = x;
+    V3[p.k] = x;
     onchange && onchange(p);
   };
-  if (p.t === "r") return rowRange(host, p.label || p.k, () => V2[p.k], set, p.min, p.max, p.step, p.def);
+  if (p.t === "r") return rowRange(host, p.label || p.k, () => V3[p.k], set, p.min, p.max, p.step, p.def);
   if (p.t === "range2") {
     const r2 = el("div", "ir r2"), l2 = el("span", "l", p.label || p.k);
     l2.style.cursor = "default";
@@ -7170,19 +8092,19 @@ function rowParam(host, p, V2, onchange) {
       x.step = p.step || 1;
     });
     const paint = () => {
-      a.value = V2[p.k][0];
-      b.value = V2[p.k][1];
-      v.textContent = Math.round(V2[p.k][0]) + "\u2013" + Math.round(V2[p.k][1]);
-      w.style.setProperty("--a", (V2[p.k][0] - p.min) / (p.max - p.min) * 100 + "%");
-      w.style.setProperty("--b", (V2[p.k][1] - p.min) / (p.max - p.min) * 100 + "%");
+      a.value = V3[p.k][0];
+      b.value = V3[p.k][1];
+      v.textContent = Math.round(V3[p.k][0]) + "\u2013" + Math.round(V3[p.k][1]);
+      w.style.setProperty("--a", (V3[p.k][0] - p.min) / (p.max - p.min) * 100 + "%");
+      w.style.setProperty("--b", (V3[p.k][1] - p.min) / (p.max - p.min) * 100 + "%");
     };
     a.addEventListener("input", () => {
-      V2[p.k][0] = Math.min(+a.value, V2[p.k][1]);
+      V3[p.k][0] = Math.min(+a.value, V3[p.k][1]);
       paint();
       onchange && onchange(p);
     });
     b.addEventListener("input", () => {
-      V2[p.k][1] = Math.max(+b.value, V2[p.k][0]);
+      V3[p.k][1] = Math.max(+b.value, V3[p.k][0]);
       paint();
       onchange && onchange(p);
     });
@@ -7198,11 +8120,11 @@ function rowParam(host, p, V2, onchange) {
     const W = 232, H = 120, svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
     svg.style.cssText = "width:100%;max-width:300px;touch-action:none;background:var(--raise);border:1px solid var(--line);display:block";
-    const draw2 = () => {
-      const pts = V2[p.k].map((y, i) => [8 + i * (W - 16) / 4, H - 8 - y * (H - 16)]);
+    const draw3 = () => {
+      const pts = V3[p.k].map((y, i) => [8 + i * (W - 16) / 4, H - 8 - y * (H - 16)]);
       let d = "M" + pts[0].join(",");
       for (let i = 0; i <= 40; i++) {
-        const f = i / 40 * 4, j = Math.min(3, Math.floor(f)), t2 = f - j, tt = t2 * t2 * (3 - 2 * t2), y = V2[p.k][j] * (1 - tt) + V2[p.k][j + 1] * tt;
+        const f = i / 40 * 4, j = Math.min(3, Math.floor(f)), t2 = f - j, tt = t2 * t2 * (3 - 2 * t2), y = V3[p.k][j] * (1 - tt) + V3[p.k][j + 1] * tt;
         d += " L" + (8 + f * (W - 16) / 4) + "," + (H - 8 - y * (H - 16));
       }
       svg.innerHTML = `<line x1="8" y1="${H - 8}" x2="${W - 8}" y2="8" stroke="var(--line)"/><path d="${d}" fill="none" stroke="var(--ink)" stroke-width="1.5"/>` + pts.map((q, i) => `<circle data-i="${i}" cx="${q[0]}" cy="${q[1]}" r="9" fill="var(--accent)" stroke="var(--ink)"/>`).join("");
@@ -7211,8 +8133,8 @@ function rowParam(host, p, V2, onchange) {
     const move = (e) => {
       if (cur < 0) return;
       const r2 = svg.getBoundingClientRect(), y = 1 - ((e.clientY - r2.top) / r2.height * H - 8) / (H - 16);
-      V2[p.k][cur] = Math.min(1, Math.max(0, y));
-      draw2();
+      V3[p.k][cur] = Math.min(1, Math.max(0, y));
+      draw3();
       onchange && onchange(p);
     };
     svg.addEventListener("pointerdown", (e) => {
@@ -7228,7 +8150,7 @@ function rowParam(host, p, V2, onchange) {
     host.appendChild(t);
     box.appendChild(svg);
     host.appendChild(box);
-    draw2();
+    draw3();
     return;
   }
   if (p.t === "image") {
@@ -7256,7 +8178,7 @@ function rowParam(host, p, V2, onchange) {
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
         MAPIMG[LAYER_ID()] = t;
-        V2.dmode = 3;
+        V3.dmode = 3;
         b.textContent = "Replace";
         toast("Map image loaded");
         renderInspector();
@@ -7280,23 +8202,23 @@ function rowParam(host, p, V2, onchange) {
       op.textContent = o;
       s.appendChild(op);
     });
-    s.value = V2[p.k];
+    s.value = V3[p.k];
     s.addEventListener("change", () => set(+s.value));
     r.appendChild(s);
   } else if (p.t === "b") {
     const c = document.createElement("input");
     c.type = "checkbox";
     c.className = "cb";
-    c.checked = !!V2[p.k];
+    c.checked = !!V3[p.k];
     c.addEventListener("change", () => set(c.checked));
     r.appendChild(c);
   } else if (p.t === "color") {
     const c = document.createElement("input");
     c.type = "color";
-    c.value = V2[p.k];
+    c.value = V3[p.k];
     const h = document.createElement("input");
     h.className = "hx";
-    h.value = V2[p.k];
+    h.value = V3[p.k];
     c.addEventListener("input", () => {
       h.value = c.value;
       set(c.value);
@@ -7311,11 +8233,11 @@ function rowParam(host, p, V2, onchange) {
   }
   host.appendChild(r);
 }
-function palEditor(host, p, V2, onchange) {
+function palEditor(host, p, V3, onchange) {
   const box = el("div", "pe");
-  const draw2 = () => {
+  const draw3 = () => {
     box.innerHTML = "";
-    (V2[p.k] || []).forEach((hex, i) => {
+    (V3[p.k] || []).forEach((hex, i) => {
       const sl = el("div", "sl"), c = document.createElement("input");
       c.type = "color";
       c.value = hex;
@@ -7323,7 +8245,7 @@ function palEditor(host, p, V2, onchange) {
       h.className = "hx";
       h.value = hex;
       const ch = (x) => {
-        V2[p.k][i] = x;
+        V3[p.k][i] = x;
         onchange && onchange(p);
       };
       c.addEventListener("input", () => {
@@ -7337,14 +8259,14 @@ function palEditor(host, p, V2, onchange) {
         }
       });
       sl.append(c, h);
-      if (V2[p.k].length > 2) {
+      if (V3[p.k].length > 2) {
         const x = el("button", "", "\xD7");
         x.setAttribute("aria-label", "Remove color");
         x.style.minWidth = "28px";
         x.addEventListener("click", () => {
-          V2[p.k].splice(i, 1);
+          V3[p.k].splice(i, 1);
           onchange && onchange(p);
-          draw2();
+          draw3();
         });
         sl.appendChild(x);
       }
@@ -7352,17 +8274,17 @@ function palEditor(host, p, V2, onchange) {
     });
     const add = el("button", "", "+ Color");
     add.addEventListener("click", () => {
-      if (V2[p.k].length < 16) {
-        V2[p.k].push("#ffffff");
+      if (V3[p.k].length < 16) {
+        V3[p.k].push("#ffffff");
         onchange && onchange(p);
-        draw2();
+        draw3();
       }
     });
     const cyc = el("button", "", "Cycle");
     cyc.addEventListener("click", () => {
-      V2[p.k] = palCycle(V2[p.k], 1);
+      V3[p.k] = palCycle(V3[p.k], 1);
       onchange && onchange(p);
-      draw2();
+      draw3();
     });
     const sel = document.createElement("select");
     sel.className = "hx";
@@ -7371,9 +8293,9 @@ function palEditor(host, p, V2, onchange) {
     sel.addEventListener("change", () => {
       const [c, n] = sel.value.split("|");
       if (PALETTES[c] && PALETTES[c][n]) {
-        V2[p.k] = PALETTES[c][n].slice();
+        V3[p.k] = PALETTES[c][n].slice();
         onchange && onchange(p);
-        draw2();
+        draw3();
       }
     });
     const imp = el("button", "", "Import");
@@ -7385,21 +8307,21 @@ function palEditor(host, p, V2, onchange) {
     fi.addEventListener("change", async () => {
       const a = palParse(await fi.files[0].text());
       if (a.length >= 2) {
-        V2[p.k] = a;
+        V3[p.k] = a;
         onchange && onchange(p);
-        draw2();
+        draw3();
       } else toast("No colors found in that file");
     });
     const exp = el("button", "", "Export");
     exp.addEventListener("click", () => {
-      const b = new Blob([palGpl(V2[p.k])], { type: "text/plain" }), a = document.createElement("a");
+      const b = new Blob([palGpl(V3[p.k])], { type: "text/plain" }), a = document.createElement("a");
       a.href = URL.createObjectURL(b);
       a.download = "n0ise-palette.gpl";
       a.click();
     });
     box.append(add, cyc, sel, imp, exp, fi);
   };
-  draw2();
+  draw3();
   host.appendChild(box);
 }
 var ACC_OPEN = {};
@@ -7608,7 +8530,7 @@ function hslHex(h, s, l) {
   return rgbHex([f(0), f(8), f(4)]);
 }
 function shareStack() {
-  const data = STACK.layers.map((l) => ({ m: l.module, p: l.module === "crtlab" ? null : l.params, o: l.opacity, b: l.blend, s: l.showSource, sel: l.select, t: l.thr, pos: l.pos, z: l.size, seed: l.seed, v: l.visible, c: l.color }));
+  const data = STACK.layers.map((l) => ({ m: l.module, p: l.module === "crtlab" ? null : l.params, o: l.opacity, b: l.blend, s: l.showSource, sel: l.select, t: l.thr, pos: l.pos, z: l.size, seed: l.seed, v: l.visible, c: l.color, mk: l.mask }));
   const hash = "#s=" + btoa(unescape(encodeURIComponent(JSON.stringify(data))));
   history.replaceState(null, "", hash);
   (navigator.clipboard ? navigator.clipboard.writeText(location.href) : Promise.reject()).then(() => toast("Link copied")).catch(() => toast("Link is in the address bar"));
@@ -7622,6 +8544,7 @@ function loadStackHash() {
       const l = mkLayer(x.m, x.p || void 0);
       Object.assign(l, { opacity: x.o, blend: x.b, showSource: x.s, select: x.sel, thr: x.t, pos: x.pos, size: x.z, seed: x.seed, visible: x.v });
       if (x.c) l.color = x.c;
+      if (x.mk) l.mask = x.mk;
       return l;
     });
     if (!STACK.layers.length) STACK.layers = [mkLayer("crtlab")];
@@ -7712,19 +8635,19 @@ function colorRow(host, l) {
 }
 var recolors = (o) => !!(o && (o.pal && o.pal !== "src"));
 function fuseBar(host, l) {
-  const V2 = l.params, bar = el("div", "fbar");
+  const V3 = l.params, bar = el("div", "fbar");
   const row = el("div", "fchips");
   for (let s = 1; s <= 4; s++) {
-    const f = CAMFX[+V2["f" + s] - 1], c = el("div", "fchip" + (f ? "" : " empty") + (f && !V2["on" + s] ? " off" : ""));
+    const f = CAMFX[+V3["f" + s] - 1], c = el("div", "fchip" + (f ? "" : " empty") + (f && !V3["on" + s] ? " off" : ""));
     const dot = el("button", "fdot");
     dot.setAttribute("aria-label", "Step " + s + " power");
-    dot.setAttribute("aria-pressed", !!(f && V2["on" + s]));
+    dot.setAttribute("aria-pressed", !!(f && V3["on" + s]));
     let hold = 0, solo = false;
     dot.addEventListener("pointerdown", () => {
       solo = false;
       hold = setTimeout(() => {
         solo = true;
-        for (let k = 1; k <= 4; k++) V2["on" + k] = k === s && !!CAMFX[+V2["f" + k] - 1];
+        for (let k = 1; k <= 4; k++) V3["on" + k] = k === s && !!CAMFX[+V3["f" + k] - 1];
         if (navigator.vibrate) try {
           navigator.vibrate(12);
         } catch (e) {
@@ -7735,7 +8658,7 @@ function fuseBar(host, l) {
     dot.addEventListener("pointerup", () => {
       clearTimeout(hold);
       if (solo || !f) return;
-      V2["on" + s] = !V2["on" + s];
+      V3["on" + s] = !V3["on" + s];
       renderInspector();
     });
     dot.addEventListener("pointerleave", () => clearTimeout(hold));
@@ -7766,7 +8689,7 @@ function fuseBar(host, l) {
     row.appendChild(c);
   }
   bar.appendChild(row);
-  const cost = fuseCost(V2), meter = el("span", "fcost", "Cost " + "\u25CF".repeat(Math.min(cost, 9)) + "\u25CB".repeat(Math.max(0, 9 - cost)));
+  const cost = fuseCost(V3), meter = el("span", "fcost", "Cost " + "\u25CF".repeat(Math.min(cost, 9)) + "\u25CB".repeat(Math.max(0, 9 - cost)));
   const act = el("div", "pe");
   const fb = el("button", "", "Fuse");
   fb.title = "Random compatible pair";
@@ -7794,7 +8717,7 @@ function fuseBar(host, l) {
   sh.addEventListener("click", () => fuseShare(l));
   act.append(fb, sv, sh, ed, rs, meter);
   bar.appendChild(act);
-  if ([1, 2, 3, 4].some((s) => +V2["f" + s] && +V2["mk" + s] === 4) || ST.mpaint) {
+  if ([1, 2, 3, 4].some((s) => +V3["f" + s] && +V3["mk" + s] === 4) || ST.mpaint) {
     const mp = el("div", "pe"), tg = el("button", "", ST.mpaint ? "Done painting" : "Paint mask");
     tg.addEventListener("click", () => {
       ST.mpaint = !ST.mpaint;
@@ -8002,14 +8925,17 @@ function renderInspector0() {
   const ss = el("div", "ir");
   ss.appendChild(el("span", "l", "Select"));
   const ssel = document.createElement("select");
-  ["all", "edges", "luma"].forEach((b) => {
+  [["all", "All"], ["subject", "Subject"], ["background", "Background"], ["edges", "Edges"], ["luma", "Luma range"], ["color", "Colour key"], ["drawn", "Drawn"]].forEach(([b, n]) => {
     const o = document.createElement("option");
     o.value = b;
-    o.textContent = b === "all" ? "All" : b === "edges" ? "Edges" : "Luma range";
+    o.textContent = n;
     ssel.appendChild(o);
   });
   ssel.value = l.select;
-  ssel.addEventListener("change", () => l.select = ssel.value);
+  ssel.addEventListener("change", () => {
+    l.select = ssel.value;
+    renderInspector();
+  });
   ss.appendChild(ssel);
   tf.b.appendChild(ss);
   rowRange(tf.b, "Threshold", () => l.thr, (v) => l.thr = v, 0, 100, 1);
@@ -8018,6 +8944,7 @@ function renderInspector0() {
   rowRange(tf.b, "Size", () => l.size, (v) => l.size = v, 20, 200, 1);
   rowRange(tf.b, "Seed", () => l.seed, (v) => l.seed = v, 0, 999, 1);
   host.appendChild(tf.d);
+  if (l.module !== "crtlab" && (m.needsMask || MASKSEL.includes(l.select))) maskSection(host, l, m);
   if (l.module === "crtlab") {
     TABS.forEach(([tid, tn], i) => {
       const a = accordion(tn, i === 0);
@@ -8283,13 +9210,13 @@ function wireHero() {
     const hero = m.schema.hero || [];
     if (!hero.length) return;
     const r = canvas.getBoundingClientRect(), ux = (e.clientX - r.left) / r.width, uy = 1 - (e.clientY - r.top) / r.height;
-    const V2 = l.module === "crtlab" ? P : l.params, defs = l.module === "crtlab" ? CTL : Object.fromEntries(m.params.map((p) => [p.k, p]));
+    const V3 = l.module === "crtlab" ? P : l.params, defs = l.module === "crtlab" ? CTL : Object.fromEntries(m.params.map((p) => [p.k, p]));
     [ux, uy].forEach((u, i) => {
       const k = hero[i];
       if (!k || !defs[k]) return;
       const p = defs[k];
       if (p.t && p.t !== "r" && p.t !== void 0 && p.t !== "r") return;
-      V2[k] = p.min + (p.max - p.min) * Math.min(1, Math.max(0, u));
+      V3[k] = p.min + (p.max - p.min) * Math.min(1, Math.max(0, u));
     });
   });
 }
@@ -8778,3 +9705,4 @@ function wireSheet() {
   requestAnimationFrame(loop);
   if (new URLSearchParams(location.search).get("bench")) setTimeout(runBench, 600);
 })();
+window.__n0 = { runModuleGate, showSheet, STACK, mkLayer, MODULES, PERSON, DRAWN, setSource, syntheticPerson, renderStack, renderFrame, P, V, ST, SRC, TEX, maskFor, startPerson, loadPerson, renderInspector, layout };
