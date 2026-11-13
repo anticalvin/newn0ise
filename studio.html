@@ -2144,6 +2144,7 @@ function makeRelief(name,cv,depth,{quick=false,dw,dh,photo=null,px=null}={}){
 /* ---------- subject cut-out (matting) ----------
    MATTERS is the swap point: each entry is {label, run(canvas,onProg) -> {data:Float32Array 0..1, w, h}}.
    modnet runs in matte.worker.js (WebGPU or WASM). fallback needs no model (border flood fill). */
+const BUILD='step4-fix1';
 const CUT={on:localStorage.getItem('n0.autocut')!=='0',workerP:null,jobs:new Map(),seq:0};
 function resizeBilinear(s,sw,sh,dw,dh){
   if(sw===dw&&sh===dh)return s;
@@ -2278,7 +2279,7 @@ function setAlpha(o,a,by){
   applyAlpha(m);rebuildRelief(o);
 }
 async function autoCut(o){
-  const m=o.meta;if(m.cutting)return;m.cutting=true;
+  const m=o.meta;if(m.cutting)return;m.cutting=true;m.cutErr='';
   const t0=performance.now();
   try{
     let r,by,a;
@@ -2287,8 +2288,9 @@ async function autoCut(o){
         cutStatus(key==='fallback'?'Cutting out subject…':'Loading cut-out model…',key==='fallback'?null:0);
         r=await MATTERS[key].run(m.photo,(p,s)=>{if(s==='cutting')cutStatus('Cutting out subject…');else cutStatus(`Loading cut-out model… ${Math.round(p*100)}%`,p);});
         by=MATTERS[key].label;break;
-      }catch(e){console.warn('matting '+key+' failed',e);}
+      }catch(e){console.warn('matting '+key+' failed',e);m.cutErr=m.cutErr||String(e&&e.message||e).slice(0,140);}
     }
+    if(by==='edge fill'&&m.cutErr)toast('Cut-out model couldn’t load ('+m.cutErr.slice(0,70)+'). Used the simple edge fill. Use Refine to fix edges.',7000);
     if(!objById(o.id))return;
     a=refineMask(r.data,r.w,r.h,m.px,m.w,m.h);
     let cov=0;for(let i=0;i<a.length;i++)cov+=a[i];cov/=a.length;
@@ -2312,11 +2314,12 @@ function buildCutSection(o){
   chipRow(r,[['auto','Auto'],['modnet','People'],['u2net','Accurate']],v=>CUT.model===v,v=>{CUT.model=v;localStorage.setItem('n0.cutmodel',v);});
   const acts=el('div','chips');
   acts.append(
-    btn('Re-run','',()=>autoCut(o)),
+    btn('Cut out subject','',()=>autoCut(o)),
     btn('Reset cut','',()=>{if(m.alpha0){setAlpha(o,Float32Array.from(m.alpha0));refreshInspector();}else toast('Nothing to reset yet.');}),
     btn('Undo auto-cut','',()=>{m.alpha=null;m.cutBy='none';applyAlpha(m);rebuildRelief(o);refreshInspector();}),
     btn(m.refine?'Close refine':'Refine','',()=>{m.refine=!m.refine;refreshInspector();}));
   r.appendChild(acts);
+  if(m.cutErr)r.appendChild(el('div','note','Cut-out model error: '+m.cutErr));
   if(m.refine)refineEditor(r,o);
 }
 function refineEditor(parent,o){
@@ -2373,7 +2376,7 @@ async function autoDepth(o,{force=false}={}){
       try{
         const r=await runMatte('depth',m.photo,(p,s)=>{if(s==='cutting')cutStatus('Estimating depth…');else cutStatus(`Loading depth model… ${Math.round(p*100)}%`,p);},'depth');
         raw={data:r.data,w:r.w,h:r.h};IDB.put(key,raw);m.depthBy='Depth Anything V2';
-      }catch(e){console.warn('depth model failed',e);raw={data:pseudoDepth(m.photo),w:m.w,h:m.h};m.depthBy='quick (no model)';toast('Depth model couldn’t load. Using a quick relief.',4500);}
+      }catch(e){console.warn('depth model failed',e);m.depthErr=String(e&&e.message||e).slice(0,140);raw={data:pseudoDepth(m.photo),w:m.w,h:m.h};m.depthBy='quick (no model)';toast('Depth model couldn’t load ('+m.depthErr.slice(0,70)+'). Using a quick relief.',7000);}
     }
     if(!objById(o.id))return;
     m.raw=raw;buildDepth(m);m.quick=false;m.depthMs=Math.round(performance.now()-t0);
@@ -2900,7 +2903,7 @@ function refreshInspector(soft){
     const row=el('div','chips');
     const tg=(label,key,onset)=>{const b=el('button','chip',label);b.setAttribute('aria-pressed',!!m[key]);b.addEventListener('click',()=>{m[key]=!m[key];b.setAttribute('aria-pressed',m[key]);(onset||rebuildRelief)(o);});return b;};
     const ad=el('button','chip','Auto depth');ad.setAttribute('aria-pressed',CUT.depthOn);ad.addEventListener('click',()=>{CUT.depthOn=!CUT.depthOn;localStorage.setItem('n0.autodepth',CUT.depthOn?'1':'0');ad.setAttribute('aria-pressed',CUT.depthOn);});
-    row.append(tg('Fill behind','fill'),tg('Solidify','solid'),ad,btn('Original look','',()=>{m.shade=0;m.detail=0;m.scale=.3;applyDepthMask(m);rebuildRelief(o);refreshInspector();}),btn('Re-run depth','',()=>autoDepth(o,{force:true})));r.appendChild(row);
+    row.append(tg('Fill behind','fill'),tg('Solidify','solid'),ad,btn('Original look','',()=>{m.shade=0;m.detail=0;m.scale=.3;applyDepthMask(m);rebuildRelief(o);refreshInspector();}),btn('Run AI depth','',()=>autoDepth(o,{force:true})));r.appendChild(row);
     sliderRow(r,'Thickness',()=>m.thick,v=>{m.thick=v;if(m.solid)rb();},0,.6,.01);
     if(m.rest){
       const vw=el('div','chips');
@@ -2909,6 +2912,8 @@ function refreshInspector(soft){
       vw.append(btn('Original view','',()=>{enterRest(o);un.setAttribute('aria-pressed',false);}),un);r.appendChild(vw);
     }
     r.appendChild(el('div','note tri',triNote(m)));
+    if(m.depthErr)r.appendChild(el('div','note','Depth model error: '+m.depthErr));
+    r.appendChild(el('div','note','Studio build '+BUILD));
     r.appendChild(el('div','note','Depth runs in your browser (WebGPU if available, otherwise WASM) and is cached per photo. Defaults stay subtle so the surface looks like the photo.'));
   }
   if(o.kind==='relief'&&o.meta.photo)buildCutSection(o);
