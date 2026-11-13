@@ -2737,6 +2737,196 @@ const faceFx=(id,label,c,src)=>({id,label,cat:'face',c,i:60,m:45,fn:'fx_'+id,fac
   float z=sqrt(1.-r2),lx=abs(fract(atan(p.x,z)*5.2)-.5),ly=abs(fract(asin(clamp(p.y,-1.,1.))*5.2)-.5);
   float ln=smoothstep(.05+.04*(1.-I),0.,min(lx,ly));return mix(c*vec3(.55,.7,.6),vec3(.85,1.,.6),ln);}`)
 ].forEach(registerCustom);
+/* ---- extra effects: Y2K, dither and line styles, pixel toys, lens and warp. Same shape as the camera filters, so they fuse, stack, toggle and mask like the rest. ---- */
+const BAYER_LIB='float b2_(vec2 a){a=floor(a);return fract(a.x/2.+a.y*a.y*.75);}float bayer4(vec2 a){return b2_(a*.5)*.25+b2_(a);}float bayer8(vec2 a){return bayer4(a*.5)*.25+b2_(a);}';
+const BLUR8_LIB='vec3 blur8(vec2 uv,float r){vec3 s=vec3(0.);for(int i=0;i<8;i++){float a=float(i)*.785398;s+=vid(uv+vec2(cos(a)/ASP,sin(a))*r*(.55+.45*float(i&1)));}return s/8.;}';
+const VGA_LIB='const vec3 VGA[16]=vec3[16](vec3(0.),vec3(0.,0.,.67),vec3(0.,.67,0.),vec3(0.,.67,.67),vec3(.67,0.,0.),vec3(.67,0.,.67),vec3(.67,.33,0.),vec3(.67),vec3(.33),vec3(.33,.33,1.),vec3(.33,1.,.33),vec3(.33,1.,1.),vec3(1.,.33,.33),vec3(1.,.33,1.),vec3(1.,1.,.33),vec3(1.));';
+const nfx=(id,label,c,i,m,src,dep=[],hist=false)=>({id,label,cat:'fx',c,i,m,fn:'fx_'+id,hist,hs:0,src,dep});
+[
+/* Y2K */
+nfx('bubble','bubble gel','#ff8fc8',55,45,`vec3 fx_bubble(vec2 uv){
+  vec3 c=mix(vid(uv),blur8(uv,.004+I*.01),.6);
+  c=mix(vec3(luma(c)),c,1.2+I*.4); c=c*vec3(1.16,1.,.88)+.04;
+  float g=smoothstep(.12,0.,abs(uv.y-(.3+.04*sin(uv.x*3.+u_time*M))));
+  return c+vec3(g*.25*(.3+I)+smoothstep(.6,0.,uv.y)*.1);}`,[BLUR8_LIB]),
+nfx('lchrome','liquid chrome','#dcdce4',55,45,`vec3 fx_lchrome(vec2 uv){
+  vec2 px=2.5/u_res;float l=(luma(vid(uv))*2.+luma(vid(uv+vec2(px.x,0.)))+luma(vid(uv-vec2(px.x,0.)))+luma(vid(uv+vec2(0.,px.y)))+luma(vid(uv-vec2(0.,px.y))))/6.;
+  float v=.5+.5*sin(l*(6.+I*14.)+u_time*.5*M+uv.y*2.);v=pow(v,1.5-I*.4);
+  return mix(vec3(.06,.05,.07),vec3(1.,.97,.93),v);}`),
+nfx('holo','holo foil','#ff7ad9',55,45,`vec3 fx_holo(vec2 uv){
+  vec3 c=vid(uv);float l=luma(c);
+  vec3 f=hpal(fract(l*1.4+uv.x*.6-uv.y*.4+u_time*.07*(M+.2)));
+  float sp=pow(hash21(floor(uv*u_res*.5)+floor(u_time*6.)),30.);
+  return mix(c,f*vec3(1.2,1.,.7)*(.45+l*.9),.3+I*.4)+sp*.7;}`),
+nfx('aero','frutiger aero','#9fe35a',55,45,`vec3 fx_aero(vec2 uv){
+  vec3 c=mix(vid(uv),blur8(uv,.006+I*.012),.5);
+  c=c*vec3(1.02,1.08,.9);c=(c-.5)*1.08+.56;
+  c+=smoothstep(1.,0.,uv.y)*.14*vec3(1.,1.,.86);
+  return mix(vec3(luma(c)),c,1.3+M*.4);}`,[BLUR8_LIB]),
+nfx('digicam','digicam 2002','#ffb347',55,45,`vec3 fx_digicam(vec2 uv){
+  float cs=mix(5.,14.,I);vec2 cell=u_res/cs;vec3 ch=vid((floor(uv*cell)+.5)/cell);
+  vec3 c=vid(uv);vec3 o=vec3(luma(c))+(ch-luma(ch))*1.25;
+  float lv=mix(32.,9.,I);o=floor(o*lv+.5)/lv;
+  o=(o-.5)*1.15+.6+vec3(.03,.02,-.02);return min(o,vec3(1.));}`),
+nfx('webcam','webcam 2000','#a8c070',55,45,`vec3 fx_webcam(vec2 uv){
+  float rows=min(mix(180.,64.,I),u_res.y/3.);vec2 cells=vec2(rows*ASP,rows);vec2 g=uv*cells,id=floor(g),w=fract(g);
+  vec3 o=mix(mix(vid((id+.5)/cells),vid((id+vec2(1.5,.5))/cells),w.x),mix(vid((id+vec2(.5,1.5))/cells),vid((id+1.5)/cells),w.x),w.y);
+  o=mix(vec3(luma(o)),o,.7)*vec3(.95,1.04,.92);
+  o+=(hash21(id+floor(u_time*8.))-.5)*(.08+.1*M);return (o-.5)*.85+.5;}`),
+nfx('lcd','lcd subpixel','#ff9d9d',50,40,`vec3 fx_lcd(vec2 uv){
+  float cs=floor(mix(3.,7.,I));vec2 p=uv*u_res/cs,id=floor(p),f=fract(p);
+  vec3 c=vid((id+.5)*cs/u_res);float s=floor(f.x*3.);
+  vec3 m=vec3(s<.5?1.:.3,(s>.5&&s<1.5)?1.:.3,s>1.5?.8:.2);
+  return c*m*vec3(1.15,1.,.85)*step(.1,f.y)*step(f.y,.9)*1.6;}`),
+nfx('vapor','vapor sun','#ff5fa8',55,45,`vec3 fx_vapor(vec2 uv){
+  float l=clamp((luma(vid(uv))-.5)*(1.1+I)+.5,0.,1.);
+  vec3 a=vec3(.12,.02,.26),b=vec3(1.,.2,.6),c=vec3(1.,.72,.5);
+  vec3 o=l<.5?mix(a,b,l*2.):mix(b,c,(l-.5)*2.);
+  o*=.92+.08*sin(uv.y*u_res.y*1.1);return o+vec3(.06,0.,.08)*M;}`),
+nfx('vga','vga 16','#ffff55',50,30,`vec3 fx_vga(vec2 uv){
+  vec3 c=vid(uv);c+=(bayer4(uv*u_res/(1.+floor(M*3.)))-.47)*(.15+I*.3);
+  float bd=1e9;vec3 best=c;
+  for(int i=0;i<16;i++){vec3 d=c-VGA[i];float e=dot(d*d,vec3(.3,.59,.11));if(e<bd){bd=e;best=VGA[i];}}
+  return best;}`,[BAYER_LIB,VGA_LIB]),
+nfx('gboy','handheld lcd','#9bbc0f',55,30,`vec3 fx_gboy(vec2 uv){
+  float rows=min(mix(144.,56.,I),u_res.y/4.);vec2 cells=vec2(rows*ASP,rows);vec2 id=floor(uv*cells),f=fract(uv*cells);
+  float l=luma(vid((id+.5)/cells));l=clamp(l+(bayer4(id)-.47)*.28,0.,.999);int k=int(l*4.);
+  vec3 p=k==0?vec3(.06,.22,.06):k==1?vec3(.19,.38,.19):k==2?vec3(.55,.67,.06):vec3(.61,.74,.06);
+  p=mix(p,vec3(float(k)/3.),step(.5,M)*.85);
+  return p*(1.-.14*step(.88,max(f.x,f.y)));}`,[BAYER_LIB]),
+nfx('ps1','ps1 era','#c0c0c0',55,45,`vec3 fx_ps1(vec2 uv){
+  float rows=min(mix(160.,70.,I),u_res.y/3.);vec2 cells=vec2(rows*ASP,rows);vec2 q=floor(uv*cells)/cells;
+  vec2 j=vec2(sin(q.y*40.+u_time*2.),cos(q.x*30.+u_time*1.7))*.006*(.4+M);
+  vec3 c=vid(q+j+.5/cells);float b=bayer4(uv*cells)-.47;float L=mix(11.,4.,I);return floor(c*L+.5+b*.9)/L;}`,[BAYER_LIB]),
+/* dither and line styles */
+nfx('bayer','bayer 1-bit','#f4efe1',55,20,`vec3 fx_bayer(vec2 uv){
+  float l=clamp((luma(vid(uv))-.5)*(1.+I)+.5,0.,1.);float t=bayer8(uv*u_res/(1.+floor(M*3.)));
+  return mix(vec3(.04,.035,.03),vec3(.96,.94,.88),step(t,l));}`,[BAYER_LIB]),
+nfx('ign','noise dither','#ffd08a',55,20,`vec3 fx_ign(vec2 uv){
+  vec3 c=vid(uv);vec2 p=floor(uv*u_res/(1.+floor(M*2.)));float t=fract(52.9829189*fract(dot(p,vec2(.06711056,.00583715))));
+  float lv=floor(mix(4.,1.,I)+.5);return floor(c*lv+t)/lv;}`),
+nfx('linedith','line dither','#eeeeee',55,40,`vec3 fx_linedith(vec2 uv){
+  vec3 c=vid(uv);float l=clamp((luma(c)-.5)*(1.+I*.8)+.5,0.,1.);float rows=min(mix(100.,30.,M),u_res.y/6.);
+  float d=abs(fract(uv.y*rows)-.5)*2.;float ln=smoothstep(l+.07,l-.07,d);
+  return mix(vec3(.04),vec3(.96,.94,.88),ln);}`),
+nfx('hatch','crosshatch','#e9e1cf',55,40,`vec3 fx_hatch(vec2 uv){
+  float l=luma(vid(uv));vec2 p=uv*u_res;float k=u_res.y/mix(110.,45.,I);float h=0.;
+  h+=step(abs(fract((p.x+p.y)/k)-.5)*2.,.3)*step(l,.75);
+  h+=step(abs(fract((p.x-p.y)/k)-.5)*2.,.3)*step(l,.5);
+  h+=step(abs(fract(p.y/k)-.5)*2.,.3)*step(l,.3);
+  h+=step(abs(fract(p.x/k)-.5)*2.,.3)*step(l,.15);
+  return mix(vec3(.96,.94,.88),vec3(.08,.07,.1),clamp(h,0.,1.));}`),
+nfx('contour','contour map','#e6c07b',55,40,`vec3 fx_contour(vec2 uv){
+  vec2 t=1.5/u_res;vec3 c=vid(uv);float l=(luma(c)*2.+luma(vid(uv+vec2(t.x,0.)))+luma(vid(uv-vec2(t.x,0.)))+luma(vid(uv+vec2(0.,t.y)))+luma(vid(uv-vec2(0.,t.y))))/6.;
+  float v=l*mix(5.,24.,I);float f=fract(v),d=min(f,1.-f);float w=max(fwidth(v),.002);
+  float ln=1.-smoothstep(.6,1.6,d/w);return mix(c*(.45+.55*M),vec3(.05),ln);}`),
+nfx('wavel','wave lines','#f0ead8',55,45,`vec3 fx_wavel(vec2 uv){
+  vec3 c=vid(uv);float l=luma(c);float rows=min(mix(70.,26.,I),u_res.y/6.);
+  float y=uv.y*rows+sin(uv.x*(10.+M*20.)+u_time*.8*M)*.45*l;float d=abs(fract(y)-.5)*2.;
+  return mix(vec3(.03),c*1.25+.05,smoothstep(l+.1,l-.1,d));}`),
+nfx('sketch','pencil sketch','#e8e2d4',55,40,`vec3 fx_sketch(vec2 uv){
+  vec3 c=vid(uv);float l=luma(c);float e=edge(uv,1.+M);
+  float v=1.-clamp(smoothstep(.05,.5,e)*(.6+I*.8),0.,1.)*.92;v*=.7+.3*smoothstep(.1,.9,l);
+  return vec3(.97,.95,.9)*v;}`),
+/* pixel toys */
+nfx('stitch','cross stitch','#e07a5f',55,40,`vec3 fx_stitch(vec2 uv){
+  float rows=min(mix(80.,26.,I),u_res.y/7.);vec2 cells=vec2(rows*ASP,rows);vec2 g=uv*cells,id=floor(g),f=fract(g);
+  vec3 c=vid((id+.5)/cells);float x=min(abs(f.x-f.y),abs(f.x+f.y-1.));
+  float st=smoothstep(.22,.1,x)*step(.1,min(min(f.x,f.y),min(1.-f.x,1.-f.y)));
+  return mix(vec3(.12,.1,.09)*(.8+.4*hash21(id*3.)),c*(.8+.35*(1.-x)),st);}`),
+nfx('mosaic','stained mosaic','#e0a040',50,40,`vec3 fx_mosaic(vec2 uv){
+  float n=mix(24.,7.,I);vec2 p=uv*vec2(ASP,1.)*n,ip=floor(p),fp=fract(p);float d1=9.,d2=9.;vec2 ct=vec2(0.);
+  for(int j=-1;j<=1;j++)for(int i=-1;i<=1;i++){vec2 o=vec2(float(i),float(j));vec2 h=vec2(hash21(ip+o),hash21(ip+o+17.));
+    vec2 pt=.5+.4*sin(u_time*.5*M+6.2831*h);vec2 r=o+pt-fp;float d=dot(r,r);
+    if(d<d1){d2=d1;d1=d;ct=(ip+o+pt)/n;}else if(d<d2)d2=d;}
+  vec3 c=vid(clamp(ct/vec2(ASP,1.),0.,1.));return c*mix(.2,1.,smoothstep(0.,.08,sqrt(d2)-sqrt(d1)));}`),
+nfx('lego','brick studs','#e3342f',55,40,`vec3 fx_lego(vec2 uv){
+  float rows=min(mix(60.,18.,I),u_res.y/8.);vec2 cells=vec2(rows*ASP,rows);vec2 g=uv*cells,id=floor(g),f=fract(g);
+  vec3 c=vid((id+.5)/cells);vec2 d=f-.5;float r=length(d);float st=smoothstep(.33,.3,r);
+  vec3 o=c*(.82+.2*st);o+=.28*smoothstep(.28,.05,length(d+vec2(.08,-.08)))*st;
+  o*=1.-.35*smoothstep(.3,.36,r)*step(r,.42);return o*(1.-.45*step(.94,max(f.x,f.y)));}`),
+nfx('ledm','led matrix','#ff6a3d',55,40,`vec3 fx_ledm(vec2 uv){
+  float rows=min(mix(90.,28.,I),u_res.y/6.);vec2 cells=vec2(rows*ASP,rows);vec2 g=uv*cells,id=floor(g),f=fract(g);
+  vec3 c=vid((id+.5)/cells);float r=length(f-.5);float m=smoothstep(.46,.3,r);
+  return c*(m*1.6+.03)+c*.25*smoothstep(.7,.3,r)*M;}`),
+/* lens, light, warp, time */
+nfx('emboss','relief','#c8c8c8',55,35,`vec3 fx_emboss(vec2 uv){
+  vec2 px=(1.+I*2.)/u_res;float e=.5+(luma(vid(uv+px))-luma(vid(uv-px)))*(2.+I*5.);
+  return mix(vec3(e),vid(uv)*(e*1.4),M*.8);}`),
+nfx('tilt','tilt shift','#a3d977',55,45,`vec3 fx_tilt(vec2 uv){
+  float m=smoothstep(.12,.45,abs(uv.y-.5));vec3 s=blur8(uv,m*(.004+I*.016));
+  vec3 c=mix(vid(uv),s,smoothstep(0.,.3,m));return mix(vec3(luma(c)),c,1.25+M*.6)*1.05;}`,[BLUR8_LIB]),
+nfx('streak','anamorphic streak','#ffb070',55,45,`vec3 fx_streak(vec2 uv){
+  vec3 c=vid(uv),s=vec3(0.);float L=.05+M*.2;
+  for(int i=-8;i<=8;i++){float t=float(i)/8.;s+=max(vid(uv+vec2(t*L,0.))-.6,0.)*(1.-abs(t));}
+  return c+s/8.*vec3(1.,.72,.45)*(1.5+I*5.);}`),
+nfx('longexp','long exposure','#ffe0a0',55,60,`vec3 fx_longexp(vec2 uv){
+  vec3 c=vid(uv);if(u_chip>.5)return c*vec3(1.12,1.03,.86)+.04;
+  vec3 p=texture(u_prev,uv).rgb;c=mix(c,max(c,p*(.86+M*.11)),.4+I*.6);return c*vec3(1.12,1.03,.86)+.04;}`,[],true),
+nfx('rgbtear','rgb tear','#ff5050',55,45,`vec3 fx_rgbtear(vec2 uv){
+  float row=floor(uv.y*mix(30.,90.,M));float t=floor(u_time*5.);
+  float o=(hash21(vec2(row,t))-.5)*(.03+I*.12)*step(.3,hash21(vec2(row,t+4.)))+.004;
+  vec3 c=vec3(vid(uv+vec2(o*1.6,0.)).r,vid(uv+vec2(o,0.)).g,vid(uv+vec2(o*.4,0.)).b);return c*(1.+.35*step(.97,hash21(vec2(row,t+9.))));}`),
+nfx('fish','fisheye','#d9d9a0',55,45,`vec3 fx_fish(vec2 uv){
+  vec2 p=(uv-.5)*vec2(ASP,1.);float r=length(p);p*=1.-(.4+I*1.2)*r*r*(.5+M*.8)*.6;
+  return vid(mir(p/vec2(ASP,1.)+.5));}`),
+nfx('swirl','swirl','#e8a0ff',55,45,`vec3 fx_swirl(vec2 uv){
+  vec2 p=(uv-.5)*vec2(ASP,1.);float r=length(p);float a=(3.+I*7.)*smoothstep(.9,0.,r)*(.7+.3*sin(u_time*(.3+M)));
+  float cs=cos(a),sn=sin(a);p=mat2(cs,-sn,sn,cs)*p*(1.-.3*smoothstep(.9,0.,r));return vid(mir(p/vec2(ASP,1.)+.5));}`),
+nfx('ripple','ripple','#ffd166',55,45,`vec3 fx_ripple(vec2 uv){
+  vec2 d=(uv-.5)*vec2(ASP,1.);float r=length(d);vec2 dir=d/(r+1e-4);
+  float w=sin(r*(22.+I*16.)-u_time*(2.+M*6.))*.012*(1.+I*3.);vec2 q=uv+dir*w/vec2(ASP,1.);return vec3(vid(mir(q+dir*.004)).r,vid(mir(q)).g,vid(mir(q-dir*.004)).b);}`),
+nfx('acid','acid wash','#ff3df0',55,45,`vec3 fx_acid(vec2 uv){
+  vec3 c=vid(uv);float l=luma(c);c=hueRot(c,l*(3.+I*5.)+u_time*.3*M);
+  return mix(vec3(luma(c)),c,2.+I*1.2);}`),
+nfx('pop','pop art','#ffe000',55,40,`vec3 fx_pop(vec2 uv){
+  float l=clamp((luma(vid(uv))-.5)*(1.2+I)+.5,0.,1.);
+  float dots=length(fract(uv*vec2(ASP,1.)*min(60.,u_res.y/9.)-.5));
+  l+= (.5-dots)*.18*(.4+M);int k=int(clamp(l,0.,.999)*4.);
+  return k==0?vec3(.05,.03,.1):k==1?vec3(.86,.1,.2):k==2?vec3(1.,.45,.7):vec3(1.,.88,.1);}`)
+].forEach(registerCustom);
+Object.assign(FXBY.lcd,{hs:-25});FX_BLUISH.add('holo');
+/* new engines */
+defineModule({id:'patdith',family:'Dither',name:'Pattern Dither',
+  params:[{k:'pat',t:'c',label:'Pattern',opts:['Bayer 8','Dots','Diagonal','Crosshatch','Noise','Gradient noise','Lines'],def:0,sec:'Pattern',hero:true},
+    {k:'cell',label:'Cell size',min:1,max:8,def:2,step:.5,sec:'Pattern',hero:true},{k:'lv',label:'Levels',min:2,max:6,def:2,step:1,sec:'Pattern'},
+    {k:'con',label:'Contrast',min:0,max:100,def:35,sec:'Pattern'},{k:'col',label:'Keep color',min:0,max:100,def:0,sec:'Colors'},
+    {k:'ink',t:'color',label:'Ink',def:'#0c0b0a',sec:'Colors'},{k:'bg',t:'color',label:'Paper',def:'#f4efe1',sec:'Colors'}],
+  frag:SS+`
+float b2_(vec2 a){a=floor(a);return fract(a.x/2.+a.y*a.y*.75);}float b4_(vec2 a){return b2_(a*.5)*.25+b2_(a);}float b8_(vec2 a){return b4_(a*.5)*.25+b2_(a);}
+float h21_(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+vec4 fx(vec2 uv){
+  float cs=u_cell*S;vec2 px=uv*uRes/cs,id=floor(px);vec3 c=texture(uSrc,(id+.5)*cs/uRes).rgb;
+  float l=clamp((luma(c)-.5)*(1.+u_con/50.)+.5,0.,1.);float t;int p=int(u_pat+.5);
+  if(p==0)t=b8_(id);else if(p==1)t=1.-length(fract(px/6.)-.5)*1.4142;else if(p==2)t=fract((px.x+px.y)/4.);
+  else if(p==3)t=min(fract((px.x+px.y)/4.),fract((px.x-px.y)/4.));else if(p==4)t=h21_(id);
+  else if(p==5)t=fract(52.9829189*fract(dot(id,vec2(.06711056,.00583715))));else t=fract(px.y/3.);
+  float n=u_lv-1.;float v=clamp(floor(l*n+t)/n,0.,1.);
+  vec3 mono=mix(u_ink,u_bg,v);vec3 cd=floor(c*n+t)/n;
+  return vec4(mix(mono,cd,u_col/100.),1.);}`});
+defineModule({id:'contour',family:'Lines',name:'Contour Map',
+  params:[{k:'n',label:'Levels',min:4,max:40,def:14,step:1,sec:'Lines',hero:true},{k:'w',label:'Line width',min:.5,max:6,def:1.5,step:.25,sec:'Lines',hero:true},
+    {k:'con',label:'Contrast',min:0,max:100,def:35,sec:'Lines'},{k:'fill',label:'Band fill',min:0,max:100,def:40,sec:'Fill'},{k:'keep',label:'Keep color',min:0,max:100,def:55,sec:'Fill'},
+    {k:'ink',t:'color',label:'Line',def:'#120f0a',sec:'Colors'},{k:'bg',t:'color',label:'Paper',def:'#efe6d0',sec:'Colors'}],
+  frag:SS+`
+vec4 fx(vec2 uv){
+  vec2 t=1.5*S/uRes;vec3 c=texture(uSrc,uv).rgb;
+  float l=(luma(c)*2.+luma(texture(uSrc,uv+vec2(t.x,0.)).rgb)+luma(texture(uSrc,uv-vec2(t.x,0.)).rgb)+luma(texture(uSrc,uv+vec2(0.,t.y)).rgb)+luma(texture(uSrc,uv-vec2(0.,t.y)).rgb))/6.;
+  l=clamp((l-.5)*(1.+u_con/50.)+.5,0.,1.);float v=l*u_n;float f=fract(v),d=min(f,1.-f),w=max(fwidth(v),.0001);
+  float ln=1.-smoothstep(u_w*S*.5,u_w*S*.5+1.2,d/w);
+  vec3 base=mix(u_bg,mix(vec3(floor(v)/u_n),c,u_keep/100.),u_fill/100.);
+  return vec4(mix(base,u_ink,ln),1.);}`});
+defineModule({id:'ridge',family:'Lines',name:'Ridge Lines',
+  params:[{k:'rows',label:'Lines',min:16,max:120,def:52,step:1,sec:'Lines',hero:true},{k:'amp',label:'Height',min:0,max:300,def:150,sec:'Lines',hero:true},
+    {k:'w',label:'Line width',min:.5,max:4,def:1.2,step:.25,sec:'Lines'},{k:'con',label:'Contrast',min:0,max:100,def:35,sec:'Lines'},{k:'keep',label:'Keep color',min:0,max:100,def:0,sec:'Colors'},
+    {k:'ink',t:'color',label:'Line',def:'#f2efe6',sec:'Colors'},{k:'bg',t:'color',label:'Background',def:'#0a0a0a',sec:'Colors'}],
+  frag:SS+`
+vec4 fx(vec2 uv){
+  float pitch=1./u_rows,row0=floor(uv.y/pitch),ink=0.;vec3 lc=u_ink;
+  for(int k=-4;k<=4;k++){float ry=(row0+float(k)+.5)*pitch;vec3 s=texture(uSrc,vec2(uv.x,clamp(ry,0.,1.))).rgb;
+    float l=clamp((luma(s)-.5)*(1.+u_con/50.)+.5,0.,1.);float cy=ry+l*u_amp/100.*pitch*2.;
+    float a=1.-smoothstep(u_w*S*.5,u_w*S*.5+1.2,abs(uv.y-cy)*uRes.y);if(a>ink){ink=a;lc=mix(u_ink,s*1.2+.1,u_keep/100.);}}
+  return vec4(mix(u_bg,lc,ink),1.);}`});
 async function ensureHuman(){
   if(FACE.human||FACE.loading||performance.now()<FACE.failed)return;FACE.loading=true;toast('Loading the face model…');
   try{
@@ -4090,7 +4280,7 @@ async function runFuseGate(thr=.04,pairsN=20){
 /* =====================================================================
    Inspector: layer strip, accordions, generic param rows, gallery, skins
    ===================================================================== */
-const IDENT={crtlab:'#ff5a1f',fuse:'#ff5c8a',psort:'#e8b04a',riso:'#ff48b0',engrave:'#c9b27c',seccam:'#8fbf7a',mosh:'#d65a5a',dither:'#8bac0f',ascii:'#ff2a2a',epsilon:'#ffb347',orb:'#ff2a6d',linemod:'#d8ff3a',cmyk:'#e6007e',shapes:'#ffd60a',stipple:'#f4efe1',pixelmania:'#ff9a1f',displace:'#c9c9c9',crusher:'#ff6a00',patmerge:'#ff6fae',multithr:'#f7f3ea'};
+const IDENT={patdith:'#f4efe1',contour:'#e6c07b',ridge:'#f2efe6',crtlab:'#ff5a1f',fuse:'#ff5c8a',psort:'#e8b04a',riso:'#ff48b0',engrave:'#c9b27c',seccam:'#8fbf7a',mosh:'#d65a5a',dither:'#8bac0f',ascii:'#ff2a2a',epsilon:'#ffb347',orb:'#ff2a6d',linemod:'#d8ff3a',cmyk:'#e6007e',shapes:'#ffd60a',stipple:'#f4efe1',pixelmania:'#ff9a1f',displace:'#c9c9c9',crusher:'#ff6a00',patmerge:'#ff6fae',multithr:'#f7f3ea'};
 const INS={gallery:false,cat:'All'};
 const $i=id=>document.getElementById(id);
 const layer=()=>STACK.layers[STACK.sel]||STACK.layers[0];
@@ -4384,9 +4574,9 @@ const lsSet=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}};
 /* one taxonomy for engines and camera filters, so similar looks sit together. Face effects live only in 'Face'. */
 const CAM_FAMILY={clean:'Color',chrome:'Color',aqua:'Color',solar:'Color',thermal:'Color',duo:'Color',tri:'Color',neon:'Color',fire:'Color',cyber:'Color',sunset:'Color',forest:'Color',invert:'Color',poster:'Color',xray:'Color',
  noir:'Film',lomo:'Film',vintage:'Film',kodak:'Film',fuji:'Film',cinema:'Film',super8:'Film',night:'Film',vhs:'Signal / CRT',crt:'Signal / CRT',
- halftone:'Print',pixel:'Pixel',ascii:'Glyph',matrix:'Glyph',glitch:'Glitch',mosh:'Glitch',bloom:'Light',dream:'Light',
+ bubble:'Y2K',lchrome:'Y2K',holo:'Y2K',aero:'Y2K',digicam:'Y2K',webcam:'Y2K',lcd:'Y2K',vapor:'Y2K',vga:'Y2K',gboy:'Pixel',ps1:'Pixel',bayer:'Dither',ign:'Dither',linedith:'Lines',hatch:'Lines',contour:'Lines',wavel:'Lines',sketch:'Lines',stitch:'Pixel',mosaic:'Pixel',lego:'Pixel',ledm:'Pixel',emboss:'Light',tilt:'Light',streak:'Light',longexp:'Time',rgbtear:'Glitch',fish:'Warp',swirl:'Warp',ripple:'Warp',acid:'Color',pop:'Color',halftone:'Print',pixel:'Pixel',ascii:'Glyph',matrix:'Glyph',glitch:'Glitch',mosh:'Glitch',bloom:'Light',dream:'Light',
  prism:'Warp',kaleido:'Warp',mirror:'Warp',liquid:'Warp',paint:'Warp',grid:'Warp',ghost:'Time',tunnel:'Time',slit:'Time'};
-const UFAM_ORDER=['Mix','Color','Film','Signal / CRT','Dither','Print','Pixel','Glyph','Lines','Glitch','Light','Warp','Time','Face'];
+const UFAM_ORDER=['Mix','Color','Y2K','Film','Signal / CRT','Dither','Print','Pixel','Glyph','Lines','Glitch','Light','Warp','Time','Face'];
 const camFam=f=>f.face?'Face':(f.custom||f.cat==='custom')?'Mine':CAM_FAMILY[f.id]||'Color';
 const modFam=m=>RAIL_FAMILY[m.id]||m.family;
 const famRank=f=>{const i=UFAM_ORDER.indexOf(f);return i<0?99:i;};
@@ -4454,7 +4644,7 @@ function wireHero(){
 function pickCam(id){const l=layer();if(l.module!=='fuse'){l.module='fuse';l.params=MODULES.fuse.defaults();for(let s=2;s<=4;s++)l.params['f'+s]=0;}fuseSet(l,1,id);INS.gallery=false;renderInspector();}
 function loadRecipeLayer(r){const l=layer();if(l.module!=='fuse'){l.module='fuse';l.params=MODULES.fuse.defaults();}Object.assign(l.params,r.p);INS.gallery=false;renderInspector();}
 const camOn=(l,fx)=>l.module==='fuse'&&+l.params.f1===fxIndex(fx.id);
-const RAIL_FAMILY={dither:'Dither',orb:'Dither',multithr:'Dither',cmyk:'Print',shapes:'Print',stipple:'Print',patmerge:'Print',crusher:'Pixel',pixelmania:'Pixel',ascii:'Glyph',linemod:'Lines',displace:'Glitch',epsilon:'Light',crtlab:'Signal / CRT',fuse:'Mix',psort:'Glitch',mosh:'Glitch',riso:'Print',engrave:'Lines',seccam:'Signal / CRT'};
+const RAIL_FAMILY={patdith:'Dither',contour:'Lines',ridge:'Lines',dither:'Dither',orb:'Dither',multithr:'Dither',cmyk:'Print',shapes:'Print',stipple:'Print',patmerge:'Print',crusher:'Pixel',pixelmania:'Pixel',ascii:'Glyph',linemod:'Lines',displace:'Glitch',epsilon:'Light',crtlab:'Signal / CRT',fuse:'Mix',psort:'Glitch',mosh:'Glitch',riso:'Print',engrave:'Lines',seccam:'Signal / CRT'};
 const RAIL_ORDER=['★ Favorites','Recent','Mine',...UFAM_ORDER];
 const THUMBS=new Map();   /* key: module id + source version -> canvas */
 function cachedThumb(id){const k=id+'|'+SRC.ver;if(id!=='crtlab'&&THUMBS.has(k))return THUMBS.get(k);const rc=id.startsWith('recipe:')&&loadRecipes().find(r=>'recipe:'+r.id===id);const fx=id.startsWith('fuse:')&&FXBY[id.slice(5)];const c=rc?moduleThumb('fuse',112,84,rc.p):fx?moduleThumb('fuse',112,84,{f1:fxIndex(fx.id),i1:fx.i,m1:fx.m}):moduleThumb(id,112,84);if(id!=='crtlab'){THUMBS.set(k,c);if(THUMBS.size>60)THUMBS.delete(THUMBS.keys().next().value);}return c;}
