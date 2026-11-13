@@ -2135,6 +2135,35 @@ function buildUI(){
   });
   buildLabExtras();
   buildProfiles();
+  buildDockTabs();
+  /* long panes: every titled group folds, one open at a time, so nothing needs a long scroll */
+  Object.values(UI.panes).forEach(pane=>{
+    const gs=[...pane.querySelectorAll(':scope>.grp')].filter(g=>g.querySelector(':scope>.gt'));
+    gs.forEach((g,i)=>{const t=g.querySelector(':scope>.gt');t.tabIndex=0;t.setAttribute('role','button');
+      const set=on=>{g.classList.toggle('shut',!on);t.setAttribute('aria-expanded',on);};
+      const tog=()=>{const on=g.classList.contains('shut');if(on)gs.forEach(o=>{if(o!==g){o.classList.add('shut');o.firstChild.setAttribute('aria-expanded',false);}});set(on);};
+      t.addEventListener('click',tog);t.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();tog();}});set(i===0);});
+  });
+}
+
+/* sheet / panel tabs: Effects (pick a look), Fuse (build a camera-style blend), Layers (edit the stack) */
+function setDock(v,quiet){
+  if(v==='fuse'){
+    let ix=STACK.layers.findIndex(l=>l.module==='fuse');
+    if(ix<0){STACK.layers.push(mkLayer('fuse'));ix=STACK.layers.length-1;}
+    STACK.sel=ix;INS.gallery=false;INS.tab='look';
+  }
+  document.body.dataset.dt=v;lsSet('n0ise.dock',v);
+  document.querySelectorAll('.dtabs button').forEach(b=>b.setAttribute('aria-selected',b.dataset.v===v));
+  if(!quiet){buzz(6);renderInspector();}
+  const d=$i('dock');if(d)d.scrollTop=0;
+}
+function buildDockTabs(){
+  const dock=$i('dock');if(!dock||dock.querySelector('.dtabs'))return;
+  const nav=el('nav','dtabs');nav.setAttribute('role','tablist');
+  [['fx','Effects'],['fuse','Fuse'],['layers','Layers']].forEach(([v,n])=>{const b=el('button','',n);b.dataset.v=v;b.setAttribute('role','tab');b.addEventListener('click',()=>setDock(v));nav.appendChild(b);});
+  const g=$i('grab');g?g.after(nav):dock.prepend(nav);
+  const v=lsGet('n0ise.dock','fx');setDock(v==='fuse'?'layers':v,true);
 }
 
 /* bitmap tab ordering: palette block first */
@@ -2729,7 +2758,7 @@ async function runFuseGate(thr=.04,pairsN=20){
    Inspector: layer strip, accordions, generic param rows, gallery, skins
    ===================================================================== */
 const IDENT={patdith:'#f4efe1',contour:'#e6c07b',ridge:'#f2efe6',crtlab:'#ff5a1f',fuse:'#ff5c8a',psort:'#e8b04a',riso:'#ff48b0',engrave:'#c9b27c',seccam:'#8fbf7a',mosh:'#d65a5a',dither:'#8bac0f',ascii:'#ff2a2a',epsilon:'#ffb347',orb:'#ff2a6d',linemod:'#d8ff3a',cmyk:'#e6007e',shapes:'#ffd60a',stipple:'#f4efe1',pixelmania:'#ff9a1f',displace:'#c9c9c9',crusher:'#ff6a00',patmerge:'#ff6fae',multithr:'#f7f3ea'};
-const INS={gallery:false,cat:'All'};
+const INS={gallery:false,cat:'All',tab:'look'};
 const $i=id=>document.getElementById(id);
 const layer=()=>STACK.layers[STACK.sel]||STACK.layers[0];
 const fmtv=(p,v)=>p.step&&p.step<1?(+v).toFixed(p.step<.2?2:1):String(Math.round(v*100)/100);
@@ -2809,7 +2838,7 @@ function palEditor(host,p,V,onchange){
   draw();host.appendChild(box);
 }
 const ACC_OPEN={};
-function accordion(title,open){const d=document.createElement('details');d.className='acc';const ak=(STACK.layers[STACK.sel]?STACK.layers[STACK.sel].module:'')+'|'+title;d.open=ak in ACC_OPEN?ACC_OPEN[ak]:!!open;d.addEventListener('toggle',()=>{ACC_OPEN[ak]=d.open;});const s=document.createElement('summary');s.textContent=title;const b=el('div','bd');d.append(s,b);return{d,b};}
+function accordion(title,open){const d=document.createElement('details');d.className='acc';const ak=(STACK.layers[STACK.sel]?STACK.layers[STACK.sel].module:'')+'|'+title;d.open=ak in ACC_OPEN?ACC_OPEN[ak]:!!open;d.addEventListener('toggle',()=>{ACC_OPEN[ak]=d.open;if(d.open&&d.parentNode)[...d.parentNode.children].forEach(x=>{if(x!==d&&x.tagName==='DETAILS'&&x.open)x.open=false;});});const s=document.createElement('summary');s.textContent=title;const b=el('div','bd');d.append(s,b);return{d,b};}
 
 /* thumbnails: render a module over the current source into a small offscreen RT */
 const TH={rt:null,src:null,buf:null};
@@ -2972,13 +3001,20 @@ function renderInspector(){
 }
 function renderInspector0(){
   renderStrip();renderPeek();
-  const host=$i('insp');host.innerHTML='';
+  let host=$i('insp');host.innerHTML='';
   if(INS.gallery){renderGallery(host);return;}
   const l=layer(),m=MODULES[l.module],ix=STACK.sel;
   /* banner */
   const col=IDENT[l.module]||'#ccc',dark=parseInt(col.slice(1,3),16)*.3+parseInt(col.slice(3,5),16)*.59+parseInt(col.slice(5,7),16)*.11<140;
   const ban=el('div','ban');ban.style.background=col;ban.style.color=dark?'#fff':'#111';
   ban.append(el('div','no',String(ix+1).padStart(2,'0')),el('div','nm',m.name));host.appendChild(ban);
+  const TABS3=[['look','Look'],['place','Place'],['motion','Motion'],['layer','Layer']];
+  if(!TABS3.some(t=>t[0]===INS.tab))INS.tab='look';
+  const tabs=el('div','itabs');tabs.setAttribute('role','tablist');
+  TABS3.forEach(([id,n])=>{const b=el('button','',n);b.setAttribute('role','tab');b.setAttribute('aria-selected',id===INS.tab);b.addEventListener('click',()=>{INS.tab=id;buzz(6);renderInspector();});tabs.appendChild(b);});
+  host.appendChild(tabs);
+  const PG={look:el('div','ipage'),place:el('div','ipage'),motion:el('div','ipage'),layer:el('div','ipage')};
+  const outer=host;host=PG.layer;
   const hd=el('div','hd');
   const mk=(t,f)=>{const b=el('button','btn',t);b.addEventListener('click',f);hd.appendChild(b);return b;};
   mk('Remix',()=>{remix(l);renderInspector();});
@@ -2989,6 +3025,7 @@ function renderInspector0(){
   if(ix<STACK.layers.length-1)mk('Down',()=>{const a=STACK.layers;[a[ix+1],a[ix]]=[a[ix],a[ix+1]];STACK.sel=ix+1;renderInspector();});
   if(STACK.layers.length>1)mk('Delete',()=>{STACK.layers.splice(ix,1);STACK.sel=Math.max(0,ix-1);renderInspector();});
   host.appendChild(hd);
+  host=PG.look;
   colorRow(host,l);
   /* presets */
   const pr=accordion('Presets',false);
@@ -3004,7 +3041,8 @@ function renderInspector0(){
     pr.b.appendChild(el('div','cl','◐ = this preset also sets a color palette'));
   }
   if(l.module==='fuse')fuseBar(host,l);
-  host.appendChild(pr.d);
+  PG.layer.appendChild(pr.d);
+  host=PG.place;
   /* transform */
   const tf=accordion('Transform',false);
   rowRange(tf.b,'Mix',()=>l.opacity,v=>l.opacity=v,0,100,1);
@@ -3015,18 +3053,23 @@ function renderInspector0(){
   rowRange(tf.b,'Position X',()=>l.pos[0],v=>l.pos[0]=v,-50,50,1);rowRange(tf.b,'Position Y',()=>l.pos[1],v=>l.pos[1]=v,-50,50,1);
   rowRange(tf.b,'Size',()=>l.size,v=>l.size=v,20,200,1);rowRange(tf.b,'Seed',()=>l.seed,v=>l.seed=v,0,999,1);
   host.appendChild(tf.d);
+  host=PG.motion;
   if(l.module!=='crtlab')modulateSection(host,l,m);
+  else host.appendChild(el('div','cl','Signals and modulators aren’t available for the CRT lab'));
+  host=PG.place;
   if(l.module!=='crtlab'&&(m.needsMask||MASKSEL.includes(l.select)))maskSection(host,l,m);
   /* module sections */
+  host=PG.look;
   if(l.module==='crtlab'){
     TABS.forEach(([tid,tn],i)=>{const a=accordion(tn,i===0);const pane=UI.panes[tid];pane.hidden=false;a.b.classList.add('legacy-body');a.b.appendChild(pane);host.appendChild(a.d);});
   }else{
     m.schema.sections.forEach((sec,i)=>{
-      const a=accordion(sec.label,i<2);
+      const a=accordion(sec.label,i<1);
       sec.keys.forEach(k=>{const p=m.params.find(x=>x.k===k);if(m.colorBound&&l.params.orig&&(p.t==='pal'||p.t==='color'||m.hideOnOrig.includes(k)))return;if(p.t==='pal')palEditor(a.b,p,l.params,null);else rowParam(a.b,p,l.params,null);});
       host.appendChild(a.d);});
   }
-  recipeSection(host);
+  recipeSection(PG.layer);
+  outer.appendChild(PG[INS.tab]);
 }
 /* ---- WP4: mobile quality of life ---- */
 const buzz=(ms=8)=>{try{navigator.vibrate&&navigator.vibrate(ms);}catch(e){}};
@@ -3168,12 +3211,15 @@ function renderPeek(){
       row.appendChild(t);io?io.observe(t):(t.replaceChild(Object.assign(cachedThumb(x.id),{className:'rt'}),ph));});
     g.appendChild(row);rail.appendChild(g);});
   const tabs=el('div','railtabs');wrap._rail=rail;
-  [...rail.querySelectorAll('.rg')].forEach(g=>{const b=el('button','',g.dataset.f.replace('★ ','★'));b.addEventListener('click',()=>{const d=$i('dock'),top=g.getBoundingClientRect().top-d.getBoundingClientRect().top+d.scrollTop-(tabs.getBoundingClientRect().height+4);d.scrollTo({top:Math.max(0,top),behavior:'smooth'});});b._g=g;tabs.appendChild(b);});
+  {const gs=[...rail.querySelectorAll('.rg')];if(!gs.some(g=>g.dataset.f===RAIL.fam))RAIL.fam=gs[0]&&gs[0].dataset.f;
+   const show=f=>{RAIL.fam=f;gs.forEach(g=>{g.hidden=g.dataset.f!==f;});[...tabs.children].forEach(b=>b.setAttribute('aria-pressed',b._g.dataset.f===f));};
+   gs.forEach(g=>{const b=el('button','',g.dataset.f.replace('★ ','★'));b.addEventListener('click',()=>{show(g.dataset.f);buzz(5);const d=$i('dock');if(d)d.scrollTop=0;});b._g=g;tabs.appendChild(b);});
+   show(RAIL.fam);}
   wrap.append(tabs,rail);host.appendChild(wrap);
   press(rail);
   RAIL.cur=curId;
 }
-const RAIL={cur:''};
+const RAIL={cur:'',fam:''};
 /* the sheet never rises past halfway: the art keeps the top half, the sheet's own content scrolls */
 const SHEET={s:1,vis:()=>{const h=Math.round(innerHeight*.5);return[26,Math.min(222,h-60),h,h];}};
 function wireSheet(){

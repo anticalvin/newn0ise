@@ -316,6 +316,22 @@ body[data-sheet] .insp,body[data-side] .insp{overflow:visible;padding-bottom:cal
 body[data-sheet] .grab{position:sticky;top:0;z-index:3;background:var(--panel)}
 body[data-sheet] main{transition:padding-bottom .26s cubic-bezier(.2,.8,.2,1)}
 @media (prefers-reduced-motion:reduce){body[data-sheet] main{transition:none}}
+.itabs{position:sticky;top:44px;z-index:3;display:grid;grid-template-columns:repeat(4,1fr);background:var(--bg,#000);border-bottom:1px solid var(--line);margin:0 0 2px}
+.itabs button{min-height:44px;padding:0;border:0;border-bottom:2px solid transparent;background:none;color:var(--dim,#999);font:600 11px var(--lab);text-transform:uppercase;letter-spacing:.08em;cursor:pointer}
+.itabs button[aria-selected=true]{color:var(--ink);border-bottom-color:var(--accent,currentColor)}
+.itabs button:focus-visible{outline:2px solid var(--accent,currentColor);outline-offset:-3px}
+.ban{min-height:40px}.ban .no{font-size:20px}.ban .nm{font-size:18px}
+.grp>.gt{cursor:pointer;min-height:40px;display:flex;align-items:center;justify-content:space-between}
+.grp>.gt::after{content:"+";opacity:.6}.grp:not(.shut)>.gt::after{content:"−"}
+.grp.shut>:not(.gt){display:none!important}
+.grp>.gt:focus-visible{outline:2px solid var(--accent,currentColor);outline-offset:-2px}
+.dtabs{display:grid;grid-template-columns:repeat(3,1fr);position:sticky;top:0;z-index:4;background:var(--bg,#000);border-bottom:1px solid var(--line)}
+.dtabs button{min-height:44px;border:0;border-bottom:2px solid transparent;background:none;color:var(--dim,#999);font:700 11px var(--lab);text-transform:uppercase;letter-spacing:.1em;cursor:pointer}
+.dtabs button[aria-selected=true]{color:var(--ink);border-bottom-color:var(--accent,currentColor)}
+.dtabs button:focus-visible{outline:2px solid var(--accent,currentColor);outline-offset:-3px}
+body[data-dt=fx] #strip,body[data-dt=fx] #insp{display:none!important}
+body[data-dt=fuse] #peek,body[data-dt=fuse] #strip,body[data-dt=layers] #peek{display:none!important}
+body[data-dt=fuse] .ban,body[data-dt=fuse] .itabs{display:none}
 </style>
 </head>
 <body>
@@ -353,6 +369,6 @@ body[data-sheet] main{transition:padding-bottom .26s cubic-bezier(.2,.8,.2,1)}
   </main>
 </div>
 <input type="file" id="file" accept="image/*,video/*,audio/*,.mp3,.wav,.m4a,.ogg,.flac,.aac" hidden>
-<script type="module" src="assets/index.js?v=bac71a8a"></script>
+<script type="module" src="assets/index.js?v=ea5f2581"></script>
 </body>
 </html>

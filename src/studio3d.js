@@ -930,13 +930,15 @@ function buildSplatBytes(m){
   const cx=asp/(cols-1),cy=1/(rows-1),q=new THREE.Quaternion(),zz=new THREE.Vector3(0,0,1),nv=new THREE.Vector3();
   for(let j=0;j<rows;j++)for(let i=0;i<cols;i++){
     const u=i/(cols-1),v=j/(rows-1),k=j*cols+i;
-    const a=useA?m.alpha[Math.round(v*(m.h-1))*m.w+Math.round(u*(m.w-1))]:1;if(a<.04)continue;
+    let a=useA?m.alpha[Math.round(v*(m.h-1))*m.w+Math.round(u*(m.w-1))]:1;
+    if(useA){a=clamp((a-.3)/.55,0,1);a=a*a*(3-2*a);} // pull the matte in a touch so no background halo rides on the edge
+    if(a<.06)continue;
     const z=zv[k],s=m.rest?(D-z)/D:1,x=(u-.5)*asp*s,y=(.5-v)*s;
     const zl=zv[j*cols+Math.max(0,i-1)],zr=zv[j*cols+Math.min(cols-1,i+1)],zu=zv[Math.max(0,j-1)*cols+i],zd=zv[Math.min(rows-1,j+1)*cols+i];
     nv.set(-(zr-zl)/(2*cx),(zd-zu)/(2*cy)*-1,1);nv.x*=1;nv.normalize();nv.lerp(zz,.45).normalize(); // soften steep normals so slopes don't turn into slivers
     nv.set(nv.x,-nv.y,-nv.z);q.setFromUnitVectors(zz,nv); // into the y-down file frame
-    const sx=Math.max(cx,cy)*s*.9,o=n*8;
-    f[o]=x;f[o+1]=-y;f[o+2]=-z;f[o+3]=sx;f[o+4]=sx;f[o+5]=sx*.25;
+    const sx=Math.max(cx,cy)*s*.62,o=n*8; // tight discs that just overlap: crisp like the photo, not a smeared cloud
+    f[o]=x;f[o+1]=-y;f[o+2]=-z;f[o+3]=sx;f[o+4]=sx;f[o+5]=sx*.35;
     const px=Math.min(cv.width-1,Math.round(u*(cv.width-1))),py=Math.min(cv.height-1,Math.round(v*(cv.height-1))),pi=(py*cv.width+px)*4,b=n*32+24;
     u8[b]=pix[pi];u8[b+1]=pix[pi+1];u8[b+2]=pix[pi+2];u8[b+3]=Math.round(a*255);
     u8[b+4]=clamp(Math.round(q.w*128+128),0,255);u8[b+5]=clamp(Math.round(q.x*128+128),0,255);u8[b+6]=clamp(Math.round(q.y*128+128),0,255);u8[b+7]=clamp(Math.round(q.z*128+128),0,255);
@@ -1032,7 +1034,7 @@ async function photoToRelief(file){
 }
 function makeRelief(name,cv,depth,{quick=false,dw,dh,photo=null,px=null}={}){
   const g=new THREE.Group();
-  const meta={canvas:cv,photo,px,alpha:null,keepBg:false,w:cv.width,h:cv.height,depth,dw:dw||cv.width,dh:dh||cv.height,N:220,sway:!!photo,fur:0,wind:.5,breathe:false,scale:photo?.6:.45,gamma:1,flat:0,detail:.35,shade:.3,tear:.5,fill:true,solid:false,thick:.15,hq:!matchMedia('(pointer:coarse)').matches,rest:!!photo,smooth:1,cut:.08,mode:'mesh',lit:false,pt:.012,quick};
+  const meta={canvas:cv,photo,px,alpha:null,keepBg:false,w:cv.width,h:cv.height,depth,dw:dw||cv.width,dh:dh||cv.height,N:220,sway:!!photo,fur:0,wind:.5,breathe:false,scale:photo?.45:.45,gamma:1,flat:0,detail:.35,shade:.3,tear:.5,fill:true,solid:false,thick:.15,hq:!matchMedia('(pointer:coarse)').matches,rest:!!photo,smooth:1,cut:.08,mode:photo?'splats':'mesh',lit:false,pt:.012,quick};
   const o=registerObject(baseName(name),g,'relief',{fit:false,meta});
   rebuildRelief(o);
   // sit on the ground, 1.8 units tall
