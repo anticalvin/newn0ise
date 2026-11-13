@@ -30,3 +30,9 @@ Nothing here is vendored. Versions are pinned and each is more than two weeks ol
 - MODNet scored poorly on non-person subjects in our check (IoU 0.43 to 0.54), so it is not the default.
 - BiRefNet-lite failed on the test machine's WebGPU (storage-buffer limit) and ran out of memory on WASM, so it is opt-in only and never the default.
 - SlimSAM (`Xenova/slimsam-77-uniform`, Apache-2.0) and MediaPipe Image Segmenter are verified permissive but not wired in yet; tap-to-pick uses colour region growing for now.
+
+## Build tooling (not shipped to users)
+
+| Tool | Version | Licence | Use |
+|---|---|---|---|
+| esbuild | 0.25.5 | MIT (verified in the package's LICENSE.md) | bundles `src/` into `assets/index.js` and `assets/studio.js`. Dev dependency only; three.js and Spark stay on their pinned CDN URLs via the import map. |

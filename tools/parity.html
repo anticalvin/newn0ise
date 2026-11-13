@@ -1,0 +1,34 @@
+<!doctype html><meta charset="utf-8"><title>n0ise parity</title><pre id="o">running…</pre>
+<script type="module">
+import * as G from '../src/engine.js';
+import {makeProject,renderProject,resetTimeState} from '../src/project.js';
+import {createN0} from '../src/studio-adapter.js';
+const out=[];const log=s=>out.push(s);
+const c=document.createElement('canvas');c.width=c.height=64;const gl=G.createGL(c);G.attachGL(c,null,gl);G.initGL();G.initLUT();
+const src=document.createElement('canvas');src.width=640;src.height=480;const g=src.getContext('2d');g.scale(2,2);
+const gr=g.createLinearGradient(0,0,320,240);gr.addColorStop(0,'#203050');gr.addColorStop(1,'#e0a060');g.fillStyle=gr;g.fillRect(0,0,320,240);
+g.fillStyle='#fff';g.beginPath();g.arc(160,120,60,0,7);g.fill();g.fillStyle='#c02040';g.fillRect(40,150,90,60);
+G.applyProfile('studio');Object.assign(G.P,{pal:'src',seed:11});
+const P=makeProject({P:G.P,seed:11,size:[640,480]});
+const diff=(a,b)=>{let mx=0,sum=0;for(let i=0;i<a.px.length;i++){const d=Math.abs(a.px[i]-b.px[i]);if(d>mx)mx=d;sum+=d;}return {max:mx,mean:+(sum/a.px.length).toFixed(4)};};
+try{
+renderProject(P,0,[640,480],{source:src});   // prime: shader programs compile in the background on first use
+const t=1.0,fps=30,k=Math.round(t*fps);
+const preview=renderProject(P,t,[640,480],{source:src});
+renderProject(P,3.3,[640,480],{source:src});
+const still=renderProject(P,t,[640,480],{source:src});
+let video=null;for(let f=0;f<=k;f++){const r=renderProject(P,f/fps,[640,480],{source:src});if(f===k)video=r;}
+log('preview vs still '+JSON.stringify(diff(preview,still)));
+log('preview vs video frame '+JSON.stringify(diff(preview,video)));
+const A=renderProject(P,t,[640,480],{source:src,warm:0});
+const n0=createN0();n0.attach(gl);n0.setSize(640,480);
+G.setSource(src,'t',false);const tex=G.TEX.src; // same upload the app uses
+n0.resetGL();resetTimeState();Object.assign(G.P,P.engine.P);G.P.seed=11;G.V.frameNo=0;
+G.CPU.last=-1e9;G.CPU.ms=0;G.ST.autoQ=1;G.ST.lite=false;
+const ot=n0.render(tex,t,1/30,false,k);
+const fb=gl.createFramebuffer();gl.bindFramebuffer(gl.FRAMEBUFFER,fb);gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,ot,0);
+const px=new Uint8Array(640*480*4);gl.readPixels(0,0,640,480,gl.RGBA,gl.UNSIGNED_BYTE,px);
+log('app path vs 3D page path '+JSON.stringify(diff(A,{px}))+' size '+A.w+'x'+A.h);
+}catch(e){log('ERROR '+e.message+' '+(e.stack||'').split('\n')[1]);}
+document.getElementById('o').textContent=out.join('\n');window.__parity=out;
+</script>
