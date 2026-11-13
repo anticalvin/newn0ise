@@ -1568,6 +1568,7 @@ function setupEnv(){try{const pm=new THREE.PMREMGenerator(renderer);envTex=pm.fr
 const grid=new THREE.GridHelper(12,24,0x666670,0x2f2f36);grid.material.transparent=true;grid.material.opacity=.4;scene.add(grid);
 const tc=new TransformControls(camera,canvas);tc.setSize(.8);
 const tcHelper=tc.getHelper?tc.getHelper():tc;scene.add(tcHelper);
+tcHelper.traverse(n=>{n.userData.noView=true;}); // the view modes must not swap the gizmo's own materials (Normal and Depth crashed it)
 tc.addEventListener('dragging-changed',e=>{controls.enabled=!e.value;});
 tc.addEventListener('objectChange',()=>{bump();refreshInspector&&refreshInspector(true);});
 let selBox=null;
@@ -1952,41 +1953,137 @@ function pseudoDepth(cv){
 }
 const REST_HFOV=50;
 const restD=asp=>(asp/2)/Math.tan(THREE.MathUtils.degToRad(REST_HFOV/2)); // plane distance (plane height = 1) for a 50° horizontal view of the photo
+/* push-pull hole fill: colours spread outward from valid pixels through a pyramid (edge-extended, then smooth) */
+function pushPull(px,valid,w,h){
+  const lv=[];let cw=w,ch=h,col=[new Float32Array(w*h),new Float32Array(w*h),new Float32Array(w*h)],wt=new Float32Array(w*h);
+  for(let i=0;i<w*h;i++){wt[i]=valid[i]?1:0;for(let c=0;c<3;c++)col[c][i]=px[i*4+c];}
+  lv.push({w:cw,h:ch,col,wt});
+  while(cw>2&&ch>2){
+    const nw=cw>>1,nh=ch>>1,nc=[new Float32Array(nw*nh),new Float32Array(nw*nh),new Float32Array(nw*nh)],nwt=new Float32Array(nw*nh),L=lv[lv.length-1];
+    for(let y=0;y<nh;y++)for(let x=0;x<nw;x++){let s=0,r=[0,0,0];
+      for(let j=0;j<2;j++)for(let i=0;i<2;i++){const q=(2*y+j)*cw+2*x+i,ww=L.wt[q];s+=ww;for(let c=0;c<3;c++)r[c]+=L.col[c][q]*ww;}
+      const o=y*nw+x;nwt[o]=s/4;for(let c=0;c<3;c++)nc[c][o]=s>0?r[c]/s:0;}
+    cw=nw;ch=nh;lv.push({w:cw,h:ch,col:nc,wt:nwt});
+  }
+  for(let l=lv.length-2;l>=0;l--){const U=lv[l+1],L=lv[l];
+    const up=U.col.map(c=>resizeBilinear(c,U.w,U.h,L.w,L.h)),uw=resizeBilinear(U.wt,U.w,U.h,L.w,L.h);
+    for(let i=0;i<L.w*L.h;i++){const ww=Math.min(1,L.wt[i]);
+      for(let c=0;c<3;c++)L.col[c][i]=ww*L.col[c][i]+(1-ww)*(uw[i]>0?up[c][i]:L.col[c][i]);
+      L.wt[i]=Math.max(L.wt[i],Math.min(1,uw[i]));}
+  }
+  const out=new Uint8ClampedArray(w*h*4);
+  for(let i=0;i<w*h;i++){out[i*4]=lv[0].col[0][i];out[i*4+1]=lv[0].col[1][i];out[i*4+2]=lv[0].col[2][i];out[i*4+3]=255;}
+  return out;
+}
+/* behind-the-subject layers, built at half size and cached until the mask changes */
+function ensureLayers(m){
+  if(m.layers&&!m.bdDirty)return m.layers;
+  const w=Math.max(2,m.w>>1),h=Math.max(2,m.h>>1),n=w*h,mk=()=>{const c=document.createElement('canvas');c.width=w;c.height=h;return c;};
+  const small=document.createElement('canvas');small.width=w;small.height=h;const sg=small.getContext('2d',{willReadFrequently:true});sg.drawImage(m.canvas,0,0,w,h);
+  const px=sg.getImageData(0,0,w,h).data,a=new Float32Array(n);
+  if(m.alpha){for(let y=0;y<h;y++)for(let x=0;x<w;x++)a[y*w+x]=m.alpha[Math.min(m.h-1,y*2)*m.w+Math.min(m.w-1,x*2)];}else a.fill(1);
+  const L=m.layers||(m.layers={});
+  // 1) subject colours extended outward, then softened: the back of a solid, and the fill inside torn areas
+  const inside=new Uint8Array(n);for(let i=0;i<n;i++)inside[i]=a[i]>.9?1:0;
+  const ext=pushPull(px,inside,w,h),soft=new Float32Array(n*3);
+  for(let c=0;c<3;c++){const pl=new Float32Array(n);for(let i=0;i<n;i++)pl[i]=ext[i*4+c];const b=blurPlane(pl,w,h,Math.max(3,Math.round(w/90)));for(let i=0;i<n;i++)soft[i*3+c]=b[i];}
+  const mkTex=(cv,old)=>{const t=old||new THREE.CanvasTexture(cv);t.colorSpace=THREE.NoColorSpace;t.needsUpdate=true;return t;};
+  const bc=L.backCv||(L.backCv=mk()),bg=bc.getContext('2d'),bi=bg.createImageData(w,h);
+  const ea=blurPlane(a,w,h,2);
+  for(let i=0;i<n;i++){bi.data[i*4]=soft[i*3];bi.data[i*4+1]=soft[i*3+1];bi.data[i*4+2]=soft[i*3+2];bi.data[i*4+3]=Math.round(a[i]*255);}
+  bg.putImageData(bi,0,0);L.backTex=mkTex(bc,L.backTex);
+  // fill under the subject (interior only, so the cut-out silhouette stays clean at rest)
+  const fc=L.fillCv||(L.fillCv=mk()),fg=fc.getContext('2d'),fi=fg.createImageData(w,h);
+  for(let i=0;i<n;i++){fi.data[i*4]=soft[i*3];fi.data[i*4+1]=soft[i*3+1];fi.data[i*4+2]=soft[i*3+2];fi.data[i*4+3]=ea[i]>.97?255:0;}
+  fg.putImageData(fi,0,0);L.fillTex=mkTex(fc,L.fillTex);
+  // 2) clean background plate for Keep background: the subject area is filled from the surrounding backdrop
+  if(m.alpha){
+    const dil=blurPlane(a,w,h,Math.max(2,Math.round(w/180))),valid=new Uint8Array(n);for(let i=0;i<n;i++)valid[i]=dil[i]<.01?1:0;
+    const raw=pushPull(px,valid,w,h),pc=L.plateCv||(L.plateCv=mk()),pg=pc.getContext('2d');pg.putImageData(new ImageData(raw,w,h),0,0);L.plateTex=mkTex(pc,L.plateTex);
+  }
+  m.bdDirty=false;return L;
+}
 function buildReliefGeometry(m){
-  const asp=m.w/m.h,cap=m.hq?420000:150000;
+  const asp=m.w/m.h,cap=(m.hq?420000:150000)/(m.solid?1.9:1);
   const cols=Math.max(16,Math.min(Math.round(m.w/2),Math.floor(Math.sqrt(cap/2*asp)))),rows=Math.max(8,Math.round(cols/asp));
   let dp=m.depth;const dw=m.dw||m.w,dh=m.dh||m.h;
   if(m.smooth>0)dp=blurPlane(dp,dw,dh,m.smooth);
   const sample=(u,v)=>{const x=clamp(u*(dw-1),0,dw-1),y=clamp(v*(dh-1),0,dh-1),x0=Math.floor(x),y0=Math.floor(y),x1=Math.min(dw-1,x0+1),y1=Math.min(dh-1,y0+1),fx=x-x0,fy=y-y0;
     return lerp(lerp(dp[y0*dw+x0],dp[y0*dw+x1],fx),lerp(dp[y1*dw+x0],dp[y1*dw+x1],fx),fy);};
-  const D=restD(asp),pos=new Float32Array(cols*rows*3),uv=new Float32Array(cols*rows*2),dd=new Float32Array(cols*rows),av=new Float32Array(cols*rows).fill(1),useA=m.alpha&&!m.keepBg;
+  const D=restD(asp),N=cols*rows,pos=new Float32Array(N*3),uv=new Float32Array(N*2),zv=new Float32Array(N),dsm=new Float32Array(N),av=new Float32Array(N).fill(1),useA=m.alpha&&!m.keepBg;
+  const place=(k,u,v,z)=>{const s=m.rest?(D-z)/D:1;return [(u-.5)*asp*s,(.5-v)*s,z];};
   for(let j=0;j<rows;j++)for(let i=0;i<cols;i++){
     const u=i/(cols-1),v=j/(rows-1),k=j*cols+i;
     let d=sample(u,v);d=Math.pow(Math.max(0,d),m.gamma);d=.5+(d-.5)*(1-m.flat);
-    const z=(d-.5)*m.scale,s=m.rest?(D-z)/D:1;   // rest: slide each vertex along its view ray, so the photo looks identical from the rest camera
-    dd[k]=d;pos[k*3]=(u-.5)*asp*s;pos[k*3+1]=(.5-v)*s;pos[k*3+2]=z;
+    const z=(d-.5)*m.scale,P=place(k,u,v,z);
+    zv[k]=z;dsm[k]=d;pos[k*3]=P[0];pos[k*3+1]=P[1];pos[k*3+2]=P[2];
     uv[k*2]=u;uv[k*2+1]=1-v;
     if(useA)av[k]=m.alpha[Math.round(v*(m.h-1))*m.w+Math.round(u*(m.w-1))];
   }
-  const idx=new Uint32Array((cols-1)*(rows-1)*6);let n=0;
-  for(let j=0;j<rows-1;j++)for(let i=0;i<cols-1;i++){
+  // cut where the surface would stretch: slope of any edge in the cell above the limit
+  const cx=asp/(cols-1),cy=1/(rows-1),cell=(cx+cy)/2,lim=14-12*m.tear,cw=cols-1,ch=rows-1,inc=new Uint8Array(cw*ch);let nInc=0,maxSlope=0;
+  for(let j=0;j<ch;j++)for(let i=0;i<cw;i++){
     const a=j*cols+i,b=a+1,c=a+cols,d=c+1;
-    const mx=Math.max(dd[a],dd[b],dd[c],dd[d]),mn=Math.min(dd[a],dd[b],dd[c],dd[d]);
-    if((mx-mn)*m.scale>m.cut*.55)continue;   // tear where depth jumps (units: scene height)
+    const zmx=Math.max(zv[a],zv[b],zv[c],zv[d]),zmn=Math.min(zv[a],zv[b],zv[c],zv[d]),sl=(zmx-zmn)/cell;
+    if(sl>lim)continue;
     if(useA&&Math.max(av[a],av[b],av[c],av[d])<.02)continue;
-    idx[n++]=a;idx[n++]=c;idx[n++]=b;idx[n++]=b;idx[n++]=c;idx[n++]=d;
+    inc[j*cw+i]=1;nInc++;if(sl>maxSlope)maxSlope=sl;
   }
-  const g=new THREE.BufferGeometry();
-  g.setAttribute('position',new THREE.BufferAttribute(pos,3));g.setAttribute('uv',new THREE.BufferAttribute(uv,2));
-  g.setIndex(new THREE.BufferAttribute(idx.slice(0,n),1));if(m.lit||m.mode==='points')g.computeVertexNormals();
-  return {g,cols,rows,tris:n/3};
+  const idx=new Uint32Array(nInc*6);let n=0;
+  for(let j=0;j<ch;j++)for(let i=0;i<cw;i++){if(!inc[j*cw+i])continue;const a=j*cols+i,b=a+1,c=a+cols,d=c+1;idx[n++]=a;idx[n++]=c;idx[n++]=b;idx[n++]=b;idx[n++]=c;idx[n++]=d;}
+  const mkG=(p,u,ix)=>{const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(p,3));g.setAttribute('uv',new THREE.BufferAttribute(u,2));g.setIndex(new THREE.BufferAttribute(ix,1));g.computeVertexNormals();return g;};
+  const out={g:mkG(pos,uv,idx),cols,rows,tris:n/3,maxSlope,lim,shaped:dsm};
+  // solid: mirrored back surface plus side walls, so orbiting past the edge doesn't show an empty shell
+  if(m.solid){
+    const z0=-m.scale/2-m.thick/2,bp=new Float32Array(2*N*3),bu=new Float32Array(2*N*2);
+    for(let k=0;k<N;k++){const u=uv[k*2],v=1-uv[k*2+1],P=place(k,u,v,2*z0-zv[k]);bp[k*3]=P[0];bp[k*3+1]=P[1];bp[k*3+2]=P[2];
+      bp[(N+k)*3]=pos[k*3];bp[(N+k)*3+1]=pos[k*3+1];bp[(N+k)*3+2]=pos[k*3+2];bu[k*2]=u;bu[k*2+1]=1-v;bu[(N+k)*2]=uv[k*2];bu[(N+k)*2+1]=uv[k*2+1];}
+    const bi=[];
+    const has=(i,j)=>i>=0&&j>=0&&i<cw&&j<ch&&inc[j*cw+i];
+    for(let j=0;j<ch;j++)for(let i=0;i<cw;i++){if(!inc[j*cw+i])continue;const a=j*cols+i,b=a+1,c=a+cols,d=c+1;bi.push(a,b,c,b,d,c);
+      const wall=(p,q)=>{bi.push(p,q,N+p,q,N+q,N+p);};
+      if(!has(i,j-1))wall(a,b);if(!has(i,j+1))wall(c,d);if(!has(i-1,j))wall(a,c);if(!has(i+1,j))wall(b,d);}
+    out.back=mkG(bp,bu,new Uint32Array(bi));
+  }
+  // fill behind: a soft copy of the surface set back a little, so torn areas show a plausible surface instead of a hole
+  if(m.fill&&!m.solid){
+    const bc=Math.min(cols,140),br=Math.max(8,Math.round(bc/asp)),bn=bc*br,fp=new Float32Array(bn*3),fu=new Float32Array(bn*2),fz=new Float32Array(bn);
+    const sm=blurPlane(dsm,cols,rows,Math.max(2,Math.round(cols/40)));
+    for(let j=0;j<br;j++)for(let i=0;i<bc;i++){const u=i/(bc-1),v=j/(br-1),k=j*bc+i,gx=Math.round(u*(cols-1)),gy=Math.round(v*(rows-1));
+      const z=m.keepBg?-m.scale*.5-.015:(sm[gy*cols+gx]-.5)*m.scale-m.scale*.08-.01;fz[k]=z;const P=place(k,u,v,z);
+      fp[k*3]=P[0];fp[k*3+1]=P[1];fp[k*3+2]=P[2];fu[k*2]=u;fu[k*2+1]=1-v;}
+    const fa=new Float32Array(bn).fill(1);
+    if(!m.keepBg&&m.alpha)for(let j=0;j<br;j++)for(let i=0;i<bc;i++)fa[j*bc+i]=m.alpha[Math.round(j/(br-1)*(m.h-1))*m.w+Math.round(i/(bc-1)*(m.w-1))];
+    const fi=new Uint32Array((bc-1)*(br-1)*6);let q=0;
+    for(let j=0;j<br-1;j++)for(let i=0;i<bc-1;i++){const a=j*bc+i,b=a+1,c=a+bc,d=c+1;
+      if(Math.min(fa[a],fa[b],fa[c],fa[d])<.97)continue;   // under the subject only; the silhouette stays clean at rest
+      fi[q++]=a;fi[q++]=c;fi[q++]=b;fi[q++]=b;fi[q++]=c;fi[q++]=d;}
+    out.fill=mkG(fp,fu,fi.slice(0,q));
+  }
+  return out;
+}
+/* tangent-space normals from the shaped depth, so Shading shows pores, creases and hair */
+function buildNormalTex(m,shaped,cols,rows){
+  const w=Math.min(cols*2,m.w>>1),h=Math.max(2,Math.round(w*m.h/m.w)),dw=m.dw||m.w,dh=m.dh||m.h;
+  const dp=blurPlane(m.depth,dw,dh,1),sm=new Float32Array(w*h);
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++){let d=dp[Math.min(dh-1,Math.round(y/(h-1)*(dh-1)))*dw+Math.min(dw-1,Math.round(x/(w-1)*(dw-1)))];d=Math.pow(Math.max(0,d),m.gamma);sm[y*w+x]=(.5+(d-.5)*(1-m.flat)-.5)*m.scale;}
+  const c=m.nmCv||(m.nmCv=document.createElement('canvas'));c.width=w;c.height=h;const g=c.getContext('2d'),im=g.createImageData(w,h),px=1/h,k=m.detail*0+1;
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++){
+    const xl=Math.max(0,x-1),xr=Math.min(w-1,x+1),yu=Math.max(0,y-1),yd=Math.min(h-1,y+1);
+    const dzx=(sm[y*w+xr]-sm[y*w+xl])/((xr-xl||1)*px),dzy=(sm[yd*w+x]-sm[yu*w+x])/((yd-yu||1)*px);
+    let nx=-dzx*k,ny=dzy*k,nz=1;const l=Math.hypot(nx,ny,nz);nx/=l;ny/=l;nz/=l;
+    const o=(y*w+x)*4;im.data[o]=(nx*.5+.5)*255;im.data[o+1]=(ny*.5+.5)*255;im.data[o+2]=(nz*.5+.5)*255;im.data[o+3]=255;}
+  g.putImageData(im,0,0);
+  if(!m.nmTex){m.nmTex=new THREE.CanvasTexture(c);m.nmTex.colorSpace=THREE.NoColorSpace;m.nmTex.anisotropy=4;}
+  m.nmTex.needsUpdate=true;return m.nmTex;
 }
 function rebuildRelief(o){
   const m=o.meta;if(!m||!m.canvas)return;
-  const {g,cols,rows,tris}=buildReliefGeometry(m);
+  const R=buildReliefGeometry(m),{g,cols,rows,tris}=R;
   if(!m.tex){m.tex=new THREE.CanvasTexture(m.canvas);m.tex.colorSpace=THREE.NoColorSpace; /* the studio's render target is not re-encoded on output, so keep the photo's own sRGB values untouched */ m.tex.anisotropy=renderer.capabilities.getMaxAnisotropy();}
   o.root.children.slice().forEach(c=>{o.root.remove(c);c.geometry&&c.geometry.dispose();if(c.material&&c.material.dispose)c.material.dispose();});
-  let node;
+  const cut=!!(m.alpha&&!m.keepBg);
+  const add=(geo,mat,order)=>{const n=new THREE.Mesh(geo,mat);n.userData._mat=mat;n.renderOrder=order||0;o.root.add(n);return n;};
   if(m.mode==='points'){
     const cv=m.canvas,ctx=cv.getContext('2d',{willReadFrequently:true}).getImageData(0,0,cv.width,cv.height).data;
     const pos=g.attributes.position,col=new Float32Array(pos.count*3),uv=g.attributes.uv;
@@ -1994,12 +2091,23 @@ function rebuildRelief(o){
     for(let k=0;k<pos.count;k++){const x=Math.min(cv.width-1,Math.floor(uv.getX(k)*(cv.width-1))),y=Math.min(cv.height-1,Math.floor((1-uv.getY(k))*(cv.height-1))),p=(y*cv.width+x)*4;
       c.setRGB(ctx[p]/255,ctx[p+1]/255,ctx[p+2]/255,THREE.SRGBColorSpace);col[k*3]=c.r;col[k*3+1]=c.g;col[k*3+2]=c.b;}
     g.setAttribute('color',new THREE.BufferAttribute(col,3));g.setIndex(null);
-    node=new THREE.Points(g,new THREE.PointsMaterial({size:m.pt,sizeAttenuation:true,vertexColors:true}));
+    const node=new THREE.Points(g,new THREE.PointsMaterial({size:m.pt,sizeAttenuation:true,vertexColors:true}));o.root.add(node);
   }else{
-    const mat=m.lit?new THREE.MeshStandardMaterial({map:m.tex,roughness:.9,metalness:0,side:THREE.DoubleSide,transparent:!!(m.alpha&&!m.keepBg),alphaTest:m.alpha&&!m.keepBg?.02:0}):new THREE.MeshBasicMaterial({map:m.tex,toneMapped:false,side:THREE.DoubleSide,transparent:!!(m.alpha&&!m.keepBg),alphaTest:m.alpha&&!m.keepBg?.02:0});
-    node=new THREE.Mesh(g,mat);node.userData._mat=mat;
+    const base={side:THREE.DoubleSide,toneMapped:false};
+    let fmat;
+    if(m.shade>0){ // shading blends lit and unlit: at 0 the photo is untouched, higher values let light and the depth normals shape it
+      fmat=new THREE.MeshLambertMaterial({...base,map:m.tex,color:new THREE.Color().setScalar(m.shade),emissive:new THREE.Color().setScalar(1-m.shade),emissiveMap:m.tex,normalMap:buildNormalTex(m,R.shaped,cols,rows),normalScale:new THREE.Vector2(1,1)});
+    }else fmat=new THREE.MeshBasicMaterial({...base,map:m.tex});
+    if(cut){fmat.transparent=true;fmat.alphaTest=.02;}
+    add(g,fmat,2);
+    const L=(R.back||R.fill)?ensureLayers(m):null;
+    if(R.back){const bm=new THREE.MeshBasicMaterial({...base,map:L.backTex});if(cut){bm.transparent=true;bm.alphaTest=.02;}add(R.back,bm,1);}
+    if(R.fill){
+      const tex=m.keepBg?(L.plateTex||m.tex):L.fillTex;
+      add(R.fill,new THREE.MeshBasicMaterial({...base,map:tex}),0);
+    }
   }
-  o.root.add(node);o.meta.stats=`${cols}×${rows}`;o.meta.tris=tris;
+  o.meta.stats=`${cols}×${rows}`;o.meta.tris=tris;o.meta.maxSlope=R.maxSlope;o.meta.slopeLim=R.lim;
   applyView();bump();
 }
 async function photoToRelief(file){
@@ -2024,7 +2132,7 @@ async function photoToRelief(file){
 }
 function makeRelief(name,cv,depth,{quick=false,dw,dh,photo=null,px=null}={}){
   const g=new THREE.Group();
-  const meta={canvas:cv,photo,px,alpha:null,keepBg:false,w:cv.width,h:cv.height,depth,dw:dw||cv.width,dh:dh||cv.height,N:220,scale:.3,gamma:1,flat:0,hq:!matchMedia('(pointer:coarse)').matches,rest:!!photo,smooth:1,cut:.08,mode:'mesh',lit:false,pt:.012,quick};
+  const meta={canvas:cv,photo,px,alpha:null,keepBg:false,w:cv.width,h:cv.height,depth,dw:dw||cv.width,dh:dh||cv.height,N:220,scale:.45,gamma:1,flat:0,detail:.35,shade:.3,tear:.5,fill:true,solid:false,thick:.15,hq:!matchMedia('(pointer:coarse)').matches,rest:!!photo,smooth:1,cut:.08,mode:'mesh',lit:false,pt:.012,quick};
   const o=registerObject(baseName(name),g,'relief',{fit:false,meta});
   rebuildRelief(o);
   // sit on the ground, 1.8 units tall
@@ -2163,7 +2271,7 @@ function applyAlpha(m){
   if(m.keepBg||!m.alpha)ctx.putImageData(new ImageData(new Uint8ClampedArray(m.px),m.w,m.h),0,0);
   else ctx.putImageData(new ImageData(decontaminate(m.px,m.alpha,m.w,m.h),m.w,m.h),0,0);
   if(m.tex)m.tex.needsUpdate=true;
-  applyDepthMask(m);
+  applyDepthMask(m);m.bdDirty=true;
 }
 function setAlpha(o,a,by){
   const m=o.meta;m.alpha=a;if(by)m.cutBy=by;
@@ -2284,7 +2392,8 @@ function buildDepth(m){
   vals.sort((p,q)=>p-q);
   const L=vals[Math.floor(.02*(vals.length-1))],H=vals[Math.floor(.98*(vals.length-1))],r=Math.max(1e-6,H-L),dn=new Float32Array(n);
   for(let i=0;i<n;i++)dn[i]=clamp((d[i]-L)/r,0,1);
-  m.dn=dn;applyDepthMask(m);
+  const hp=blurPlane(I,w,h,2);for(let i=0;i<n;i++)hp[i]=I[i]-hp[i];   // photo high-pass: pores, hair, creases
+  m.hp=hp;m.dn=dn;applyDepthMask(m);
 }
 /* outside the subject the surface eases to a flat plane; the subject edge extends outward a little so no cliff forms */
 function applyDepthMask(m){
@@ -2296,6 +2405,7 @@ function applyDepthMask(m){
     const bn=blurPlane(na,m.w,m.h,r),ba=blurPlane(a,m.w,m.h,r);
     for(let i=0;i<n;i++){const ext=ba[i]>.01?bn[i]/ba[i]*Math.min(1,ba[i]*6):0;o[i]=ext*(1-a[i])+m.dn[i]*a[i];}
   }
+  if(m.hp&&m.detail>0){const k=m.detail*.6;for(let i=0;i<n;i++)o[i]+=k*m.hp[i]*(a?a[i]:1);}
   m.depth=o;m.dw=m.w;m.dh=m.h;
 }
 
@@ -2762,7 +2872,7 @@ function renderObjList(){
   });
 }
 let reliefT=0;
-const triNote=m=>m.tris?`${m.stats} grid · ${Math.round(m.tris/1000)}k triangles`:'';
+const triNote=m=>m.tris?`${m.stats} grid · ${Math.round(m.tris/1000)}k triangles`+(m.maxSlope?` · max slope ${m.maxSlope.toFixed(1)}/${m.slopeLim.toFixed(0)}`:''):'';
 function refreshInspector(soft){
   if(soft){inspSyncs.forEach(f=>f());return;}
   if(!inspEl)return;inspEl.innerHTML='';inspSyncs=[];
@@ -2777,18 +2887,21 @@ function refreshInspector(soft){
   if(o.kind==='relief'){
     const m=o.meta,rb=()=>{clearTimeout(reliefT);reliefT=setTimeout(()=>rebuildRelief(o),60);};
     const r=sec(inspEl,'Relief',m.depthing?'working…':(m.depthBy||'flat'));
-    sliderRow(r,'Depth',()=>m.scale,v=>{m.scale=v;rb();},0,1,.01);
+    sliderRow(r,'Depth',()=>m.scale,v=>{m.scale=v;rb();},0,1.2,.01);
+    sliderRow(r,'Detail',()=>m.detail,v=>{m.detail=v;clearTimeout(reliefT);reliefT=setTimeout(()=>{applyDepthMask(m);rebuildRelief(o);},120);},0,1,.02);
+    sliderRow(r,'Shading',()=>m.shade,v=>{m.shade=v;rb();},0,1,.02);
     sliderRow(r,'Curve',()=>m.gamma,v=>{m.gamma=v;rb();},.4,2.5,.05);
     sliderRow(r,'Flatten',()=>m.flat,v=>{m.flat=v;rb();},0,1,.02);
     sliderRow(r,'Smooth',()=>m.smooth,v=>{m.smooth=Math.round(v);rb();},0,8,1);
-    sliderRow(r,'Tear edges',()=>m.cut,v=>{m.cut=v;rb();},.01,.5,.01);
+    sliderRow(r,'Tear edges',()=>m.tear,v=>{m.tear=v;rb();},0,1,.02);
     chipRow(r,[['draft','Draft'],['high','High']],v=>(m.hq?'high':'draft')===v,v=>{m.hq=v==='high';rebuildRelief(o);r.querySelector('.tri').textContent=triNote(m);});
     chipRow(r,[['mesh','Surface'],['points','Points']],v=>m.mode===v,v=>{m.mode=v;rebuildRelief(o);});
     sliderRow(r,'Point size',()=>m.pt,v=>{m.pt=v;rb();},.003,.04,.001);
     const row=el('div','chips');
-    const lb=el('button','chip','Lit');lb.setAttribute('aria-pressed',m.lit);lb.addEventListener('click',()=>{m.lit=!m.lit;lb.setAttribute('aria-pressed',m.lit);rebuildRelief(o);});
+    const tg=(label,key,onset)=>{const b=el('button','chip',label);b.setAttribute('aria-pressed',!!m[key]);b.addEventListener('click',()=>{m[key]=!m[key];b.setAttribute('aria-pressed',m[key]);(onset||rebuildRelief)(o);});return b;};
     const ad=el('button','chip','Auto depth');ad.setAttribute('aria-pressed',CUT.depthOn);ad.addEventListener('click',()=>{CUT.depthOn=!CUT.depthOn;localStorage.setItem('n0.autodepth',CUT.depthOn?'1':'0');ad.setAttribute('aria-pressed',CUT.depthOn);});
-    row.append(lb,ad,btn('Re-run depth','',()=>autoDepth(o,{force:true})));r.appendChild(row);
+    row.append(tg('Fill behind','fill'),tg('Solidify','solid'),ad,btn('Original look','',()=>{m.shade=0;m.detail=0;m.scale=.3;applyDepthMask(m);rebuildRelief(o);refreshInspector();}),btn('Re-run depth','',()=>autoDepth(o,{force:true})));r.appendChild(row);
+    sliderRow(r,'Thickness',()=>m.thick,v=>{m.thick=v;if(m.solid)rb();},0,.6,.01);
     if(m.rest){
       const vw=el('div','chips');
       const un=el('button','chip','Unlock orbit');un.setAttribute('aria-pressed',!!(S.rest&&!S.rest.cage));
