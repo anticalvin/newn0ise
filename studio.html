@@ -1895,6 +1895,7 @@ function frame(ts){
     if(S.needFrame){S.needFrame=false;frameAll();}
     const lift=Math.round(sheet.coverPx());if(lift!==S._lift){S._lift=lift;hudLift.style.transform=`translate3d(0,${-lift}px,0)`;hudLift2.style.transform=`translate3d(0,${-lift}px,0)`;}
     if(S.rest)restTick();
+    animTick(t);
     controls.autoRotate=S.spin;if(S.spin)bump();
     controls.update(dt);
     if(selBox)selBox.update();
@@ -2166,6 +2167,20 @@ function rebuildRelief(o){
     add(g,fmat,2);
     const L=(R.back||R.fill)?ensureLayers(m):null;
     if(R.back){const bm=new THREE.MeshBasicMaterial({...base,map:L.backTex});if(cut){bm.transparent=true;bm.alphaTest=.02;}add(R.back,bm,1);}
+    m.furMats=[];
+    if(m.fur>0&&cut){ // animated fur: shells of the surface pushed along the normals, strands cut by a hash, swaying in the wind
+      const NS=m.hq?14:8,dens=Math.max(80,m.w/2);
+      for(let i=1;i<=NS;i++){
+        const mt=new THREE.ShaderMaterial({side:THREE.DoubleSide,transparent:false,toneMapped:false,
+          uniforms:{uMap:{value:m.tex},uShell:{value:i/NS},uLen:{value:m.fur*.07},uWind:{value:m.wind},uTime:{value:0},uDens:{value:dens}},
+          vertexShader:`uniform float uShell,uLen,uWind,uTime;varying vec2 vUv;void main(){vUv=uv;vec3 p=position+normal*uLen*uShell;float k=uShell*uShell*uLen;
+            p.x+=sin(uTime*1.7+position.y*9.+position.x*5.)*uWind*k;p.y+=sin(uTime*1.3+position.x*7.)*uWind*k*.5-k*.4;gl_Position=projectionMatrix*modelViewMatrix*vec4(p,1.);}`,
+          fragmentShader:`uniform sampler2D uMap;uniform float uShell,uDens;varying vec2 vUv;
+            float h(vec2 c){return fract(sin(dot(c,vec2(127.1,311.7)))*43758.5453);}
+            void main(){vec4 t=texture2D(uMap,vUv);if(t.a<.5)discard;if(h(floor(vUv*uDens))<uShell)discard;gl_FragColor=vec4(t.rgb*(.8+.2*uShell),1.);}`});
+        m.furMats.push(mt);add(g,mt,3+i);
+      }
+    }
     if(R.fill){
       const tex=m.keepBg?(L.plateTex||m.tex):L.fillTex;
       add(R.fill,new THREE.MeshBasicMaterial({...base,map:tex}),0);
@@ -2207,7 +2222,7 @@ async function photoToRelief(file){
 }
 function makeRelief(name,cv,depth,{quick=false,dw,dh,photo=null,px=null}={}){
   const g=new THREE.Group();
-  const meta={canvas:cv,photo,px,alpha:null,keepBg:false,w:cv.width,h:cv.height,depth,dw:dw||cv.width,dh:dh||cv.height,N:220,scale:.45,gamma:1,flat:0,detail:.35,shade:.3,tear:.5,fill:true,solid:false,thick:.15,hq:!matchMedia('(pointer:coarse)').matches,rest:!!photo,smooth:1,cut:.08,mode:'mesh',lit:false,pt:.012,quick};
+  const meta={canvas:cv,photo,px,alpha:null,keepBg:false,w:cv.width,h:cv.height,depth,dw:dw||cv.width,dh:dh||cv.height,N:220,sway:!!photo,fur:0,wind:.5,breathe:false,scale:photo?.6:.45,gamma:1,flat:0,detail:.35,shade:.3,tear:.5,fill:true,solid:false,thick:.15,hq:!matchMedia('(pointer:coarse)').matches,rest:!!photo,smooth:1,cut:.08,mode:'mesh',lit:false,pt:.012,quick};
   const o=registerObject(baseName(name),g,'relief',{fit:false,meta});
   rebuildRelief(o);
   // sit on the ground, 1.8 units tall
@@ -2219,7 +2234,7 @@ function makeRelief(name,cv,depth,{quick=false,dw,dh,photo=null,px=null}={}){
 /* ---------- subject cut-out (matting) ----------
    MATTERS is the swap point: each entry is {label, run(canvas,onProg) -> {data:Float32Array 0..1, w, h}}.
    modnet runs in matte.worker.js (WebGPU or WASM). fallback needs no model (border flood fill). */
-const BUILD='step5-splats1';
+const BUILD='step5-life1';
 const CUT={on:localStorage.getItem('n0.autocut')!=='0',workerP:null,jobs:new Map(),seq:0};
 function resizeBilinear(s,sw,sh,dw,dh){
   if(sw===dw&&sh===dh)return s;
@@ -2497,6 +2512,21 @@ function setCage(on){
   const c=controls;
   if(on){c.enablePan=false;c.minAzimuthAngle=-CAGE;c.maxAzimuthAngle=CAGE;c.minPolarAngle=Math.PI/2-CAGE;c.maxPolarAngle=Math.PI/2+CAGE;}
   else{c.enablePan=true;c.minAzimuthAngle=-Infinity;c.maxAzimuthAngle=Infinity;c.minPolarAngle=0;c.maxPolarAngle=Math.PI;c.rotateSpeed=1;c.minDistance=.3;c.maxDistance=60;}
+}
+const ANIM={hold:false,idleAt:0};
+controls.addEventListener('start',()=>{ANIM.hold=true;});
+controls.addEventListener('end',()=>{ANIM.hold=false;ANIM.idleAt=performance.now()+3500;});
+function animTick(t){
+  for(const o of S.objs){const m=o.meta;if(!m||o.kind!=='relief')continue;
+    if(m.furMats)for(const u of m.furMats){u.uniforms.uTime.value=t;u.uniforms.uWind.value=m.wind;}
+    const bz=m.breathe?1+.14*Math.sin(t*1.4):1;if(Math.abs(o.root.scale.z-bz)>1e-4)o.root.scale.z=bz;}
+  const R=S.rest,o=R&&objById(R.id);
+  if(o&&R.cage&&o.meta.sway&&!ANIM.hold&&!S.exporting&&performance.now()>ANIM.idleAt)
+  {
+    const A=THREE.MathUtils.degToRad(9),sp=new THREE.Spherical().setFromVector3(camera.position.clone().sub(controls.target));
+    sp.theta=A*Math.sin(t*.9);sp.phi=Math.PI/2+A*.45*Math.sin(t*.6+1);
+    camera.position.copy(controls.target).add(new THREE.Vector3().setFromSpherical(sp));camera.lookAt(controls.target);
+  }
 }
 function enterRest(o){
   if(!o||!o.meta.rest)return;
@@ -2975,6 +3005,11 @@ function refreshInspector(soft){
     sliderRow(r,'Curve',()=>m.gamma,v=>{m.gamma=v;rb();},.4,2.5,.05);
     sliderRow(r,'Flatten',()=>m.flat,v=>{m.flat=v;rb();},0,1,.02);
     sliderRow(r,'Smooth',()=>m.smooth,v=>{m.smooth=Math.round(v);rb();},0,8,1);
+    const an=el('div','chips');
+    const tgm=(label,key)=>{const b=el('button','chip',label);b.setAttribute('aria-pressed',!!m[key]);b.addEventListener('click',()=>{m[key]=!m[key];b.setAttribute('aria-pressed',m[key]);if(key==='sway'){ANIM.idleAt=0;if(!m.sway&&S.rest)enterRest(o);}});return b;};
+    an.append(tgm('Sway','sway'),tgm('Breathe','breathe'));r.appendChild(an);
+    sliderRow(r,'Fur',()=>m.fur,v=>{const was=m.fur>0;m.fur=v;if(was!==v>0)rb();else if(m.furMats)m.furMats.forEach(u=>u.uniforms.uLen.value=v*.07);},0,1,.02);
+    sliderRow(r,'Wind',()=>m.wind,v=>{m.wind=v;},0,2,.02);
     sliderRow(r,'Tear edges',()=>m.tear,v=>{m.tear=v;rb();},0,1,.02);
     chipRow(r,[['draft','Draft'],['high','High']],v=>(m.hq?'high':'draft')===v,v=>{m.hq=v==='high';rebuildRelief(o);r.querySelector('.tri').textContent=triNote(m);});
     chipRow(r,[['mesh','Surface'],['splats','Splats'],['points','Points']],v=>m.mode===v,v=>{m.mode=v;rebuildRelief(o);refreshInspector();});
