@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>n0ise / LAB</title>
+<style>
+:root{color-scheme:dark;--bg:#0b0c0d;--panel:#131516;--line:#2c3031;--ink:#e6e9e7;--muted:#89918d;--accent:#d5ff70}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:13px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace}button,select,textarea,input{font:inherit}button,select{background:#1d2020;color:var(--ink);border:1px solid #373c3a;border-radius:5px;padding:9px 12px;cursor:pointer}button:hover{border-color:var(--accent)}button.primary{background:var(--accent);color:#151713;border-color:var(--accent);font-weight:700}header{height:67px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;padding:0 23px;gap:14px}header strong{font-size:21px;letter-spacing:-1.5px}header strong span{color:var(--accent)}.tag{font-size:10px;border:1px solid #414642;padding:3px 7px;color:var(--muted);margin-left:12px}main{display:grid;grid-template-columns:minmax(260px,1fr) minmax(380px,1.55fr) minmax(280px,.85fr);height:calc(100vh - 67px);min-height:550px}.panel{min-width:0;border-right:1px solid var(--line);display:flex;flex-direction:column}.panel:last-child{border:0}.head{padding:18px 20px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between}.eyebrow{color:var(--muted);font-size:10px;letter-spacing:2px}.head h2{font-size:15px;margin:5px 0 0}.editor{width:100%;flex:1;min-height:300px;resize:none;background:#101213;color:#d4edc4;border:0;outline:0;padding:20px;font:12px/1.8 ui-monospace,monospace;tab-size:2}.bar{display:flex;flex-wrap:wrap;gap:8px;padding:12px 16px;border-top:1px solid var(--line)}.stage{background:#090a0a;display:flex;align-items:center;justify-content:center;flex:1;min-height:300px;padding:18px;overflow:hidden}.stage iframe{width:100%;height:100%;border:1px solid #282d2a;background:#050505;min-height:300px}.status{color:var(--muted);font-size:11px;padding:10px 18px;border-top:1px solid var(--line)}.side{padding:20px;overflow:auto}.side h3{font-size:11px;letter-spacing:1.5px;color:var(--muted);font-weight:500;margin:8px 0 18px}.control{margin:0 0 22px}.control label{display:flex;justify-content:space-between;margin-bottom:8px}.control output{color:var(--accent)}input[type=range]{width:100%;accent-color:var(--accent)}.hint{font-size:11px;color:var(--muted);margin:20px 0;line-height:1.8}.wide{width:100%;margin-bottom:9px}.bottom{border-top:1px solid var(--line);margin-top:24px;padding-top:20px}#error{color:#ff958c;white-space:pre-wrap;word-break:break-word}.pill{color:var(--accent);font-size:10px}select{max-width:190px}@media(max-width:1000px){main{grid-template-columns:1fr 1fr;height:auto}.panel:last-child{grid-column:1/-1}.stage{height:520px}}@media(max-width:650px){header{padding:0 12px}main{display:flex;flex-direction:column}.panel{border-right:0;border-bottom:1px solid var(--line)}.stage{height:400px}.editor{height:320px;flex:auto}.tag{display:none}}
+</style></head><body>
+<header><div><strong>n<span>0</span>ise / LAB</strong><span class="tag">GENERATIVE WORKSPACE / 001</span></div><div><span class="pill">● P5 ENGINE</span> &nbsp; <button id="new">+ NEW SKETCH</button></div></header>
+<main>
+<section class="panel"><div class="head"><div><div class="eyebrow">01 / SOURCE</div><h2>Sketch editor</h2></div><select id="preset" aria-label="Choose sketch"><option value="flow">Flow field</option><option value="orbit">Orbital study</option><option value="grid">Signal grid</option></select></div><textarea id="code" class="editor" spellcheck="false" aria-label="p5 sketch code"></textarea><div class="bar"><button class="primary" id="run">▶ RUN CODE</button><button id="reset">RESET</button><button id="save">SAVE LOCAL</button></div></section>
+<section class="panel"><div class="head"><div><div class="eyebrow">02 / OUTPUT</div><h2>Live canvas</h2></div><div><button id="pause">PAUSE</button> <button id="export">↓ PNG</button></div></div><div class="stage"><iframe id="preview" title="Live p5 sketch" sandbox="allow-scripts allow-downloads"></iframe></div><div class="status"><span id="status">Preparing canvas…</span><div id="error" role="alert"></div></div></section>
+<section class="panel"><div class="head"><div><div class="eyebrow">03 / MODULATE</div><h2>Parameters</h2></div><span class="pill">LIVE</span></div><div class="side"><h3>SKETCH CONTROLS</h3><div id="controls"></div><button class="wide" id="random">↝ RANDOMIZE PARAMETERS</button><button class="wide" id="seed">↻ NEW SEED</button><div class="bottom"><h3>HOW IT WORKS</h3><p class="hint">Write standard p5.js using setup() and draw(). Read values from params.speed, params.density, params.scale, and params.hue. Change sliders while your sketch runs. Save locally, remix, and export a still.</p><button class="wide" id="duplicate">DUPLICATE TO EDITOR</button><p class="hint">Ctrl / Cmd + Enter runs the sketch. The preview is isolated from the editor.</p></div></div></section>
+</main>
+<script>
+const presets={
+flow:`function setup() {
+  createCanvas(700, 700);
+  background(6, 9, 9);
+  colorMode(HSB, 360, 100, 100, 100);
+}
+function draw() {
+  noStroke();
+  fill(0, 0, 0, 5);
+  rect(0, 0, width, height);
+  const count = floor(params.density / 2);
+  for (let i = 0; i < count; i++) {
+    let x = random(width), y = random(height);
+    let a = noise(x * params.scale / 200, y * params.scale / 200, frameCount * 0.002 * params.speed) * TAU * 2;
+    let len = 4 + params.speed * 6;
+    stroke((params.hue + a * 18) % 360, 70, 95, 60);
+    strokeWeight(1.2);
+    line(x, y, x + cos(a) * len, y + sin(a) * len);
+  }
+}`,
+orbit:`function setup() {
+  createCanvas(700, 700);
+  colorMode(HSB, 360, 100, 100, 100);
+}
+function draw() {
+  background(5, 8, 8, 100);
+  translate(width / 2, height / 2);
+  noFill();
+  for (let i = 0; i < params.density; i++) {
+    let t = frameCount * 0.008 * params.speed + i * 0.19;
+    let r = 40 + i * 2.6;
+    let x = cos(t * 0.73) * r;
+    let y = sin(t * 1.13) * r;
+    stroke((params.hue + i * 1.8) % 360, 65, 95, 65);
+    strokeWeight(1);
+    circle(x, y, 4 + 12 * sin(t * params.scale) ** 2);
+  }
+}`,
+grid:`function setup() {
+  createCanvas(700, 700);
+  colorMode(HSB, 360, 100, 100, 100);
+}
+function draw() {
+  background(5, 8, 8);
+  const step = max(9, 70 - params.density / 3);
+  noFill();
+  for (let y = step; y < height; y += step) {
+    for (let x = step; x < width; x += step) {
+      let n = noise(x * params.scale / 180, y * params.scale / 180, frameCount * 0.007 * params.speed);
+      stroke((params.hue + n * 95) % 360, 75, 95, 75);
+      strokeWeight(1);
+      push();
+      translate(x, y);
+      rotate(n * TAU);
+      line(-step * n * .4, 0, step * n * .4, 0);
+      pop();
+    }
+  }
+}`
+};
+const specs=[['speed',0,5,.05,1],['density',5,180,1,90],['scale',.1,8,.1,2],['hue',0,360,1,95]];
+const $=id=>document.getElementById(id);
+let params=Object.fromEntries(specs.map(([k,,,,v])=>[k,v]));let paused=false;let current='flow';
+function controls(){ $('controls').innerHTML='';for(const [key,min,max,step] of specs){const wrap=document.createElement('div');wrap.className='control';const label=document.createElement('label');label.textContent=key.toUpperCase();const output=document.createElement('output');output.textContent=params[key];label.append(output);const input=document.createElement('input');Object.assign(input,{type:'range',min,max,step,value:params[key]});input.addEventListener('input',()=>{params[key]=Number(input.value);output.textContent=input.value;send({type:'params',params})});wrap.append(label,input);$('controls').append(wrap)}}
+function send(message){$('preview').contentWindow?.postMessage(message,'*')}
+function run(){paused=false;$('pause').textContent='PAUSE';$('error').textContent='';$('status').textContent='Loading p5.js…';const code=$('code').value.replace(/<\\/script/gi,'<\\/script');const boot=`<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#050505;display:grid;place-items:center}canvas{max-width:100%;max-height:100%;object-fit:contain}</style></head><body><script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.11.11/p5.min.js"><\\/script><script>let params=${JSON.stringify(params)};let sketchSeed=${Math.floor(Math.random()*1000000)};window.onerror=(message)=>parent.postMessage({n0ise:true,type:'error',message:String(message)},'*');window.addEventListener('message',e=>{if(e.data.type==='params')params=e.data.params;if(e.data.type==='pause'){e.data.paused?noLoop():loop()}if(e.data.type==='seed'){randomSeed(e.data.seed);noiseSeed(e.data.seed)}if(e.data.type==='export'){let c=document.querySelector('canvas');if(c)parent.postMessage({n0ise:true,type:'image',data:c.toDataURL('image/png')},'*')}});try{${code}\nconst userSetup=window.setup;window.setup=function(){if(typeof userSetup==='function')userSetup();randomSeed(sketchSeed);noiseSeed(sketchSeed);parent.postMessage({n0ise:true,type:'ready'},'*')};}catch(e){parent.postMessage({n0ise:true,type:'error',message:e.stack||String(e)},'*')}<\\/script></body></html>`;$('preview').srcdoc=boot}
+function load(name){current=name;$('preset').value=name;$('code').value=presets[name];run()}
+$('run').onclick=run;$('reset').onclick=()=>load(current);$('preset').onchange=e=>load(e.target.value);$('new').onclick=()=>{$('code').value='function setup() {\n  createCanvas(700, 700);\n}\n\nfunction draw() {\n  background(10);\n  // Your next experiment starts here.\n}\n';run()};$('pause').onclick=()=>{paused=!paused;send({type:'pause',paused});$('pause').textContent=paused?'RESUME':'PAUSE'};$('seed').onclick=()=>send({type:'seed',seed:Math.floor(Math.random()*1e9)});$('random').onclick=()=>{for(const [k,min,max,step] of specs)params[k]=Number((Math.round((min+Math.random()*(max-min))/step)*step).toFixed(2));controls();send({type:'params',params})};$('save').onclick=()=>{localStorage.setItem('n0ise-lab-sketch',JSON.stringify({code:$('code').value,params}));$('status').textContent='Saved in this browser'};$('duplicate').onclick=()=>{const stamp='// REMIX '+new Date().toLocaleString()+'\n';$('code').value=stamp+$('code').value;$('code').focus()};$('export').onclick=()=>send({type:'export'});document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key==='Enter'){e.preventDefault();run()}});window.addEventListener('message',e=>{if(e.source!==$('preview').contentWindow||!e.data?.n0ise)return;if(e.data.type==='ready')$('status').textContent='● LIVE / 700 × 700';if(e.data.type==='error'){$('error').textContent=e.data.message;$('status').textContent='Sketch error'}if(e.data.type==='image'){const a=document.createElement('a');a.href=e.data.data;a.download='n0ise-lab-'+Date.now()+'.png';a.click()}});
+try{const saved=JSON.parse(localStorage.getItem('n0ise-lab-sketch'));if(saved?.code){$('code').value=saved.code;params={...params,...saved.params}}else $('code').value=presets.flow}catch{$('code').value=presets.flow}controls();run();
+</script></body></html>
