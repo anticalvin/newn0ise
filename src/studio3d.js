@@ -776,6 +776,10 @@ function frame(ts){
     grid.visible=S.grid&&!S.exporting&&!S.walk;
     if(selBox)selBox.visible=!S.exporting&&S.sel!=null&&!S.walk;
     tcHelper.visible=!S.exporting&&!S.walk&&!!(S.gizmo||S.pivot)&&S.sel!=null;
+    /* anything that changes the picture without a bump() (visualizers, physics, spin, walking, recording, auto mode, breathing reliefs) must also
+       invalidate the cached look frame, otherwise the effect keeps showing the first baked frame */
+    S.animating=!!(S.walk||S.spin||(typeof sim!=='undefined'&&sim.playing)||(typeof stRec!=='undefined'&&stRec.state==='recording')||AUTO.on||S.objs.some(o=>(o.kind==='viz'&&o.vis)||(o.kind==='relief'&&o.meta&&(o.meta.breathe||o.meta.furMats))));
+    if(S.animating){S.ver++;N0.SRC.ver=S.ver;S.liveUntil=performance.now()+120;}
     bgCol.set(S.bg);
     renderer.setRenderTarget(rt);renderer.setClearColor(bgCol,1);renderer.clear();renderer.render(scene,camera);
     const wantMask=S.fx&&!S.hold&&S.mask.mode===2&&!(S.engine!=='stack'&&S.objs.some(x=>x.look));

@@ -111,6 +111,9 @@ setup(d4,({W,H,t,px,py,put,col})=>{
   for(const [bx,bz] of [[-2,6],[2.4,9],[0,12]]){const z=((bz-sp*1.0)%14+14)%14+.5,s=H*.5/z,x=W/2+(bx+(px-.5)*3)*s*W*.05,y=hy+s;
     for(let a=0;a<s*1.2;a++)for(let b=0;b<s*.9;b++){if(a===0||b===0||a>=s*1.2-1||b>=s*.9-1)put(Math.round(x+b),Math.round(y-a),255,col);}}
 });
+const warm=()=>{if(warm.d)return;warm.d=1;const pf=h=>{const l=document.createElement('link');l.rel='prefetch';l.href=h;document.head.appendChild(l);};pf('effects.html');pf('tokens.css');fetch('effects.html').then(r=>r.text()).then(t=>{const m=t.match(/assets\/index\.js\?v=\w+/);if(m)pf(m[0]);}).catch(()=>{});};
+document.querySelectorAll('.door').forEach(d=>{['pointerenter','pointerdown','touchstart'].forEach(ev=>d.addEventListener(ev,warm,{passive:true,once:true}));
+  d.addEventListener('click',e=>{if(!document.startViewTransition||e.metaKey||e.ctrlKey||e.shiftKey||e.button)return;e.preventDefault();const h=d.href;document.startViewTransition(()=>{location.href=h;});});});
 if('serviceWorker' in navigator&&location.protocol!=='file:')navigator.serviceWorker.register('sw.js').catch(()=>{});
 </script>
 </body>

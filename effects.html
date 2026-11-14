@@ -1,6 +1,8 @@
 <!doctype html>
 <html lang="en">
 <head>
+<script>try{if(new URLSearchParams(location.search).get('cam'))document.documentElement.dataset.boot='cam';}catch(e){}</script>
+<style>html[data-boot=cam],html[data-boot=cam] body{background:#0a0a0a!important}html[data-boot=cam] header,html[data-boot=cam] main,html[data-boot=cam] .ws,html[data-boot=cam] .camhome{visibility:hidden!important}html[data-boot=cam] body::after{content:'Starting camera…';position:fixed;inset:0;display:flex;align-items:center;justify-content:center;color:#6f6c66;font:500 12px ui-monospace,monospace;letter-spacing:.12em;text-transform:uppercase}.cgtap{min-height:64px;padding:0 28px;border:1px solid #f2efe8;background:#0a0a0a;color:#f2efe8;font:700 14px ui-monospace,monospace;letter-spacing:.1em;text-transform:uppercase;border-radius:4px}</style>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>n0ise · effects</title>
@@ -458,7 +460,7 @@ body[data-cam] .tl{bottom:var(--campad,0px);max-height:32dvh;border-bottom:1px s
     <div class="stage" id="stage">
       <button class="pill chipb" id="artonly" aria-label="Show or hide controls">Art only</button>
       <button class="pill chipb" id="srcchip">Source</button>
-      <div class="srcmenu" id="srcmenu" hidden><button data-a="open">Import</button><button data-a="cam">Camera</button><button data-a="audio">Audio file</button><button data-a="demo">Demo</button><button data-a="test">Test card</button><button data-a="rec">Record</button></div>
+      <div class="srcmenu" id="srcmenu" hidden><button data-a="open">Open media</button><button data-a="cam">Use camera</button><button data-a="demo">Try sample</button><button data-a="open">Style an image</button><button data-a="rec">Record a look</button><button data-a="animate">Animate a scene</button><button data-a="audio">Audio file</button><button data-a="test">Test card</button></div>
       <canvas id="gl"></canvas>
       <div class="info" id="info"></div>
       <div class="float tr"><button class="pill" id="reset">Reset</button><button class="pill" id="textoff" hidden>Remove text</button><button class="pill" id="tlbtn">Animate</button><button class="pill" id="power" aria-pressed="true">Power</button></div>
@@ -476,6 +478,6 @@ body[data-cam] .tl{bottom:var(--campad,0px);max-height:32dvh;border-bottom:1px s
   </main>
 </div>
 <input type="file" id="file" accept="image/*,video/*,audio/*,.mp3,.wav,.m4a,.ogg,.flac,.aac" hidden>
-<script type="module" src="assets/index.js?v=ab1ed4ea"></script>
+<script type="module" src="assets/index.js?v=c18404e7"></script>
 </body>
 </html>

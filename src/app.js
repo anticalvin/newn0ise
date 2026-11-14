@@ -1,6 +1,6 @@
 import {toRecipe,fromRecipe,checkRecipe} from './recipe.js';
 import {CAMS,glyph,drawOverlay} from './cams.js';
-import {createRecorder,fmtTime} from './recorder.js';
+import {createRecorder,fmtTime,verifyFrames,fixWebmDuration} from './recorder.js';
 import {createTimeline} from './timeline.js';
 import {createEditor} from './editor.js';
 import {createOverlays} from './overlay.js';
@@ -16,12 +16,14 @@ import {SIG,SIGNALS,signalValue,V,hooks,attachGL,createGL,VS,HEAD,$,clamp,lerp,T
    CRT Lab is one module (it reads the source itself and is the base).
    ===================================================================== */
 const MODULES={};const MAPIMG={};
-const registerModule=m=>(MODULES[m.id]=m);
+const DEV=/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
+const registerModule=m=>{if(MODULES[m.id]){const msg='Two effects share the id “'+m.id+'” ('+MODULES[m.id].name+' and '+m.name+'). The second one replaced the first.';if(DEV)throw new Error(msg);console.error(msg);}return (MODULES[m.id]=m);};
 const COLOR_MODES=['original','mono','duotone','gradient','palette'];
 const BLENDS=['normal','multiply','screen','additive','difference','overlay'];
 const LAYER_DEFAULTS={color:{mode:'original',pal:['#1a0f2e','#ffd27a'],amt:100},opacity:100,blend:'normal',showSource:false,select:'all',mask:{src:'person',invert:false,feather:20,grow:0,snap:35,lo:.5,hi:1,tol:.35,col:'#2fa84f'},thr:50,pos:[0,0],size:100,seed:0,visible:true,solo:false,mods:[]};
 let layerUid=1;
-const mkLayer=(mod,params)=>({uid:layerUid++,module:mod,params:params||(MODULES[mod]&&MODULES[mod].defaults?MODULES[mod].defaults():{}),...JSON.parse(JSON.stringify(LAYER_DEFAULTS))});
+/* saved looks from before the Lines “Contour Map” got its own id: Lines-style parameters mean contourmap */
+const mkLayer=(mod,params)=>(mod==='contour'&&params&&('n' in params||'w' in params||'con' in params)&&(mod='contourmap'),{uid:layerUid++,module:mod,params:params||(MODULES[mod]&&MODULES[mod].defaults?MODULES[mod].defaults():{}),...JSON.parse(JSON.stringify(LAYER_DEFAULTS))});
 
 function crtSchema(){
   const secs=[];
@@ -129,7 +131,7 @@ void main(){float r=uScrAsp/uSrcAsp;vec2 s=r>1.?vec2(1.,1./r):vec2(r,1.);o=vec4(
 function defineModule(d){
   const params=(d.colorBound?[{k:'orig',t:'b',label:'Original colors',def:true,sec:'Color'}]:[]).concat(d.params).map(p=>({t:'r',step:1,sec:'Main',...p}));
   const m={
-    id:d.id,family:d.family,name:d.name,needsMask:!!d.needsMask,colorBound:!!d.colorBound,hideOnOrig:d.hideOnOrig||[],engine:d.engine||'gpu',hidden:d.hidden,params,
+    id:d.id,family:d.family,name:d.name,presets:d.presets||null,needsMask:!!d.needsMask,colorBound:!!d.colorBound,hideOnOrig:d.hideOnOrig||[],engine:d.engine||'gpu',hidden:d.hidden,params,
     defaultLook:d.defaultLook||{paper:'#ffffff',ink:'#000000',palette:null},
     get schema(){const secs=[];params.forEach(p=>{let s=secs.find(x=>x.label===p.sec);if(!s)secs.push(s={id:p.sec,label:p.sec,keys:[]});s.keys.push(p.k);});return{sections:secs,hero:params.filter(p=>p.hero).map(p=>p.k)};},
     defaults(){const o={};params.forEach(p=>{o[p.k]=Array.isArray(p.def)?p.def.slice():p.def;});return o;},
@@ -1016,7 +1018,7 @@ vec4 fx(vec2 uv){
   float n=u_lv-1.;float v=clamp(floor(l*n+t)/n,0.,1.);
   vec3 mono=mix(u_ink,u_bg,v);vec3 cd=floor(c*n+t)/n;
   return vec4(mix(mono,cd,u_col/100.),1.);}`});
-defineModule({id:'contour',family:'Lines',name:'Contour Map',
+defineModule({id:'contourmap',family:'Lines',name:'Contour Map',
   params:[{k:'n',label:'Levels',min:4,max:40,def:14,step:1,sec:'Lines',hero:true},{k:'w',label:'Line width',min:.5,max:6,def:1.5,step:.25,sec:'Lines',hero:true},
     {k:'con',label:'Contrast',min:0,max:100,def:35,sec:'Lines'},{k:'fill',label:'Band fill',min:0,max:100,def:40,sec:'Fill'},{k:'keep',label:'Keep color',min:0,max:100,def:55,sec:'Fill'},
     {k:'ink',t:'color',label:'Line',def:'#120f0a',sec:'Colors'},{k:'bg',t:'color',label:'Paper',def:'#efe6d0',sec:'Colors'}],
@@ -1238,6 +1240,39 @@ vec4 fx(vec2 uv){
   float ifr=u_iframe>0.?step(fract(uTime/u_iframe),.03):0.;
   return vec4(mix(cur,hold,keep*(1.-ifr)),1.);}`,
   bind(pr,V,ctx){histBind(pr,'mosh',ctx);},after(pr,V,ctx){histSave('mosh',ctx);}});
+/* Temporal Loom (behind a flag: ?flags=loom, or localStorage n0ise.flags = "loom"). The picture is woven from time: each thread of the frame keeps its own
+   memory length, and an over/under weave decides which threads show the live frame and which show the past, so a moving subject is
+   knitted out of several moments at once. Needs one stored frame (the same as Datamosh). Resets on any seek, loop or export start so a
+   given time always renders the same way. Lite fallback (ST.lite): no stored frame, only the woven shading. */
+const FLAG_LOOM=/[?&]flags=[^&]*loom/.test(location.search)||String(localStorage.getItem('n0ise.flags')||'').includes('loom');
+const LOOM={last:-1e9,wasClean:false};
+defineModule({id:'loom',family:'Time',name:'Temporal Loom',hidden:!FLAG_LOOM,
+  params:[
+    {k:'w',label:'Thread width',min:2,max:48,def:10,step:1,sec:'Weave',hero:true},{k:'lag',label:'Memory',min:0,max:100,def:70,sec:'Weave',hero:true},
+    {k:'weave',label:'Over and under',min:0,max:100,def:60,sec:'Weave',hero:true},
+    {k:'flow',label:'Thread drift',min:0,max:100,def:35,sec:'Advanced'},{k:'shade',label:'Cloth shading',min:0,max:100,def:35,sec:'Advanced'},{k:'dir',t:'b',label:'Horizontal threads',def:false,sec:'Advanced'}],
+  presets:[{name:'Linen',v:{w:6,lag:55,weave:80,flow:15,shade:45,dir:false}},{name:'Ribbon',v:{w:24,lag:85,weave:40,flow:60,shade:20,dir:true}},{name:'Static weave',v:{w:3,lag:92,weave:100,flow:5,shade:55,dir:false}}],
+  hist:true,
+  frag:SS+`
+uniform sampler2D u_prev;uniform float u_reset,u_lite;
+vec4 fx(vec2 uv){
+  vec2 px=uv*uRes;float W=max(2.,u_w*S);
+  float along=u_dir>.5?px.x:px.y,across=u_dir>.5?px.y:px.x;
+  float ti=floor(across/W),ri=floor(along/W);
+  float a=h21(vec2(ti,uSeed+3.));
+  float keep=u_lag/100.*(.35+.65*a);
+  float chk=mod(ti+ri,2.);float over=mix(.5,chk,u_weave/100.);
+  keep*=mix(1.,.15+1.7*(1.-over),u_weave/100.);
+  keep=clamp(keep,0.,.97);
+  if(u_reset>.5||u_lite>.5)keep=0.;
+  vec2 dr=(u_dir>.5?vec2(1.,0.):vec2(0.,1.))*(a-.5)*u_flow/100.*.012;
+  vec3 cur=texture(uSrc,uv).rgb,old=texture(u_prev,clamp(uv+dr,0.,1.)).rgb;
+  vec3 c=mix(cur,old,keep);
+  float edge=smoothstep(0.,.18*W,across-ti*W)*smoothstep(0.,.18*W,(ti+1.)*W-across);
+  c*=1.-u_shade/100.*.5*(1.-edge)*(.6+.4*chk);
+  return vec4(c,1.);}`,
+  bind(pr,V,ctx){const jump=ctx.t<LOOM.last-1e-4||ctx.t-LOOM.last>.5||(ST.clean&&!LOOM.wasClean);LOOM.last=ctx.t;LOOM.wasClean=!!ST.clean;
+    pr.f('u_reset',jump?1:0);pr.f('u_lite',ST.lite?1:0);histBind(pr,'loom',ctx);},after(pr,V,ctx){histSave('loom',ctx);}});
 /*WP6:END*/
 
 
@@ -2248,17 +2283,21 @@ function camTrack(){const st=SRC.el&&SRC.el.srcObject;return st&&st.getVideoTrac
 let camGen=0,camErr='',camPM=false,camDemo=false,camEnsure=null,camRetry=0,camLifeOn=false;
 function setPM(v){camPM=!!v;canvas.style.transform=v?'scaleX(-1)':'';SRC.mirror=false;SRC.lastVer=-1;}
 const camErrMsg=e=>{const n=e&&e.name||'';if(!window.isSecureContext)return'Browsers only allow the camera on a secure (https) page.';if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia)return'This browser can’t open the camera.';if(n==='NotAllowedError'||n==='SecurityError')return'Camera access was blocked. iPhone: Settings > Safari > Camera > Ask or Allow. Chrome: tap the lock beside the address, then Camera > Allow. Then tap Try again.';if(n==='NotFoundError'||n==='OverconstrainedError')return'No camera was found on this device.';if(n==='NotReadableError')return'Another app is using the camera. Close it and try again.';return'The camera couldn’t start ('+(n||'unknown error')+').';};
-async function startCam(flip,opt){
+let camNeedTap=false;
+async function startCam(flip,opt){camNeedTap=false;
   const gen=++camGen;
   if(flip){camFacing=camFacing==='environment'?'user':'environment';CAMOPT.deviceId='';}
   if(opt)Object.assign(CAMOPT,opt);
   try{
     const old=SRC.el&&SRC.el.srcObject;
+    if(/[?&]fakecam=(\w+)/.test(location.search)){const m=location.search.match(/fakecam=(\w+)/)[1];if(m==='deny'){const er=new Error('x');er.name='NotAllowedError';throw er;}
+      const cv=document.createElement('canvas');cv.width=640;cv.height=480;const g=cv.getContext('2d');let n=0;setInterval(()=>{n++;g.fillStyle='#223';g.fillRect(0,0,640,480);g.fillStyle='#fc6';g.fillRect((n*7)%600,200,60,60);g.fillStyle='#fff';g.font='40px sans-serif';g.fillText('frame '+n,20,60);},33);
+      const fs=cv.captureStream(30);const v0=document.createElement('video');v0.playsInline=true;v0.muted=true;v0.srcObject=fs;await v0.play();setSource(v0,'Camera',true);refreshUI();camErr='';camDemo=false;return true;}
     const mk=async(strict)=>navigator.mediaDevices.getUserMedia({video:Object.assign(CAMOPT.deviceId?{deviceId:{exact:CAMOPT.deviceId}}:{facingMode:camFacing},{width:{ideal:CAMOPT.w},height:{ideal:CAMOPT.h},frameRate:{ideal:CAMOPT.fps}}),audio:false});
     if(old&&old.getTracks)old.getTracks().forEach(t=>t.stop());
     let stream;try{stream=await mk();}catch(e){if(CAMOPT.deviceId){CAMOPT.deviceId='';stream=await mk();}else throw e;}
     if(gen!==camGen){stream.getTracks().forEach(t=>t.stop());return false;}
-    const v=document.createElement('video');v.playsInline=true;v.muted=true;v.srcObject=stream;await v.play();
+    const v=document.createElement('video');v.playsInline=true;v.muted=true;v.srcObject=stream;try{await v.play();}catch(pe){if(pe&&pe.name==='NotAllowedError'){camNeedTap=true;stream.getTracks().forEach(t=>t.stop());return false;}throw pe;}
     if(gen!==camGen){stream.getTracks().forEach(t=>t.stop());return false;}
     setSource(v,'Camera',true);refreshUI();camErr='';camDemo=false;
     try{stream.getVideoTracks()[0].addEventListener('ended',()=>setTimeout(()=>camEnsure&&camEnsure(),300));}catch(e){}
@@ -2534,12 +2573,12 @@ const camRecorder=createRecorder({
 function camRecStart(){
   const cc=document.createElement('canvas');cc.width=canvas.width;cc.height=canvas.height;const g=cc.getContext('2d');
   camRec0=performance.now();ST.clean=true;
-  const hook=()=>{if(cc.width!==canvas.width||cc.height!==canvas.height)return;g.drawImage(canvas,0,0);drawOverlay(g,cc.width,cc.height,CAMS[camIx],{keep:true,text:camText,t:(performance.now()-camRec0)/1000,recOn:true});};
+  const hook=()=>{if(cc.width!==canvas.width||cc.height!==canvas.height)return;g.drawImage(canvas,0,0);drawOverlay(g,cc.width,cc.height,CAMS[camIx],{keep:true,text:camText,t:(performance.now()-camRec0)/1000,recOn:true});camRecorder.frame();};
   const track=camTrack();
-  return camRecorder.start({canvas:cc,fps:30,mic:camMic,audioStream:AUD.on&&AUD.dest?AUD.dest.stream:null,watchTrack:track,
+  return camRecorder.start({canvas:cc,fps:30,manual:true,mic:camMic,audioStream:AUD.on&&AUD.dest?AUD.dest.stream:null,watchTrack:track,
     begin:()=>{hook();FRAME_HOOKS.push(hook);if(TLN.tracks.length){TLN.seek(TLN.loopOn?TLN.loop[0]:0);TLN.play(true);}},
     end:()=>{const i=FRAME_HOOKS.indexOf(hook);if(i>=0)FRAME_HOOKS.splice(i,1);ST.clean=false;},
-    onDone:async r=>{const name=stamp()+'.'+r.ext,id=await rollAdd(r.blob,name,true,r.poster,r.duration);camRecToast(r,name,id);}});
+    onDone:async r=>{window.__lastRec=r;const name=stamp()+'.'+r.ext,id=await rollAdd(r.blob,name,true,r.poster,r.duration);camRecToast(r,name,id);}});
 }
 let camMic=false;
 function camRecToast(r,name,id){
@@ -2694,7 +2733,21 @@ function buildCamUI(){
   addEventListener('resize',()=>{if(CAMMODE)setTimeout(paintCamUI,60);});
   camThumbUpdate();
 }
+function showTapGate(){
+  delete document.documentElement.dataset.boot;
+  let g=$('#camgate');if(g)g.remove();g=el('div','camgate');g.id='camgate';
+  g.innerHTML='<a class="cghome" href="index.html" aria-label="n0ise home">n<b>0</b>ise</a>';
+  const b=el('button','cgtap','Tap to start camera');b.addEventListener('click',async()=>{g.remove();await openCamera();});g.appendChild(b);document.body.appendChild(g);
+}
+/* Camera door: go straight to the camera. If permission is already granted open at once; if it is unknown let the browser's own prompt be the only thing shown; if it was refused explain how to fix it. */
+async function bootCamera(){
+  const msg='Allow the camera, then pick a camera body: CCTV, disposable, Super 8, instant and more.';
+  let st='prompt';if(!/fakecam=/.test(location.search))try{const r=await navigator.permissions.query({name:'camera'});st=r.state;}catch(e){}
+  if(st==='denied'){showCamGate('The camera is blocked for this site. Allow it in your browser’s site settings, then try again.',false);return;}
+  await openCamera();
+}
 function showCamGate(msg,first){
+  delete document.documentElement.dataset.boot;
   let g=$('#camgate');if(g)g.remove();g=el('div','camgate');g.id='camgate';
   g.innerHTML=`<a class="cghome" href="index.html" aria-label="n0ise home">n<b>0</b>ise</a><div class="cgbox"><b>Camera</b><p></p><div class="cgbtns"></div></div>`;g.querySelector('p').textContent=msg;
   const row=g.querySelector('.cgbtns'),mk=(t,cls,fn)=>{const b=el('button',cls,t);b.addEventListener('click',fn);row.appendChild(b);};
@@ -2720,11 +2773,11 @@ function camLife(){
 }
 async function openCamera(o){
   if(o&&o.demo){camDemo=true;setSource(demoCanvas(),'Camera',false);refreshUI();}
-  else{const ok=await startCam(false);if(!ok){showCamGate(camErr||'The camera couldn’t start.');return;}}
+  else{const ok=await startCam(false);if(!ok){if(camNeedTap)showTapGate();else showCamGate(camErr||'The camera couldn’t start.');return;}}
   if(!(o&&o.demo)&&(!(SRC.el instanceof HTMLVideoElement)||SRC.name!=='Camera'))return;
   camLife();camMode=lsGet('n0ise.cammode','photo')==='video'?'video':'photo';camFavs=lsGet('n0ise.camfavs',[]);camCat=lsGet('n0ise.camcat','All');camIx=Math.max(0,CAMS.findIndex(c=>c.id===lsGet('n0ise.cam','cctv')));camText=!!lsGet('n0ise.camtext',false);{const tb=$('#camtxt');if(tb)tb.setAttribute('aria-pressed',camText);}
   camSaved={layers:STACK.layers,sel:STACK.sel,aspect:P.aspect};
-  setPM(camFacing==='user');buildCamUI();CAMMODE=true;document.body.dataset.cam='1';
+  setPM(camFacing==='user');buildCamUI();CAMMODE=true;document.body.dataset.cam='1';delete document.documentElement.dataset.boot;
   readCaps();applyCam(camIx,true);
   const m=$('#cammir');if(m)m.setAttribute('aria-pressed',camPM);
   if(navigator.wakeLock)navigator.wakeLock.request('screen').then(w=>{CAMWAKE=w;}).catch(()=>{});
@@ -3363,9 +3416,13 @@ function renderInspector0(){
   if(l.module==='crtlab'){
     TABS.forEach(([tid,tn],i)=>{const a=accordion(tn,i===0);const pane=UI.panes[tid];pane.hidden=false;a.b.classList.add('legacy-body');a.b.appendChild(pane);host.appendChild(a.d);});
   }else{
+    const heroKeys=(m.schema.hero||[]).filter(k=>m.params.some(p=>p.k===k&&p.t==='r')).slice(0,3);
+    if(m.presets&&m.presets.length){const pr=el('div','chips');m.presets.forEach(ps=>{const b=el('button','chip',ps.name);b.addEventListener('click',()=>{Object.assign(l.params,ps.v);snap();renderInspector();buzz(8);});pr.appendChild(b);});host.appendChild(pr);}
+    if(heroKeys.length>=2){const mb=el('div','mainctl');heroKeys.forEach(k=>rowParam(mb,m.params.find(x=>x.k===k),l.params,null));host.appendChild(mb);}
     m.schema.sections.forEach((sec,i)=>{
-      const a=accordion(sec.label,i<1);
-      sec.keys.forEach(k=>{const p=m.params.find(x=>x.k===k);if(m.colorBound&&l.params.orig&&(p.t==='pal'||p.t==='color'||m.hideOnOrig.includes(k)))return;if(p.t==='pal')palEditor(a.b,p,l.params,null);else rowParam(a.b,p,l.params,null);});
+      const rest=sec.keys.filter(k=>heroKeys.length<2||!heroKeys.includes(k));if(!rest.length)return;
+      const a=accordion(heroKeys.length>=2?'More · '+sec.label:sec.label,heroKeys.length<2&&i<1);
+      rest.forEach(k=>{const p=m.params.find(x=>x.k===k);if(m.colorBound&&l.params.orig&&(p.t==='pal'||p.t==='color'||m.hideOnOrig.includes(k)))return;if(p.t==='pal')palEditor(a.b,p,l.params,null);else rowParam(a.b,p,l.params,null);});
       host.appendChild(a.d);});
   }
   recipeSection(PG.layer);
@@ -3599,7 +3656,7 @@ function wireSheet(){
   const sm=$i('srcchip'),menu=$i('srcmenu');
   if(sm){sm.addEventListener('click',()=>{menu.hidden=!menu.hidden;});
     menu.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;menu.hidden=true;const a=b.dataset.a;
-      if(a==='open')$i('open').click();else if(a==='audio'){let fi=$('#audfile');if(!fi){fi=document.createElement('input');fi.type='file';fi.id='audfile';fi.accept='audio/*,.mp3,.wav,.m4a,.ogg,.flac,.aac';fi.hidden=true;fi.addEventListener('change',()=>{const f=fi.files[0];fi.value='';if(f)startAudio(f);});document.body.appendChild(fi);}fi.click();}else if(a==='cam')openCamera();else if(a==='rec')$i('rec').click();
+      if(a==='open')$i('open').click();else if(a==='audio'){let fi=$('#audfile');if(!fi){fi=document.createElement('input');fi.type='file';fi.id='audfile';fi.accept='audio/*,.mp3,.wav,.m4a,.ogg,.flac,.aac';fi.hidden=true;fi.addEventListener('change',()=>{const f=fi.files[0];fi.value='';if(f)startAudio(f);});document.body.appendChild(fi);}fi.click();}else if(a==='cam')openCamera();else if(a==='animate'){const bt=[...document.querySelectorAll('button')].find(x=>x.textContent.trim()==='Animate');if(bt)bt.click();}else if(a==='rec')$i('rec').click();
       else if(a==='demo'){setSource(demoCanvas(),'Demo');refreshUI();}else if(a==='test'){setSource(testCanvas(),'Test');refreshUI();}});}
 }
 (function boot(){
@@ -3619,7 +3676,7 @@ function wireSheet(){
   loadStackHash();loadFuseHash();wireMaskPaint();wireHero();wireTouch();wireSheet();renderInspector();
   requestAnimationFrame(loop);
   if(new URLSearchParams(location.search).get('bench'))setTimeout(runBench,600);
-  if(new URLSearchParams(location.search).get('cam'))setTimeout(()=>showCamGate('Allow the camera, then pick a camera body: CCTV, disposable, Super 8, instant and more.',true),300);
+  if(new URLSearchParams(location.search).get('cam'))bootCamera();else delete document.documentElement.dataset.boot;
 })();
 /* test hook (read-only use from the console and tools/) */
 /* Short regression test for compositing, run from the console: await __n0.regress(). Stateless modules only, deterministic frames (ST.clean turns Alive off). */
@@ -3647,7 +3704,7 @@ async function regress(){
   STACK.layers=keep.L;STACK.sel=keep.sel;ST.clean=keep.clean;V.sizeKey='';
   return res;
 }
-window.__n0={AUD,syntheticPerson,compareMasks,QUAL,PERSON,setMaskQuality,idleApply,regress,idleRestore,ED,IDLE,TLN,camRecorder,fxRecorder,openCamera,applyCam,CAMS,CAMFX,fxIndex,SHEET,applyRecipe,currentRecipe,toRecipe,fromRecipe,modParams,updateSignals,SIG,runModuleGate,showSheet,STACK,mkLayer,MODULES,PERSON,DRAWN,setSource,syntheticPerson,renderStack,renderFrame,P,V,ST,SRC,TEX,maskFor,startPerson,loadPerson,renderInspector,layout};
+window.__n0={registerModule,fixWebmDuration,camRecStart,verifyFrames,AUD,syntheticPerson,compareMasks,QUAL,PERSON,setMaskQuality,idleApply,regress,idleRestore,ED,IDLE,TLN,camRecorder,fxRecorder,openCamera,applyCam,CAMS,CAMFX,fxIndex,SHEET,applyRecipe,currentRecipe,toRecipe,fromRecipe,modParams,updateSignals,SIG,runModuleGate,showSheet,STACK,mkLayer,MODULES,PERSON,DRAWN,setSource,syntheticPerson,renderStack,renderFrame,P,V,ST,SRC,TEX,maskFor,startPerson,loadPerson,renderInspector,layout};
 {const v=lsGet('n0ise.alive',null);IDLE.on=v?v==='on':!IDLE.reduce;}
 TLN.mount(document.body);ED.mount();setTimeout(takeHandoff,900);
 ED.onExport=()=>{
