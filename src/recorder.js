@@ -9,11 +9,11 @@ export const fmtTime=s=>Math.floor(s/60)+':'+String(Math.floor(s%60)).padStart(2
 export function createRecorder(o={}){
   const CAP=o.cap||180,WARN=o.warn||CAP-15;
   const R={state:'idle',sec:0,mime:'',reason:''};
-  let cv=null,attached=false,rf=null,mr=null,parts=[],t0=0,timer=0,stopWanted=false,mic=null,opts=null,poster=null,posterT=0,warned=false,posterTried=false;
+  let tog=false,cv=null,mg=null,src=null,lastReq=0,iv=33,pump=0,attached=false,rf=null,mr=null,parts=[],t0=0,timer=0,stopWanted=false,mic=null,opts=null,poster=null,posterT=0,warned=false,posterTried=false;
   const set=s=>{R.state=s;o.onState&&o.onState(s,R);};
   async function makePoster(){
-    if(poster||!opts||!opts.canvas)return;
-    try{poster=await new Promise(res=>opts.canvas.toBlob(res,'image/jpeg',.8));}catch(e){}
+    if(poster||!opts||!(cv||opts.canvas))return;
+    try{poster=await new Promise(res=>(cv||opts.canvas).toBlob(res,'image/jpeg',.8));}catch(e){}
   }
   function cleanup(){
     clearInterval(timer);timer=0;
@@ -21,7 +21,8 @@ export function createRecorder(o={}){
     try{opts&&opts.end&&opts.end();}catch(e){}
     removeEventListener('pagehide',onHide);document.removeEventListener('visibilitychange',onVis);
     const vt=opts&&opts.watchTrack;if(vt)vt.removeEventListener('ended',onEnded);
-    if(attached&&cv)cv.remove();attached=false;cv=null;rf=null;
+    clearInterval(pump);pump=0;
+    if(attached&&cv)cv.remove();mg=null;src=null;attached=false;cv=null;rf=null;
     mr=null;parts=[];opts=null;poster=null;warned=false;posterTried=false;stopWanted=false;
   }
   const onHide=()=>R.stop('left');
@@ -47,17 +48,24 @@ export function createRecorder(o={}){
       R.mime=pickMime();if(!R.mime)throw new Error('This browser can’t record video.');
       if(!op.canvas||!op.canvas.captureStream)throw new Error('Recording isn’t supported here.');
       op.begin&&op.begin();
-      cv=op.canvas;if(!cv.isConnected){cv.style.cssText='position:fixed;left:0;top:0;width:1px;height:1px;opacity:0;pointer-events:none';document.body.appendChild(cv);attached=true;}
-      let stream=op.manual&&cv.captureStream(0);rf=stream&&stream.getVideoTracks()[0];
+      /* Record a scaled copy at a steady frame rate, not the live canvas: a phone canvas can be 1200 x 2600 and the encoder can't keep up
+         in real time, which shows up as a laggy, stuttering file. The copy is capped (default 1280 on the long side) and frames are
+         paced, with the last frame repeated if the page stalls, so the timeline never freezes. */
+      src=op.canvas;iv=1000/(op.fps||30);const k=Math.min(1,(op.maxSide||1280)/Math.max(src.width,src.height,1));
+      if(op.copy||k<.999){cv=document.createElement('canvas');cv.width=Math.max(2,Math.round(src.width*k)&~1);cv.height=Math.max(2,Math.round(src.height*k)&~1);mg=cv.getContext('2d');mg.drawImage(src,0,0,cv.width,cv.height);}
+      else cv=src;
+      if(!cv.isConnected){cv.style.cssText='position:fixed;left:0;top:0;width:1px;height:1px;opacity:0;pointer-events:none';document.body.appendChild(cv);attached=true;}
+      let stream=(op.manual||op.copy||mg)&&cv.captureStream(0);rf=stream&&stream.getVideoTracks()[0];
       if(!(rf&&typeof rf.requestFrame==='function')){rf=null;stream=cv.captureStream(op.fps||30);}
       if(op.mic){try{mic=await navigator.mediaDevices.getUserMedia({audio:true});mic.getAudioTracks().forEach(t=>stream.addTrack(t));}catch(e){o.onWarn&&o.onWarn('Microphone was blocked. Recording without sound.');}}
       if(op.audioStream)op.audioStream.getAudioTracks().forEach(t=>stream.addTrack(t));
-      mr=new MediaRecorder(stream,{mimeType:R.mime,videoBitsPerSecond:op.bitrate||6e6});
+      mr=new MediaRecorder(stream,{mimeType:R.mime,videoBitsPerSecond:op.bitrate||Math.round(Math.min(8e6,Math.max(1.5e6,cv.width*cv.height*(op.fps||30)*.12)))});
       mr.ondataavailable=e=>{if(e.data&&e.data.size)parts.push(e.data);};
       mr.onerror=()=>R.stop('error');
       mr.onstop=finish;
       if(stopWanted){cleanup();set('idle');return false;}
-      mr.start(250);t0=performance.now();R.sec=0;set('recording');
+      mr.start(250);t0=performance.now();R.sec=0;set('recording');lastReq=0;
+      if(rf)pump=setInterval(()=>{if(performance.now()-lastReq>iv*1.7){lastReq=performance.now();try{const x=cv.getContext('2d');if(x){tog=!tog;x.save();x.globalAlpha=.02;x.fillStyle=tog?'#000':'#fff';x.fillRect(0,0,1,1);x.restore();}rf.requestFrame();}catch(e){}}},iv);
       timer=setInterval(()=>{
         R.sec=(performance.now()-t0)/1000;o.onTick&&o.onTick(R.sec,R);
         if(R.sec>1&&!posterTried){posterTried=true;makePoster();}
@@ -69,7 +77,12 @@ export function createRecorder(o={}){
       return true;
     }catch(e){cleanup();set('idle');o.onError&&o.onError(e);return false;}
   };
-  R.frame=()=>{if(rf&&(R.state==='recording'||R.state==='arming'))try{rf.requestFrame();}catch(e){}};
+  R.due=()=>!!rf&&(R.state==='recording'||R.state==='arming')&&performance.now()-lastReq>=iv*.85;
+  R.frame=()=>{
+    if(!rf||(R.state!=='recording'&&R.state!=='arming'))return;
+    const n=performance.now();if(n-lastReq<iv*.85)return;lastReq=n;   // never faster than the target rate
+    try{if(mg&&src)mg.drawImage(src,0,0,cv.width,cv.height);rf.requestFrame();}catch(e){}
+  };
   R.stop=function(reason){
     if(R.state==='arming'){stopWanted=true;return;}
     if(R.state!=='recording')return;

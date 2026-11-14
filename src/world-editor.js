@@ -2,9 +2,10 @@
    press Play to let physics run, press Walk to stand inside it. Every edit goes through the scene API, so what you do by hand and
    what an AI does through MCP are the same operations. Undo and redo cover everything placed from this tab. */
 export function createWorldEditor(c){
-  const {THREE,S,api,sim,walk,camera,canvas,controls,tc,objById,selectObj,removeObj,bump,el,sec,btn,toast,renderObjList}=c;
-  const LIB=[['cube','Cube'],['sphere','Sphere'],['cylinder','Cylinder'],['cone','Cone'],['capsule','Capsule'],['human','Human'],['wall','Wall'],['floor','Floor'],['platform','Platform'],['pillar','Pillar'],['crate','Crate'],['ball','Ball']];
+  const {playWorld,setStart,THREE,S,api,sim,walk,camera,canvas,controls,tc,objById,selectObj,removeObj,bump,el,sec,btn,toast,renderObjList}=c;
+  const LIB=[['cube','Cube'],['sphere','Sphere'],['cylinder','Cylinder'],['cone','Cone'],['capsule','Capsule'],['human','Human'],['wall','Wall'],['floor','Floor'],['platform','Platform'],['pillar','Pillar'],['crate','Crate'],['ball','Ball'],['goal','Goal']];
   const G={
+    goal:'<path d="M13 35V6M13 8l15 6-15 7"/>',
     cube:'<rect x="9" y="9" width="22" height="22"/>',sphere:'<circle cx="20" cy="20" r="12"/>',cylinder:'<ellipse cx="20" cy="11" rx="10" ry="4"/><path d="M10 11v18c0 2 4.5 4 10 4s10-2 10-4V11"/>',
     cone:'<path d="M20 6L9 30c0 2 5 4 11 4s11-2 11-4z"/>',capsule:'<rect x="12" y="5" width="16" height="30" rx="8"/>',human:'<circle cx="20" cy="9" r="4"/><path d="M12 16h16M20 14v12M20 26l-6 10M20 26l6 10M12 16l-3 10M28 16l3 10"/>',
     wall:'<rect x="4" y="10" width="32" height="20"/><path d="M4 20h32M14 10v10M26 20v10"/>',floor:'<path d="M6 26l14-8 14 8-14 8z"/>',platform:'<path d="M8 22l12-6 12 6v6l-12 6-12-6z M8 22l12 6 12-6M20 28v6"/>',
@@ -44,7 +45,8 @@ export function createWorldEditor(c){
     const boxes=S.objs.filter(o=>o.vis).map(o=>new THREE.Box3().setFromObject(o.holder));
     for(let i=0;i<10&&boxes.some(b=>!b.isEmpty()&&p.x>b.min.x-.3&&p.x<b.max.x+.3&&p.z>b.min.z-.3&&p.z<b.max.z+.3);i++)p.x+=1.4;
     const drop=sim.playing||key==='crate'||key==='ball';
-    const r=await api.run({cmd:'add',type:key,pos:[p.x,drop?1.5:0,p.z]});
+    const r=await api.run({cmd:'add',type:key==='goal'?'pillar':key,pos:[p.x,drop?1.5:0,p.z]});
+    if(key==='goal'){const g=S.objs.find(x=>x.id===r.id);if(g){g.meta.goal=true;g.name='Goal';api.run({cmd:'set',id:g.id,color:'#e6c15a',phys:{type:'none'}});}}
     const o=S.objs.find(x=>x.id===r.id);if(o){o.meta.uid=++ed.uid+1000;selectObj(o.id);setGizmo('translate');}
     renderObjList&&renderObjList();sim.invalidate();renderDetails();
     if(S.objs.length<4&&!sim.playing)api.run({cmd:'camera',frame:true});
@@ -83,12 +85,24 @@ export function createWorldEditor(c){
       btn('Delete','',()=>{push();removeObj(o.id);sim.invalidate();renderDetails();}));
     s.appendChild(ac);
   }
+  async function levelStarter(){try{await starter2();}catch(e){toast('Couldn’t build the starter level: '+(e.message||e),5000);console.error(e);}}
+  async function starter2(){
+    push();
+    const add=async(type,pos,extra={})=>{const r=await api.run({cmd:'add',type,pos});const o=S.objs.find(x=>x.id===r.id);if(o){o.meta.uid=++ed.uid+1000;if(extra.goal){o.meta.goal=true;o.name='Goal';}if(extra.color)api.run({cmd:'set',id:o.id,color:extra.color,phys:extra.goal?{type:'none'}:undefined});}return o;};
+    S.objs.filter(o=>!(o.meta&&o.meta.player)).map(o=>o.id).forEach(id=>removeObj(id));
+    await add('platform',[0,0,-3.5]);await add('platform',[0,.45,-6.5]);await add('platform',[0,.9,-9.5]);await add('crate',[-2.2,0,-2]);await add('crate',[2.4,0,-4]);
+    await add('pillar',[0,1.35,-12.2],{goal:true,color:'#e6c15a'});
+    S.start=[0,0,2.5];{const pl=S.objs.find(o=>o.meta&&o.meta.player);if(pl)pl.holder.position.set(0,0,2.5);}renderObjList&&renderObjList();sim.invalidate();renderDetails();api.run({cmd:'camera',frame:true});toast('Starter level. Press Play as character.',3500);
+  }
   function build(p){
     pane=p;
-    const top=sec(p,'Play');
+    const lv=sec(p,'Your level');
+    lv.appendChild(el('div','note','You are the character. Build with the tiles below, then press Play to run around in it. Esc returns to editing.'));
+    const lr=el('div','chips');lr.append(btn('Play as character','pri',()=>playWorld()),btn('Set start here','',()=>setStart()),btn('Starter level','',()=>levelStarter()));lv.appendChild(lr);
+    const top=sec(p,'Physics');
     const row=el('div','chips');
-    playBtn=btn('Play','pri',async()=>{if(sim.playing){sim.pause();playBtn.textContent='Play';}else{try{const r=await sim.play();playBtn.textContent='Pause';if(!r.bodies)toast('Nothing has physics yet. Set an object to Falls first.');}catch(e){toast('Physics couldn’t load: '+(e.message||e),5000);}}});
-    row.append(playBtn,btn('Reset','',()=>{sim.reset();playBtn.textContent='Play';}),btn('Walk','',()=>document.getElementById('bWalk').click()),btn('Undo','',doUndo),btn('Redo','',doRedo),btn('Open in Effects','',()=>c.openInEffects&&c.openInEffects()));top.appendChild(row);
+    playBtn=btn('Run physics','',async()=>{if(sim.playing){sim.pause();playBtn.textContent='Run physics';}else{try{const r=await sim.play();playBtn.textContent='Pause';if(!r.bodies)toast('Nothing has physics yet. Set an object to Falls first.');}catch(e){toast('Physics couldn’t load: '+(e.message||e),5000);}}});
+    row.append(playBtn,btn('Reset','',()=>{sim.reset();playBtn.textContent='Run physics';}),btn('First person','',()=>document.getElementById('bWalk').click()),btn('Undo','',doUndo),btn('Redo','',doRedo),btn('Open in Effects','',()=>c.openInEffects&&c.openInEffects()));top.appendChild(row);
     const gv=sec(p,'Gravity');const gr=document.createElement('input');gr.type='range';gr.min=-30;gr.max=30;gr.step=.1;gr.value=-sim.st.g;
     const gl=el('div','note','');const showG=()=>{gl.textContent=(Math.abs(sim.st.g)<.05?'Zero gravity':sim.st.g>0?'Upside down · ':'')+Math.abs(sim.st.g).toFixed(1)+' m/s²';};
     const setG=v=>{sim.setGravity(-v);gr.value=v;showG();};gr.addEventListener('input',()=>setG(+gr.value));showG();

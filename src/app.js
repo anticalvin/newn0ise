@@ -2578,13 +2578,13 @@ const camRecorder=createRecorder({
   onError:e=>toast(String(e&&e.message||e),5000)
 });
 function camRecStart(){
-  const cc=document.createElement('canvas');cc.width=canvas.width;cc.height=canvas.height;const g=cc.getContext('2d');
-  camRec0=performance.now();ST.clean=true;
-  const hook=()=>{if(cc.width!==canvas.width||cc.height!==canvas.height)return;g.drawImage(canvas,0,0);drawOverlay(g,cc.width,cc.height,CAMS[camIx],{keep:true,text:camText,t:(performance.now()-camRec0)/1000,recOn:true});camRecorder.frame();};
+  const k=Math.min(1,1280/Math.max(canvas.width,canvas.height,1)),cc=document.createElement('canvas');cc.width=Math.max(2,Math.round(canvas.width*k)&~1);cc.height=Math.max(2,Math.round(canvas.height*k)&~1);const g=cc.getContext('2d');
+  camRec0=performance.now();
+  const hook=()=>{if(!camRecorder.due())return;g.drawImage(canvas,0,0,cc.width,cc.height);drawOverlay(g,cc.width,cc.height,CAMS[camIx],{keep:true,text:camText,t:(performance.now()-camRec0)/1000,recOn:true});camRecorder.frame();};
   const track=camTrack();
   return camRecorder.start({canvas:cc,fps:30,manual:true,mic:camMic,audioStream:AUD.on&&AUD.dest?AUD.dest.stream:null,watchTrack:track,
-    begin:()=>{hook();FRAME_HOOKS.push(hook);if(TLN.tracks.length){TLN.seek(TLN.loopOn?TLN.loop[0]:0);TLN.play(true);}},
-    end:()=>{const i=FRAME_HOOKS.indexOf(hook);if(i>=0)FRAME_HOOKS.splice(i,1);ST.clean=false;},
+    begin:()=>{g.drawImage(canvas,0,0,cc.width,cc.height);FRAME_HOOKS.push(hook);if(TLN.tracks.length){TLN.seek(TLN.loopOn?TLN.loop[0]:0);TLN.play(true);}},
+    end:()=>{const i=FRAME_HOOKS.indexOf(hook);if(i>=0)FRAME_HOOKS.splice(i,1);},
     onDone:async r=>{window.__lastRec=r;const name=stamp()+'.'+r.ext,id=await rollAdd(r.blob,name,true,r.poster,r.duration);camRecToast(r,name,id);}});
 }
 let camMic=false;
@@ -2804,9 +2804,10 @@ function toggleRec(sec){
   if(!GLOK)return;
   if(fxRecorder.state==='recording'){fxRecorder.stop('user');return;}
   if(fxRecorder.busy)return;
-  fxRecorder.start({canvas,fps:30,audioStream:AUD.on&&AUD.dest?AUD.dest.stream:null,
-    begin:()=>{ST.clean=true;if(TLN.tracks.length){TLN.seek(TLN.loopOn?TLN.loop[0]:0);TLN.play(true);}if(navigator.wakeLock)navigator.wakeLock.request('screen').then(w=>{WAKE=w;}).catch(()=>{});},
-    end:()=>{ST.clean=false;if(WAKE){WAKE.release().catch(()=>{});WAKE=null;}},
+  const fxHook=()=>fxRecorder.frame();
+  fxRecorder.start({canvas,fps:30,copy:true,audioStream:AUD.on&&AUD.dest?AUD.dest.stream:null,
+    begin:()=>{FRAME_HOOKS.push(fxHook);if(TLN.tracks.length){TLN.seek(TLN.loopOn?TLN.loop[0]:0);TLN.play(true);}if(navigator.wakeLock)navigator.wakeLock.request('screen').then(w=>{WAKE=w;}).catch(()=>{});},
+    end:()=>{const i=FRAME_HOOKS.indexOf(fxHook);if(i>=0)FRAME_HOOKS.splice(i,1);if(WAKE){WAKE.release().catch(()=>{});WAKE=null;}},
     onDone:async r=>{deliver(r.blob,`${stamp()}.${r.ext}`,true);}});
   if(typeof sec==='number')setTimeout(()=>fxRecorder.stop('limit'),sec*1000);
 }
@@ -3716,9 +3717,10 @@ window.__n0={registerModule,fixWebmDuration,camRecStart,verifyFrames,AUD,synthet
 TLN.mount(document.body);ED.mount();setTimeout(takeHandoff,900);
 ED.onExport=()=>{
   if(fxRecorder.busy||!ED.active())return;toast('Exporting at normal speed. Keep this tab open.',4000);
-  fxRecorder.start({canvas,fps:30,audioStream:ED.audioStream(),
-    begin:()=>{ST.clean=true;ED.setExporting(true);ED.seek(0);ED.play(true);},
-    end:()=>{ST.clean=false;ED.setExporting(false);ED.play(false);},
+  const xh=()=>fxRecorder.frame();
+  fxRecorder.start({canvas,fps:30,copy:true,audioStream:ED.audioStream(),
+    begin:()=>{FRAME_HOOKS.push(xh);ED.setExporting(true);ED.seek(0);ED.play(true);},
+    end:()=>{const i=FRAME_HOOKS.indexOf(xh);if(i>=0)FRAME_HOOKS.splice(i,1);ED.setExporting(false);ED.play(false);},
     onDone:async r=>{deliver(r.blob,`${stamp()}.${r.ext}`,true);}});
   ED.onEnd=()=>{if(fxRecorder.state==='recording')fxRecorder.stop('user');};
 };{const b=document.getElementById('tlbtn');if(b)b.addEventListener('click',()=>TLN.show());}

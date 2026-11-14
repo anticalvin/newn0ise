@@ -14,6 +14,7 @@ import {createWalk} from './walk.js';
 import {createSim} from './sim.js';
 import {createRecorder,fmtTime} from './recorder.js';
 import {P3D,build as buildPhoto,loadCanvas,sampleCanvas} from './photo3d.js';
+import {rigHuman} from './rig.js';
 import {put as handoffPut,take as handoffTake} from './handoff.js';
 import {createWorldEditor} from './world-editor.js';
 import {RoomEnvironment} from 'three/addons/environments/RoomEnvironment.js';
@@ -822,6 +823,7 @@ function frame(ts){
       gl.viewport(0,0,canvas.width,canvas.height);N0.blit(cTex);
     }
     renderer.resetState();
+    if(stRec.state==='recording'||stRec.state==='arming')stRec.frame();
     frames++;errN=0;if(frames%15===0)updateFxNote();
   }catch(e){
     console.error(e);errN++;
@@ -1820,6 +1822,7 @@ const paneEls={};
 function setTab(id){
   TABN.forEach(([k])=>{$('#tab_'+k).setAttribute('aria-selected',k===id);paneEls[k].hidden=k!==id;});
   panes.scrollTop=0;S.tab=id;
+  if(id==='world'&&!S._plSpawn&&typeof ensurePlayer==='function'){S._plSpawn=1;ensurePlayer().then(()=>{S.needFrame=true;}).catch(()=>{});}
 }
 function buildTabs(){
   TABN.forEach(([k,l])=>{
@@ -1858,6 +1861,7 @@ function buildScenePane(){
   add.appendChild(btn('Import files','pri',()=>$('#file').click()));
   Object.keys(PRIMS).forEach(k=>add.appendChild(btn('+ '+k,'',()=>addPrimitive(k))));
   add.appendChild(btn('+ Visualizer','',()=>addViz('waterfall')));
+  add.appendChild(btn('+ Human','',async()=>{try{await api.run({cmd:'add',type:'human'});api.run({cmd:'camera',frame:true});}catch(e){toast(e.message||String(e));}}));
   Object.keys(P3D).forEach(k=>add.appendChild(btn('+ '+P3D[k].name,'',()=>pickPhoto(k))));add.appendChild(btn('Sample photo','',()=>addPhoto('fold',sampleCanvas())));
   add.appendChild(btn('Walk','',()=>$('#bWalk').click()));{const ab=btn('Connect AI','',()=>aiConnect());AI.btn=ab;add.appendChild(ab);}add.appendChild(btn('Save project','',saveProject));add.appendChild(btn('Open project','',()=>{const i=document.createElement('input');i.type='file';i.accept='.zip,application/zip';i.onchange=()=>i.files[0]&&importFiles([i.files[0]]);i.click();}));add.appendChild(btn('Copy look link','',lookLink));
   s1.appendChild(add);
@@ -2059,7 +2063,7 @@ function recordCanvas(seconds,spin,mode){
   return new Promise((res,rej)=>{
     if(stRec.busy)return rej(new Error('Already recording.'));
     stRecBtns.mode=mode||(spin?'turn':'live');const spin0=S.spin;
-    stRec.start({canvas,fps:30,
+    stRec.start({canvas,fps:30,copy:true,
       begin:()=>{S.exporting=true;if(spin){S.spin=true;controls.autoRotateSpeed=60/seconds;}},
       end:()=>{S.exporting=false;S.spin=spin0;controls.autoRotateSpeed=2.4;const b=$('#bSpin');if(b)b.setAttribute('aria-pressed',S.spin);},
       onDone:async r=>res({blob:r.blob,ext:r.ext,poster:r.poster,duration:r.duration})
@@ -2261,11 +2265,30 @@ setTimeout(()=>{applyLookHash();offerRestore();},1200);
 
 
 /* ---------- walk mode, scene API and the AI bridge ---------- */
-const walk=createWalk({THREE,camera,controls,canvas,S,holderBox,sheet,bump,leaveRest,tcDetach:()=>tc.detach()});
+const walk=createWalk({THREE,camera,controls,canvas,S,holderBox,sheet,bump,leaveRest,faceOffset:PLAYERFACE(),onTick:p=>goalCheck(p),tcDetach:()=>tc.detach()});
+/* World: you are the character. The human model is the default player; it runs, jumps and collides with what you place. */
+const PLAYER={goalHit:false};
+function PLAYERFACE(){return 0;}
+function goalCheck(p){const g=S.objs.find(o=>o.meta&&o.meta.goal&&o.vis);if(!g)return;const q=g.holder.position,near=Math.hypot(q.x-p.x,q.z-p.z)<1.1&&Math.abs(q.y-p.y)<3;if(near&&!PLAYER.goalHit){PLAYER.goalHit=true;toast('Level complete',2500);}else if(!near)PLAYER.goalHit=false;}
+async function ensurePlayer(){
+  let o=S.objs.find(x=>x.meta&&x.meta.player);
+  if(!o){const r=await api.run({cmd:'add',type:'human',pos:S.start?[S.start[0],0,S.start[2]]:[0,0,0]});o=objById(r.id);if(!o)throw new Error('The character didn’t load.');
+    o.meta.player=true;o.name='Player';o.meta.phys={type:'none'};renderObjList&&renderObjList();}
+  if(!o.rig)o.rig=rigHuman(THREE,o.root);
+  return o;
+}
+async function playWorld(){
+  if(walk.on){walk.exit();return;}
+  try{const o=await ensurePlayer();const h=o.holder;
+    const start=S.start||[h.position.x,h.position.y,h.position.z];S.start=start;
+    PLAYER.goalHit=false;walk.enter({third:true,player:o,rig:o.rig,pos:[start[0],start[1],start[2]],camYaw:0});
+  }catch(e){toast(String(e.message||e),4000);}
+}
+function setStart(){const o=S.objs.find(x=>x.meta&&x.meta.player);const t=o?o.holder.position:controls.target;S.start=[t.x,0,t.z];toast('Start set here');}
 const sim=createSim({THREE,S,bump});
 const api=createApi({sim,THREE,S,scene,camera,controls,renderer,canvas,world,hemi,key,grid,PRIMS,addPrimitive,removeObj,objById,importOne,applyView,bump,frameAll,tick,walk,projectFiles,zipStore,GLTFExporter,renderObjList,refreshInspector,setShadowFlags,selectObj,waitFrames,requestResize:()=>{needResize=true;}});
-window.n0={run:api.run,describe:api.describe,walk,sim};
-const worldEd=createWorldEditor({openInEffects:()=>openInEffects(),THREE,S,api,sim,walk,camera,canvas,controls,tc,objById,selectObj,removeObj,bump,el,sec,btn,toast,renderObjList});
+window.n0={run:api.run,describe:api.describe,walk,sim,playWorld};window.__playWorld=playWorld;
+const worldEd=createWorldEditor({playWorld:()=>playWorld(),setStart:()=>setStart(),openInEffects:()=>openInEffects(),THREE,S,api,sim,walk,camera,canvas,controls,tc,objById,selectObj,removeObj,bump,el,sec,btn,toast,renderObjList});
 worldEd.build(paneEls.world);
 if(/^#world/.test(location.hash)){setTab('world');worldEd.starter();}
 $('#bWalk')&&$('#bWalk').addEventListener('click',()=>walk.on?walk.exit():walk.enter({pos:[camera.position.x*.6,0,Math.max(2.5,camera.position.z*.8)],yaw:0}));

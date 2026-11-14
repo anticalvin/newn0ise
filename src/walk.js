@@ -3,11 +3,12 @@
    visible objects: low boxes are steps you can climb, tall ones are walls you slide along. The floor is y = 0. */
 export function createWalk(c){
   const {THREE,camera,controls,canvas,S,holderBox,sheet,onExit}=c;
+  const TP={obj:null,rig:null,face:0,ph:0,amt:0,dist:4.2,done:false};
   const st={on:false,yaw:0,pitch:0,pos:new THREE.Vector3(0,0,4),vy:0,ground:true,keys:new Set(),jx:0,jy:0,saved:null,boxes:[],boxT:0};
   const EYE=1.65,R=.3,H=1.75,STEP=.55,G=22;
   let ui=null,lookId=null,joyId=null,joyO=null,lastLook=null;
   function refreshBoxes(){
-    st.boxes=S.objs.filter(o=>o.vis&&o.kind!=='viz').map(o=>holderBox(o.holder)).filter(b=>!b.isEmpty()&&isFinite(b.min.x)&&(b.max.y-b.min.y)<200);st.boxT=performance.now();
+    st.boxes=S.objs.filter(o=>o.vis&&o.kind!=='viz'&&!(o.meta&&o.meta.player)).map(o=>holderBox(o.holder)).filter(b=>!b.isEmpty()&&isFinite(b.min.x)&&(b.max.y-b.min.y)<200);st.boxT=performance.now();
   }
   function build(){
     ui=document.createElement('div');ui.id='walkui';
@@ -28,7 +29,7 @@ export function createWalk(c){
   function onMouse(e){if(st.on&&document.pointerLockElement===canvas)look(e.movementX,e.movementY);}
   function down(e){
     if(!st.on||e.target.closest('#walkui button'))return;
-    if(e.pointerType==='mouse'){lookId=e.pointerId;lastLook=[e.clientX,e.clientY];if(canvas.requestPointerLock&&e.button===0)try{canvas.requestPointerLock();}catch(_){}return;}
+    if(e.pointerType==='mouse'){lookId=e.pointerId;lastLook=[e.clientX,e.clientY];if(!st.third&&canvas.requestPointerLock&&e.button===0)try{canvas.requestPointerLock();}catch(_){}return;}
     const left=e.clientX<innerWidth*.45;
     if(left&&joyId==null){joyId=e.pointerId;joyO=[e.clientX,e.clientY];const s=ui.querySelector('#walkStick');s.hidden=false;s.style.left=e.clientX-50+'px';s.style.top=e.clientY-50+'px';}
     else if(lookId==null){lookId=e.pointerId;lastLook=[e.clientX,e.clientY];}
@@ -51,16 +52,17 @@ export function createWalk(c){
     document.body.dataset.walk='1';sheet.ht=0;sheet.h=0;sheet.hv=0;
     if(S.rest&&c.leaveRest)c.leaveRest();
     if(c.tcDetach)c.tcDetach();
+    st.third=!!opts.third;TP.obj=opts.player||null;TP.rig=opts.rig||null;TP.done=false;TP.face=st.yaw;if(st.third){st.pitch=-.22;st.yaw=Math.PI*0+(opts.camYaw||0);}
     refreshBoxes();st.on=true;
     const coarse=matchMedia('(pointer:coarse)').matches;
-    ui.querySelector('#walkHint').textContent=coarse?'Left thumb moves, right thumb looks':'WASD move · mouse look (click first) · Space jump · Shift run · Esc leave';
+    ui.querySelector('#walkHint').textContent=st.third?(coarse?'Left thumb runs, right thumb turns the camera':'WASD run · drag to turn the camera · Space jump · Shift sprint · Esc back to editing'):coarse?'Left thumb moves, right thumb looks':'WASD move · mouse look (click first) · Space jump · Shift run · Esc leave';
     ui.querySelector('#walkJump').style.display=coarse?'block':'none';
     addEventListener('keydown',onKey);addEventListener('keyup',onKey);document.addEventListener('mousemove',onMouse);
     canvas.addEventListener('pointerdown',down);addEventListener('pointermove',move);addEventListener('pointerup',up);addEventListener('pointercancel',up);
     c.bump();
   }
   function exit(){
-    if(!st.on)return;st.on=false;S.walk=false;delete document.body.dataset.walk;
+    if(!st.on)return;st.on=false;S.walk=false;if(st.third&&TP.rig)TP.rig.set(0,0);st.third=false;delete document.body.dataset.walk;
     if(document.pointerLockElement===canvas)document.exitPointerLock();
     removeEventListener('keydown',onKey);removeEventListener('keyup',onKey);document.removeEventListener('mousemove',onMouse);
     canvas.removeEventListener('pointerdown',down);removeEventListener('pointermove',move);removeEventListener('pointerup',up);removeEventListener('pointercancel',up);
@@ -89,8 +91,17 @@ export function createWalk(c){
         if(p.x>b.min.x-R&&p.x<b.max.x+R&&p.z>b.min.z-R&&p.z<b.max.z+R){p[ax]=old;break;}
       }
     }
-    camera.position.set(p.x,p.y+EYE,p.z);camera.rotation.set(st.pitch,st.yaw,0);
+    if(st.third&&TP.obj){
+      const sp2=Math.hypot(vx,vz),mv=sp2>.05;
+      if(mv){const tgt=Math.atan2(vx,vz)+(c.faceOffset||0);let d=tgt-TP.face;d=Math.atan2(Math.sin(d),Math.cos(d));TP.face+=d*Math.min(1,dt*12);}
+      TP.amt+=((mv&&st.ground?Math.min(1,sp2/3):0)-TP.amt)*Math.min(1,dt*10);TP.ph+=sp2*dt*(sp2>4?2.1:2.6)*1.0;
+      const h=TP.obj.holder;h.position.set(p.x,p.y+Math.abs(Math.sin(TP.ph))*.05*TP.amt,p.z);h.rotation.set(0,TP.face,0);
+      if(TP.rig)TP.rig.set(TP.ph,st.ground?TP.amt:.35);
+      st.pitch=Math.max(-1.1,Math.min(.35,st.pitch));const cy=Math.cos(st.pitch),fwd=new THREE.Vector3(-Math.sin(st.yaw)*cy,Math.sin(st.pitch),-Math.cos(st.yaw)*cy);
+      const tgt=new THREE.Vector3(p.x,p.y+1.35,p.z);camera.position.copy(tgt).addScaledVector(fwd,-TP.dist);camera.position.y=Math.max(.25,camera.position.y);camera.lookAt(tgt);
+      if(c.onTick)c.onTick(p);
+    }else{camera.position.set(p.x,p.y+EYE,p.z);camera.rotation.set(st.pitch,st.yaw,0);}
     c.bump();
   }
-  return {enter,exit,tick,get on(){return st.on;},refreshBoxes};
+  return {enter,exit,tick,get on(){return st.on;},get third(){return st.third;},place(x,y,z){st.pos.set(x,y,z);},refreshBoxes};
 }
