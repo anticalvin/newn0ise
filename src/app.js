@@ -1,10 +1,11 @@
 import {toRecipe,fromRecipe,checkRecipe} from './recipe.js';
 import {CAMS,glyph,drawOverlay} from './cams.js';
-import {createRecorder,fmtTime,verifyFrames,fixWebmDuration} from './recorder.js';
+import {createRecorder,fmtTime,verifyFrames,fixWebmDuration,QUALITY,estimateMB} from './recorder.js';
 import {createTimeline} from './timeline.js';
 import {createEditor} from './editor.js';
 import {createOverlays} from './overlay.js';
 import {installLooks} from './looks.js';
+import {createPluginHost,SAFE as PLUG_SAFE} from './pluginhost.js';
 import {put as handoffPut,take as handoffTake} from './handoff.js';
 import {CAMSIM_PARAMS,CAMSIM_FRAG,SIMS} from './camsim.js';
 import {QUAL,setMaskQuality,PERSON,startPerson,feedPerson,syntheticPerson,DRAWN,paintDrawn,clearDrawn,maskFor,resetMatteGL,MASK_DEFAULTS} from './matte.js';
@@ -1275,6 +1276,7 @@ vec4 fx(vec2 uv){
   bind(pr,V,ctx){const jump=ctx.t<LOOM.last-1e-4||ctx.t-LOOM.last>.5||(ST.clean&&!LOOM.wasClean);LOOM.last=ctx.t;LOOM.wasClean=!!ST.clean;
     pr.f('u_reset',jump?1:0);pr.f('u_lite',ST.lite?1:0);histBind(pr,'loom',ctx);},after(pr,V,ctx){histSave('loom',ctx);}});
 const LOOKS=installLooks({defineModule,SS,histBind,histSave,histRT,PR,samp,bindRT,draw,ST});
+const PLUG=createPluginHost({defineModule,MODULES,SS,histBind,histSave,CAMS,RECIPES:LOOKS.RECIPES,ST,VS,HEAD,GLSL_LIB,toast:(...a)=>toast(...a),onChange:()=>{try{renderInspector();}catch(e){}}});PLUG.load();
 /*WP6:END*/
 
 
@@ -1585,6 +1587,46 @@ function applyRecipe(j){
   if(r.P){Object.assign(P,r.P);}
   STACK.layers=r.layers.length?r.layers:[mkLayer('crtlab')];STACK.sel=0;V.sizeKey='';V.lastBKey='';TLN.load(j.timeline||null,STACK.layers);
   snap();refreshUI();renderInspector();if(r.skipped.length)toast('Skipped effects this version doesn’t have: '+r.skipped.join(', '),5000);
+}
+/* ---- Plugins sheet: import, write, test, install, manage ---- */
+const PLUG_TEMPLATE={n0fx:1,id:'me.myeffect',name:'My effect',version:'1.0.0',apiVersion:1,author:'me',licence:'CC0-1.0',kind:'effect',family:'Community',description:'Describe what it does.',
+  params:[{k:'amt',t:'r',label:'Amount',min:0,max:100,def:40,hero:true},{k:'spd',t:'r',label:'Speed',min:0,max:100,def:30,hero:true}],
+  glsl:'vec4 fx(vec2 uv){\n  float a=u_amt/100.*.03;\n  vec2 w=vec2(sin(uv.y*30.+uTime*u_spd/10.),cos(uv.x*30.+uTime*u_spd/10.))*a;\n  return vec4(texture(uSrc,uv+w).rgb,1.);\n}'};
+const PLUG_BRIEF=`I want you to write a plugin for the n0ise image app. Reply with ONE JSON object and nothing else.
+Format (.n0fx, JSON): {"n0fx":1,"id":"author.name","name":"...","version":"1.0.0","apiVersion":1,"author":"...","licence":"MIT","kind":"effect","family":"Community","description":"...","params":[{"k":"amt","t":"r","label":"Amount","min":0,"max":100,"def":40,"hero":true}],"glsl":"vec4 fx(vec2 uv){ ... return vec4(color,1.); }"}
+Rules: "glsl" defines only vec4 fx(vec2 uv). No #version, #extension, uniform declarations, main(), while or do loops. for loops need a constant limit (for(int i=0;i<8;i++)), at most 64. At most 64 texture reads. Each param k (lower-case letters/digits) becomes the uniform float u_k (colour params become vec3). t is r (slider, needs min, max, def), b (switch, def true/false), color (def "#rrggbb") or c (choice: opts list plus integer def). Mark up to three important params "hero":true.
+Available: uSrc (the picture, sampler2D), uAux (subject mask, .r = 1 inside the subject), uRes (vec2 pixels), uTime (seconds), uSeed (float), S (scale: uRes.y/600.), and helpers luma(vec3), h21(vec2), vnoise(vec2), fbm(vec2), curl(vec2). Set "feedback":true to get u_prev (the previous output frame) and u_reset (1 on the first frame).
+Make the default look good with no tweaking. What I want: `;
+function pluginsSheet(){
+  if($('.sheet'))return;
+  const sh=el('div','sheet'),box=el('div','xp');sh.appendChild(box);box.style.maxWidth='560px';
+  box.appendChild(el('h3','','Plugins'));
+  box.appendChild(el('div','cl',PLUG_SAFE?'Safe mode: all plugins are off.':'Community plugins add effects, cameras and recipes. They are data and shader code only. Imported plugins show their author, licence and a content hash.'));
+  const bar=el('div','chips');
+  const imp=document.createElement('input');imp.type='file';imp.accept='.n0fx,.json,application/json';imp.hidden=true;
+  const ta=document.createElement('textarea');ta.spellcheck=false;ta.rows=11;ta.placeholder='Paste a plugin here, or press New to start from a template.';ta.style.cssText='width:100%;font:12px/1.4 ui-monospace,monospace;background:#0d0c0b;color:#f2efe8;border:1px solid #2a2724;border-radius:6px;padding:8px;box-sizing:border-box';
+  const out=el('pre','');out.style.cssText='white-space:pre-wrap;font:12px/1.45 ui-monospace,monospace;margin:6px 0;max-height:150px;overflow:auto';
+  const list=el('div');
+  const parse=()=>{try{return JSON.parse(ta.value);}catch(e){out.textContent='That isn’t valid JSON ('+e.message+'). Check commas, quotes and brackets.';out.className='bad';return null;}};
+  const show=r=>{out.className=r.ok?'good':'bad';out.textContent=(r.ok?'Looks good'+(r.ms?' · test frame '+r.ms.toFixed(1)+' ms':''):'Fix these first:')+'\n'+r.errors.map(e=>'• '+e).join('\n')+(r.warnings.length?'\n'+r.warnings.map(w=>'! '+w).join('\n'):'');};
+  const btn=(t,cls,fn)=>{const b=el('button',cls||'btn',t);b.classList.add('btn');b.addEventListener('click',fn);return b;};
+  const draw=()=>{list.innerHTML='';
+    if(!PLUG.items.length){list.appendChild(el('div','cl','Nothing installed yet.'));return;}
+    PLUG.items.forEach(it=>{const j=it.j,row=el('div','ir');row.style.cssText='display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:6px 0';
+      const t=el('div','');t.style.flex='1 1 180px';const nm=el('b','',j.name||j.id);const meta=el('div','cl',`community · ${j.author} · ${j.licence} · v${j.version} · #${it.hash||'—'}${it.broken?' · off: '+it.broken:''}`);t.append(nm,meta);
+      const on=btn(it.on?'On':'Off','',()=>{PLUG.setOn(j.id,!it.on);draw();});on.setAttribute('aria-pressed',it.on);
+      row.append(t,on,btn('Edit','',()=>{ta.value=JSON.stringify(j,null,2);out.textContent='';}),btn('Duplicate','',()=>{const d=PLUG.duplicate(j.id);if(d){ta.value=JSON.stringify(d,null,2);out.textContent='This is your own copy. Press Install to add it.';}}),
+        btn('Export','',()=>deliver(new Blob([JSON.stringify(j,null,2)],{type:'application/json'}),(j.id||'plugin')+'.n0fx',false)),btn('Delete','',()=>{PLUG.remove(j.id);draw();}));
+      list.appendChild(row);});
+  };
+  imp.addEventListener('change',async()=>{const f=imp.files[0];imp.value='';if(!f)return;if(f.size>200*1024){out.textContent='That file is larger than 200 KB.';out.className='bad';return;}ta.value=await f.text();const j=parse();if(j)show(PLUG.check(j));});
+  bar.append(btn('Import file','pri',()=>imp.click()),btn('New','',()=>{ta.value=JSON.stringify(PLUG_TEMPLATE,null,2);out.textContent='';}),
+    btn('Copy brief for my AI','',async()=>{try{await navigator.clipboard.writeText(PLUG_BRIEF);toast('Copied. Paste it into your AI, then say what effect you want.');}catch(e){ta.value=PLUG_BRIEF;toast('Select and copy the text.');}}));
+  const act=el('div','chips');
+  act.append(btn('Test','',()=>{const j=parse();if(j)show(PLUG.check(j));}),btn('Install','pri',async()=>{const j=parse();if(!j)return;const r=await PLUG.install(j);show(r);if(r.ok){draw();}}),
+    btn('Copy errors','',async()=>{try{await navigator.clipboard.writeText('My n0ise plugin failed validation. Fix it and send back the whole corrected JSON:\n'+out.textContent);toast('Copied. Paste it back to your AI.');}catch(e){toast('Select the text and copy it.');}}));
+  box.append(bar,imp,ta,act,out,el('h3','','Installed'),list,btn('Close','',()=>sh.remove()));
+  document.body.appendChild(sh);draw();sh.addEventListener('pointerdown',e=>{if(e.target===sh)sh.remove();});
 }
 function recipeSection(host){
   const a=accordion('Recipe',false);
@@ -2582,7 +2624,7 @@ function camRecStart(){
   camRec0=performance.now();
   const hook=()=>{if(!camRecorder.due())return;g.drawImage(canvas,0,0,cc.width,cc.height);drawOverlay(g,cc.width,cc.height,CAMS[camIx],{keep:true,text:camText,t:(performance.now()-camRec0)/1000,recOn:true});camRecorder.frame();};
   const track=camTrack();
-  return camRecorder.start({canvas:cc,fps:30,manual:true,mic:camMic,audioStream:AUD.on&&AUD.dest?AUD.dest.stream:null,watchTrack:track,
+  return camRecorder.start({canvas:cc,fps:30,quality:VQ(),manual:true,mic:camMic,audioStream:AUD.on&&AUD.dest?AUD.dest.stream:null,watchTrack:track,
     begin:()=>{g.drawImage(canvas,0,0,cc.width,cc.height);FRAME_HOOKS.push(hook);if(TLN.tracks.length){TLN.seek(TLN.loopOn?TLN.loop[0]:0);TLN.play(true);}},
     end:()=>{const i=FRAME_HOOKS.indexOf(hook);if(i>=0)FRAME_HOOKS.splice(i,1);},
     onDone:async r=>{window.__lastRec=r;const name=stamp()+'.'+r.ext,id=await rollAdd(r.blob,name,true,r.poster,r.duration);camRecToast(r,name,id);}});
@@ -2800,23 +2842,36 @@ const fxRecorder=createRecorder({cap:180,warn:165,
     b.textContent=st==='recording'?'● '+fmtTime(fxRecorder.sec):(st==='stopping'||st==='saving')?'Saving…':'Rec';b.disabled=st==='stopping'||st==='saving'||st==='arming';},
   onTick:()=>{const b=$('#rec');if(b&&fxRecorder.state==='recording')b.textContent='● '+fmtTime(fxRecorder.sec);},
   onWarn:m=>toast(m,4000),onError:e=>toast(String(e&&e.message||e),5000)});
-function toggleRec(sec){
+/* Sound from a video source: its audio goes into the recording, and the clip stays audible while it records. */
+const SRCA=new WeakMap();
+function srcAudioStream(){
+  const v=SRC.el;if(!(v instanceof HTMLVideoElement)||v.srcObject)return null;
+  try{
+    let e=SRCA.get(v);
+    if(!e){const AC=window.AudioContext||window.webkitAudioContext;if(!AC)return null;const ctx=new AC(),node=ctx.createMediaElementSource(v),dest=ctx.createMediaStreamDestination();node.connect(dest);node.connect(ctx.destination);e={ctx,dest};SRCA.set(v,e);}
+    if(e.ctx.state==='suspended')e.ctx.resume();v.muted=false;return e.dest.stream;
+  }catch(err){return null;}
+}
+const VQ=()=>(lsGet('n0ise.vq',2))-1;
+function toggleRec(sec,opt){opt=opt||{};
   if(!GLOK)return;
   if(fxRecorder.state==='recording'){fxRecorder.stop('user');return;}
   if(fxRecorder.busy)return;
   const fxHook=()=>fxRecorder.frame();
-  fxRecorder.start({canvas,fps:30,copy:true,audioStream:AUD.on&&AUD.dest?AUD.dest.stream:null,
+  fxRecorder.start({canvas,fps:opt.fps||30,quality:opt.q!=null?opt.q:VQ(),copy:true,audioStream:AUD.on&&AUD.dest?AUD.dest.stream:(ED.active()?ED.audioStream():srcAudioStream()),
     begin:()=>{FRAME_HOOKS.push(fxHook);if(TLN.tracks.length){TLN.seek(TLN.loopOn?TLN.loop[0]:0);TLN.play(true);}if(navigator.wakeLock)navigator.wakeLock.request('screen').then(w=>{WAKE=w;}).catch(()=>{});},
     end:()=>{const i=FRAME_HOOKS.indexOf(fxHook);if(i>=0)FRAME_HOOKS.splice(i,1);if(WAKE){WAKE.release().catch(()=>{});WAKE=null;}},
-    onDone:async r=>{deliver(r.blob,`${stamp()}.${r.ext}`,true);}});
+    onDone:async r=>{window.__lastRec=r;deliver(r.blob,`${stamp()}.${r.ext}`,true);}});
   if(typeof sec==='number')setTimeout(()=>fxRecorder.stop('limit'),sec*1000);
 }
 let busy=false;
 function openExport(){
   if(!GLOK||$('.sheet'))return;
-  const sh=el('div','sheet'),o={len:4,w:480,mul:1,fmt:0,boom:0};
+  const sh=el('div','sheet'),o={len:4,w:480,mul:1,fmt:0,boom:0,q:VQ(),fps:30};
   sh.innerHTML=`<div class="xp"><h3>Export</h3>
   <div class="cl">Length</div><div class="chips" data-k="len"><button class="chip" data-v="2">2s</button><button class="chip" data-v="4">4s</button><button class="chip" data-v="8">8s</button></div>
+  <div class="cl">Video quality</div><div class="chips" data-k="q"><button class="chip" data-v="0">Standard</button><button class="chip" data-v="1">High</button><button class="chip" data-v="2">Max</button></div>
+  <div class="cl">Video frame rate</div><div class="chips" data-k="fps"><button class="chip" data-v="30">30</button><button class="chip" data-v="60">60</button></div><p class="cl" id="xe"></p>
   <div class="cl">GIF size</div><div class="chips" data-k="w"><button class="chip" data-v="320">Small</button><button class="chip" data-v="480">Medium</button><button class="chip" data-v="640">Large</button></div>
   <div class="cl">GIF loop</div><div class="chips" data-k="boom"><button class="chip" data-v="0">Forward</button><button class="chip" data-v="1">Boomerang</button></div>
   <div class="cl">Image size</div><div class="chips" data-k="mul"><button class="chip" data-v="1">1x</button><button class="chip" data-v="2">2x</button><button class="chip" data-v="4">4x</button></div>
@@ -2826,7 +2881,8 @@ function openExport(){
   <p id="xd"></p><p id="xm"></p><button class="btn" id="xc">Close</button></div>`;
   document.body.appendChild(sh);
   const sync=()=>sh.querySelectorAll('.chips').forEach(r=>r.querySelectorAll('.chip').forEach(b=>b.setAttribute('aria-pressed',+b.dataset.v===o[r.dataset.k])));const upd=()=>{const[dw,dh]=expDims(SZ.cw||canvas.clientWidth,SZ.ch||canvas.clientHeight,o.mul);$('#xd',sh).textContent=`Image: ${dw}×${dh}`+(Math.max(dw,dh)>=exportCap()?' (largest this device allows)':'');};upd();
-  sh.querySelectorAll('.chips').forEach(r=>r.addEventListener('click',e=>{const b=e.target.closest('.chip');if(b&&!busy){o[r.dataset.k]=+b.dataset.v;sync();upd();}}));sync();
+  const est=()=>{const k=Math.min(1,QUALITY[o.q].max/Math.max(canvas.width,canvas.height)),w=Math.round(canvas.width*k),h=Math.round(canvas.height*k);$('#xe',sh).textContent=`Video: ${w} × ${h}, ${o.fps} fps, about ${estimateMB(w,h,o.fps,o.len,o.q).toFixed(1)} MB for ${o.len} s`;};
+  sh.querySelectorAll('.chips').forEach(r=>r.addEventListener('click',e=>{const b=e.target.closest('.chip');if(b&&!busy){o[r.dataset.k]=+b.dataset.v;if(r.dataset.k==='q')lsSet('n0ise.vq',o.q+1);sync();upd();est();}}));sync();est();
   const msg=t=>{$('#xm',sh).textContent=t;};
   const run=async f=>{if(busy)return;busy=true;sh.classList.add('busy');try{await f();}catch(e){console.error(e);toast('Export failed, try a smaller size');}busy=false;sh.classList.remove('busy');msg('');};
   const close=()=>{if(!busy)sh.remove();};
@@ -2837,7 +2893,8 @@ function openExport(){
   $('#xj',sh).addEventListener('click',()=>{sh.remove();openProjects();});
   $('#xg',sh).addEventListener('click',()=>run(async()=>{const b=await exportGIF(o.len,o.w,msg,o.boom);sh.remove();deliver(b,stamp()+'.gif',false);}));
   $('#xv',sh).addEventListener('click',()=>run(async()=>{
-    toggleRec(o.len);const t0=performance.now();
+    if(ED.active()&&ED.onExport){ED.onExport();await new Promise(r=>{const i=setInterval(()=>{msg('Exporting the timeline with sound… '+fmtTime(fxRecorder.sec||0));if(!fxRecorder.busy){clearInterval(i);r();}},300);});sh.remove();return;}
+    toggleRec(o.len,{q:o.q,fps:o.fps});const t0=performance.now();
     await new Promise(r=>{const i=setInterval(()=>{msg(`Recording ${Math.min(o.len,(performance.now()-t0)/1000).toFixed(0)}/${o.len}s`);if(!rec){clearInterval(i);r();}},250);});
     sh.remove();}));
 }
@@ -2874,6 +2931,7 @@ function resetAll(){
 function wire(){
   $('#undo').addEventListener('click',undo);$('#redo').addEventListener('click',redo);
   $('#open').addEventListener('click',()=>$('#file').click());
+  {const pb=$('#plugins');if(pb)pb.addEventListener('click',pluginsSheet);}
   $('#file').addEventListener('change',e=>{loadFile(e.target.files[0]);e.target.value='';});
   $('#cam').addEventListener('click',()=>SRC.name==='Camera'?startCam(true).then(()=>{SRC.mirror=camFacing==='user';}):openCamera());
   $('#rec').addEventListener('click',()=>toggleRec());
@@ -3685,6 +3743,18 @@ function wireSheet(){
   requestAnimationFrame(loop);
   if(new URLSearchParams(location.search).get('bench'))setTimeout(runBench,600);
   if(new URLSearchParams(location.search).get('cam'))bootCamera();else delete document.documentElement.dataset.boot;
+  /* start sheet: once per visit, only when arriving from the home page with nothing loaded yet. Camera never shows it. */
+  if(!new URLSearchParams(location.search).get('cam')&&/index\.html|\/$/.test(document.referrer.replace(location.origin,''))&&!location.hash&&!sessionStorage.getItem('n0ise.started')){
+    sessionStorage.setItem('n0ise.started','1');
+    setTimeout(()=>{if($('.sheet'))return;const sh=el('div','sheet'),bx=el('div','xp');sh.appendChild(bx);bx.style.maxWidth='420px';bx.appendChild(el('h3','','Start'));
+      const mk=(t,cls,fn)=>{const b=el('button','btn big'+(cls?' '+cls:''),t);b.addEventListener('click',()=>{sh.remove();fn();});bx.appendChild(b);};
+      mk('Upload photo or video','primary',()=>$('#file').click());
+      mk('Blank canvas','',()=>{const c=document.createElement('canvas');c.width=1080;c.height=1350;const g=c.getContext('2d');const gr=g.createLinearGradient(0,0,0,1350);gr.addColorStop(0,'#2b2b2b');gr.addColorStop(1,'#050505');g.fillStyle=gr;g.fillRect(0,0,1080,1350);setSource(c,'Blank',false);});
+      mk('Explore demos','',()=>{setSource(demoCanvas(),'Sample',false);});
+      const rc=(()=>{try{return JSON.parse(localStorage.getItem('n0ise.projects')||'[]');}catch(e){return[];}})();
+      mk('Skip','',()=>{});
+      document.body.appendChild(sh);sh.addEventListener('pointerdown',e=>{if(e.target===sh)sh.remove();});},700);
+  }
 })();
 /* test hook (read-only use from the console and tools/) */
 /* Short regression test for compositing, run from the console: await __n0.regress(). Stateless modules only, deterministic frames (ST.clean turns Alive off). */
@@ -3712,13 +3782,13 @@ async function regress(){
   STACK.layers=keep.L;STACK.sel=keep.sel;ST.clean=keep.clean;V.sizeKey='';
   return res;
 }
-window.__n0={registerModule,fixWebmDuration,camRecStart,verifyFrames,AUD,syntheticPerson,compareMasks,QUAL,PERSON,setMaskQuality,idleApply,regress,idleRestore,ED,IDLE,TLN,camRecorder,fxRecorder,openCamera,applyCam,CAMS,CAMFX,fxIndex,SHEET,applyRecipe,currentRecipe,toRecipe,fromRecipe,modParams,updateSignals,SIG,runModuleGate,showSheet,STACK,mkLayer,MODULES,PERSON,DRAWN,setSource,syntheticPerson,renderStack,renderFrame,P,V,ST,SRC,TEX,maskFor,startPerson,loadPerson,renderInspector,layout};
+window.__n0={PLUG,pluginsSheet,registerModule,fixWebmDuration,camRecStart,verifyFrames,AUD,syntheticPerson,compareMasks,QUAL,PERSON,setMaskQuality,idleApply,regress,idleRestore,ED,IDLE,TLN,camRecorder,fxRecorder,openCamera,applyCam,CAMS,CAMFX,fxIndex,SHEET,applyRecipe,currentRecipe,toRecipe,fromRecipe,modParams,updateSignals,SIG,runModuleGate,showSheet,STACK,mkLayer,MODULES,PERSON,DRAWN,setSource,syntheticPerson,renderStack,renderFrame,P,V,ST,SRC,TEX,maskFor,startPerson,loadPerson,renderInspector,layout};
 {const v=lsGet('n0ise.alive',null);IDLE.on=v?v==='on':!IDLE.reduce;}
 TLN.mount(document.body);ED.mount();setTimeout(takeHandoff,900);
 ED.onExport=()=>{
   if(fxRecorder.busy||!ED.active())return;toast('Exporting at normal speed. Keep this tab open.',4000);
   const xh=()=>fxRecorder.frame();
-  fxRecorder.start({canvas,fps:30,copy:true,audioStream:ED.audioStream(),
+  fxRecorder.start({canvas,fps:30,quality:VQ(),copy:true,audioStream:ED.audioStream(),
     begin:()=>{FRAME_HOOKS.push(xh);ED.setExporting(true);ED.seek(0);ED.play(true);},
     end:()=>{const i=FRAME_HOOKS.indexOf(xh);if(i>=0)FRAME_HOOKS.splice(i,1);ED.setExporting(false);ED.play(false);},
     onDone:async r=>{deliver(r.blob,`${stamp()}.${r.ext}`,true);}});

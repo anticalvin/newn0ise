@@ -5,6 +5,9 @@
    left, or when the video track ends, and whatever was captured so far is saved. */
 const MIMES=['video/mp4;codecs=avc1.42E01E,mp4a.40.2','video/mp4;codecs=avc1','video/webm;codecs=vp9,opus','video/webm;codecs=vp9','video/webm;codecs=vp8,opus','video/webm;codecs=vp8','video/webm','video/mp4'];
 export const pickMime=()=>{try{return window.MediaRecorder&&MediaRecorder.isTypeSupported?MIMES.find(m=>MediaRecorder.isTypeSupported(m))||'':'';}catch(e){return '';}};
+export const QUALITY=[{id:'standard',name:'Standard',bpp:.08,max:1280},{id:'high',name:'High',bpp:.12,max:1920},{id:'max',name:'Max',bpp:.18,max:3840}];
+export const bitrateFor=(w,h,fps,q)=>Math.round(Math.min(40e6,Math.max(1.5e6,w*h*fps*(QUALITY[q]||QUALITY[1]).bpp)));
+export const estimateMB=(w,h,fps,secs,q)=>bitrateFor(w,h,fps,q)*secs/8/1048576;
 export const fmtTime=s=>Math.floor(s/60)+':'+String(Math.floor(s%60)).padStart(2,'0');
 export function createRecorder(o={}){
   const CAP=o.cap||180,WARN=o.warn||CAP-15;
@@ -51,7 +54,7 @@ export function createRecorder(o={}){
       /* Record a scaled copy at a steady frame rate, not the live canvas: a phone canvas can be 1200 x 2600 and the encoder can't keep up
          in real time, which shows up as a laggy, stuttering file. The copy is capped (default 1280 on the long side) and frames are
          paced, with the last frame repeated if the page stalls, so the timeline never freezes. */
-      src=op.canvas;iv=1000/(op.fps||30);const k=Math.min(1,(op.maxSide||1280)/Math.max(src.width,src.height,1));
+      src=op.canvas;iv=1000/(op.fps||30);const qi=op.quality!=null?op.quality:1,k=Math.min(1,(op.maxSide||QUALITY[qi].max)/Math.max(src.width,src.height,1));
       if(op.copy||k<.999){cv=document.createElement('canvas');cv.width=Math.max(2,Math.round(src.width*k)&~1);cv.height=Math.max(2,Math.round(src.height*k)&~1);mg=cv.getContext('2d');mg.drawImage(src,0,0,cv.width,cv.height);}
       else cv=src;
       if(!cv.isConnected){cv.style.cssText='position:fixed;left:0;top:0;width:1px;height:1px;opacity:0;pointer-events:none';document.body.appendChild(cv);attached=true;}
@@ -59,7 +62,7 @@ export function createRecorder(o={}){
       if(!(rf&&typeof rf.requestFrame==='function')){rf=null;stream=cv.captureStream(op.fps||30);}
       if(op.mic){try{mic=await navigator.mediaDevices.getUserMedia({audio:true});mic.getAudioTracks().forEach(t=>stream.addTrack(t));}catch(e){o.onWarn&&o.onWarn('Microphone was blocked. Recording without sound.');}}
       if(op.audioStream)op.audioStream.getAudioTracks().forEach(t=>stream.addTrack(t));
-      mr=new MediaRecorder(stream,{mimeType:R.mime,videoBitsPerSecond:op.bitrate||Math.round(Math.min(8e6,Math.max(1.5e6,cv.width*cv.height*(op.fps||30)*.12)))});
+      mr=new MediaRecorder(stream,{mimeType:R.mime,videoBitsPerSecond:op.bitrate||bitrateFor(cv.width,cv.height,op.fps||30,op.quality!=null?op.quality:1)});
       mr.ondataavailable=e=>{if(e.data&&e.data.size)parts.push(e.data);};
       mr.onerror=()=>R.stop('error');
       mr.onstop=finish;

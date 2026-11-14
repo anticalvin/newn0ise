@@ -1,0 +1,3 @@
+{"n0fx":1,"id":"demo.ripple","name":"Ripple","version":"1.0.0","apiVersion":1,"author":"demo","licence":"CC0-1.0","kind":"effect","family":"Community","description":"Water-like ripples that spread from the middle.",
+ "params":[{"k":"amt","t":"r","label":"Strength","min":0,"max":100,"def":45,"hero":true},{"k":"freq","t":"r","label":"Ring spacing","min":4,"max":60,"def":22,"hero":true},{"k":"spd","t":"r","label":"Speed","min":0,"max":100,"def":40,"hero":true}],
+ "glsl":"vec4 fx(vec2 uv){\n  vec2 p=uv-.5;float r=length(p*vec2(uRes.x/uRes.y,1.));\n  float w=sin(r*u_freq-uTime*u_spd/8.)*u_amt/100.*.02*smoothstep(1.2,0.,r);\n  return vec4(texture(uSrc,uv+normalize(p+1e-4)*w).rgb,1.);\n}"}

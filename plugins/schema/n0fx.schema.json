@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "n0ise plugin (.n0fx)",
+  "type": "object",
+  "required": ["n0fx", "id", "name", "version", "apiVersion", "author", "licence", "kind"],
+  "properties": {
+    "n0fx": {"const": 1},
+    "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{1,23}\\.[a-z0-9][a-z0-9_-]{1,31}$"},
+    "name": {"type": "string", "maxLength": 60},
+    "version": {"type": "string", "maxLength": 20},
+    "apiVersion": {"const": 1},
+    "author": {"type": "string", "maxLength": 60},
+    "licence": {"type": "string", "maxLength": 40},
+    "kind": {"enum": ["effect", "generator", "pack", "macro"]},
+    "family": {"type": "string", "maxLength": 24},
+    "description": {"type": "string", "maxLength": 400},
+    "feedback": {"type": "boolean"},
+    "glsl": {"type": "string", "maxLength": 65536, "description": "Defines vec4 fx(vec2 uv). Required for effect and generator."},
+    "params": {"type": "array", "maxItems": 16, "items": {
+      "type": "object", "required": ["k", "label"],
+      "properties": {"k": {"type": "string", "pattern": "^[a-z][a-z0-9]{0,11}$"}, "t": {"enum": ["r", "b", "color", "c"]}, "label": {"type": "string", "maxLength": 40},
+        "min": {"type": "number"}, "max": {"type": "number"}, "def": {}, "step": {"type": "number"}, "hero": {"type": "boolean"}, "opts": {"type": "array", "items": {"type": "string"}}}}},
+    "layers": {"type": "array", "maxItems": 12, "description": "Macro: [{module, params}]"},
+    "recipes": {"type": "array", "description": "Pack: [{name, note, layers:[{module, params}]}]"},
+    "cameras": {"type": "array", "description": "Pack: [{id, name, sub, sim, aspect, mods:[{module, params}]}]"}
+  }
+}

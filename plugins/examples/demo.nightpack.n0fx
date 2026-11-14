@@ -1,0 +1,3 @@
+{"n0fx":1,"id":"demo.nightpack","name":"Night pack","version":"1.0.0","apiVersion":1,"author":"demo","licence":"CC0-1.0","kind":"pack","description":"A camera body and a recipe built from existing effects.",
+ "cameras":[{"id":"nightpaper","name":"Night paper","sub":"Embossed paper under a slow scan","sim":"neg35","aspect":"3:4","mods":[{"module":"blindemboss","params":{"depth":50,"keep":40}},{"module":"scanner","params":{"per":9}}]}],
+ "recipes":[{"name":"Paper scan","note":"Emboss, then a scan bar","layers":[{"module":"blindemboss","params":{"depth":60}},{"module":"scanner","params":{"per":7}}]}]}
