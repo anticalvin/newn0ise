@@ -1,5 +1,7 @@
 import {toRecipe,fromRecipe,checkRecipe} from './recipe.js';
 import {CAMS,glyph,drawOverlay} from './cams.js';
+import {createRecorder,fmtTime} from './recorder.js';
+import {createTimeline} from './timeline.js';
 import {CAMSIM_PARAMS,CAMSIM_FRAG,SIMS} from './camsim.js';
 import {PERSON,startPerson,feedPerson,syntheticPerson,DRAWN,paintDrawn,clearDrawn,maskFor,resetMatteGL,MASK_DEFAULTS} from './matte.js';
 import {SIG,SIGNALS,signalValue,V,hooks,attachGL,createGL,VS,HEAD,$,clamp,lerp,TABS,CT,CTL,PALS,hexRGB,lum255,rgbHex,PROFILES,BASE,P,E,MODS,applyProfile,canvas,stage,gl,GLOK,noGL,PR,mkProg,mkProgAsync,initGL,mkRT,freeRT,bindRT,samp,draw,TEX,initLUT,SRC,srcDims,uploadSrc,setSource,fitCanvas,demoCanvas,testCanvas,RB,readDrop,audio,ST,STAGES,stageModel,CHAINS,applyStages,buildChainUI,refreshChainUI,computeE,T,POINTER,PAINTQ,SZ,exportCap,expDims,EMBED,EMB,layout,syncSrc,renderFrame,CTX,adaptQ} from './engine.js';
@@ -1537,9 +1539,9 @@ function modulateSection(host,l,m){
 /* ---------- recipes (project files) ---------- */
 const SPKEY='n0ise.stackpresets';
 const loadStackPresets=()=>{try{return JSON.parse(localStorage.getItem(SPKEY)||'[]');}catch(e){return[];}};
-const currentRecipe=name=>toRecipe({name,P,layers:STACK.layers,MODULES,size:[ST.DW||1280,ST.DH||720]});
+const currentRecipe=name=>{const j=toRecipe({name,P,layers:STACK.layers,MODULES,size:[ST.DW||1280,ST.DH||720]});const t=TLN.serialize();if(t)j.timeline=t;return j;};
 function applyRecipe(j){
-  const r=fromRecipe(j,{mkLayer,MODULES});
+  const r=fromRecipe(j,{mkLayer,MODULES});TLN.load(j.timeline||null);
   if(r.P){Object.assign(P,r.P);}
   STACK.layers=r.layers.length?r.layers:[mkLayer('crtlab')];STACK.sel=0;V.sizeKey='';V.lastBKey='';
   snap();refreshUI();renderInspector();if(r.skipped.length)toast('Skipped effects this version doesn’t have: '+r.skipped.join(', '),5000);
@@ -1629,6 +1631,8 @@ window.__embedRender=function(cv,w,h,t,dt){
   if(SRC.el!==cv){setSource(cv,'Studio',true);}else uploadSrc();
   renderStack(t,dt);V.frameNo++;return canvas;
 };
+const FRAME_HOOKS=[];
+const TLN=createTimeline({el:(...a)=>el(...a),layers:()=>STACK.layers,setCam:i=>{if(CAMMODE)applyCam(i,true);},getCam:()=>camIx,hasCam:()=>CAMMODE,params:l=>MODULES[l.module]?MODULES[l.module].params:[],toast:(...a)=>toast(...a),onToggle:on=>{V.sizeKey='';}});
 function loop(now){
   requestAnimationFrame(loop);
   if(window.__benching||(EMBED&&document.hidden))return;
@@ -1640,7 +1644,9 @@ function loop(now){
   V.fpsAcc+=1/dt;V.fpsN++;if(V.fpsN>=20){V.fps=V.fpsAcc/V.fpsN;V.fpsAcc=0;V.fpsN=0;adaptQ();$('#info').textContent=V.infoStr;}
   try{
     if(audio.on)audioTick();
+    TLN.tick(dt);
     renderStack(t,dt);V.frameNo++;
+    for(let i=0;i<FRAME_HOOKS.length;i++)FRAME_HOOKS[i](t);
     if(V.errN){V.errN=0;const e=$('#err');if(e&&!e.hidden&&!V.DEAD)e.hidden=true;}
   }catch(e){
     console.error(e);V.errN++;
@@ -2200,9 +2206,11 @@ async function loadFile(f){
 let camFacing='environment';
 const CAMOPT={deviceId:'',w:1920,h:1080,fps:30};
 function camTrack(){const st=SRC.el&&SRC.el.srcObject;return st&&st.getVideoTracks&&st.getVideoTracks()[0]||null;}
-let camErr='';
-const camErrMsg=e=>{const n=e&&e.name||'';if(!window.isSecureContext)return'Browsers only allow the camera on a secure (https) page.';if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia)return'This browser can’t open the camera.';if(n==='NotAllowedError'||n==='SecurityError')return'Camera access was blocked. Allow it for this site in your browser settings, then try again.';if(n==='NotFoundError'||n==='OverconstrainedError')return'No camera was found on this device.';if(n==='NotReadableError')return'Another app is using the camera. Close it and try again.';return'The camera couldn’t start ('+(n||'unknown error')+').';};
+let camGen=0,camErr='',camPM=false,camDemo=false,camEnsure=null,camRetry=0,camLifeOn=false;
+function setPM(v){camPM=!!v;canvas.style.transform=v?'scaleX(-1)':'';SRC.mirror=false;SRC.lastVer=-1;}
+const camErrMsg=e=>{const n=e&&e.name||'';if(!window.isSecureContext)return'Browsers only allow the camera on a secure (https) page.';if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia)return'This browser can’t open the camera.';if(n==='NotAllowedError'||n==='SecurityError')return'Camera access was blocked. iPhone: Settings > Safari > Camera > Ask or Allow. Chrome: tap the lock beside the address, then Camera > Allow. Then tap Try again.';if(n==='NotFoundError'||n==='OverconstrainedError')return'No camera was found on this device.';if(n==='NotReadableError')return'Another app is using the camera. Close it and try again.';return'The camera couldn’t start ('+(n||'unknown error')+').';};
 async function startCam(flip,opt){
+  const gen=++camGen;
   if(flip){camFacing=camFacing==='environment'?'user':'environment';CAMOPT.deviceId='';}
   if(opt)Object.assign(CAMOPT,opt);
   try{
@@ -2210,8 +2218,11 @@ async function startCam(flip,opt){
     const mk=async(strict)=>navigator.mediaDevices.getUserMedia({video:Object.assign(CAMOPT.deviceId?{deviceId:{exact:CAMOPT.deviceId}}:{facingMode:camFacing},{width:{ideal:CAMOPT.w},height:{ideal:CAMOPT.h},frameRate:{ideal:CAMOPT.fps}}),audio:false});
     if(old&&old.getTracks)old.getTracks().forEach(t=>t.stop());
     let stream;try{stream=await mk();}catch(e){if(CAMOPT.deviceId){CAMOPT.deviceId='';stream=await mk();}else throw e;}
+    if(gen!==camGen){stream.getTracks().forEach(t=>t.stop());return false;}
     const v=document.createElement('video');v.playsInline=true;v.muted=true;v.srcObject=stream;await v.play();
-    setSource(v,'Camera',true);refreshUI();camErr='';
+    if(gen!==camGen){stream.getTracks().forEach(t=>t.stop());return false;}
+    setSource(v,'Camera',true);refreshUI();camErr='';camDemo=false;
+    try{stream.getVideoTracks()[0].addEventListener('ended',()=>setTimeout(()=>camEnsure&&camEnsure(),300));}catch(e){}
     try{const t=stream.getVideoTracks()[0],st=t.getSettings();if(st.facingMode==='user')camFacing='user';else if(st.facingMode==='environment')camFacing='environment';}catch(e){}
     return true;
   }catch(e){camErr=camErrMsg(e);toast(camErr,6000);return false;}
@@ -2373,15 +2384,16 @@ async function exportBatch(files,o,msg){
   toast(out.length+' images saved');
 }
 /* ---------- export ---------- */
-function openSheet(blob,name,isVideo){
+function openSheet(blob,name,isVideo,meta){
   const url=URL.createObjectURL(blob),sh=el('div','sheet');
   const file=new File([blob],name,{type:blob.type});
   const canShare=!!(navigator.canShare&&navigator.canShare({files:[file]}));
   const media=isVideo?`<video src="${url}" controls playsinline loop autoplay muted style="max-width:100%;max-height:56dvh;border-radius:6px"></video>`:`<img alt="Your finished export" src="${url}">`;
-  sh.innerHTML=`<div>${media}<p>${(blob.size/1048576).toFixed(1)} MB · ${name.split('.').pop().toUpperCase()}</p><div class="xrow"><a class="btn primary" download="${name}" href="${url}">Download</a>${canShare?'<button class="btn" id="shr">Share</button>':''}<button class="btn" id="cls">Close</button></div></div>`;
+  sh.innerHTML=`<div>${media}<p>${(blob.size/1048576).toFixed(1)} MB · ${name.split('.').pop().toUpperCase()}${meta&&meta.dur?' · '+fmtTime(meta.dur):''}</p><div class="xrow"><a class="btn primary" download="${name}" href="${url}">Download</a>${canShare?'<button class="btn" id="shr">Share</button>':''}<button class="btn" id="cls">Close</button>${meta&&meta.id?'<button class="btn" id="dis">Discard</button>':''}</div></div>`;
   document.body.appendChild(sh);
   const close=()=>{sh.remove();URL.revokeObjectURL(url);};
   $('#cls',sh).addEventListener('click',close);
+  {const d=$('#dis',sh);if(d)d.addEventListener('click',async()=>{await rollDelete(meta.id);close();camThumbUpdate();toast('Discarded');});}
   sh.addEventListener('pointerdown',e=>{if(e.target===sh)close();});
   const shr=$('#shr',sh);if(shr)shr.addEventListener('click',async()=>{try{await navigator.share({files:[file]});}catch(e){}});
 }
@@ -2398,11 +2410,11 @@ async function savePNG(){
 /* ---- WP2: camera screen ---- */
 let camAuto=false,camAutoT=0,CAMMODE=false,camTimer=0,camGrid=false,camFps=false,camBusy=false;
 const rollDB=()=>new Promise((res,rej)=>{if(!window.indexedDB)return rej(new Error('no idb'));const q=indexedDB.open('n0ise-roll',1);q.onupgradeneeded=()=>q.result.createObjectStore('caps',{keyPath:'id',autoIncrement:true});q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error);});
-async function rollAdd(blob,name,isVideo){try{const db=await rollDB();await new Promise((res,rej)=>{const tx=db.transaction('caps','readwrite');tx.objectStore('caps').add({blob,name,isVideo,ts:Date.now()});tx.oncomplete=res;tx.onerror=()=>rej(tx.error);});camThumbUpdate();return true;}catch(e){toast('Couldn’t save to the roll. Download it instead.');deliver2(blob,name,isVideo);return false;}}
+async function rollAdd(blob,name,isVideo,poster,dur){try{const db=await rollDB();const id=await new Promise((res,rej)=>{const tx=db.transaction('caps','readwrite');const rq=tx.objectStore('caps').add({blob,name,isVideo,poster:poster||null,dur:dur||0,ts:Date.now()});tx.oncomplete=()=>res(rq.result);tx.onerror=()=>rej(tx.error);});camThumbUpdate();return id||true;}catch(e){toast('Couldn’t save to the roll. Download it instead.');deliver2(blob,name,isVideo);return false;}}
 async function rollList(){try{const db=await rollDB();return await new Promise((res,rej)=>{const out=[],tx=db.transaction('caps');const c=tx.objectStore('caps').openCursor(null,'prev');c.onsuccess=()=>{const cur=c.result;if(cur&&out.length<60){out.push(cur.value);cur.continue();}else res(out);};c.onerror=()=>rej(c.error);});}catch(e){return[];}}
 async function rollDelete(id){try{const db=await rollDB();await new Promise(res=>{const tx=db.transaction('caps','readwrite');tx.objectStore('caps').delete(id);tx.oncomplete=res;});}catch(e){}}
 const deliver2=(b,n,v)=>openSheet(b,n,v);
-async function camThumbUpdate(){const b=$('#camroll');if(!b)return;const l=await rollList();b.innerHTML='';if(l[0]&&!l[0].isVideo){const im=new Image();im.alt='';im.src=URL.createObjectURL(l[0].blob);im.onload=()=>URL.revokeObjectURL(im.src);b.appendChild(im);}else b.textContent=l.length?String(l.length):'Roll';}
+async function camThumbUpdate(){const b=$('#camroll');if(!b)return;const l=await rollList();b.innerHTML='';const t=l[0],tb=t&&(t.isVideo?t.poster:t.blob);if(tb){const im=new Image();im.alt='';im.src=URL.createObjectURL(tb);im.onload=()=>URL.revokeObjectURL(im.src);b.appendChild(im);if(t.isVideo)b.appendChild(el('i','playbadge','▶'));}else b.textContent=l.length?String(l.length):'Roll';}
 async function openRoll(){
   const sh=el('div','sheet'),l=await rollList(),urls=[];
   const box=el('div','rollbox',`<h3>Roll</h3>`);const grid=el('div','rollgrid');
@@ -2417,11 +2429,23 @@ async function openRoll(){
 }
 /* camera bodies (see cams.js): a Fuse recipe + frame shape + overlay, applied to the shared engine */
 let camIx=0,camStr=50,camText=false,camSaved=null,camOvT=0,camRec0=0,camRecOn=false;
+let camCat='All',camFavs=[];
+const camVis=i=>{const c=CAMS[i];return camCat==='All'||(camCat==='★'?camFavs.includes(c.id):c.cat===camCat);};
+function setCamCat(n){camCat=n;lsSet('n0ise.camcat',n);const st=$('#camstrip');if(!st)return;
+  [...st.children].forEach((b,i)=>{b.hidden=!camVis(i);});$('#camcats').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.c===n));
+  if(!camVis(camIx)){const f=CAMS.findIndex((c,i)=>camVis(i));if(f>=0)applyCam(f);else toast('No favourites yet. Tap the star on a camera.');}else paintCamUI();}
+function camStep(d){let i=camIx;for(let k=0;k<CAMS.length;k++){i=(i+d+CAMS.length)%CAMS.length;if(camVis(i))break;}applyCam(i);}
+function camFavToggle(){const id=CAMS[camIx].id,k=camFavs.indexOf(id);if(k<0)camFavs.push(id);else camFavs.splice(k,1);lsSet('n0ise.camfavs',camFavs);paintCamUI();if(camCat==='★')setCamCat('★');}
+function camSurprise(){const pool=CAMS.map((c,i)=>i).filter(i=>i!==camIx);applyCam(pool[Math.random()*pool.length|0]);}
+function camMix(){const sl=camSim();if(!sl)return;const defs=Object.fromEntries(MODULES.camsim.params.map(p=>[p.k,p]));const base=SIMS[CAMS[camIx].sim]||{};
+  Object.keys(base).forEach(k=>{const d=defs[k];if(!d||d.t==='color'||typeof base[k]!=='number'||k==='res'||k==='bits')return;const r=(d.max-d.min)*.2;sl.params[k]=Math.max(d.min,Math.min(d.max,base[k]+(Math.random()*2-1)*r));});
+  sl.params.seed2=Math.floor(Math.random()*99);buzz(8);toast('Mixed within '+CAMS[camIx].name);}
 function applyCam(i,quiet){
   camIx=(i+CAMS.length)%CAMS.length;const c=CAMS[camIx];lsSet('n0ise.cam',c.id);
   const layers=[];
   if(c.fx&&c.fx.length){const l=mkLayer('fuse');for(let k=1;k<=4;k++){fuseSet(l,k,null);l.params['on'+k]=false;}
     c.fx.forEach((id,k)=>{fuseSet(l,k+1,id);l.params['mx'+(k+1)]=c.mix[k]??100;});layers.push(l);}
+  (c.mods||[]).forEach(m=>{if(MODULES[m.module])layers.push(mkLayer(m.module,m.params));});
   const sl=mkLayer('camsim');Object.assign(sl.params,SIMS[c.sim]||{});layers.push(sl);
   STACK.layers=layers;STACK.sel=layers.length-1;P.aspect=c.aspect;V.sizeKey='';V.lastBKey='';
   setCamStr(camStr);paintCamUI();applyPro();if(!quiet)buzz(8);
@@ -2437,8 +2461,9 @@ function paintCamUI(){
   const st=$('#camstrip');if(!st)return;
   [...st.children].forEach((b,i)=>{b.setAttribute('aria-pressed',i===camIx);});
   const t=st.children[camIx];if(t&&!st._dragging)st.scrollTo({left:t.offsetLeft-(st.clientWidth-t.offsetWidth)/2,behavior:st._first?'smooth':'auto'});st._first=true;
-  const c=CAMS[camIx];$('#camname').textContent=c.name;$('#camsub').textContent=c.sub;const a=$('#camasp');if(a)a.textContent=P.aspect==='src'?'Full':P.aspect;
-  {const bt=$('.cambot'),app=document.querySelector('.app');if(bt&&app){app.style.setProperty('--stagepad','0px');app.style.setProperty('--campad',bt.offsetHeight+'px');V.sizeKey='';ST.freeze=0;}}
+  const c=CAMS[camIx];{const f=$('#camfav');if(f){const on=camFavs.includes(c.id);f.textContent=on?'★':'☆';f.setAttribute('aria-pressed',on);}}
+  $('#camname').textContent=c.name;$('#camsub').textContent=c.sub;const a=$('#camasp');if(a)a.textContent=P.aspect==='src'?'Full':P.aspect;
+  {const bt=$('.cambot'),app=document.querySelector('.app');if(bt&&app){app.style.setProperty('--stagepad','0px');app.style.setProperty('--campad',bt.offsetHeight+'px');document.documentElement.style.setProperty('--campad',bt.offsetHeight+'px');V.sizeKey='';ST.freeze=0;}}
   drawCamOv();
 }
 function composite(){const o=document.createElement('canvas');o.width=canvas.width;o.height=canvas.height;const g=o.getContext('2d');g.drawImage(canvas,0,0);
@@ -2448,20 +2473,36 @@ async function camShoot(){
   const blob=await new Promise(r=>o.toBlob(r,'image/jpeg',.93));
   if(blob){const u=$('#camui');u.classList.add('flash');setTimeout(()=>u.classList.remove('flash'),120);buzz(25);await rollAdd(blob,stamp()+'.jpg',false);}
 }
-async function camRecStart(){
-  if(!window.MediaRecorder){toast('Recording isn’t supported here');return null;}
-  const mime=['video/mp4','video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm'].find(m=>MediaRecorder.isTypeSupported(m));if(!mime){toast('No recording format available');return null;}
+/* ---- camera recording on the shared recorder (src/recorder.js) ---- */
+let camMode='photo';
+const camRecUI=()=>{const u=$('#camui'),sh=$('#shutter');if(!u||!sh)return;const st=camRecorder.state;u.dataset.rec=st;
+  sh.classList.toggle('rec',st==='recording'||st==='stopping');sh.disabled=st==='stopping'||st==='saving';
+  const bar=$('#camrec');if(bar){bar.hidden=!(st==='recording'||st==='stopping'||st==='saving');bar.querySelector('.rt').textContent=st==='saving'?'Saving…':fmtTime(camRecorder.sec||0);}};
+const camRecorder=createRecorder({
+  cap:180,warn:165,
+  onState:()=>{camRecOn=camRecorder.state==='recording';camRecUI();},
+  onTick:sec=>{camRecUI();const sh=$('#shutter');if(sh)sh.style.setProperty('--p',Math.min(100,sec/180*100)+'%');},
+  onWarn:m=>toast(m,4000),
+  onError:e=>toast(String(e&&e.message||e),5000)
+});
+function camRecStart(){
   const cc=document.createElement('canvas');cc.width=canvas.width;cc.height=canvas.height;const g=cc.getContext('2d');
-  camRec0=performance.now();camRecOn=true;ST.clean=true;let raf=0;
-  const loop=()=>{g.drawImage(canvas,0,0);drawOverlay(g,cc.width,cc.height,CAMS[camIx],{keep:true,text:camText,t:(performance.now()-camRec0)/1000,recOn:true});raf=requestAnimationFrame(loop);};loop();
-  const cs=cc.captureStream(30);if(AUD.on&&AUD.dest)AUD.dest.stream.getAudioTracks().forEach(tk=>cs.addTrack(tk));
-  const mr=new MediaRecorder(cs,{mimeType:mime,videoBitsPerSecond:6e6}),parts=[];
-  mr.ondataavailable=e=>{if(e.data.size)parts.push(e.data);};
-  mr.onstop=async()=>{cancelAnimationFrame(raf);camRecOn=false;ST.clean=false;const blob=new Blob(parts,{type:mime.split(';')[0]});
-    const name=stamp()+(mime.includes('mp4')?'.mp4':'.webm');await rollAdd(blob,name,true);openSheet(blob,name,true);};
-  mr.start();return mr;
+  camRec0=performance.now();ST.clean=true;
+  const hook=()=>{if(cc.width!==canvas.width||cc.height!==canvas.height)return;g.drawImage(canvas,0,0);drawOverlay(g,cc.width,cc.height,CAMS[camIx],{keep:true,text:camText,t:(performance.now()-camRec0)/1000,recOn:true});};
+  const track=camTrack();
+  return camRecorder.start({canvas:cc,fps:30,mic:camMic,audioStream:AUD.on&&AUD.dest?AUD.dest.stream:null,watchTrack:track,
+    begin:()=>{hook();FRAME_HOOKS.push(hook);if(TLN.tracks.length){TLN.seek(TLN.loopOn?TLN.loop[0]:0);TLN.play(true);}},
+    end:()=>{const i=FRAME_HOOKS.indexOf(hook);if(i>=0)FRAME_HOOKS.splice(i,1);ST.clean=false;},
+    onDone:async r=>{const name=stamp()+'.'+r.ext,id=await rollAdd(r.blob,name,true,r.poster,r.duration);camRecToast(r,name,id);}});
 }
-
+let camMic=false;
+function camRecToast(r,name,id){
+  const t=el('button','rectoast');t.setAttribute('aria-label','Open the recording');
+  if(r.poster){const im=new Image();im.alt='';im.src=URL.createObjectURL(r.poster);im.onload=()=>URL.revokeObjectURL(im.src);t.appendChild(im);}
+  t.appendChild(el('span','',`Saved · ${fmtTime(r.duration)} · ${(r.blob.size/1048576).toFixed(1)} MB`));
+  t.addEventListener('click',()=>{t.remove();openSheet(r.blob,name,true,{id:typeof id==='number'?id:null,dur:r.duration});});
+  document.body.appendChild(t);setTimeout(()=>t.remove(),9000);
+}
 /* ---- camera Pro: lens, flash, zoom, exposure, white balance, focus, quality. Hardware controls where the browser exposes them
    (Chrome/Android: most; iOS Safari: lens choice, resolution, frame rate, sometimes zoom), software ones everywhere else. ---- */
 const PRO={zoom:1,ev:0,wb:0,focus:-1,flash:'off',level:false,hist:false};
@@ -2511,7 +2552,7 @@ async function renderPro(){
   const chip=(t,on,fn)=>{const b=el('button','prchip',t);b.setAttribute('aria-pressed',!!on);b.addEventListener('click',()=>{buzz(5);fn();});return b;};
   const slider=(min,max,step,val,fn,fmt)=>{const w=el('div','prsl'),i=document.createElement('input');i.type='range';i.min=min;i.max=max;i.step=step;i.value=val;const v=el('span','prv',fmt(val));i.addEventListener('input',()=>{v.textContent=fmt(+i.value);fn(+i.value);});w.append(i,v);return w;};
   const lens=(await listLenses()).filter(l=>l.name);
-  if(lens.length>1){const cur=proSet.deviceId;row('Lens',...lens.map(l=>chip(l.name,l.id===cur,async()=>{await startCam(false,{deviceId:l.id});SRC.mirror=camFacing==='user';await renderPro();applyCam(camIx,true);applyPro();})));}
+  if(lens.length>1){const cur=proSet.deviceId;row('Lens',...lens.map(l=>chip(l.name,l.id===cur,async()=>{await startCam(false,{deviceId:l.id});setPM(camFacing==='user');await renderPro();applyCam(camIx,true);applyPro();})));}
   const zr=rng(proCaps,'zoom');
   row('Zoom '+(zr?'(lens)':'(digital)'),slider(zr?zr.min:1,zr?Math.min(zr.max,15):8,.1,PRO.zoom,v=>{PRO.zoom=v;applyPro();},v=>(+v).toFixed(1)+'×'));
   row('Exposure',slider(-2,2,.1,PRO.ev,v=>{PRO.ev=v;applyPro();},v=>(v>0?'+':'')+(+v).toFixed(1)+' EV'));
@@ -2520,8 +2561,8 @@ async function renderPro(){
   const fr=rng(proCaps,'focusDistance');if(fr)row('Focus',chip('Auto',PRO.focus<0,()=>{PRO.focus=-1;applyPro();renderPro();}),slider(fr.min,fr.max,(fr.max-fr.min)/50||.01,PRO.focus<0?fr.min:PRO.focus,v=>{PRO.focus=v;applyPro();},v=>(+v).toFixed(2)));
   row('Flash',chip('Off',PRO.flash==='off',()=>{setFlash('off');renderPro();}),chip('On',PRO.flash==='on',()=>{setFlash('on');renderPro();}),chip('Torch'+(proCaps.torch?'':' ✕'),PRO.flash==='torch',()=>{setFlash('torch');renderPro();}));
   const cur=(proSet.height||0);
-  row('Quality',...[[1280,720,'720p'],[1920,1080,'1080p'],[3840,2160,'4K']].map(([w,h,n])=>chip(n,CAMOPT.h===h,async()=>{await startCam(false,{w,h});SRC.mirror=camFacing==='user';await renderPro();applyCam(camIx,true);applyPro();})),
-    ...[30,60].map(f=>chip(f+' fps',CAMOPT.fps===f,async()=>{await startCam(false,{fps:f});SRC.mirror=camFacing==='user';await renderPro();applyCam(camIx,true);applyPro();})));
+  row('Quality',...[[1280,720,'720p'],[1920,1080,'1080p'],[3840,2160,'4K']].map(([w,h,n])=>chip(n,CAMOPT.h===h,async()=>{await startCam(false,{w,h});setPM(camFacing==='user');await renderPro();applyCam(camIx,true);applyPro();})),
+    ...[30,60].map(f=>chip(f+' fps',CAMOPT.fps===f,async()=>{await startCam(false,{fps:f});setPM(camFacing==='user');await renderPro();applyCam(camIx,true);applyPro();})));
   row('Aids',chip('Level',PRO.level,async()=>{PRO.level=!PRO.level;if(PRO.level)await startLevel();$('#camlevel').hidden=!PRO.level;renderPro();}),chip('Histogram',PRO.hist,()=>{PRO.hist=!PRO.hist;$('#camhist').hidden=!PRO.hist;renderPro();}));
   const got=[];['zoom','torch','exposureCompensation','colorTemperature','focusDistance','iso','exposureTime'].forEach(k=>{if(proCaps[k])got.push(k==='exposureCompensation'?'exposure':k==='colorTemperature'?'white balance':k==='focusDistance'?'focus':k==='exposureTime'?'shutter':k);});
   box.appendChild(el('div','prnote',(proSet.width?`Stream ${proSet.width}×${proSet.height}${proSet.frameRate?' at '+Math.round(proSet.frameRate)+' fps':''}. `:'')+(got.length?'Hardware controls here: '+got.join(', ')+'. ':'No hardware controls from this browser; zoom, exposure and white balance are applied in software. ')+'LiDAR depth isn’t available to web pages on iPhone.'));
@@ -2541,46 +2582,62 @@ function buildCamUI(){
   if($('#camui'))return;const stage=$('#stage'),u=el('div','camui');u.id='camui';
   const btn=(id,txt,label,fn)=>{const b=el('button','cb',txt);b.id=id;b.setAttribute('aria-label',label);b.addEventListener('click',fn);return b;};
   const top=el('div','camtop');
-  top.append(btn('camx','✕','Close camera',closeCamera),btn('camflip','Flip','Flip camera',async()=>{await startCam(true);SRC.mirror=camFacing==='user';readCaps();applyCam(camIx,true);applyPro();}),
+  top.append(btn('camx','✕','Close camera',()=>closeCamera()),btn('camflip','Flip','Flip camera',async()=>{await startCam(true);setPM(camFacing==='user');readCaps();applyCam(camIx,true);applyPro();}),
     btn('camflashb','Flash','Flash',()=>{setFlash(PRO.flash==='off'?'on':PRO.flash==='on'?(proCaps.torch?'torch':'off'):'off');}),
     btn('camasp','3:4','Frame shape',e=>{const o=['3:4','1:1','4:3','9:16','16:9','src'],i=(o.indexOf(P.aspect)+1)%o.length;P.aspect=o[i];V.sizeKey='';paintCamUI();}),
     btn('campb','Pro','Pro controls',e=>{const on=u.classList.toggle('pro');u.classList.remove('more');e.currentTarget.setAttribute('aria-pressed',on);if(on)renderPro();}),
     btn('cammore','More','More controls',e=>{const on=u.classList.toggle('more');u.classList.remove('pro');$('#campb').setAttribute('aria-pressed',false);e.currentTarget.setAttribute('aria-pressed',on);}));
   const more=el('div','cammoregrid');
-  more.append(btn('cammir','Mirror','Mirror preview',e=>{SRC.mirror=!SRC.mirror;SRC.lastVer=-1;e.currentTarget.setAttribute('aria-pressed',SRC.mirror);}),
+  more.append(btn('cammir','Mirror','Mirror the preview only. Saved files are never mirrored.',e=>{setPM(!camPM);e.currentTarget.setAttribute('aria-pressed',camPM);}),
     btn('camgrid','Grid','Grid lines',e=>{camGrid=!camGrid;u.classList.toggle('grid',camGrid);e.currentTarget.setAttribute('aria-pressed',camGrid);}),
     btn('cammic','Mic','Let sound move the look',e=>{toggleMic();setTimeout(()=>e.currentTarget.setAttribute('aria-pressed',audio.on),600);}),
-    btn('camauto','Auto','Change camera every few seconds',e=>{camAuto=!camAuto;e.currentTarget.setAttribute('aria-pressed',camAuto);clearInterval(camAutoT);if(camAuto)camAutoT=setInterval(()=>applyCam(camIx+1,true),4000);}),
+    btn('camauto','Auto','Change camera every few seconds',e=>{camAuto=!camAuto;e.currentTarget.setAttribute('aria-pressed',camAuto);clearInterval(camAutoT);if(camAuto)camAutoT=setInterval(()=>camStep(1),4000);}),
     btn('camtxt','Text','Show date and readout text',e=>{camText=!camText;lsSet('n0ise.camtext',camText);e.currentTarget.setAttribute('aria-pressed',camText);drawCamOv();}),
     btn('camtim','Timer off','Self timer',e=>{camTimer=camTimer===0?3:camTimer===3?10:0;e.currentTarget.textContent=camTimer?'Timer '+camTimer+'s':'Timer off';}),
+    btn('cammicrec','Sound','Record with microphone sound',e=>{camMic=!camMic;e.currentTarget.setAttribute('aria-pressed',camMic);if(camMic)toast('Videos will include microphone sound');}),
+    btn('camtl','Timeline','Open the timeline',e=>{TLN.show();u.classList.remove('more');}),
+    btn('camsur','Surprise','Random camera',()=>camSurprise()),
+    btn('cammix','Mix','Randomise within this look',()=>camMix()),
     btn('camfps','FPS','Show frame rate',e=>{camFps=!camFps;e.currentTarget.setAttribute('aria-pressed',camFps);}),
     btn('camlab','Edit','Open this look in the editor',()=>{const keep=STACK.layers;closeCamera(true);STACK.layers=keep;STACK.sel=keep.length-1;refreshUI();renderInspector();}));
   const ov=document.createElement('canvas');ov.id='camov';
   const bot=el('div','cambot'),info=el('div','caminfo');
-  info.append(Object.assign(el('b','','Camera'),{id:'camname'}),Object.assign(el('span','','' ),{id:'camsub'}));
+  const fav=el('button','camfav','☆');fav.id='camfav';fav.setAttribute('aria-label','Favourite this camera');fav.addEventListener('click',camFavToggle);
+  info.append(Object.assign(el('b','','Camera'),{id:'camname'}),fav,Object.assign(el('span','','' ),{id:'camsub'}));
   const str=document.createElement('input');str.type='range';str.min=0;str.max=100;str.value=camStr;str.id='camstr';str.setAttribute('aria-label','Look strength');str.addEventListener('input',()=>setCamStr(+str.value));
   const strip=el('div','camstrip');strip.id='camstrip';strip.setAttribute('role','listbox');strip.setAttribute('aria-label','Cameras');
   CAMS.forEach((c,i)=>{const b=el('button','camt');b.setAttribute('role','option');b.innerHTML=glyph(c.glyph)+`<span>${c.name}</span>`;b.addEventListener('click',()=>{if(camIx!==i)applyCam(i);});strip.appendChild(b);});
+  const cats=el('div','camcats');cats.id='camcats';cats.setAttribute('role','tablist');
+  ['All','★','Film','Video','Digital','Glitch','Subject'].forEach(n=>{const b=el('button','',n);b.dataset.c=n;b.setAttribute('aria-pressed',n===camCat);b.addEventListener('click',()=>setCamCat(n));cats.appendChild(b);});
   let sT=0;strip.addEventListener('scroll',()=>{strip._dragging=true;clearTimeout(sT);sT=setTimeout(()=>{strip._dragging=false;const mid=strip.scrollLeft+strip.clientWidth/2;let best=0,bd=1e9;[...strip.children].forEach((t,i)=>{const d=Math.abs(t.offsetLeft+t.offsetWidth/2-mid);if(d<bd){bd=d;best=i;}});if(best!==camIx)applyCam(best);},110);},{passive:true});
   const row=el('div','camrow');
   const roll=el('button','camroll','Roll');roll.id='camroll';roll.setAttribute('aria-label','Open roll');roll.addEventListener('click',openRoll);
   const sh=el('button','shutter');sh.id='shutter';sh.setAttribute('aria-label','Shutter. Tap for a photo, hold to record');
-  const sw=el('button','cb camswap','Next');sw.setAttribute('aria-label','Next camera');sw.addEventListener('click',()=>applyCam(camIx+1));
+  const sw=el('button','cb camswap','Next');sw.setAttribute('aria-label','Next camera');sw.addEventListener('click',()=>camStep(1));
   row.append(roll,sh,sw);
-  bot.append(info,str,strip,row);
+  const modes=el('div','cammode');[['photo','Photo'],['video','Video']].forEach(([m,l])=>{const b=el('button','',l);b.dataset.m=m;b.setAttribute('aria-pressed',camMode===m);b.addEventListener('click',()=>{if(camRecorder.busy)return;camMode=m;lsSet('n0ise.cammode',m);modes.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x.dataset.m===m));sh.setAttribute('aria-label',m==='video'?'Shutter. Tap to start or stop recording':'Shutter. Tap for a photo, hold to record');});modes.appendChild(b);});
+  bot.append(info,str,cats,strip,modes,row);
+  const rb=el('div','camrecbar');rb.id='camrec';rb.hidden=true;rb.innerHTML='<i></i><span class="rt">0:00</span>';
   const cd=el('div','camcount');cd.id='camcount';cd.hidden=true;const fp=el('div','camfpsv');fp.id='camfpsv';fp.hidden=true;
   const pro=el('div','campro');pro.id='campro';const lv=el('div','camlevel');lv.id='camlevel';lv.hidden=true;const hs=document.createElement('canvas');hs.id='camhist';hs.width=128;hs.height=48;hs.hidden=true;const sf=el('div','camflash');sf.id='camflash';
-  u.append(ov,lv,hs,sf,top,more,pro,bot,cd,fp,el('i','g1'),el('i','g2'),el('i','g3'),el('i','g4'));stage.appendChild(u);
-  let hold=0,recording=false,mr=null;
-  sh.addEventListener('pointerdown',e=>{e.preventDefault();try{sh.setPointerCapture(e.pointerId);}catch(_){}recording=false;hold=setTimeout(async()=>{recording=true;sh.classList.add('rec');buzz(20);mr=await camRecStart();if(!mr){recording=false;sh.classList.remove('rec');}},380);});
-  const stopRec=()=>{if(mr){mr.stop();mr=null;}sh.classList.remove('rec');recording=false;};
-  sh.addEventListener('pointerup',async()=>{clearTimeout(hold);if(recording){stopRec();return;}if(camBusy)return;camBusy=true;
+  u.append(ov,lv,hs,sf,top,more,pro,bot,rb,cd,fp,el('i','g1'),el('i','g2'),el('i','g3'),el('i','g4'));stage.appendChild(u);
+  let hold=0,holdRec=false,downBusy=false;
+  const takePhoto=async()=>{if(camBusy)return;camBusy=true;
     for(let n=camTimer;n>0;n--){cd.hidden=false;cd.textContent=n;buzz(8);await new Promise(r=>setTimeout(r,1000));}cd.hidden=true;
-    try{await withFlash(camShoot);}finally{camBusy=false;}});
-  sh.addEventListener('pointercancel',()=>{clearTimeout(hold);if(recording)stopRec();});sh.addEventListener('contextmenu',e=>e.preventDefault());
-  /* swipe the picture sideways to change camera */
-  let sx=0,sy=0,sOn=false;stage.addEventListener('pointerdown',e=>{if(!CAMMODE||e.target.closest('button,input,.camstrip'))return;sOn=true;sx=e.clientX;sy=e.clientY;});
-  stage.addEventListener('pointerup',e=>{if(!sOn)return;sOn=false;const dx=e.clientX-sx,dy=e.clientY-sy;if(Math.abs(dx)>70&&Math.abs(dx)>Math.abs(dy)*2&&!(window.__multi&&window.__multi()))applyCam(camIx+(dx<0?1:-1));});
+    try{await withFlash(camShoot);}finally{camBusy=false;}};
+  sh.addEventListener('pointerdown',e=>{e.preventDefault();try{sh.setPointerCapture(e.pointerId);}catch(_){}
+    downBusy=camRecorder.state==='stopping'||camRecorder.state==='saving'||camBusy;holdRec=false;if(downBusy)return;
+    if(camRecorder.state==='recording')return; /* the release below stops it */
+    if(camMode==='photo')hold=setTimeout(()=>{holdRec=true;buzz(20);camRecStart();},380);});
+  sh.addEventListener('pointerup',async()=>{
+    clearTimeout(hold);if(downBusy)return;
+    if(camRecorder.state==='recording'||camRecorder.state==='arming'){if(camRecorder.state==='arming'&&!holdRec&&camMode==='video'){return;}camRecorder.stop('user');buzz(12);return;}
+    if(holdRec){holdRec=false;return;}
+    if(camMode==='video'){buzz(20);camRecStart();return;}
+    await takePhoto();});
+  sh.addEventListener('pointercancel',()=>{clearTimeout(hold);if(holdRec||camRecorder.state==='arming')camRecorder.stop('cancel');});
+  sh.addEventListener('contextmenu',e=>e.preventDefault());
+  document.addEventListener('keydown',e=>{if(CAMMODE&&e.code==='Space'&&!/INPUT|TEXTAREA|SELECT/.test((e.target||{}).tagName||'')){e.preventDefault();if(camRecorder.busy&&camRecorder.state==='recording')camRecorder.stop('user');else if(!camRecorder.busy)camMode==='video'?camRecStart():takePhoto();}});
   setInterval(()=>{if(!CAMMODE)return;if(camFps){fp.hidden=false;fp.textContent=Math.round(V.fps)+' fps';}else fp.hidden=true;drawCamOv();histTick();},camRecOn?100:250);
   addEventListener('resize',()=>{if(CAMMODE)setTimeout(paintCamUI,60);});
   camThumbUpdate();
@@ -2594,41 +2651,52 @@ function showCamGate(msg,first){
   mk('Skip to effects','',()=>g.remove());
   document.body.appendChild(g);
 }
+function camLife(){
+  if(camLifeOn)return;camLifeOn=true;
+  camEnsure=async()=>{
+    if(!CAMMODE||camDemo||camRecorder.busy)return;
+    const t=camTrack();
+    if(t&&t.readyState==='live'){if(SRC.el&&SRC.el.paused)SRC.el.play().catch(()=>{});camRetry=0;return;}
+    if(camRetry>=3){showCamGate('The camera stopped and couldn’t restart. '+(camErr||''));return;}
+    camRetry++;const ok=await startCam(false);
+    if(!CAMMODE){stopCamTracks();return;}
+    if(ok){camRetry=0;setPM(camFacing==='user');readCaps();applyCam(camIx,true);applyPro();}
+  };
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden)camEnsure();});
+  try{navigator.mediaDevices.addEventListener('devicechange',()=>setTimeout(camEnsure,400));}catch(e){}
+  addEventListener('orientationchange',()=>setTimeout(()=>{V.sizeKey='';camEnsure();},400));
+}
 async function openCamera(o){
-  if(o&&o.demo){setSource(demoCanvas(),'Camera',false);refreshUI();}
+  if(o&&o.demo){camDemo=true;setSource(demoCanvas(),'Camera',false);refreshUI();}
   else{const ok=await startCam(false);if(!ok){showCamGate(camErr||'The camera couldn’t start.');return;}}
   if(!(o&&o.demo)&&(!(SRC.el instanceof HTMLVideoElement)||SRC.name!=='Camera'))return;
-  camIx=Math.max(0,CAMS.findIndex(c=>c.id===lsGet('n0ise.cam','cctv')));camText=!!lsGet('n0ise.camtext',false);{const tb=$('#camtxt');if(tb)tb.setAttribute('aria-pressed',camText);}
+  camLife();camMode=lsGet('n0ise.cammode','photo')==='video'?'video':'photo';camFavs=lsGet('n0ise.camfavs',[]);camCat=lsGet('n0ise.camcat','All');camIx=Math.max(0,CAMS.findIndex(c=>c.id===lsGet('n0ise.cam','cctv')));camText=!!lsGet('n0ise.camtext',false);{const tb=$('#camtxt');if(tb)tb.setAttribute('aria-pressed',camText);}
   camSaved={layers:STACK.layers,sel:STACK.sel,aspect:P.aspect};
-  SRC.mirror=camFacing==='user';buildCamUI();CAMMODE=true;document.body.dataset.cam='1';
+  setPM(camFacing==='user');buildCamUI();CAMMODE=true;document.body.dataset.cam='1';
   readCaps();applyCam(camIx,true);
-  const m=$('#cammir');if(m)m.setAttribute('aria-pressed',SRC.mirror);
+  const m=$('#cammir');if(m)m.setAttribute('aria-pressed',camPM);
   if(navigator.wakeLock)navigator.wakeLock.request('screen').then(w=>{CAMWAKE=w;}).catch(()=>{});
   camThumbUpdate();setTimeout(paintCamUI,120);
 }
 let CAMWAKE=null;
-function closeCamera(keepSource){CAMMODE=false;camAuto=false;clearInterval(camAutoT);delete document.body.dataset.cam;{const u=$('#camui');if(u)u.classList.remove('more');}if(camSaved&&!keepSource){STACK.layers=camSaved.layers;STACK.sel=camSaved.sel;}if(camSaved){P.aspect=camSaved.aspect;V.sizeKey='';}if(window.SHEET&&SHEET.apply&&document.body.dataset.sheet!==undefined)try{SHEET.apply(1,true);}catch(e){}if(keepSource){if(CAMWAKE){CAMWAKE.release().catch(()=>{});CAMWAKE=null;}return;}if(CAMWAKE){CAMWAKE.release().catch(()=>{});CAMWAKE=null;}if(rec)toggleRec();setSource(demoCanvas(),'Demo');refreshUI();renderInspector();}
+function closeCamera(keepSource){camGen++;if(camRecorder.busy)camRecorder.stop('closed');CAMMODE=false;camAuto=false;clearInterval(camAutoT);delete document.body.dataset.cam;{const u=$('#camui');if(u)u.classList.remove('more');}if(camSaved&&!keepSource){STACK.layers=camSaved.layers;STACK.sel=camSaved.sel;}if(camSaved){P.aspect=camSaved.aspect;V.sizeKey='';}if(window.SHEET&&SHEET.apply&&document.body.dataset.sheet!==undefined)try{SHEET.apply(1,true);}catch(e){}if(keepSource){if(CAMWAKE){CAMWAKE.release().catch(()=>{});CAMWAKE=null;}return;}if(CAMWAKE){CAMWAKE.release().catch(()=>{});CAMWAKE=null;}if(rec)toggleRec();stopCamTracks();setPM(false);setSource(demoCanvas(),'Demo');refreshUI();renderInspector();}
+function stopCamTracks(){try{const st=SRC.el&&SRC.el.srcObject;if(st&&st.getTracks)st.getTracks().forEach(t=>t.stop());}catch(e){}}
 let rec=null,chunks=[];
 let WAKE=null;
+const fxRecorder=createRecorder({cap:180,warn:165,
+  onState:()=>{const b=$('#rec'),st=fxRecorder.state;rec=st==='idle'?null:fxRecorder;if(!b)return;b.setAttribute('aria-pressed',st==='recording');
+    b.textContent=st==='recording'?'● '+fmtTime(fxRecorder.sec):(st==='stopping'||st==='saving')?'Saving…':'Rec';b.disabled=st==='stopping'||st==='saving'||st==='arming';},
+  onTick:()=>{const b=$('#rec');if(b&&fxRecorder.state==='recording')b.textContent='● '+fmtTime(fxRecorder.sec);},
+  onWarn:m=>toast(m,4000),onError:e=>toast(String(e&&e.message||e),5000)});
 function toggleRec(sec){
   if(!GLOK)return;
-  if(rec){rec.stop();return;}
-  if(!window.MediaRecorder||!canvas.captureStream){toast('Recording isn’t supported here');return;}
-  const mime=['video/mp4','video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm'].find(m=>MediaRecorder.isTypeSupported(m));
-  if(!mime){toast('No recording format available');return;}
-  chunks=[];
-  const cs=canvas.captureStream(30);if(AUD.on&&AUD.dest)AUD.dest.stream.getAudioTracks().forEach(tk=>cs.addTrack(tk));
-  rec=new MediaRecorder(cs,{mimeType:mime,videoBitsPerSecond:7e6});
-  rec.ondataavailable=e=>{if(e.data.size)chunks.push(e.data);};
-  rec.onstop=()=>{
-    if(WAKE){WAKE.release().catch(()=>{});WAKE=null;}
-    const blob=new Blob(chunks,{type:mime.split(';')[0]});rec=null;ST.clean=false;
-    const b=$('#rec');b.setAttribute('aria-pressed','false');b.textContent='Rec';
-    deliver(blob,`${stamp()}.${mime.includes('mp4')?'mp4':'webm'}`,true);
-  };
-  if(navigator.wakeLock)navigator.wakeLock.request('screen').then(w=>{WAKE=w;}).catch(()=>{});
-  ST.clean=true;rec.start();const b=$('#rec');b.setAttribute('aria-pressed','true');b.textContent='Stop';
-  if(typeof sec==='number')setTimeout(()=>rec&&rec.stop(),sec*1000);
+  if(fxRecorder.state==='recording'){fxRecorder.stop('user');return;}
+  if(fxRecorder.busy)return;
+  fxRecorder.start({canvas,fps:30,audioStream:AUD.on&&AUD.dest?AUD.dest.stream:null,
+    begin:()=>{ST.clean=true;if(TLN.tracks.length){TLN.seek(TLN.loopOn?TLN.loop[0]:0);TLN.play(true);}if(navigator.wakeLock)navigator.wakeLock.request('screen').then(w=>{WAKE=w;}).catch(()=>{});},
+    end:()=>{ST.clean=false;if(WAKE){WAKE.release().catch(()=>{});WAKE=null;}},
+    onDone:async r=>{deliver(r.blob,`${stamp()}.${r.ext}`,true);}});
+  if(typeof sec==='number')setTimeout(()=>fxRecorder.stop('limit'),sec*1000);
 }
 let busy=false;
 function openExport(){
@@ -2945,7 +3013,7 @@ function rowRange(host,label,get,set,min,max,step,def){
 }
 const LAYER_ID=()=>layer().uid;
 function rowParam(host,p,V,onchange){
-  const set=x=>{V[p.k]=x;onchange&&onchange(p);};
+  const set=x=>{V[p.k]=x;TLN.capture(V,p.k,x);onchange&&onchange(p);};
   if(p.t==='r')return rowRange(host,p.label||p.k,()=>V[p.k],set,p.min,p.max,p.step,p.def);
   if(p.t==='range2'){
     const r=el('div','ir r2'),l=el('span','l',p.label||p.k);l.style.cursor='default';const w=el('div','dual'),a=document.createElement('input'),b=document.createElement('input'),v=el('span','v');
@@ -3462,4 +3530,5 @@ function wireSheet(){
   if(new URLSearchParams(location.search).get('cam'))setTimeout(()=>showCamGate('Allow the camera, then pick a camera body: CCTV, disposable, Super 8, instant and more.',true),300);
 })();
 /* test hook (read-only use from the console and tools/) */
-window.__n0={openCamera,applyCam,CAMS,CAMFX,fxIndex,SHEET,applyRecipe,currentRecipe,toRecipe,fromRecipe,modParams,updateSignals,SIG,runModuleGate,showSheet,STACK,mkLayer,MODULES,PERSON,DRAWN,setSource,syntheticPerson,renderStack,renderFrame,P,V,ST,SRC,TEX,maskFor,startPerson,loadPerson,renderInspector,layout};
+window.__n0={TLN,camRecorder,fxRecorder,openCamera,applyCam,CAMS,CAMFX,fxIndex,SHEET,applyRecipe,currentRecipe,toRecipe,fromRecipe,modParams,updateSignals,SIG,runModuleGate,showSheet,STACK,mkLayer,MODULES,PERSON,DRAWN,setSource,syntheticPerson,renderStack,renderFrame,P,V,ST,SRC,TEX,maskFor,startPerson,loadPerson,renderInspector,layout};
+TLN.mount(document.body);{const b=document.getElementById('tlbtn');if(b)b.addEventListener('click',()=>TLN.show());}

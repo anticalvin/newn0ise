@@ -147,6 +147,8 @@ body[data-walk] #walkui{display:block}
 .wgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:8px}
 .wtile{min-height:68px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;border:1px solid var(--line,#333);background:transparent;color:var(--ink,#eee);border-radius:3px;padding:4px 2px;font:600 10px var(--lab,monospace);text-transform:uppercase;letter-spacing:.06em}
 .wtile:active{background:var(--ink,#eee);color:var(--bg,#000)}.wtile:focus-visible{outline:2px solid var(--accent,#f60);outline-offset:2px}
+body[data-recording='1']::after{content:'';position:fixed;top:calc(10px + env(safe-area-inset-top,0px));right:12px;width:12px;height:12px;border-radius:50%;background:#ff3b2f;z-index:70;animation:recp 1s steps(2) infinite}@keyframes recp{50%{opacity:.2}}@media (prefers-reduced-motion:reduce){body[data-recording='1']::after{animation:none}}
+.fxnote{align-self:center;margin-right:8px;font:600 10.5px var(--lab,monospace);color:var(--ink,#eee);background:rgba(10,10,10,.75);padding:4px 8px;border-radius:3px;max-width:62vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.fxnote:empty{display:none}
 </style>
 </head>
 <body>
@@ -162,7 +164,7 @@ body[data-walk] #walkui{display:block}
     <div id="stage">
       <canvas id="gl" tabindex="0"></canvas>
       <div class="hud tl"><div class="seg" id="viewSeg"></div></div>
-      <div class="hud tr"><button class="chipb" id="bFx" aria-pressed="true">FX</button></div>
+      <div class="hud tr"><span id="fxnote" class="fxnote" aria-live="polite"></span><button class="chipb" id="bFx" aria-pressed="true">FX</button></div>
       <div class="hud bl" id="hudBL"><button class="chipb" id="bFrame">Frame</button><button class="chipb" id="bGrid" aria-pressed="true">Grid</button><button class="chipb" id="bWalk">Walk</button><button class="chipb" id="bSpin" aria-pressed="false">Spin</button></div>
       <div class="hud br" id="hudBR"><button class="chipb" id="bHold">Hold: original</button></div>
       <div class="empty" id="empty"><b>Bring a model, a photo or a scan.</b>glb · gltf · obj · stl · ply · splat · spz · audio — or use the Scan tab</div>
@@ -179,6 +181,6 @@ body[data-walk] #walkui{display:block}
 <input type="file" id="file" multiple hidden accept="audio/*,.mp3,.wav,.m4a,.ogg,.flac,.glb,.gltf,.bin,.obj,.mtl,.stl,.ply,.splat,.spz,.ksplat,.sog,image/*,video/*">
 <section id="scan" hidden></section>
 <div id="fxov" class="bg"><div class="fxtop"><b>Effects</b><span>Pick and tune effects. They apply to the selected object only.</span><button class="btn pri" id="fxdone">Done</button></div><iframe id="fxif" title="n0ise effects" allow="autoplay"></iframe></div>
-<script type="module" src="assets/studio.js?v=97bba6c7"></script>
+<script type="module" src="assets/studio.js?v=cecf87fc"></script>
 </body>
 </html>

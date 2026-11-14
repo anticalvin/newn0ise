@@ -12,6 +12,7 @@ import {GLTFExporter} from 'three/addons/exporters/GLTFExporter.js';
 import {createApi} from './studio-api.js';
 import {createWalk} from './walk.js';
 import {createSim} from './sim.js';
+import {createRecorder,fmtTime} from './recorder.js';
 import {createWorldEditor} from './world-editor.js';
 import {RoomEnvironment} from 'three/addons/environments/RoomEnvironment.js';
 import {createN0} from './studio-adapter.js';
@@ -672,7 +673,12 @@ void main(){
   vec3 o3=texture(uO,vUv).rgb,f3=texture(uF,vUv).rgb;
   float m=1.;
   if(uMode>.5&&uMode<1.5){float z=lin(texture(uD,vUv).r);m=1.-smoothstep(uRange,uRange+uSoft,abs(z-uFocus));}
-  else if(uMode>1.5&&uMode<2.5){vec4 q=texture(uM,vUv);m=uMA>.5?q.a:q.r;}
+  else if(uMode>1.5&&uMode<2.5){
+    vec4 q=texture(uM,vUv);m=uMA>.5?q.a:q.r;
+    // one pixel of growth and a soft edge, so no fringe of the original shows around the object
+    float n=0.;for(int i=0;i<4;i++){vec2 d=i==0?vec2(uPx.x,0.):i==1?vec2(-uPx.x,0.):i==2?vec2(0.,uPx.y):vec2(0.,-uPx.y);vec4 r=texture(uM,vUv+d);n=max(n,uMA>.5?r.a:r.r);}
+    m=max(m,n*.65);
+  }
   else if(uMode>2.5){
     float z0=lin(texture(uD,vUv).r);
     float e=max(max(abs(lin(texture(uD,vUv+vec2(uPx.x,0.)).r)-z0),abs(lin(texture(uD,vUv-vec2(uPx.x,0.)).r)-z0)),max(abs(lin(texture(uD,vUv+vec2(0.,uPx.y)).r)-z0),abs(lin(texture(uD,vUv-vec2(0.,uPx.y)).r)-z0)));
@@ -683,20 +689,30 @@ void main(){
 }`);
 }
 const selMat=new THREE.MeshBasicMaterial({color:0xffffff,side:THREE.DoubleSide});
+const blkMat=new THREE.MeshBasicMaterial({color:0x000000,side:THREE.DoubleSide});
+/* mask of the look target. Meshes: the target draws white and everything else draws black into the same depth buffer, so an object in
+   front of the target hides it and the look can never show through. Splats can't take a material: their own alpha is the mask. */
 function renderSelMask(){
   const o=objById(S.fxTarget!=null?S.fxTarget:S.sel);if(!o||!maskRT){if(maskRT){renderer.setRenderTarget(maskRT);renderer.setClearColor(0x000000,0);renderer.clear();}S.maskA=0;return false;}
   const isSp=o.kind==='splat'||(o.meta&&o.meta.mode==='splats');S.maskA=isSp?1:0;
   const vis=S.objs.map(x=>x.holder.visible);
-  S.objs.forEach(x=>{x.holder.visible=x===o&&x.vis;});
+  if(isSp)S.objs.forEach(x=>{x.holder.visible=x===o&&x.vis;});
   const gv=grid.visible,sbv=selBox?selBox.visible:false,tv=tcHelper.visible;
   grid.visible=false;if(selBox)selBox.visible=false;tcHelper.visible=false;
-  const bgOld=scene.background,envOld=scene.environment;scene.environment=null;
-  if(!isSp)scene.overrideMaterial=selMat; // splats can't take an override material: their own alpha is the mask
+  const bgOld=scene.background,envOld=scene.environment,fogOld=scene.fog;scene.environment=null;scene.fog=null;
+  const swaps=[];
+  if(!isSp)scene.traverseVisible(n=>{
+    if(!n.isMesh||n.isSplatMesh)return;let p=n,mine=false;while(p){if(p===o.holder){mine=true;break;}p=p.parent;}
+    swaps.push([n,n.material]);n.material=mine?selMat:blkMat;
+  });
   renderer.setRenderTarget(maskRT);renderer.setClearColor(0x000000,isSp?0:1);renderer.clear();renderer.render(scene,camera);
-  scene.overrideMaterial=null;scene.environment=envOld;scene.background=bgOld;
+  swaps.forEach(([n,m])=>{n.material=m;});
+  scene.environment=envOld;scene.background=bgOld;scene.fog=fogOld;
   S.objs.forEach((x,i)=>{x.holder.visible=vis[i];});grid.visible=gv;if(selBox)selBox.visible=sbv;tcHelper.visible=tv;
   return true;
 }
+function updateFxNote(){const n=$('#fxnote');if(!n)return;const o=objById(S.fxTarget!=null?S.fxTarget:S.sel);
+  const t=!S.fx||S.hold?'':S.mask.mode===2?(o?'Look on: '+o.name:'Look on: nothing selected. Tap an object.'):'';if(n.textContent!==t)n.textContent=t;}
 const rtTex=t=>renderer.properties.get(t).__webglTexture;
 
 /* ---------- main loop ---------- */
@@ -745,7 +761,7 @@ function frame(ts){
       gl.viewport(0,0,canvas.width,canvas.height);N0.blit(cTex);
     }
     renderer.resetState();
-    frames++;errN=0;
+    frames++;errN=0;if(frames%15===0)updateFxNote();
   }catch(e){
     console.error(e);errN++;
     if(errN===3)noGL('Rendering stopped: '+String(e.message||e).slice(0,200)+' — reload to try again.');
@@ -1964,18 +1980,25 @@ async function exportImage(scale,withFx){
   S.exporting=false;S.big=false;S.q=q0;S.hold=fx0;needResize=true;
   if(blob)await deliver(blob,`n0ise-studio-${Date.now().toString(36)}.png`);else toast('Export failed.');
 }
-function recordCanvas(seconds,spin){
+const stRecBtns={live:null,turn:null,mode:''};
+const stRec=createRecorder({cap:180,warn:165,
+  onState:()=>stRecUI(),onTick:()=>stRecUI(),onWarn:m=>toast(m,4000),onError:e=>toast(String(e&&e.message||e),5000)});
+function stRecUI(){
+  const st=stRec.state,{live,turn}=stRecBtns,on=st==='recording'||st==='stopping'||st==='arming',t=fmtTime(stRec.sec||0);
+  document.body.dataset.recording=on?'1':'';
+  if(live){live.setAttribute('aria-pressed',on&&stRecBtns.mode==='live');live.textContent=on&&stRecBtns.mode==='live'?(st==='recording'?'● '+t+'  Stop':'Saving…'):'Record live';live.disabled=on&&stRecBtns.mode==='turn'||st==='saving';}
+  if(turn){turn.textContent=on&&stRecBtns.mode==='turn'?(st==='recording'?'● '+t+'  Stop':'Saving…'):'Record turntable';turn.disabled=on&&stRecBtns.mode==='live'||st==='saving';}
+}
+function recordCanvas(seconds,spin,mode){
   return new Promise((res,rej)=>{
-    if(!window.MediaRecorder||!canvas.captureStream)return rej(new Error('Recording isn’t supported here.'));
-    const mime=['video/mp4;codecs=avc1','video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm','video/mp4'].find(m=>MediaRecorder.isTypeSupported(m));
-    if(!mime)return rej(new Error('No recording format available.'));
-    const chunks=[],rec=new MediaRecorder(canvas.captureStream(30),{mimeType:mime,videoBitsPerSecond:8e6});
-    rec.ondataavailable=e=>{if(e.data.size)chunks.push(e.data);};
-    rec.onstop=()=>{S.exporting=false;S.spin=spin0;controls.autoRotateSpeed=2.4;$('#bSpin').setAttribute('aria-pressed',S.spin);res({blob:new Blob(chunks,{type:mime.split(';')[0]}),ext:mime.includes('mp4')?'mp4':'webm'});};
-    const spin0=S.spin;S.exporting=true;
-    if(spin){S.spin=true;controls.autoRotateSpeed=60/seconds;}
-    rec.start();setTimeout(()=>rec.state!=='inactive'&&rec.stop(),seconds*1000);
-    S.stopRec=()=>rec.state!=='inactive'&&rec.stop();
+    if(stRec.busy)return rej(new Error('Already recording.'));
+    stRecBtns.mode=mode||(spin?'turn':'live');const spin0=S.spin;
+    stRec.start({canvas,fps:30,
+      begin:()=>{S.exporting=true;if(spin){S.spin=true;controls.autoRotateSpeed=60/seconds;}},
+      end:()=>{S.exporting=false;S.spin=spin0;controls.autoRotateSpeed=2.4;const b=$('#bSpin');if(b)b.setAttribute('aria-pressed',S.spin);},
+      onDone:async r=>res({blob:r.blob,ext:r.ext,poster:r.poster,duration:r.duration})
+    }).then(ok=>{if(!ok&&stRec.state==='idle')rej(new Error('Recording didn’t start.'));});
+    if(seconds&&seconds<170)setTimeout(()=>stRec.stop('limit'),seconds*1000);
   });
 }
 function exportGLB(){
@@ -2010,8 +2033,9 @@ function buildExportPane(){
   const v=sec(p,'Video');
   let secs=8;sliderRow(v,'Turntable (s)',()=>secs,x=>{secs=x;},3,20,1);
   const b=el('div','chips');
-  const t=btn('Record turntable','pri',async()=>{t.disabled=true;toast('Recording…',secs*1000);try{const r=await recordCanvas(secs,true);await deliver(r.blob,`n0ise-turntable.${r.ext}`);}catch(e){toast(e.message||'Recording failed');}t.disabled=false;});
-  const l=btn('Record live','',async()=>{if(S.stopRec&&l.dataset.on){S.stopRec();return;}l.dataset.on='1';l.textContent='Stop';try{const r=await recordCanvas(120,false);await deliver(r.blob,`n0ise-live.${r.ext}`);}catch(e){toast(e.message||'Recording failed');}delete l.dataset.on;l.textContent='Record live';});
+  const t=btn('Record turntable','pri',async()=>{if(stRec.state==='recording'&&stRecBtns.mode==='turn'){stRec.stop('user');return;}if(stRec.busy)return;try{const r=await recordCanvas(secs,true,'turn');await deliver(r.blob,`n0ise-turntable.${r.ext}`);}catch(e){toast(e.message||'Recording failed');}});
+  const l=btn('Record live','',async()=>{if(stRec.state==='recording'&&stRecBtns.mode==='live'){stRec.stop('user');return;}if(stRec.busy)return;try{const r=await recordCanvas(0,false,'live');await deliver(r.blob,`n0ise-live.${r.ext}`);}catch(e){toast(e.message||'Recording failed');}});
+  stRecBtns.turn=t;stRecBtns.live=l;
   b.append(t,l);v.appendChild(b);
   const m=sec(p,'Model');
   const mb=el('div','chips');

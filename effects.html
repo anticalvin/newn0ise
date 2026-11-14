@@ -382,6 +382,43 @@ body[data-cam] #stage{box-sizing:border-box;padding:calc(56px + env(safe-area-in
 .cgbtns{display:flex;flex-direction:column;gap:8px}
 .cgbtns button{min-height:52px;border:1px solid #3a3835;background:#0a0a0a;color:#f2efe8;font:600 13px var(--lab);text-transform:uppercase;letter-spacing:.08em;border-radius:3px}
 .cgbtns button.pri{background:var(--accent);border-color:var(--accent);color:#0a0a0a}
+
+.cammode{display:flex;justify-content:center;gap:4px;padding:0 16px}
+.cammode button{min-height:36px;min-width:84px;border:1px solid #3a3835;background:#0a0a0a;color:#8d8a82;font:700 11px var(--lab);text-transform:uppercase;letter-spacing:.1em;border-radius:3px}
+.cammode button[aria-pressed=true]{background:#f2efe8;color:#0a0a0a;border-color:#f2efe8}
+.camrecbar{position:absolute;left:50%;top:calc(62px + env(safe-area-inset-top,0px));transform:translateX(-50%);display:flex;align-items:center;gap:8px;padding:6px 12px;background:rgba(10,10,10,.85);border:1px solid #3a3835;border-radius:3px;font:700 14px var(--lab);color:#f2efe8;z-index:3;pointer-events:none}
+.camrecbar i{width:10px;height:10px;border-radius:50%;background:#ff3b2f;animation:recp 1s steps(2) infinite}
+@keyframes recp{50%{opacity:.2}}
+@media (prefers-reduced-motion:reduce){.camrecbar i{animation:none}}
+.shutter{--p:0%}
+.shutter.rec{border-color:transparent;background:conic-gradient(#ff3b2f var(--p),#fff 0)}
+.shutter.rec::after{inset:20px;border-radius:3px;background:#ff3b2f}
+.shutter:disabled{opacity:.5}
+.rectoast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(190px + env(safe-area-inset-bottom,0px));z-index:120;display:flex;align-items:center;gap:10px;padding:6px 14px 6px 6px;background:#0a0a0a;border:1px solid #3a3835;color:#f2efe8;font:600 12px var(--lab);border-radius:3px;min-height:48px}
+.rectoast img{width:56px;height:40px;object-fit:cover;background:#000}
+.playbadge{position:absolute;right:4px;bottom:2px;font-style:normal;font-size:12px;color:#fff;text-shadow:0 0 3px #000}
+.camroll{position:relative}
+.camt,.camrow{touch-action:manipulation}
+.camcats{display:flex;gap:4px;padding:0 10px;overflow-x:auto;scrollbar-width:none}.camcats::-webkit-scrollbar{display:none}
+.camcats button{flex:1 0 auto;min-height:36px;padding:0 7px;border:0;border-bottom:2px solid transparent;background:none;color:#8d8a82;font:700 10px var(--lab);text-transform:uppercase;letter-spacing:.05em}
+.camcats button[aria-pressed=true]{color:#f2efe8;border-bottom-color:var(--accent)}
+.camfav{position:absolute;right:14px;top:0;min-width:44px;min-height:44px;border:0;background:none;color:#f2efe8;font-size:22px}
+.caminfo{position:relative}.camfav{pointer-events:auto}
+.camt[hidden]{display:none}
+.tl{position:fixed;left:0;right:0;bottom:0;z-index:150;background:#0a0a0a;border-top:1px solid #3a3835;color:#f2efe8;font:600 11px var(--lab);padding:6px 8px calc(8px + env(safe-area-inset-bottom,0px));max-height:46dvh;overflow-y:auto}
+.tl[hidden]{display:none}
+.tlbar,.tladd{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.tl button,.tl select,.tl input{min-height:40px;border:1px solid #3a3835;background:#0a0a0a;color:#f2efe8;font:600 11px var(--lab);padding:0 10px;border-radius:3px}
+.tl button[aria-pressed=true]{background:#f2efe8;color:#0a0a0a}
+.tltime{flex:1;text-align:right;color:#b9b6ad}
+.tlruler{width:100%;height:30px;display:block;margin:6px 0 2px;touch-action:none;background:#12110f}
+.tlrow{display:grid;grid-template-columns:86px 1fr 40px;gap:6px;align-items:center;margin:2px 0}
+.tll{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#b9b6ad}
+.lane{width:100%;height:40px;background:#12110f;touch-action:none}
+.tlx{min-width:40px;padding:0}
+.tlempty{padding:10px 2px;color:#8d8a82;font-weight:500;line-height:1.4}
+.tladd{margin-top:6px}.tllen{display:flex;align-items:center;gap:6px;color:#b9b6ad}.tldur{width:60px}
+body[data-cam] .tl{bottom:var(--campad,0px);max-height:32dvh;border-bottom:1px solid #3a3835}
 </style>
 </head>
 <body>
@@ -404,7 +441,7 @@ body[data-cam] #stage{box-sizing:border-box;padding:calc(56px + env(safe-area-in
       <div class="srcmenu" id="srcmenu" hidden><button data-a="open">Import</button><button data-a="cam">Camera</button><button data-a="audio">Audio file</button><button data-a="demo">Demo</button><button data-a="test">Test card</button><button data-a="rec">Record</button></div>
       <canvas id="gl"></canvas>
       <div class="info" id="info"></div>
-      <div class="float tr"><button class="pill" id="reset">Reset</button><button class="pill" id="textoff" hidden>Remove text</button><button class="pill" id="power" aria-pressed="true">Power</button></div>
+      <div class="float tr"><button class="pill" id="reset">Reset</button><button class="pill" id="textoff" hidden>Remove text</button><button class="pill" id="tlbtn">Timeline</button><button class="pill" id="power" aria-pressed="true">Power</button></div>
       <div class="float bl"><button class="pill" id="shuffle">Shuffle</button><button class="pill" id="paint" aria-pressed="false">Beam paint</button></div>
       <div class="float br"><button class="pill" id="hold">Hold for original</button></div>
       <div class="err" id="err" hidden></div>
@@ -419,6 +456,6 @@ body[data-cam] #stage{box-sizing:border-box;padding:calc(56px + env(safe-area-in
   </main>
 </div>
 <input type="file" id="file" accept="image/*,video/*,audio/*,.mp3,.wav,.m4a,.ogg,.flac,.aac" hidden>
-<script type="module" src="assets/index.js?v=c9d251b2"></script>
+<script type="module" src="assets/index.js?v=eac02c0b"></script>
 </body>
 </html>

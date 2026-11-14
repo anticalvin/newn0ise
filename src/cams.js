@@ -2,22 +2,59 @@
    a frame shape and an overlay (date stamp, rec readout, film gate, instant border). The look runs on the shared engine;
    the overlay is plain 2D drawing so the live view and the saved photo or video are made by the same code. */
 export const CAMS=[
-  {id:'cctv',name:'CCTV',sub:'Wide lens, tape-grade video, pumping exposure',sim:'cctv',aspect:'4:3',ov:{stamp:'cctv'},glyph:'dome'},
-  {id:'dash',name:'Dashcam',sub:'Wide windscreen view, hard compression',sim:'dash',aspect:'16:9',ov:{stamp:'date'},glyph:'dash'},
-  {id:'door',name:'Doorbell',sub:'Fisheye, cool and flat at the front step',sim:'door',aspect:'3:4',ov:{},glyph:'dome'},
-  {id:'ccd',name:'CCD 03',sub:'Compact digital: flash, sharpening halos, fringing',sim:'ccd',aspect:'3:4',ov:{stamp:'date'},glyph:'compact'},
-  {id:'web',name:'Webcam 00',sub:'Low-res cam from the early web',sim:'web',aspect:'4:3',ov:{},glyph:'phone'},
-  {id:'disp',name:'Disposable',sub:'Plastic lens, hard flash, heavy corners',sim:'disp',aspect:'3:4',ov:{stamp:'date'},glyph:'toy'},
-  {id:'holga',name:'Toy film',sub:'Soft plastic lens, light leaks, deep vignette',sim:'holga',aspect:'1:1',ov:{},glyph:'toy'},
-  {id:'inst',name:'Instant',sub:'Faded print with a white border',sim:'inst',aspect:'1:1',ov:{frame:'instant'},glyph:'instant'},
-  {id:'handy',name:'Handy',sub:'Tape camcorder: chroma bleed, tracking, comb',sim:'handy',aspect:'4:3',ov:{rec:true},glyph:'camcorder'},
-  {id:'s8',name:'Super 8',sub:'Small-gauge film: weave, halation, scratches',sim:'s8',aspect:'4:3',ov:{frame:'gate'},glyph:'film'},
-  {id:'noir',name:'Noir 35',sub:'Black and white stock, coarse grain',sim:'noir',aspect:'3:4',ov:{},glyph:'slr'},
-  {id:'night',name:'Night',sub:'Light-amplifier tube, green and noisy',sim:'night',aspect:'3:4',ov:{nv:true},glyph:'slr'},
-  {id:'heat',name:'Heat',sub:'Thermal sensor, low resolution',sim:'heat',aspect:'3:4',ov:{cross:true},glyph:'phone'},
-  {id:'sig',name:'Signal',sub:'Bad analog feed: tearing, bleed, noise',sim:'sig',aspect:'4:3',ov:{rec:'play'},glyph:'camcorder'},
-  {id:'prism',name:'Prism',sub:'Split light and mirrored facets',sim:'prism',fx:['prism','kaleido'],mix:[100,35],aspect:'1:1',ov:{},glyph:'toy'},
-  {id:'clean',name:'Studio',sub:'Clean, a little sharpening and bloom',sim:'clean',aspect:'3:4',ov:{},glyph:'compact'}
+  {id:'cctv',cat:'Video',name:'CCTV',sub:'Wide lens, tape-grade video, pumping exposure',sim:'cctv',aspect:'4:3',ov:{stamp:'cctv'},glyph:'dome'},
+  {id:'dash',cat:'Video',name:'Dashcam',sub:'Wide windscreen view, hard compression',sim:'dash',aspect:'16:9',ov:{stamp:'date'},glyph:'dash'},
+  {id:'door',cat:'Video',name:'Doorbell',sub:'Fisheye, cool and flat at the front step',sim:'door',aspect:'3:4',ov:{},glyph:'dome'},
+  {id:'ccd',cat:'Digital',name:'CCD 03',sub:'Compact digital: flash, sharpening halos, fringing',sim:'ccd',aspect:'3:4',ov:{stamp:'date'},glyph:'compact'},
+  {id:'web',cat:'Video',name:'Webcam 00',sub:'Low-res cam from the early web',sim:'web',aspect:'4:3',ov:{},glyph:'phone'},
+  {id:'disp',cat:'Film',name:'Disposable',sub:'Plastic lens, hard flash, heavy corners',sim:'disp',aspect:'3:4',ov:{stamp:'date'},glyph:'toy'},
+  {id:'holga',cat:'Film',name:'Toy film',sub:'Soft plastic lens, light leaks, deep vignette',sim:'holga',aspect:'1:1',ov:{},glyph:'toy'},
+  {id:'inst',cat:'Film',name:'Instant',sub:'Faded print with a white border',sim:'inst',aspect:'1:1',ov:{frame:'instant'},glyph:'instant'},
+  {id:'handy',cat:'Video',name:'Handy',sub:'Tape camcorder: chroma bleed, tracking, comb',sim:'handy',aspect:'4:3',ov:{rec:true},glyph:'camcorder'},
+  {id:'s8',cat:'Film',name:'Super 8',sub:'Small-gauge film: weave, halation, scratches',sim:'s8',aspect:'4:3',ov:{frame:'gate'},glyph:'film'},
+  {id:'noir',cat:'Film',name:'Noir 35',sub:'Black and white stock, coarse grain',sim:'noir',aspect:'3:4',ov:{},glyph:'slr'},
+  {id:'night',cat:'Digital',name:'Night',sub:'Light-amplifier tube, green and noisy',sim:'night',aspect:'3:4',ov:{nv:true},glyph:'slr'},
+  {id:'heat',cat:'Digital',name:'Heat',sub:'Thermal sensor, low resolution',sim:'heat',aspect:'3:4',ov:{cross:true},glyph:'phone'},
+  {id:'sig',cat:'Glitch',name:'Signal',sub:'Bad analog feed: tearing, bleed, noise',sim:'sig',aspect:'4:3',ov:{rec:'play'},glyph:'camcorder'},
+  {id:'prism',cat:'Glitch',name:'Prism',sub:'Split light and mirrored facets',sim:'prism',fx:['prism','kaleido'],mix:[100,35],aspect:'1:1',ov:{},glyph:'toy'},
+  {id:'clean',cat:'Digital',name:'Studio',sub:'Clean, a little sharpening and bloom',sim:'clean',aspect:'3:4',ov:{},glyph:'compact'},
+  {id:'neg35',cat:'Film',name:'35mm negative',sub:'Colour negative stock, soft and warm',sim:'neg35',aspect:'3:4',ov:{},glyph:'slr'},
+  {id:'slide',cat:'Film',name:'Slide film',sub:'Saturated reversal film, deep contrast',sim:'slide',aspect:'3:4',ov:{},glyph:'slr'},
+  {id:'xpro',cat:'Film',name:'Cross process',sub:'Slide film in the wrong chemistry',sim:'xpro',aspect:'3:4',ov:{},glyph:'slr'},
+  {id:'bleach',cat:'Film',name:'Bleach bypass',sub:'Silver left in, harsh and desaturated',sim:'bleach',aspect:'3:4',ov:{},glyph:'slr'},
+  {id:'mf120',cat:'Film',name:'120 medium',sub:'Medium format, fine grain, calm tones',sim:'mf120',aspect:'1:1',ov:{},glyph:'slr'},
+  {id:'expired',cat:'Film',name:'Expired instant',sub:'Old instant film: faded, leaking, stained',sim:'expired',aspect:'1:1',ov:{frame:'instant'},glyph:'instant'},
+  {id:'p110',cat:'Film',name:'110 pocket',sub:'Tiny negative, heavy grain and corners',sim:'p110',aspect:'4:3',ov:{stamp:'date'},glyph:'toy'},
+  {id:'pinhole',cat:'Film',name:'Pinhole',sub:'No lens: soft, dark corners, long exposure',sim:'pinhole',aspect:'1:1',ov:{},glyph:'lens'},
+  {id:'vhslp',cat:'Video',name:'VHS LP',sub:'Slow-speed tape: smear, tracking, noise',sim:'vhslp',aspect:'4:3',ov:{rec:true},glyph:'camcorder'},
+  {id:'hi8',cat:'Video',name:'Hi8',sub:'Handycam tape, cleaner colour than VHS',sim:'hi8',aspect:'4:3',ov:{rec:true},glyph:'camcorder'},
+  {id:'beta',cat:'Video',name:'Betamax',sub:'Sharper tape, warm and a little tired',sim:'beta',aspect:'4:3',ov:{rec:true},glyph:'camcorder'},
+  {id:'eng',cat:'Video',name:'News camera',sub:'Broadcast field camera, crisp and bright',sim:'eng',aspect:'16:9',ov:{rec:true},glyph:'camcorder'},
+  {id:'satfeed',cat:'Video',name:'Satellite feed',sub:'Blocky live link with dropouts',sim:'satfeed',aspect:'16:9',ov:{stamp:'cctv'},glyph:'screen'},
+  {id:'flip03',cat:'Digital',name:'Flip phone',sub:'Tiny sensor from a 2003 flip phone',sim:'flip03',aspect:'3:4',ov:{},glyph:'phone'},
+  {id:'campho',cat:'Digital',name:'Camera phone',sub:'Early phone camera, crunchy sharpening',sim:'campho',aspect:'4:3',ov:{},glyph:'phone'},
+  {id:'eyecam',cat:'Video',name:'Eye cam',sub:'Console webcam: noisy, sharp, auto-exposing',sim:'eyecam',aspect:'4:3',ov:{},glyph:'phone'},
+  {id:'body',cat:'Video',name:'Bodycam',sub:'Wide lens, flat contrast, compressed',sim:'body',aspect:'16:9',ov:{stamp:'cctv'},glyph:'dome'},
+  {id:'baby',cat:'Video',name:'Baby monitor',sub:'Night mode, green-grey, bursts of noise',sim:'baby',aspect:'4:3',ov:{},glyph:'dome'},
+  {id:'gbc',cat:'Digital',name:'Pocket 2-bit',sub:'Four shades of green on a tiny screen',sim:'gbc',aspect:'1:1',ov:{},glyph:'screen'},
+  {id:'amber',cat:'Digital',name:'Amber terminal',sub:'Phosphor screen: scanlines, glow, curve',sim:'amber',aspect:'4:3',ov:{},glyph:'screen'},
+  {id:'lcdg',cat:'Digital',name:'LCD panel',sub:'Small LCD: banded, bright, hard colours',sim:'lcdg',aspect:'4:3',ov:{},glyph:'screen'},
+  {id:'eink',cat:'Digital',name:'E-ink',sub:'Paper-grey, four levels, soft ghosting',sim:'eink',aspect:'3:4',ov:{},glyph:'screen'},
+  {id:'ledm',cat:'Digital',name:'LED matrix',sub:'A few dozen glowing points',sim:'ledm',aspect:'1:1',ov:{},glyph:'screen'},
+  {id:'micro',cat:'Digital',name:'Microscope',sub:'Magnified, tube vignette, fringing',sim:'micro',aspect:'1:1',ov:{},glyph:'lens'},
+  {id:'endo',cat:'Digital',name:'Endoscope',sub:'Wide ring light, warm tones',sim:'endo',aspect:'1:1',ov:{},glyph:'lens'},
+  {id:'fpv',cat:'Digital',name:'Drone FPV',sub:'Wide analog link with dropouts',sim:'fpv',aspect:'16:9',ov:{},glyph:'dash'},
+  {id:'ascii',cat:'Glitch',name:'Text cam',sub:'Picture drawn from characters',sim:'clean',aspect:'4:3',ov:{},glyph:'screen',fx:['ascii'],mix:[100]},
+  {id:'moshc',cat:'Glitch',name:'Datamosh',sub:'Smeared motion, frozen blocks',sim:'mosh',aspect:'3:4',ov:{},glyph:'wave',fx:['mosh'],mix:[100]},
+  {id:'psortc',cat:'Glitch',name:'Pixel sort',sub:'Streaks of sorted brightness',sim:'clean',aspect:'3:4',ov:{},glyph:'wave',mods:[{module:'psort'}]},
+  {id:'slitc',cat:'Glitch',name:'Slit scan',sub:'Time smeared across the frame',sim:'clean',aspect:'3:4',ov:{},glyph:'wave',fx:['slit'],mix:[100]},
+  {id:'echoc',cat:'Glitch',name:'Echo trails',sub:'Ghosts of the last second',sim:'clean',aspect:'3:4',ov:{},glyph:'wave',mods:[{module:'echo'}]},
+  {id:'kaleidoc',cat:'Glitch',name:'Kaleidoscope',sub:'Mirrored wedges around the centre',sim:'prism',aspect:'1:1',ov:{},glyph:'lens',fx:['kaleido'],mix:[100]},
+  {id:'mirrorc',cat:'Glitch',name:'Mirror',sub:'Split the frame and fold it',sim:'clean',aspect:'3:4',ov:{},glyph:'lens',fx:['mirror'],mix:[100]},
+  {id:'fracture',cat:'Glitch',name:'Time fracture',sub:'Slit-scan over a ghosted copy',sim:'sig',aspect:'3:4',ov:{},glyph:'wave',fx:['slit','ghost'],mix:[100,50]},
+  {id:'sil',cat:'Subject',name:'Silhouette',sub:'Solid shape of the person in front',sim:'clean',aspect:'3:4',ov:{},glyph:'person',mods:[{module:'solid'}]},
+  {id:'neonc',cat:'Subject',name:'Neon outline',sub:'Glowing contour of the person',sim:'clean',aspect:'3:4',ov:{},glyph:'person',mods:[{module:'neonedge'}]},
+  {id:'sigc',cat:'Subject',name:'Signal body',sub:'Person redrawn as moving signal lines',sim:'clean',aspect:'3:4',ov:{},glyph:'person',mods:[{module:'sigbody'}]}
 ];
 
 /* flat camera glyphs, 56x40, currentColor only */
@@ -29,6 +66,10 @@ export function glyph(kind){
     case 'film':return s('<rect x="5" y="9" width="40" height="24" rx="2"/><circle cx="19" cy="21" r="7"/><path d="M45 15l7-3v18l-7-3zM12 5h14"/>');
     case 'slr':return s('<path d="M5 12h12l3-5h16l3 5h12v24H5z"/><circle cx="28" cy="23" r="9"/><circle cx="28" cy="23" r="3"/>');
     case 'phone':return s('<rect x="17" y="2" width="22" height="36" rx="3"/><circle cx="28" cy="12" r="4"/><path d="M24 31h8"/>');
+    case 'screen':return s('<rect x="6" y="6" width="44" height="28" rx="2"/><path d="M20 38h16M28 34v4"/><path d="M12 14h18M12 20h26M12 26h12"/>');
+    case 'wave':return s('<path d="M4 20c5-12 8-12 12 0s8 12 12 0 8-12 12 0 6 8 8 4"/><path d="M4 30h48M4 10h48" stroke-dasharray="3 4"/>');
+    case 'person':return s('<circle cx="28" cy="11" r="6"/><path d="M14 36c0-9 6-14 14-14s14 5 14 14z"/>');
+    case 'lens':return s('<circle cx="28" cy="20" r="15"/><circle cx="28" cy="20" r="8"/><circle cx="28" cy="20" r="2.5"/>');
     case 'dome':return s('<path d="M6 8h44v6H6z"/><path d="M10 14c0 14 8 22 18 22s18-8 18-22"/><circle cx="28" cy="24" r="5"/>');
     case 'dash':return s('<rect x="6" y="12" width="44" height="20" rx="3"/><circle cx="20" cy="22" r="6"/><path d="M32 18h12M32 24h8M28 32v6M22 38h12"/>');
     case 'toy':return s('<rect x="6" y="8" width="44" height="28" rx="3"/><circle cx="28" cy="23" r="9"/><path d="M12 13h6M40 13h4"/><circle cx="28" cy="23" r="3"/>');
