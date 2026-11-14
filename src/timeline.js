@@ -29,22 +29,23 @@ export function createTimeline(c){
     if(TL.t>b){if(TL.loopOn&&b>a)TL.t=a+(TL.t-b)%(b-a);else{TL.t=b;TL.playing=false;paint();}}
     TL.apply();draw();
   };
-  TL.seek=t=>{TL.t=Math.max(0,Math.min(TL.dur,t));TL.apply();draw();};
-  TL.play=on=>{TL.playing=on===undefined?!TL.playing:on;if(TL.playing&&TL.t>=TL.dur)TL.t=TL.loop[0];lastCam=-1;paint();};
+  TL.handle=null;TL.el=()=>host;
+  TL.seek=t=>{if(TL.handle&&TL.handle.active()){TL.handle.seek(t);TL.t=TL.handle.t;draw();return;}TL.t=Math.max(0,Math.min(TL.dur,t));TL.apply();draw();};
+  TL.play=on=>{if(TL.handle&&TL.handle.active()){TL.handle.play(on);paint();return;}TL.playing=on===undefined?!TL.playing:on;if(TL.playing&&TL.t>=TL.dur)TL.t=TL.loop[0];lastCam=-1;paint();};
   TL.track=(lay,k,make)=>{let tr=TL.tracks.find(x=>x.lay===lay&&x.k===k);if(!tr&&make){tr={lay,k,keys:[]};TL.tracks.push(tr);}return tr;};
   TL.addKey=(lay,k,v,t=TL.t,e='ease')=>{
     const tr=TL.track(lay,k,true),ks=tr.keys,near=ks.find(x=>Math.abs(x.t-t)<.06);
     if(near){near.v=v;near.e=near.e||e;}else{ks.push({t:+t.toFixed(3),v,e});ks.sort((a,b)=>a.t-b.t);}
     build();draw();return tr;
   };
-  TL.capture=(V,k,v)=>{if(!TL.rec||!TL.playing)return;const lay=layers().findIndex(l=>l.params===V);if(lay>=0)TL.addKey(lay,k,v,TL.t,'linear');};
+  TL.capture=(V,k,v)=>{const pl=TL.handle&&TL.handle.active()?TL.handle.playing:TL.playing;if(!TL.rec||!pl)return;const lay=layers().findIndex(l=>l.params===V);if(lay>=0)TL.addKey(lay,k,v,TL.t,'linear');};
   TL.serialize=()=>TL.tracks.length?{dur:TL.dur,loop:TL.loop.slice(),loopOn:TL.loopOn,tracks:JSON.parse(JSON.stringify(TL.tracks))}:null;
   TL.load=d=>{TL.tracks=d&&d.tracks?JSON.parse(JSON.stringify(d.tracks)):[];if(d){TL.dur=d.dur||8;TL.loop=d.loop||[0,TL.dur];TL.loopOn=d.loopOn!==false;}TL.view=[0,TL.dur];TL.t=0;build();draw();};
   /* ---- drawer ---- */
   const css=getComputedStyle(document.documentElement);
   const ink=()=>'#f2efe8',acc=()=>(css.getPropertyValue('--accent')||'#ff5a1f').trim()||'#ff5a1f';
   const x2t=(x,w)=>TL.view[0]+x/w*(TL.view[1]-TL.view[0]),t2x=(t,w)=>(t-TL.view[0])/(TL.view[1]-TL.view[0])*w;
-  function paint(){if(!host)return;const b=host.querySelector('.tlplay');if(b)b.textContent=TL.playing?'Pause':'Play';const r=host.querySelector('.tlrec');if(r)r.setAttribute('aria-pressed',TL.rec);}
+  function paint(){if(!host)return;const b=host.querySelector('.tlplay');const pl=TL.handle&&TL.handle.active()?TL.handle.playing:TL.playing;if(b)b.textContent=pl?'Pause':'Play';const r=host.querySelector('.tlrec');if(r)r.setAttribute('aria-pressed',TL.rec);}
   function drawLane(cv,tr){
     const w=cv.clientWidth|0,h=cv.clientHeight|0;if(!w)return;if(cv.width!==w)cv.width=w;if(cv.height!==h)cv.height=h;const g=cv.getContext('2d');g.clearRect(0,0,w,h);
     g.fillStyle='rgba(242,239,232,.08)';if(TL.loopOn)g.fillRect(t2x(TL.loop[0],w),0,t2x(TL.loop[1],w)-t2x(TL.loop[0],w),h);
@@ -92,9 +93,9 @@ export function createTimeline(c){
     <canvas class="tlruler"></canvas><div class="tllist"></div>
     <div class="tladd"><select class="tlsel" aria-label="Parameter"></select><select class="tlease" aria-label="Easing"><option>ease</option><option>linear</option><option>hold</option><option>bounce</option></select><button class="tlkey">Key</button><label class="tllen">Length <input type="number" class="tldur" min="1" max="120" step="1" value="8"></label></div>`;
     parent.appendChild(host);ruler=host.querySelector('.tlruler');list=host.querySelector('.tllist');timeEl=host.querySelector('.tltime');
-    host.querySelector('.tlplay').addEventListener('click',()=>TL.play());host.querySelector('.tlhome').addEventListener('click',()=>{TL.t=TL.loopOn?TL.loop[0]:0;TL.apply();draw();});
+    host.querySelector('.tlplay').addEventListener('click',()=>TL.play());host.querySelector('.tlhome').addEventListener('click',()=>TL.seek(TL.loopOn?TL.loop[0]:0));
     host.querySelector('.tlloop').addEventListener('click',e=>{TL.loopOn=!TL.loopOn;e.currentTarget.setAttribute('aria-pressed',TL.loopOn);draw();});
-    host.querySelector('.tlrec').addEventListener('click',e=>{TL.rec=!TL.rec;if(TL.rec&&!TL.playing)TL.play(true);paint();});
+    host.querySelector('.tlrec').addEventListener('click',e=>{TL.rec=!TL.rec;const pl=TL.handle&&TL.handle.active()?TL.handle.playing:TL.playing;if(TL.rec&&!pl)TL.play(true);paint();});
     host.querySelector('.tlclose').addEventListener('click',()=>TL.show(false));
     host.querySelector('.tldur').addEventListener('change',e=>{TL.dur=Math.max(1,Math.min(120,+e.target.value||8));TL.loop=[Math.min(TL.loop[0],TL.dur),TL.dur];TL.view=[0,TL.dur];draw();});
     host.querySelector('.tlkey').addEventListener('click',()=>{const o=host.querySelector('.tlsel').selectedOptions[0];if(!o)return;const lay=+o.dataset.lay,k=o.dataset.k;
@@ -112,7 +113,7 @@ export function createTimeline(c){
   };
   TL.fillParams=()=>{
     if(!host)return;const s=host.querySelector('.tlsel');s.innerHTML='';const L=layers();
-    L.forEach((l,i)=>{const defs=params(l);const g=document.createElement('optgroup');g.label='Layer '+(i+1)+' · '+l.module;
+    L.forEach((l,i)=>{const defs=params(l)||[];const g=document.createElement('optgroup');g.label='Layer '+(i+1)+' · '+l.module;
       const add=(k,n)=>{const o=document.createElement('option');o.textContent=n;o.dataset.lay=i;o.dataset.k=k;g.appendChild(o);};
       add('opacity','Mix');defs.filter(p=>(p.t==='r'||p.t===undefined)&&typeof l.params[p.k]==='number').forEach(p=>add(p.k,p.label||p.k));s.appendChild(g);});
     if(c.hasCam()){const o=document.createElement('option');o.textContent='Camera (look switching)';o.dataset.lay=0;o.dataset.k='cam';s.appendChild(o);}

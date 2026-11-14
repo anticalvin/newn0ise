@@ -2,6 +2,7 @@ import {toRecipe,fromRecipe,checkRecipe} from './recipe.js';
 import {CAMS,glyph,drawOverlay} from './cams.js';
 import {createRecorder,fmtTime} from './recorder.js';
 import {createTimeline} from './timeline.js';
+import {createEditor} from './editor.js';
 import {CAMSIM_PARAMS,CAMSIM_FRAG,SIMS} from './camsim.js';
 import {PERSON,startPerson,feedPerson,syntheticPerson,DRAWN,paintDrawn,clearDrawn,maskFor,resetMatteGL,MASK_DEFAULTS} from './matte.js';
 import {SIG,SIGNALS,signalValue,V,hooks,attachGL,createGL,VS,HEAD,$,clamp,lerp,TABS,CT,CTL,PALS,hexRGB,lum255,rgbHex,PROFILES,BASE,P,E,MODS,applyProfile,canvas,stage,gl,GLOK,noGL,PR,mkProg,mkProgAsync,initGL,mkRT,freeRT,bindRT,samp,draw,TEX,initLUT,SRC,srcDims,uploadSrc,setSource,fitCanvas,demoCanvas,testCanvas,RB,readDrop,audio,ST,STAGES,stageModel,CHAINS,applyStages,buildChainUI,refreshChainUI,computeE,T,POINTER,PAINTQ,SZ,exportCap,expDims,EMBED,EMB,layout,syncSrc,renderFrame,CTX,adaptQ} from './engine.js';
@@ -1632,7 +1633,24 @@ window.__embedRender=function(cv,w,h,t,dt){
   renderStack(t,dt);V.frameNo++;return canvas;
 };
 const FRAME_HOOKS=[];
+/* Alive: an effect is never frozen. Each layer's main controls drift a few percent on slow sine waves and the grain seed crawls.
+   The offsets are applied just before the frame is drawn and removed straight after, so saved values and sliders never change. */
+const IDLE={on:true,amt:.035,saved:[],reduce:matchMedia('(prefers-reduced-motion:reduce)').matches};
+function idleApply(t){
+  IDLE.saved.length=0;if(!IDLE.on||ST.clean||(IDLE.reduce&&!IDLE.force))return;
+  STACK.layers.forEach((l,li)=>{
+    if(!l.visible||l.module==='crtlab')return;const m=MODULES[l.module];if(!m||!l.params)return;
+    const keys=m.schema.hero.length?m.schema.hero:m.params.filter(p=>p.t==='r'&&!/^(orig|seed)$/.test(p.k)).slice(0,2).map(p=>p.k);
+    keys.slice(0,3).forEach((k,i)=>{const p=m.params.find(x=>x.k===k);if(!p||p.t!=='r'||typeof l.params[k]!=='number'||!(p.max>p.min))return;
+      const base=l.params[k],span=p.max-p.min,w=Math.sin(t*(.45+.17*i)+li*1.7+i*2.1)*.7+Math.sin(t*(.13+.05*i)+i)*.3;
+      IDLE.saved.push([l.params,k,base]);l.params[k]=Math.max(p.min,Math.min(p.max,base+span*IDLE.amt*w));});
+    IDLE.saved.push([l,'seed',l.seed]);l.seed=(l.seed||0)+Math.floor(t*2)%997;
+  });
+}
+function idleRestore(){for(const [o,k,v] of IDLE.saved)o[k]=v;IDLE.saved.length=0;}
 const TLN=createTimeline({el:(...a)=>el(...a),layers:()=>STACK.layers,setCam:i=>{if(CAMMODE)applyCam(i,true);},getCam:()=>camIx,hasCam:()=>CAMMODE,params:l=>MODULES[l.module]?MODULES[l.module].params:[],toast:(...a)=>toast(...a),onToggle:on=>{V.sizeKey='';}});
+const ED=createEditor({el:(...a)=>el(...a),toast:(...a)=>toast(...a),setSource:(...a)=>setSource(...a),TLN});
+TLN.handle=ED;
 function loop(now){
   requestAnimationFrame(loop);
   if(window.__benching||(EMBED&&document.hidden))return;
@@ -1644,8 +1662,8 @@ function loop(now){
   V.fpsAcc+=1/dt;V.fpsN++;if(V.fpsN>=20){V.fps=V.fpsAcc/V.fpsN;V.fpsAcc=0;V.fpsN=0;adaptQ();$('#info').textContent=V.infoStr;}
   try{
     if(audio.on)audioTick();
-    TLN.tick(dt);
-    renderStack(t,dt);V.frameNo++;
+    if(ED.active())ED.tick(dt);else TLN.tick(dt);
+    idleApply(t);try{renderStack(t,dt);}finally{idleRestore();}V.frameNo++;
     for(let i=0;i<FRAME_HOOKS.length;i++)FRAME_HOOKS[i](t);
     if(V.errN){V.errN=0;const e=$('#err');if(e&&!e.hidden&&!V.DEAD)e.hidden=true;}
   }catch(e){
@@ -3254,6 +3272,7 @@ function renderInspector0(){
   mk('Remix',()=>{remix(l);renderInspector();});
   mk('Share',shareStack);
   mk(l.visible?'Hide':'Show',()=>{l.visible=!l.visible;renderInspector();});
+  {const ab=mk(IDLE.on?'Alive on':'Alive off',()=>{IDLE.on=!IDLE.on;IDLE.force=true;lsSet('n0ise.alive',IDLE.on?'on':'off');renderInspector();});ab.setAttribute('aria-pressed',IDLE.on);}
   {const sb=mk(l.solo?'Unsolo':'Solo',()=>{l.solo=!l.solo;renderInspector();});sb.setAttribute('aria-pressed',!!l.solo);}
   if(ix>0)mk('Up',()=>{const a=STACK.layers;[a[ix-1],a[ix]]=[a[ix],a[ix-1]];STACK.sel=ix-1;renderInspector();});
   if(ix<STACK.layers.length-1)mk('Down',()=>{const a=STACK.layers;[a[ix+1],a[ix]]=[a[ix],a[ix+1]];STACK.sel=ix+1;renderInspector();});
@@ -3530,5 +3549,14 @@ function wireSheet(){
   if(new URLSearchParams(location.search).get('cam'))setTimeout(()=>showCamGate('Allow the camera, then pick a camera body: CCTV, disposable, Super 8, instant and more.',true),300);
 })();
 /* test hook (read-only use from the console and tools/) */
-window.__n0={TLN,camRecorder,fxRecorder,openCamera,applyCam,CAMS,CAMFX,fxIndex,SHEET,applyRecipe,currentRecipe,toRecipe,fromRecipe,modParams,updateSignals,SIG,runModuleGate,showSheet,STACK,mkLayer,MODULES,PERSON,DRAWN,setSource,syntheticPerson,renderStack,renderFrame,P,V,ST,SRC,TEX,maskFor,startPerson,loadPerson,renderInspector,layout};
-TLN.mount(document.body);{const b=document.getElementById('tlbtn');if(b)b.addEventListener('click',()=>TLN.show());}
+window.__n0={idleApply,idleRestore,ED,IDLE,TLN,camRecorder,fxRecorder,openCamera,applyCam,CAMS,CAMFX,fxIndex,SHEET,applyRecipe,currentRecipe,toRecipe,fromRecipe,modParams,updateSignals,SIG,runModuleGate,showSheet,STACK,mkLayer,MODULES,PERSON,DRAWN,setSource,syntheticPerson,renderStack,renderFrame,P,V,ST,SRC,TEX,maskFor,startPerson,loadPerson,renderInspector,layout};
+{const v=lsGet('n0ise.alive',null);IDLE.on=v?v==='on':!IDLE.reduce;}
+TLN.mount(document.body);ED.mount();
+ED.onExport=()=>{
+  if(fxRecorder.busy||!ED.active())return;toast('Exporting at normal speed. Keep this tab open.',4000);
+  fxRecorder.start({canvas,fps:30,audioStream:ED.audioStream(),
+    begin:()=>{ST.clean=true;ED.setExporting(true);ED.seek(0);ED.play(true);},
+    end:()=>{ST.clean=false;ED.setExporting(false);ED.play(false);},
+    onDone:async r=>{deliver(r.blob,`${stamp()}.${r.ext}`,true);}});
+  ED.onEnd=()=>{if(fxRecorder.state==='recording')fxRecorder.stop('user');};
+};{const b=document.getElementById('tlbtn');if(b)b.addEventListener('click',()=>TLN.show());}

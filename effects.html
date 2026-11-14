@@ -419,6 +419,13 @@ body[data-cam] #stage{box-sizing:border-box;padding:calc(56px + env(safe-area-in
 .tlempty{padding:10px 2px;color:#8d8a82;font-weight:500;line-height:1.4}
 .tladd{margin-top:6px}.tllen{display:flex;align-items:center;gap:6px;color:#b9b6ad}.tldur{width:60px}
 body[data-cam] .tl{bottom:var(--campad,0px);max-height:32dvh;border-bottom:1px solid #3a3835}
+.edwrap{margin:4px 0}
+.edbar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:6px}
+.edtrack{width:100%;height:62px;display:block;background:#12110f;border:1px solid #22201e;touch-action:none;border-radius:3px}
+.edempty{padding:12px 4px;color:#8d8a82;font:500 11px/1.4 var(--lab)}
+.edinfo{flex:1;text-align:right;color:#b9b6ad;font:600 11px var(--lab);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.edwrap button:disabled,.edwrap select:disabled{opacity:.4}
+.edbar .edexp{background:var(--accent);border-color:var(--accent);color:#0a0a0a}
 </style>
 </head>
 <body>
@@ -456,6 +463,6 @@ body[data-cam] .tl{bottom:var(--campad,0px);max-height:32dvh;border-bottom:1px s
   </main>
 </div>
 <input type="file" id="file" accept="image/*,video/*,audio/*,.mp3,.wav,.m4a,.ogg,.flac,.aac" hidden>
-<script type="module" src="assets/index.js?v=eac02c0b"></script>
+<script type="module" src="assets/index.js?v=284bad32"></script>
 </body>
 </html>
