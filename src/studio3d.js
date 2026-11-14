@@ -11,6 +11,8 @@ import {PLYLoader} from 'three/addons/loaders/PLYLoader.js';
 import {GLTFExporter} from 'three/addons/exporters/GLTFExporter.js';
 import {createApi} from './studio-api.js';
 import {createWalk} from './walk.js';
+import {createSim} from './sim.js';
+import {createWorldEditor} from './world-editor.js';
 import {RoomEnvironment} from 'three/addons/environments/RoomEnvironment.js';
 import {createN0} from './studio-adapter.js';
 const N0=createN0();
@@ -715,6 +717,7 @@ function frame(ts){
     av3Tick(t,dt);
     animTick(t);
     controls.autoRotate=S.spin;if(S.spin)bump();
+    if(typeof sim!=='undefined')sim.tick(dt);
     if(S.walk)walk.tick(dt);else controls.update(dt);
     if(selBox)selBox.update();
     grid.visible=S.grid&&!S.exporting&&!S.walk;
@@ -1735,7 +1738,7 @@ function wireSheet(){
 let suppressTab=false;
 
 /* ---------- tabs ---------- */
-const TABN=[['scene','Scene'],['scan','Scan'],['look','Look'],['export','Export']];
+const TABN=[['world','World'],['scene','Scene'],['scan','Scan'],['look','Look'],['export','Export']];
 const paneEls={};
 function setTab(id){
   TABN.forEach(([k])=>{$('#tab_'+k).setAttribute('aria-selected',k===id);paneEls[k].hidden=k!==id;});
@@ -1805,6 +1808,7 @@ function renderObjList(){
 let reliefT=0;
 const triNote=m=>m.tris?`${m.stats} grid · ${Math.round(m.tris/1000)}k triangles`+(m.maxSlope?` · max slope ${m.maxSlope.toFixed(1)}/${m.slopeLim.toFixed(0)}`:''):'';
 function refreshInspector(soft){
+  window.__worldRefresh&&window.__worldRefresh(soft);
   if(soft){inspSyncs.forEach(f=>f());return;}
   if(!inspEl)return;inspEl.innerHTML='';inspSyncs=[];
   const o=objById(S.sel);if(!o)return;
@@ -2168,8 +2172,12 @@ setTimeout(()=>{applyLookHash();offerRestore();},1200);
 
 /* ---------- walk mode, scene API and the AI bridge ---------- */
 const walk=createWalk({THREE,camera,controls,canvas,S,holderBox,sheet,bump,leaveRest,tcDetach:()=>tc.detach()});
-const api=createApi({THREE,S,scene,camera,controls,renderer,canvas,world,hemi,key,grid,PRIMS,addPrimitive,removeObj,objById,importOne,applyView,bump,frameAll,tick,walk,projectFiles,zipStore,GLTFExporter,renderObjList,refreshInspector,setShadowFlags,selectObj,waitFrames,requestResize:()=>{needResize=true;}});
-window.n0={run:api.run,describe:api.describe,walk};
+const sim=createSim({THREE,S,bump});
+const api=createApi({sim,THREE,S,scene,camera,controls,renderer,canvas,world,hemi,key,grid,PRIMS,addPrimitive,removeObj,objById,importOne,applyView,bump,frameAll,tick,walk,projectFiles,zipStore,GLTFExporter,renderObjList,refreshInspector,setShadowFlags,selectObj,waitFrames,requestResize:()=>{needResize=true;}});
+window.n0={run:api.run,describe:api.describe,walk,sim};
+const worldEd=createWorldEditor({THREE,S,api,sim,walk,camera,canvas,controls,tc,objById,selectObj,removeObj,bump,el,sec,btn,toast,renderObjList});
+worldEd.build(paneEls.world);
+if(/^#world/.test(location.hash)){setTab('world');worldEd.starter();}
 $('#bWalk')&&$('#bWalk').addEventListener('click',()=>walk.on?walk.exit():walk.enter({pos:[camera.position.x*.6,0,Math.max(2.5,camera.position.z*.8)],yaw:0}));
 function aiStatus(t){AI.state=t;if(AI.btn){AI.btn.textContent=t==='on'?'AI connected':t==='wait'?'Connecting…':'Connect AI';AI.btn.setAttribute('aria-pressed',t==='on');}}
 function aiConnect(url,auto){
@@ -2186,4 +2194,4 @@ function aiConnect(url,auto){
 }
 {const q=new URLSearchParams(location.search).get('mcp');if(q){setTimeout(()=>aiConnect(q.startsWith('ws')?q:undefined),800);}}
 
-window.__studio={api,walk,aiConnect,zipStore,zipRead,projectFiles,loadProject,saveProject,AUTO,autoStep,fxRandomise,fxEnsure,fxClear,FX3,SG,addViz,AU,buildViz,vizUpdate,enterRest,leaveRest,restTick,setFx,autoDepth,buildDepth,restD,MATTERS,CUT,autoCut,refineMask,applyAlpha,S,N0,THREE,scene,camera,controls,renderer,importFiles,addPrimitive,sheet,SC,carve,surfaceNets,buildScan,makeRelief,pseudoDepth,photoToRelief,objById,selectObj,removeObj,bump,setTab,rebuildRelief,applyView,frameAll,exportImage,get rt(){return rt;}};
+window.__studio={worldEd,api,walk,aiConnect,zipStore,zipRead,projectFiles,loadProject,saveProject,AUTO,autoStep,fxRandomise,fxEnsure,fxClear,FX3,SG,addViz,AU,buildViz,vizUpdate,enterRest,leaveRest,restTick,setFx,autoDepth,buildDepth,restD,MATTERS,CUT,autoCut,refineMask,applyAlpha,S,N0,THREE,scene,camera,controls,renderer,importFiles,addPrimitive,sheet,SC,carve,surfaceNets,buildScan,makeRelief,pseudoDepth,photoToRelief,objById,selectObj,removeObj,bump,setTab,rebuildRelief,applyView,frameAll,exportImage,get rt(){return rt;}};

@@ -45,6 +45,7 @@ const wrap=fn=>async a=>{try{return await fn(a);}catch(e){return fail(e);}};
 const V3=z.array(z.number()).length(3);
 const ID={id:z.number().int().optional().describe('Object id from n0_scene'),name:z.string().optional().describe('Object name, if no id')};
 const LOOK={color:z.string().optional().describe('#rrggbb'),metalness:z.number().min(0).max(1).optional(),roughness:z.number().min(0).max(1).optional(),emissive:z.string().optional().describe('#rrggbb glow colour'),opacity:z.number().min(0).max(1).optional()};
+const PHYS=z.object({type:z.enum(['static','dynamic','kinematic','none']).optional(),shape:z.enum(['box','sphere','capsule','cylinder','hull']).optional(),mass:z.number().optional(),bounce:z.number().optional(),friction:z.number().optional()}).optional().describe('physics body settings');
 const XFORM={pos:V3.optional().describe('[x,y,z] metres; y is the base of the object'),rot:V3.optional().describe('[x,y,z] degrees'),dims:V3.optional().describe('exact [width,height,depth] in metres'),size:z.number().optional().describe('longest side in metres'),scale:z.union([z.number(),V3]).optional().describe('raw scale multiplier (prefer dims)')};
 const fwd=cmd=>wrap(async a=>text(await call({cmd,...a})));
 
@@ -52,8 +53,8 @@ server.tool('n0_status','Is the n0ise page connected to this bridge?',{},wrap(as
 server.tool('n0_describe','List every scene command and its arguments.',{},fwd('describe'));
 server.tool('n0_scene','Read the whole scene: objects (id, name, pos, rot, size, bounds, colour), lights, camera, environment.',{},fwd('scene'));
 server.tool('n0_add','Add a shape (cube, sphere, torus, knot, plane, cylinder, cone, capsule) or import a model/photo from a URL or base64 (glb, gltf, obj, stl, ply, splat, jpg, png).',
-  {type:z.string().optional().describe('cube|sphere|torus|knot|plane|cylinder|cone|capsule'),url:z.string().optional().describe('http(s) or same-origin URL of a model or image'),data:z.string().optional().describe('base64 file bytes (use with filename)'),filename:z.string().optional(),name:z.string().optional(),...XFORM,...LOOK},fwd('add'));
-server.tool('n0_set','Change an object: move, rotate, resize, recolour, rename, hide.',{...ID,newName:z.string().optional(),visible:z.boolean().optional(),...XFORM,...LOOK},fwd('set'));
+  {type:z.string().optional().describe('cube|sphere|torus|knot|plane|cylinder|cone|capsule, or ready-made human|wall|floor|platform|pillar|crate|ball'),url:z.string().optional().describe('http(s) or same-origin URL of a model or image'),data:z.string().optional().describe('base64 file bytes (use with filename)'),filename:z.string().optional(),name:z.string().optional(),...XFORM,...LOOK,phys:PHYS},fwd('add'));
+server.tool('n0_set','Change an object: move, rotate, resize, recolour, rename, hide.',{...ID,newName:z.string().optional(),visible:z.boolean().optional(),...XFORM,...LOOK,phys:PHYS},fwd('set'));
 server.tool('n0_delete','Delete an object.',ID,fwd('delete'));
 server.tool('n0_duplicate','Copy a shape.',{...ID,name:z.string().optional(),pos:V3.optional()},fwd('duplicate'));
 server.tool('n0_select','Select an object (shows its gizmo for the human).',ID,fwd('select'));
@@ -64,6 +65,7 @@ server.tool('n0_camera','Move the orbit camera. Give pos/target, or lookAt an ob
 server.tool('n0_view','Display mode: shaded, clay, normal, depth, wire.',{mode:z.enum(['shaded','clay','normal','depth','wire'])},fwd('view'));
 server.tool('n0_look','Turn the effect look over the scene on or off (off for a clean 3D render).',{on:z.boolean()},fwd('look'));
 server.tool('n0_walk','Enter or leave first-person walk mode. Collision uses object bounds; floor is y=0.',{on:z.boolean(),pos:V3.optional(),yaw:z.number().optional().describe('degrees; 0 looks toward -z')},fwd('walk'));
+server.tool('n0_sim','Physics. op play (build bodies from the scene and run), pause, reset (put everything back), gravity. Mark objects dynamic with phys first.',{op:z.enum(['play','pause','reset','gravity']),g:z.number().optional()},fwd('sim'));
 server.tool('n0_clear','Remove every object and light.',{},fwd('clear'));
 server.tool('n0_batch','Run several commands in one call. ops is a list like [{cmd:"add",type:"cube",...},{cmd:"set",...}].',{ops:z.array(z.record(z.any())),stopOnError:z.boolean().optional()},fwd('batch'));
 server.tool('n0_run','Send any raw command object to the scene API (see n0_describe).',{command:z.record(z.any())},wrap(async a=>text(await call(a.command))));

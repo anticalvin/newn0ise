@@ -3,8 +3,17 @@
    fix what it got wrong, render a picture, and look at it. Run `describe` for the command list.
    Units are metres, rotation is degrees, colours are '#rrggbb'. Objects sit with their base at pos.y (0 = on the floor). */
 export function createApi(c){
-  const {THREE,S,scene,camera,controls,renderer,canvas,hemi,key,grid,PRIMS,addPrimitive,removeObj,objById,importOne,applyView,bump,frameAll,tick,walk,projectFiles,zipStore,GLTFExporter,renderObjList,refreshInspector,setShadowFlags}=c;
-  const lights=new Map();let lid=0,groundMesh=null;
+  const {THREE,S,scene,camera,controls,renderer,canvas,hemi,key,grid,PRIMS,addPrimitive,removeObj,objById,importOne,applyView,bump,frameAll,tick,walk,projectFiles,zipStore,GLTFExporter,renderObjList,refreshInspector,setShadowFlags,sim}=c;
+  const lights=new Map();let lid=0,groundMesh=null,uidc=0;
+  const ASSETS={
+    human:{url:'assets/models/human.glb',size:1.8,name:'Human',phys:{type:'static',shape:'capsule'}},
+    wall:{type:'cube',dims:[4,3,.2],color:'#d8d0c2',phys:{type:'static'}},
+    floor:{type:'cube',dims:[6,.2,6],color:'#9a9a94',phys:{type:'static'}},
+    platform:{type:'cube',dims:[2,.5,2],color:'#bdb7ac',phys:{type:'static'}},
+    pillar:{type:'cylinder',dims:[.5,3,.5],color:'#c7bfb2',phys:{type:'static'}},
+    crate:{type:'cube',dims:[1,1,1],color:'#a67c52',phys:{type:'dynamic',mass:15}},
+    ball:{type:'sphere',dims:[.8,.8,.8],color:'#d4552b',phys:{type:'dynamic',mass:5,bounce:.7}}
+  };
   const num=(v,d)=>typeof v==='number'&&isFinite(v)?v:d;
   const v3=(a,d=[0,0,0])=>Array.isArray(a)?[num(a[0],d[0]),num(a[1],d[1]),num(a[2],d[2])]:d;
   const find=a=>{
@@ -16,7 +25,7 @@ export function createApi(c){
   const info=o=>{
     const b=new THREE.Box3().setFromObject(o.holder),e=o.holder.rotation,sz=b.isEmpty()?[0,0,0]:b.getSize(new THREE.Vector3()).toArray().map(r),h=o.holder;
     let col=null;o.holder.traverse(n=>{if(!col&&n.isMesh&&n.material&&n.material.color)col='#'+n.material.color.getHexString();});
-    return {id:o.id,name:o.name,kind:o.kind,visible:o.vis,pos:h.position.toArray().map(r),rot:[e.x,e.y,e.z].map(x=>r(x*180/Math.PI)),scale:h.scale.toArray().map(r),size:sz,color:col,
+    return {id:o.id,name:o.name,kind:o.kind,asset:o.meta&&o.meta.asset||null,phys:o.meta&&o.meta.phys||null,visible:o.vis,pos:h.position.toArray().map(r),rot:[e.x,e.y,e.z].map(x=>r(x*180/Math.PI)),scale:h.scale.toArray().map(r),size:sz,color:col,
       bounds:b.isEmpty()?null:{min:b.min.toArray().map(r),max:b.max.toArray().map(r)}};
   };
   const r=x=>Math.round(x*1000)/1000;
@@ -45,8 +54,14 @@ export function createApi(c){
     if(a.pos){const p=v3(a.pos);h.position.set(...p);}
     h.updateMatrixWorld(true);
   }
+  function setPhys(o,p){
+    o.meta=o.meta||{};o.meta.phys={...(o.meta.phys||{type:'static'}),...p};
+    if(!['static','dynamic','kinematic','none'].includes(o.meta.phys.type))o.meta.phys.type='static';
+    sim&&sim.invalidate();return o.meta.phys;
+  }
   async function addObject(a){
-    const t=String(a.type||'').toLowerCase();let o;
+    let t=String(a.type||'').toLowerCase();let o;const as=ASSETS[t];
+    if(as){a={...as,...a,phys:{...as.phys,...(a.phys||{})}};t=String(as.type||'').toLowerCase();if(as.url&&!a.url)a.url=as.url;a.asset=String(a.type).toLowerCase();a.name=a.name||as.name||a.asset[0].toUpperCase()+a.asset.slice(1);}
     const prim=Object.keys(PRIMS).find(k=>k.toLowerCase()===t);
     if(prim)o=addPrimitive(prim);
     else if(a.url||a.data){
@@ -58,6 +73,7 @@ export function createApi(c){
       o=S.objs[S.objs.length-1];
     }else throw new Error('Give type ('+Object.keys(PRIMS).map(s=>s.toLowerCase()).join(', ')+') or a url.');
     if(a.name)o.name=a.name;
+    o.meta=o.meta||{};o.meta.uid=++uidc;o.meta.asset=a.asset||(prim||'file').toLowerCase();if(a.phys)setPhys(o,a.phys);
     if(prim&&a.size==null&&!a.dims&&!a.scale)a.size=1;
     place(o,{...a,pos:a.pos||[0,0,0]});paint(o,a);
     if(S.shadows)setShadowFlags(o.holder);
@@ -136,7 +152,7 @@ export function createApi(c){
   }
   const DOC={
     scene:'{} → objects (id, name, kind, pos, rot, scale, size, color, bounds), lights, camera, environment.',
-    add:'{type:"cube|sphere|torus|knot|plane|cylinder|cone|capsule"} or {url|data(base64), filename} for glb/gltf/obj/stl/ply/splat/jpg/png, plus optional name, pos:[x,y,z] (base of the object), rot:[deg], dims:[w,h,d] metres (exact box, best for walls and floors), size (longest side in m), scale (raw multiplier), color, metalness, roughness, emissive, opacity → object info.',
+    add:'{type:"cube|sphere|torus|knot|plane|cylinder|cone|capsule"} or a ready-made {type:"human|wall|floor|platform|pillar|crate|ball"} or {url|data(base64), filename} for glb/gltf/obj/stl/ply/splat/jpg/png, plus optional name, pos:[x,y,z] (base of the object), rot:[deg], dims:[w,h,d] metres (exact box, best for walls and floors), size (longest side in m), scale (raw multiplier), color, metalness, roughness, emissive, opacity → object info.',
     set:'{id|name, newName, pos, rot, dims, scale, size, color, metalness, roughness, emissive, opacity, visible} → object info.',
     delete:'{id|name} → removes the object.',
     duplicate:'{id|name, pos?, name?} → copy of a primitive.',
@@ -146,6 +162,7 @@ export function createApi(c){
     camera:'{pos, target, fov, lookAt:id|name, frame:true} → orbit camera.',
     view:'{mode:"shaded|clay|normal|depth|wire"}',
     look:'{on:true|false} → the effect look over the scene.',
+    sim:'{op:"play|pause|reset|gravity", g} → rigid-body physics. Give objects phys:{type:"static|dynamic|kinematic|none", shape:"box|sphere|capsule|cylinder|hull", mass, bounce, friction} in add or set, then play.',
     walk:'{on:true|false, pos:[x,y,z], yaw:deg} → first-person walk mode (collision against objects).',
     render:'{pass:"beauty|clean|clay|normal|depth|wire", width} → PNG as base64.',
     export:'{format:"glb|zip"} → base64 file.',
@@ -160,7 +177,7 @@ export function createApi(c){
       case 'describe':return{commands:DOC,units:'metres, degrees, #rrggbb',tips:['Build with add, then run render and look at the picture.','pos is the base of the object: pos.y=0 sits it on the floor.','Run scene after changes to read back exact bounds.']};
       case 'scene':return sceneInfo();
       case 'add':{const o=await addObject({...a});return info(o);}
-      case 'set':{const o=ref(a);if(a.newName)o.name=a.newName;place(o,a);paint(o,a);if(a.visible!=null){o.vis=!!a.visible;o.holder.visible=o.vis;}renderObjList&&renderObjList();refreshInspector&&refreshInspector(true);bump();return info(o);}
+      case 'set':{const o=ref(a);if(a.phys)setPhys(o,a.phys);if(a.newName)o.name=a.newName;place(o,a);paint(o,a);if(a.visible!=null){o.vis=!!a.visible;o.holder.visible=o.vis;}renderObjList&&renderObjList();refreshInspector&&refreshInspector(true);bump();return info(o);}
       case 'delete':{const o=ref(a);const i=info(o);removeObj(o.id);return{deleted:i.name};}
       case 'duplicate':{const o=ref(a);const prim=Object.keys(PRIMS).find(k=>k===o.name||o.name.startsWith(k));if(!prim)throw new Error('Only shapes can be duplicated. Add the file again instead.');
         const n=addPrimitive(prim);n.holder.scale.copy(o.holder.scale);n.holder.rotation.copy(o.holder.rotation);n.holder.position.copy(o.holder.position).x+=1;if(a.pos)n.holder.position.set(...v3(a.pos));if(a.name)n.name=a.name;
@@ -172,6 +189,7 @@ export function createApi(c){
       case 'view':{if(!['shaded','clay','normal','depth','wire'].includes(a.mode))throw new Error('mode must be shaded, clay, normal, depth or wire.');S.view=a.mode;applyView();bump();return{view:S.view};}
       case 'look':{S.fx=a.on!==false;bump();return{look:S.fx};}
       case 'walk':{if(a.on===false){walk.exit();return{walking:false};}walk.enter({pos:a.pos,yaw:a.yaw});return{walking:true};}
+      case 'sim':{if(!sim)throw new Error('Simulation isn’t available.');const op=a.op||'play';if(op==='play')return await sim.play();if(op==='pause')return sim.pause();if(op==='reset')return sim.reset();if(op==='gravity')return sim.setGravity(num(a.g,-9.81));throw new Error('op must be play, pause, reset or gravity.');}
       case 'render':return renderCmd(a);
       case 'export':return exportCmd(a);
       case 'clear':{S.objs.slice().forEach(o=>removeObj(o.id));lightCmd({op:'clear'});return{cleared:true};}

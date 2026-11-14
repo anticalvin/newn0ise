@@ -46,3 +46,11 @@ Nothing here is vendored. Versions are pinned and each is more than two weeks ol
 | selfie_multiclass_256x256.tflite (float32, folder `1`) | `https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_multiclass_256x256/float32/1/selfie_multiclass_256x256.tflite` | same as above, same caveat | Optional "Detailed" model, about 16 MB |
 
 Model files are fetched once, kept with the Cache API (`n0ise-models-v1`) with visible progress, and are never uploaded anywhere: frames stay on the device. On mobile data (Save-Data, cellular, 2G/3G) the page asks before downloading.
+
+## Added with the world editor and simulation
+
+| Component | Version | Licence | Where it is used |
+|---|---|---|---|
+| Rapier (`@dimforge/rapier3d-compat`) | 0.14.0 (jsDelivr, pinned) | Apache-2.0 | Rigid-body physics in `src/sim.js`, loaded at runtime when Play is first pressed |
+| `@modelcontextprotocol/sdk`, `ws`, `zod` | 1.12.1, 8.18.2, 3.25.30 | MIT | `tools/mcp` bridge only; not shipped to the browser |
+| `assets/models/human.glb` | n/a | **Not stated. Supplied by the project owner; confirm the licence before launch.** | The "Human" object in the World tab |

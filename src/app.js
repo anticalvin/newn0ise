@@ -2200,6 +2200,8 @@ async function loadFile(f){
 let camFacing='environment';
 const CAMOPT={deviceId:'',w:1920,h:1080,fps:30};
 function camTrack(){const st=SRC.el&&SRC.el.srcObject;return st&&st.getVideoTracks&&st.getVideoTracks()[0]||null;}
+let camErr='';
+const camErrMsg=e=>{const n=e&&e.name||'';if(!window.isSecureContext)return'Browsers only allow the camera on a secure (https) page.';if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia)return'This browser can’t open the camera.';if(n==='NotAllowedError'||n==='SecurityError')return'Camera access was blocked. Allow it for this site in your browser settings, then try again.';if(n==='NotFoundError'||n==='OverconstrainedError')return'No camera was found on this device.';if(n==='NotReadableError')return'Another app is using the camera. Close it and try again.';return'The camera couldn’t start ('+(n||'unknown error')+').';};
 async function startCam(flip,opt){
   if(flip){camFacing=camFacing==='environment'?'user':'environment';CAMOPT.deviceId='';}
   if(opt)Object.assign(CAMOPT,opt);
@@ -2209,9 +2211,10 @@ async function startCam(flip,opt){
     if(old&&old.getTracks)old.getTracks().forEach(t=>t.stop());
     let stream;try{stream=await mk();}catch(e){if(CAMOPT.deviceId){CAMOPT.deviceId='';stream=await mk();}else throw e;}
     const v=document.createElement('video');v.playsInline=true;v.muted=true;v.srcObject=stream;await v.play();
-    setSource(v,'Camera',true);refreshUI();
+    setSource(v,'Camera',true);refreshUI();camErr='';
     try{const t=stream.getVideoTracks()[0],st=t.getSettings();if(st.facingMode==='user')camFacing='user';else if(st.facingMode==='environment')camFacing='environment';}catch(e){}
-  }catch(e){toast('Camera isn’t available here');}
+    return true;
+  }catch(e){camErr=camErrMsg(e);toast(camErr,6000);return false;}
 }
 /* ---------- GIF decode (animated playback) ---------- */
 function lzwDec(min,data,n){
@@ -2480,7 +2483,7 @@ async function applyPro(){
   if(PRO.focus>=0&&rng(proCaps,'focusDistance'))hwSet({focusMode:'manual',focusDistance:PRO.focus});
   else if(proCaps.focusMode&&proCaps.focusMode.includes('continuous'))hwSet({focusMode:'continuous'});
 }
-const flashBtnLabel=()=>PRO.flash==='off'?'Flash off':PRO.flash==='on'?'Flash on':'Torch';
+const flashBtnLabel=()=>PRO.flash==='off'?'Flash':PRO.flash==='on'?'Flash on':'Torch';
 async function setFlash(mode){
   PRO.flash=mode;const b=$('#camflashb');if(b){b.textContent=flashBtnLabel();b.setAttribute('aria-pressed',mode!=='off');}
   if(proCaps.torch)await hwSet({torch:mode==='torch'});
@@ -2539,7 +2542,7 @@ function buildCamUI(){
   const btn=(id,txt,label,fn)=>{const b=el('button','cb',txt);b.id=id;b.setAttribute('aria-label',label);b.addEventListener('click',fn);return b;};
   const top=el('div','camtop');
   top.append(btn('camx','✕','Close camera',closeCamera),btn('camflip','Flip','Flip camera',async()=>{await startCam(true);SRC.mirror=camFacing==='user';readCaps();applyCam(camIx,true);applyPro();}),
-    btn('camflashb','Flash off','Flash',()=>{setFlash(PRO.flash==='off'?'on':PRO.flash==='on'?(proCaps.torch?'torch':'off'):'off');}),
+    btn('camflashb','Flash','Flash',()=>{setFlash(PRO.flash==='off'?'on':PRO.flash==='on'?(proCaps.torch?'torch':'off'):'off');}),
     btn('camasp','3:4','Frame shape',e=>{const o=['3:4','1:1','4:3','9:16','16:9','src'],i=(o.indexOf(P.aspect)+1)%o.length;P.aspect=o[i];V.sizeKey='';paintCamUI();}),
     btn('campb','Pro','Pro controls',e=>{const on=u.classList.toggle('pro');u.classList.remove('more');e.currentTarget.setAttribute('aria-pressed',on);if(on)renderPro();}),
     btn('cammore','More','More controls',e=>{const on=u.classList.toggle('more');u.classList.remove('pro');$('#campb').setAttribute('aria-pressed',false);e.currentTarget.setAttribute('aria-pressed',on);}));
@@ -2582,9 +2585,19 @@ function buildCamUI(){
   addEventListener('resize',()=>{if(CAMMODE)setTimeout(paintCamUI,60);});
   camThumbUpdate();
 }
-async function openCamera(){
-  await startCam(false);
-  if(!(SRC.el instanceof HTMLVideoElement)||SRC.name!=='Camera')return;
+function showCamGate(msg,first){
+  let g=$('#camgate');if(g)g.remove();g=el('div','camgate');g.id='camgate';
+  g.innerHTML=`<div class="cgbox"><b>Camera</b><p></p><div class="cgbtns"></div></div>`;g.querySelector('p').textContent=msg;
+  const row=g.querySelector('.cgbtns'),mk=(t,cls,fn)=>{const b=el('button',cls,t);b.addEventListener('click',fn);row.appendChild(b);};
+  mk(first?'Open camera':'Try again','pri',async()=>{g.remove();await openCamera();});
+  mk('Browse with a demo picture','',async()=>{g.remove();await openCamera({demo:true});});
+  mk('Skip to effects','',()=>g.remove());
+  document.body.appendChild(g);
+}
+async function openCamera(o){
+  if(o&&o.demo){setSource(demoCanvas(),'Camera',false);refreshUI();}
+  else{const ok=await startCam(false);if(!ok){showCamGate(camErr||'The camera couldn’t start.');return;}}
+  if(!(o&&o.demo)&&(!(SRC.el instanceof HTMLVideoElement)||SRC.name!=='Camera'))return;
   camIx=Math.max(0,CAMS.findIndex(c=>c.id===lsGet('n0ise.cam','cctv')));camText=!!lsGet('n0ise.camtext',false);{const tb=$('#camtxt');if(tb)tb.setAttribute('aria-pressed',camText);}
   camSaved={layers:STACK.layers,sel:STACK.sel,aspect:P.aspect};
   SRC.mirror=camFacing==='user';buildCamUI();CAMMODE=true;document.body.dataset.cam='1';
@@ -3446,7 +3459,7 @@ function wireSheet(){
   loadStackHash();loadFuseHash();wireMaskPaint();wireHero();wireTouch();wireSheet();renderInspector();
   requestAnimationFrame(loop);
   if(new URLSearchParams(location.search).get('bench'))setTimeout(runBench,600);
-  if(new URLSearchParams(location.search).get('cam'))setTimeout(()=>{openCamera();},500);
+  if(new URLSearchParams(location.search).get('cam'))setTimeout(()=>showCamGate('Allow the camera, then pick a camera body: CCTV, disposable, Super 8, instant and more.',true),300);
 })();
 /* test hook (read-only use from the console and tools/) */
 window.__n0={openCamera,applyCam,CAMS,CAMFX,fxIndex,SHEET,applyRecipe,currentRecipe,toRecipe,fromRecipe,modParams,updateSignals,SIG,runModuleGate,showSheet,STACK,mkLayer,MODULES,PERSON,DRAWN,setSource,syntheticPerson,renderStack,renderFrame,P,V,ST,SRC,TEX,maskFor,startPerson,loadPerson,renderInspector,layout};

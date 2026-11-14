@@ -144,6 +144,9 @@ body[data-walk] #walkui{display:block}
 #walkHint{position:absolute;left:0;right:0;bottom:calc(10px + env(safe-area-inset-bottom,0px));text-align:center;font:500 11px var(--lab,monospace);color:#f2efe8;text-shadow:0 1px 2px #000;padding:0 12px}
 #walkStick{position:absolute;width:100px;height:100px;border:2px solid rgba(242,239,232,.6);border-radius:50%}
 #walkStick i{position:absolute;left:30px;top:30px;width:40px;height:40px;border-radius:50%;background:rgba(242,239,232,.8)}
+.wgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:8px}
+.wtile{min-height:68px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;border:1px solid var(--line,#333);background:transparent;color:var(--ink,#eee);border-radius:3px;padding:4px 2px;font:600 10px var(--lab,monospace);text-transform:uppercase;letter-spacing:.06em}
+.wtile:active{background:var(--ink,#eee);color:var(--bg,#000)}.wtile:focus-visible{outline:2px solid var(--accent,#f60);outline-offset:2px}
 </style>
 </head>
 <body>
@@ -176,6 +179,6 @@ body[data-walk] #walkui{display:block}
 <input type="file" id="file" multiple hidden accept="audio/*,.mp3,.wav,.m4a,.ogg,.flac,.glb,.gltf,.bin,.obj,.mtl,.stl,.ply,.splat,.spz,.ksplat,.sog,image/*,video/*">
 <section id="scan" hidden></section>
 <div id="fxov" class="bg"><div class="fxtop"><b>Effects</b><span>Pick and tune effects. They apply to the selected object only.</span><button class="btn pri" id="fxdone">Done</button></div><iframe id="fxif" title="n0ise effects" allow="autoplay"></iframe></div>
-<script type="module" src="assets/studio.js?v=1a9ce03d"></script>
+<script type="module" src="assets/studio.js?v=97bba6c7"></script>
 </body>
 </html>

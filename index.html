@@ -52,6 +52,7 @@ footer{flex:none;display:flex;justify-content:space-between;gap:12px;padding:9px
   <a class="door rec" href="effects.html?cam=1" id="d1"><canvas></canvas><span class="n">01</span><span class="d">Pick a camera body. Shoot photo or video through it.</span><i class="tick"></i><div class="t"><h2>Camera</h2><span class="go">→</span></div></a>
   <a class="door" href="effects.html" id="d2"><canvas></canvas><span class="n">02</span><span class="d">Layer CRT, dither, glitch and print looks on any picture.</span><div class="t"><h2>Effects</h2><span class="go">→</span></div></a>
   <a class="door" href="studio.html" id="d3"><canvas></canvas><span class="n">03</span><span class="d">Turn a photo into a model. Light it, move it, export it.</span><div class="t"><h2>3D</h2><span class="go">→</span></div></a>
+  <a class="door" href="studio.html#world" id="d4"><canvas></canvas><span class="n">04</span><span class="d">Build a place, add physics, then walk around inside it.</span><div class="t"><h2>World</h2><span class="go">→</span></div></a>
 </main>
 <footer><span>Runs in your browser</span><span>Nothing is uploaded</span></footer>
 <script>
@@ -100,6 +101,15 @@ setup(d3,({W,H,t,px,py,put,col})=>{
   for(const x of[-1,1])for(const y of[-1,1])for(const z of[-1,1]){let X=x*Math.cos(a)-z*Math.sin(a),Z=x*Math.sin(a)+z*Math.cos(a),Y=y*Math.cos(b)-Z*Math.sin(b);Z=y*Math.sin(b)+Z*Math.cos(b);const f=2.6/(2.6+Z*.5);V.push([cx+X*s*f,cy+Y*s*f,x,y,z]);}
   for(let i=0;i<8;i++)for(let j=i+1;j<8;j++){const p=V[i],q=V[j],d=(p[2]!==q[2])+(p[3]!==q[3])+(V[i][4]!==V[j][4]);if(d!==1)continue;
     const n=Math.round(Math.hypot(p[0]-q[0],p[1]-q[1]));for(let k=0;k<=n;k++){const u=k/n;put(Math.round(p[0]+(q[0]-p[0])*u),Math.round(p[1]+(q[1]-p[1])*u),255,col);}}
+});
+/* world: a floor grid you move through, a horizon and a few blocks */
+setup(d4,({W,H,t,px,py,put,col})=>{
+  const hy=Math.round(H*(.42+(py-.5)*.12)),sp=t*.9;
+  for(let x=0;x<W;x++)put(x,hy,255,col);
+  for(let k=1;k<14;k++){const z=((k-sp)%14+14)%14+.3,y=Math.round(hy+H*.5/z);if(y>=H)continue;for(let x=0;x<W;x++)put(x,y,k%2?255:150,col);}
+  for(let i=-8;i<=8;i++){for(let y=hy+1;y<H;y++){const z=H*.5/(y-hy),x=Math.round(W/2+(i*1.1+(px-.5)*3)*z*W*.05);put(x,y,200,col);}}
+  for(const [bx,bz] of [[-2,6],[2.4,9],[0,12]]){const z=((bz-sp*1.0)%14+14)%14+.5,s=H*.5/z,x=W/2+(bx+(px-.5)*3)*s*W*.05,y=hy+s;
+    for(let a=0;a<s*1.2;a++)for(let b=0;b<s*.9;b++){if(a===0||b===0||a>=s*1.2-1||b>=s*.9-1)put(Math.round(x+b),Math.round(y-a),255,col);}}
 });
 if('serviceWorker' in navigator&&location.protocol!=='file:')navigator.serviceWorker.register('sw.js').catch(()=>{});
 </script>
