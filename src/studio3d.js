@@ -13,6 +13,7 @@ import {createApi} from './studio-api.js';
 import {createWalk} from './walk.js';
 import {createSim} from './sim.js';
 import {createRecorder,fmtTime} from './recorder.js';
+import {P3D,build as buildPhoto,loadCanvas,sampleCanvas} from './photo3d.js';
 import {put as handoffPut,take as handoffTake} from './handoff.js';
 import {createWorldEditor} from './world-editor.js';
 import {RoomEnvironment} from 'three/addons/environments/RoomEnvironment.js';
@@ -213,6 +214,20 @@ const PRIMS={
   Capsule:()=>new THREE.CapsuleGeometry(.4,.9,8,24)
 };
 function setShadowFlags(n){if(!n)return;n.traverse(m=>{if(m.isMesh&&!m.isSplatMesh){m.castShadow=!!S.shadows;m.receiveShadow=!!S.shadows;}});}
+/* photographs as objects (brightness-based, not recovered depth) */
+function addPhoto(kind,cv){
+  const root=new THREE.Group();root.add(buildPhoto(THREE,kind,cv,null));
+  const o=registerObject(P3D[kind].name,root,'mesh',{size:2.4,meta:{p3d:{kind,o:{...P3D[kind].def},src:cv}}});
+  S.needFrame=true;return o;
+}
+function rebuildPhoto(o){const m=o.meta.p3d;const g=buildPhoto(THREE,m.kind,m.src,m.o);o.root.clear();while(g.children.length)o.root.add(g.children[0]);setShadowFlags(o.holder);bump();markDirty();}
+function photoInspector(o){
+  const m=o.meta.p3d,r=sec(inspEl,P3D[m.kind].name,'from brightness');
+  P3D[m.kind].opts.forEach(([k,l,min,max,step,names])=>sliderRow(r,l,()=>m.o[k],v=>{m.o[k]=v;rebuildPhoto(o);},min,max,step||1,names?v=>names[Math.round(v)]:undefined));
+  r.appendChild(btn('Use another picture','',()=>pickPhoto(m.kind,o)));
+  r.appendChild(el('div','note','The shape follows how light or dark each part of the picture is. It is not recovered depth.'));
+}
+function pickPhoto(kind,replace){const i=document.createElement('input');i.type='file';i.accept='image/*';i.onchange=async()=>{const f=i.files[0];if(!f)return;try{const cv=await loadCanvas(f);if(replace){replace.meta.p3d.src=cv;rebuildPhoto(replace);}else addPhoto(kind,cv);}catch(e){toast(e.message);}};i.click();}
 function addPrimitive(k){
   const g=PRIMS[k]();if(k==='Plane')g.rotateX(-Math.PI/2);
   const m=new THREE.Mesh(g,new THREE.MeshStandardMaterial({color:0xb9b4ac,roughness:.55,metalness:.1}));
@@ -1843,6 +1858,7 @@ function buildScenePane(){
   add.appendChild(btn('Import files','pri',()=>$('#file').click()));
   Object.keys(PRIMS).forEach(k=>add.appendChild(btn('+ '+k,'',()=>addPrimitive(k))));
   add.appendChild(btn('+ Visualizer','',()=>addViz('waterfall')));
+  Object.keys(P3D).forEach(k=>add.appendChild(btn('+ '+P3D[k].name,'',()=>pickPhoto(k))));add.appendChild(btn('Sample photo','',()=>addPhoto('fold',sampleCanvas())));
   add.appendChild(btn('Walk','',()=>$('#bWalk').click()));{const ab=btn('Connect AI','',()=>aiConnect());AI.btn=ab;add.appendChild(ab);}add.appendChild(btn('Save project','',saveProject));add.appendChild(btn('Open project','',()=>{const i=document.createElement('input');i.type='file';i.accept='.zip,application/zip';i.onchange=()=>i.files[0]&&importFiles([i.files[0]]);i.click();}));add.appendChild(btn('Copy look link','',lookLink));
   s1.appendChild(add);
   const note=el('div','note','Drop or import: glb, gltf (with its bin and textures), obj (+mtl), stl, ply (mesh, points or 3D Gaussian splat), splat, spz, ksplat, sog. Photos become relief. Videos open the turntable scanner.');s1.appendChild(note);
@@ -1922,6 +1938,7 @@ function refreshInspector(soft){
   }
   if(o.kind==='relief'&&o.meta.photo)buildCutSection(o);
   if(o.kind==='viz'&&o.viz)vizInspector(o);
+  if(o.meta&&o.meta.p3d)photoInspector(o);
   fxInspector(o);
   if(o.kind==='points'||o.kind==='splat'){
     const r=sec(inspEl,o.kind==='splat'?'Splat':'Points');
@@ -2275,4 +2292,4 @@ async function openInEffects(){
 setTimeout(async()=>{const m=location.hash.match(/^#from=(\w+)/);if(!m)return;const rec=await handoffTake();history.replaceState(null,'',location.pathname);
   if(!rec){toast('Nothing to open. Send a picture from the other page again.');return;}
   await photoToRelief(new File([rec.blob],'from-'+m[1]+'.png',{type:rec.blob.type||'image/png'}));toast('Opened from '+m[1]);},1400);
-window.__studio={S,N0,selectObj,addLook,removeLook,openInEffects,worldEd,api,walk,aiConnect,zipStore,zipRead,projectFiles,loadProject,saveProject,AUTO,autoStep,fxRandomise,fxEnsure,fxClear,FX3,SG,addViz,AU,buildViz,vizUpdate,enterRest,leaveRest,restTick,setFx,autoDepth,buildDepth,restD,MATTERS,CUT,autoCut,refineMask,applyAlpha,S,N0,THREE,scene,camera,controls,renderer,importFiles,addPrimitive,sheet,SC,carve,surfaceNets,buildScan,makeRelief,pseudoDepth,photoToRelief,objById,selectObj,removeObj,bump,setTab,rebuildRelief,applyView,frameAll,exportImage,get rt(){return rt;}};
+window.__studio={addPhoto,sampleCanvas,S,N0,selectObj,addLook,removeLook,openInEffects,worldEd,api,walk,aiConnect,zipStore,zipRead,projectFiles,loadProject,saveProject,AUTO,autoStep,fxRandomise,fxEnsure,fxClear,FX3,SG,addViz,AU,buildViz,vizUpdate,enterRest,leaveRest,restTick,setFx,autoDepth,buildDepth,restD,MATTERS,CUT,autoCut,refineMask,applyAlpha,S,N0,THREE,scene,camera,controls,renderer,importFiles,addPrimitive,sheet,SC,carve,surfaceNets,buildScan,makeRelief,pseudoDepth,photoToRelief,objById,selectObj,removeObj,bump,setTab,rebuildRelief,applyView,frameAll,exportImage,get rt(){return rt;}};

@@ -4,6 +4,7 @@ import {createRecorder,fmtTime,verifyFrames,fixWebmDuration} from './recorder.js
 import {createTimeline} from './timeline.js';
 import {createEditor} from './editor.js';
 import {createOverlays} from './overlay.js';
+import {installLooks} from './looks.js';
 import {put as handoffPut,take as handoffTake} from './handoff.js';
 import {CAMSIM_PARAMS,CAMSIM_FRAG,SIMS} from './camsim.js';
 import {QUAL,setMaskQuality,PERSON,startPerson,feedPerson,syntheticPerson,DRAWN,paintDrawn,clearDrawn,maskFor,resetMatteGL,MASK_DEFAULTS} from './matte.js';
@@ -1246,7 +1247,7 @@ vec4 fx(vec2 uv){
    given time always renders the same way. Lite fallback (ST.lite): no stored frame, only the woven shading. */
 const FLAG_LOOM=/[?&]flags=[^&]*loom/.test(location.search)||String(localStorage.getItem('n0ise.flags')||'').includes('loom');
 const LOOM={last:-1e9,wasClean:false};
-defineModule({id:'loom',family:'Time',name:'Temporal Loom',hidden:!FLAG_LOOM,
+defineModule({id:'loom',family:'Time',name:'Temporal Weave',
   params:[
     {k:'w',label:'Thread width',min:2,max:48,def:10,step:1,sec:'Weave',hero:true},{k:'lag',label:'Memory',min:0,max:100,def:70,sec:'Weave',hero:true},
     {k:'weave',label:'Over and under',min:0,max:100,def:60,sec:'Weave',hero:true},
@@ -1273,6 +1274,7 @@ vec4 fx(vec2 uv){
   return vec4(c,1.);}`,
   bind(pr,V,ctx){const jump=ctx.t<LOOM.last-1e-4||ctx.t-LOOM.last>.5||(ST.clean&&!LOOM.wasClean);LOOM.last=ctx.t;LOOM.wasClean=!!ST.clean;
     pr.f('u_reset',jump?1:0);pr.f('u_lite',ST.lite?1:0);histBind(pr,'loom',ctx);},after(pr,V,ctx){histSave('loom',ctx);}});
+const LOOKS=installLooks({defineModule,SS,histBind,histSave,histRT,PR,samp,bindRT,draw,ST});
 /*WP6:END*/
 
 
@@ -1591,6 +1593,11 @@ function recipeSection(host){
     Object.assign(el('button','btn','Download .json'),{onclick:()=>{const j=currentRecipe('n0ise recipe');deliver(new Blob([JSON.stringify(j,null,1)],{type:'application/json'}),'n0ise-recipe.json');}}),
     Object.assign(el('button','btn','Open file'),{onclick:()=>{const f=document.createElement('input');f.type='file';f.accept='.json,application/json';f.onchange=async()=>{try{applyRecipe(JSON.parse(await f.files[0].text()));toast('Recipe loaded');}catch(e){toast(String(e.message||e));}};f.click();}}));
   a.b.appendChild(row);
+  {const rh=el('div','sub','Recipes');a.b.appendChild(rh);
+    LOOKS.RECIPES.forEach(r=>{const x=el('div','ir');const b=el('button','btn',r.name);b.title=r.note;b.addEventListener('click',()=>{
+      if(!SRC.el||SRC.name==='Test card'){setSource(demoCanvas(),'Sample',false);}
+      const ls=r.layers.map(([id,p])=>{if(!MODULES[id])return null;const l=mkLayer(id);if(id==='camsim'){Object.assign(l.params,SIMS[p]||{});}else Object.assign(l.params,p||{});return l;}).filter(Boolean);
+      STACK.layers=ls;STACK.sel=0;V.sizeKey='';V.lastBKey='';snap();refreshUI();renderInspector();toast(r.name+': '+r.note,3500);});x.appendChild(b);a.b.appendChild(x);});}
   loadStackPresets().forEach(r=>{const x=el('div','ir');const b=el('button','btn',r.name);b.addEventListener('click',()=>{try{applyRecipe(r.j);}catch(e){toast(String(e.message||e));}});
     const d=el('button','btn','×');d.setAttribute('aria-label','Delete preset');d.addEventListener('click',()=>{localStorage.setItem(SPKEY,JSON.stringify(loadStackPresets().filter(q=>q.id!==r.id)));renderInspector();});x.append(b,d);a.b.appendChild(x);});
   a.b.appendChild(el('div','cl','A recipe holds the whole stack, its signals and the CRT settings. It is also a project file.'));
@@ -2526,7 +2533,7 @@ function applyCam(i,quiet){
   const layers=[];
   if(c.fx&&c.fx.length){const l=mkLayer('fuse');for(let k=1;k<=4;k++){fuseSet(l,k,null);l.params['on'+k]=false;}
     c.fx.forEach((id,k)=>{fuseSet(l,k+1,id);l.params['mx'+(k+1)]=c.mix[k]??100;});layers.push(l);}
-  (c.mods||[]).forEach(m=>{if(MODULES[m.module])layers.push(mkLayer(m.module,m.params));});
+  (c.mods||[]).forEach(m=>{if(MODULES[m.module]){const l=mkLayer(m.module);if(m.params)Object.assign(l.params,m.params);layers.push(l);}});
   if(c.duo){const so=layers.find(l=>l.module==='solid');if(so)Object.assign(so.params,{sub:DUO.sub,bg:DUO.bg,soft:DUO.soft,keep:0});
     [['subject',DUO.fg],['background',DUO.bgfx]].forEach(([sel,id])=>{if(!id||!FXBY[id])return;const f=mkLayer('fuse');for(let k=1;k<=4;k++){fuseSet(f,k,null);f.params['on'+k]=false;}fuseSet(f,1,id);f.select=sel;layers.push(f);});}
   if(layers.some(l=>MODULES[l.module]&&MODULES[l.module].needsMask))loadPerson(true);
