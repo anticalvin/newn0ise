@@ -1,0 +1,15 @@
+/* One visual grammar for all four pages: near-black, warm off-white, one orange accent, 3px radius, mono labels over a grotesque display face.
+   Interfaces stay quiet and precise; the pictures are what is loud. Pages read these tokens instead of defining their own colours. */
+:root{
+  --n-bg:#0a0a0a; --n-panel:#111110; --n-raise:#1a1917; --n-line:#2a2927; --n-ink:#f2efe8; --n-mute:#8d8a82;
+  --n-acc:#ff5a1f; --n-on-acc:#0a0a0a; --n-rec:#ff3b2f;
+  --n-rad:3px; --n-tap:44px;
+  --n-display:"Syne",system-ui,sans-serif; --n-mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:light){:root:not([data-skin]){--n-bg:#f2efe8;--n-panel:#e9e5dc;--n-raise:#ded9ce;--n-line:#c9c3b6;--n-ink:#0a0a0a;--n-mute:#6b6860;--n-acc:#d9480f;--n-on-acc:#fff}}
+/* workspace switcher: Camera, Effects, 3D, World */
+.ws{display:flex;gap:2px;padding:0 8px;border-bottom:1px solid var(--n-line,#2a2927);background:var(--n-bg,#0a0a0a);flex:none}
+.ws a{flex:1;min-height:36px;display:flex;align-items:center;justify-content:center;font:600 10.5px var(--n-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--n-mute,#8d8a82);text-decoration:none;border-bottom:2px solid transparent}
+.ws a[aria-current=page]{color:var(--n-ink,#f2efe8);border-bottom-color:var(--n-acc,#ff5a1f)}
+.ws a:focus-visible{outline:2px solid var(--n-acc,#ff5a1f);outline-offset:-2px}
+body[data-cam] .ws,body[data-walk] .ws{display:none!important}

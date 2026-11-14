@@ -15,6 +15,7 @@
   "@sparkjsdev/spark":"https://cdn.jsdelivr.net/npm/@sparkjsdev/spark@2.4.0/dist/spark.module.min.js"
 }}
 </script>
+<link rel="stylesheet" href="tokens.css">
 <style>
 :root{--rad:2px;--lab:'JetBrains Mono',ui-monospace,Menlo,Consolas,monospace;--disp:'Syne',system-ui,sans-serif;
   --bg:#0b0b0c;--panel:#111113;--raise:#1a1a1d;--line:#2b2b2f;--ink:#e8e6e1;--mute:#85838c;--accent:#ff5a1f;--on-accent:#150a04;--stage:#050506;--hot:#ff5a1f;color-scheme:dark;
@@ -160,6 +161,7 @@ body[data-recording='1']::after{content:'';position:fixed;top:calc(10px + env(sa
     <button class="btn" id="bImport">Import</button>
     <button class="btn pri" id="bExport">Export</button>
   </header>
+  <nav class="ws" aria-label="Workspaces"><a href="effects.html?cam=1">Camera</a><a href="effects.html">Effects</a><a href="studio.html" aria-current="page">3D</a><a href="studio.html#world">World</a></nav>
   <div class="main">
     <div id="stage">
       <canvas id="gl" tabindex="0"></canvas>
@@ -181,6 +183,6 @@ body[data-recording='1']::after{content:'';position:fixed;top:calc(10px + env(sa
 <input type="file" id="file" multiple hidden accept="audio/*,.mp3,.wav,.m4a,.ogg,.flac,.glb,.gltf,.bin,.obj,.mtl,.stl,.ply,.splat,.spz,.ksplat,.sog,image/*,video/*">
 <section id="scan" hidden></section>
 <div id="fxov" class="bg"><div class="fxtop"><b>Effects</b><span>Pick and tune effects. They apply to the selected object only.</span><button class="btn pri" id="fxdone">Done</button></div><iframe id="fxif" title="n0ise effects" allow="autoplay"></iframe></div>
-<script type="module" src="assets/studio.js?v=cecf87fc"></script>
+<script type="module" src="assets/studio.js?v=ef1802a0"></script>
 </body>
 </html>

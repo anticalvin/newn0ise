@@ -13,6 +13,7 @@ import {createApi} from './studio-api.js';
 import {createWalk} from './walk.js';
 import {createSim} from './sim.js';
 import {createRecorder,fmtTime} from './recorder.js';
+import {put as handoffPut,take as handoffTake} from './handoff.js';
 import {createWorldEditor} from './world-editor.js';
 import {RoomEnvironment} from 'three/addons/environments/RoomEnvironment.js';
 import {createN0} from './studio-adapter.js';
@@ -2039,7 +2040,7 @@ function buildExportPane(){
   b.append(t,l);v.appendChild(b);
   const m=sec(p,'Model');
   const mb=el('div','chips');
-  mb.append(btn('Scene → GLB','',exportGLB),btn('Selected → PLY','',()=>{const o=objById(S.sel);if(!o)toast('Select an object first.');else exportPLY(o);}));m.appendChild(mb);
+  mb.append(btn('Open in Effects','pri',()=>openInEffects()),btn('Scene → GLB','',exportGLB),btn('Selected → PLY','',()=>{const o=objById(S.sel);if(!o)toast('Select an object first.');else exportPLY(o);}));m.appendChild(mb);
   m.appendChild(el('div','note','GLB carries meshes and points with their materials. Splats stay in their own format. A turntable scan exports as a coloured mesh in either format.'));
   const k=sec(p,'Look');
   const kb=el('div','chips');
@@ -2199,7 +2200,7 @@ const walk=createWalk({THREE,camera,controls,canvas,S,holderBox,sheet,bump,leave
 const sim=createSim({THREE,S,bump});
 const api=createApi({sim,THREE,S,scene,camera,controls,renderer,canvas,world,hemi,key,grid,PRIMS,addPrimitive,removeObj,objById,importOne,applyView,bump,frameAll,tick,walk,projectFiles,zipStore,GLTFExporter,renderObjList,refreshInspector,setShadowFlags,selectObj,waitFrames,requestResize:()=>{needResize=true;}});
 window.n0={run:api.run,describe:api.describe,walk,sim};
-const worldEd=createWorldEditor({THREE,S,api,sim,walk,camera,canvas,controls,tc,objById,selectObj,removeObj,bump,el,sec,btn,toast,renderObjList});
+const worldEd=createWorldEditor({openInEffects:()=>openInEffects(),THREE,S,api,sim,walk,camera,canvas,controls,tc,objById,selectObj,removeObj,bump,el,sec,btn,toast,renderObjList});
 worldEd.build(paneEls.world);
 if(/^#world/.test(location.hash)){setTab('world');worldEd.starter();}
 $('#bWalk')&&$('#bWalk').addEventListener('click',()=>walk.on?walk.exit():walk.enter({pos:[camera.position.x*.6,0,Math.max(2.5,camera.position.z*.8)],yaw:0}));
@@ -2218,4 +2219,12 @@ function aiConnect(url,auto){
 }
 {const q=new URLSearchParams(location.search).get('mcp');if(q){setTimeout(()=>aiConnect(q.startsWith('ws')?q:undefined),800);}}
 
-window.__studio={worldEd,api,walk,aiConnect,zipStore,zipRead,projectFiles,loadProject,saveProject,AUTO,autoStep,fxRandomise,fxEnsure,fxClear,FX3,SG,addViz,AU,buildViz,vizUpdate,enterRest,leaveRest,restTick,setFx,autoDepth,buildDepth,restD,MATTERS,CUT,autoCut,refineMask,applyAlpha,S,N0,THREE,scene,camera,controls,renderer,importFiles,addPrimitive,sheet,SC,carve,surfaceNets,buildScan,makeRelief,pseudoDepth,photoToRelief,objById,selectObj,removeObj,bump,setTab,rebuildRelief,applyView,frameAll,exportImage,get rt(){return rt;}};
+/* Open in Effects: the current picture goes over, nothing is re-imported by hand */
+async function openInEffects(){
+  try{S.exporting=true;await waitFrames(3);const blob=await new Promise(r=>canvas.toBlob(r,'image/png'));S.exporting=false;if(!blob)throw new Error('empty');
+    await handoffPut(blob,{from:'3d'});location.href='effects.html#from=3d';}catch(e){S.exporting=false;toast('Couldn’t hand the picture over');}
+}
+setTimeout(async()=>{const m=location.hash.match(/^#from=(\w+)/);if(!m)return;const rec=await handoffTake();history.replaceState(null,'',location.pathname);
+  if(!rec){toast('Nothing to open. Send a picture from the other page again.');return;}
+  await photoToRelief(new File([rec.blob],'from-'+m[1]+'.png',{type:rec.blob.type||'image/png'}));toast('Opened from '+m[1]);},1400);
+window.__studio={openInEffects,worldEd,api,walk,aiConnect,zipStore,zipRead,projectFiles,loadProject,saveProject,AUTO,autoStep,fxRandomise,fxEnsure,fxClear,FX3,SG,addViz,AU,buildViz,vizUpdate,enterRest,leaveRest,restTick,setFx,autoDepth,buildDepth,restD,MATTERS,CUT,autoCut,refineMask,applyAlpha,S,N0,THREE,scene,camera,controls,renderer,importFiles,addPrimitive,sheet,SC,carve,surfaceNets,buildScan,makeRelief,pseudoDepth,photoToRelief,objById,selectObj,removeObj,bump,setTab,rebuildRelief,applyView,frameAll,exportImage,get rt(){return rt;}};

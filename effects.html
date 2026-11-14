@@ -7,10 +7,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="tokens.css">
 <style>
 :root{
   --bg:#06060a; --panel:#0d0d13; --raise:#15151d; --line:#22222d; --ink:#ecedf4; --mute:#797c90;
-  --accent:#3df5ff; --on-accent:#021417; --hot:#ff3d6e; --stage:#020204;
+  --accent:var(--n-acc,#ff5a1f); --on-accent:var(--n-on-acc,#0a0a0a); --hot:#ff3d6e; --stage:#020204;
   --display:"Syne",system-ui,sans-serif; --mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
   color-scheme:dark;
   box-sizing:border-box;
@@ -20,12 +21,12 @@
 @media (prefers-color-scheme: light){
   :root:not([data-theme="dark"]){
     --bg:#e9eaf0; --panel:#f6f6fa; --raise:#e6e7ee; --line:#d3d5df; --ink:#0c0d14; --mute:#6c6f84;
-    --accent:#0a5cff; --on-accent:#fff; --hot:#e0194d; --stage:#0a0a0e; color-scheme:light;
+    --accent:#d9480f; --on-accent:#fff; --hot:#e0194d; --stage:#0a0a0e; color-scheme:light;
   }
 }
 :root[data-theme="light"]{
   --bg:#e9eaf0; --panel:#f6f6fa; --raise:#e6e7ee; --line:#d3d5df; --ink:#0c0d14; --mute:#6c6f84;
-  --accent:#0a5cff; --on-accent:#fff; --hot:#e0194d; --stage:#0a0a0e; color-scheme:light;
+  --accent:#d9480f; --on-accent:#fff; --hot:#e0194d; --stage:#0a0a0e; color-scheme:light;
 }
 *{box-sizing:border-box}
 [hidden]{display:none!important}
@@ -426,6 +427,12 @@ body[data-cam] .tl{bottom:var(--campad,0px);max-height:32dvh;border-bottom:1px s
 .edinfo{flex:1;text-align:right;color:#b9b6ad;font:600 11px var(--lab);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .edwrap button:disabled,.edwrap select:disabled{opacity:.4}
 .edbar .edexp{background:var(--accent);border-color:var(--accent);color:#0a0a0a}
+.camduo{display:flex;flex-wrap:wrap;gap:6px;padding:0 12px;justify-content:center}
+.camduo label{display:flex;align-items:center;gap:6px;font:600 10px var(--lab);text-transform:uppercase;letter-spacing:.06em;color:#b9b6ad}
+.camduo input[type=color]{width:44px;height:36px;padding:0;border:1px solid #3a3835;background:none}
+.camduo input[type=range]{width:90px;height:36px;accent-color:var(--accent)}
+.camduo select{min-height:36px;background:#0a0a0a;color:#f2efe8;border:1px solid #3a3835;font:600 11px var(--lab);border-radius:3px}
+.camduo[hidden]{display:none}
 </style>
 </head>
 <body>
@@ -441,6 +448,7 @@ body[data-cam] .tl{bottom:var(--campad,0px);max-height:32dvh;border-bottom:1px s
       <button class="btn primary" id="save">Save</button>
     </div>
   </header>
+  <nav class="ws" aria-label="Workspaces"><a href="effects.html?cam=1">Camera</a><a href="effects.html" aria-current="page">Effects</a><a href="studio.html">3D</a><a href="studio.html#world">World</a></nav>
   <main>
     <div class="stage" id="stage">
       <button class="pill chipb" id="artonly" aria-label="Show or hide controls">Art only</button>
@@ -448,7 +456,7 @@ body[data-cam] .tl{bottom:var(--campad,0px);max-height:32dvh;border-bottom:1px s
       <div class="srcmenu" id="srcmenu" hidden><button data-a="open">Import</button><button data-a="cam">Camera</button><button data-a="audio">Audio file</button><button data-a="demo">Demo</button><button data-a="test">Test card</button><button data-a="rec">Record</button></div>
       <canvas id="gl"></canvas>
       <div class="info" id="info"></div>
-      <div class="float tr"><button class="pill" id="reset">Reset</button><button class="pill" id="textoff" hidden>Remove text</button><button class="pill" id="tlbtn">Timeline</button><button class="pill" id="power" aria-pressed="true">Power</button></div>
+      <div class="float tr"><button class="pill" id="reset">Reset</button><button class="pill" id="textoff" hidden>Remove text</button><button class="pill" id="tlbtn">Animate</button><button class="pill" id="power" aria-pressed="true">Power</button></div>
       <div class="float bl"><button class="pill" id="shuffle">Shuffle</button><button class="pill" id="paint" aria-pressed="false">Beam paint</button></div>
       <div class="float br"><button class="pill" id="hold">Hold for original</button></div>
       <div class="err" id="err" hidden></div>
@@ -463,6 +471,6 @@ body[data-cam] .tl{bottom:var(--campad,0px);max-height:32dvh;border-bottom:1px s
   </main>
 </div>
 <input type="file" id="file" accept="image/*,video/*,audio/*,.mp3,.wav,.m4a,.ogg,.flac,.aac" hidden>
-<script type="module" src="assets/index.js?v=284bad32"></script>
+<script type="module" src="assets/index.js?v=38a15f86"></script>
 </body>
 </html>

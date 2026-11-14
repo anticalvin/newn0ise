@@ -52,6 +52,7 @@ export const CAMS=[
   {id:'kaleidoc',cat:'Glitch',name:'Kaleidoscope',sub:'Mirrored wedges around the centre',sim:'prism',aspect:'1:1',ov:{},glyph:'lens',fx:['kaleido'],mix:[100]},
   {id:'mirrorc',cat:'Glitch',name:'Mirror',sub:'Split the frame and fold it',sim:'clean',aspect:'3:4',ov:{},glyph:'lens',fx:['mirror'],mix:[100]},
   {id:'fracture',cat:'Glitch',name:'Time fracture',sub:'Slit-scan over a ghosted copy',sim:'sig',aspect:'3:4',ov:{},glyph:'wave',fx:['slit','ghost'],mix:[100,50]},
+  {id:'duo',cat:'Subject',name:'Two-colour',sub:'Subject and background in two flat colours',sim:'clean',aspect:'3:4',ov:{},glyph:'person',duo:true,mods:[{module:'solid'}]},
   {id:'sil',cat:'Subject',name:'Silhouette',sub:'Solid shape of the person in front',sim:'clean',aspect:'3:4',ov:{},glyph:'person',mods:[{module:'solid'}]},
   {id:'neonc',cat:'Subject',name:'Neon outline',sub:'Glowing contour of the person',sim:'clean',aspect:'3:4',ov:{},glyph:'person',mods:[{module:'neonedge'}]},
   {id:'sigc',cat:'Subject',name:'Signal body',sub:'Person redrawn as moving signal lines',sim:'clean',aspect:'3:4',ov:{},glyph:'person',mods:[{module:'sigbody'}]}

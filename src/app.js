@@ -3,8 +3,9 @@ import {CAMS,glyph,drawOverlay} from './cams.js';
 import {createRecorder,fmtTime} from './recorder.js';
 import {createTimeline} from './timeline.js';
 import {createEditor} from './editor.js';
+import {put as handoffPut,take as handoffTake} from './handoff.js';
 import {CAMSIM_PARAMS,CAMSIM_FRAG,SIMS} from './camsim.js';
-import {PERSON,startPerson,feedPerson,syntheticPerson,DRAWN,paintDrawn,clearDrawn,maskFor,resetMatteGL,MASK_DEFAULTS} from './matte.js';
+import {QUAL,setMaskQuality,PERSON,startPerson,feedPerson,syntheticPerson,DRAWN,paintDrawn,clearDrawn,maskFor,resetMatteGL,MASK_DEFAULTS} from './matte.js';
 import {SIG,SIGNALS,signalValue,V,hooks,attachGL,createGL,VS,HEAD,$,clamp,lerp,TABS,CT,CTL,PALS,hexRGB,lum255,rgbHex,PROFILES,BASE,P,E,MODS,applyProfile,canvas,stage,gl,GLOK,noGL,PR,mkProg,mkProgAsync,initGL,mkRT,freeRT,bindRT,samp,draw,TEX,initLUT,SRC,srcDims,uploadSrc,setSource,fitCanvas,demoCanvas,testCanvas,RB,readDrop,audio,ST,STAGES,stageModel,CHAINS,applyStages,buildChainUI,refreshChainUI,computeE,T,POINTER,PAINTQ,SZ,exportCap,expDims,EMBED,EMB,layout,syncSrc,renderFrame,CTX,adaptQ} from './engine.js';
 {const _c=document.getElementById('gl');attachGL(_c,document.getElementById('stage'),createGL(_c));}
 /* =====================================================================
@@ -1523,7 +1524,7 @@ function modParams(l,m,t){
 }
 let MPREV=0;
 function modulateSection(host,l,m){
-  l.mods=l.mods||[];const a=accordion('Modulate',l.mods.length>0),tg=m.params.filter(p=>p.t==='r');
+  l.mods=l.mods||[];const a=accordion('Make it move',l.mods.length>0),tg=m.params.filter(p=>p.t==='r');
   l.mods.forEach((md,i)=>{
     const r=el('div','ir');r.appendChild(el('span','l','Drive'));const ts=document.createElement('select');
     tg.forEach(p=>{const o=document.createElement('option');o.value=p.k;o.textContent=p.label;ts.appendChild(o);});ts.value=md.target;ts.addEventListener('change',()=>md.target=ts.value);
@@ -1542,9 +1543,9 @@ const SPKEY='n0ise.stackpresets';
 const loadStackPresets=()=>{try{return JSON.parse(localStorage.getItem(SPKEY)||'[]');}catch(e){return[];}};
 const currentRecipe=name=>{const j=toRecipe({name,P,layers:STACK.layers,MODULES,size:[ST.DW||1280,ST.DH||720]});const t=TLN.serialize();if(t)j.timeline=t;return j;};
 function applyRecipe(j){
-  const r=fromRecipe(j,{mkLayer,MODULES});TLN.load(j.timeline||null);
+  const r=fromRecipe(j,{mkLayer,MODULES});
   if(r.P){Object.assign(P,r.P);}
-  STACK.layers=r.layers.length?r.layers:[mkLayer('crtlab')];STACK.sel=0;V.sizeKey='';V.lastBKey='';
+  STACK.layers=r.layers.length?r.layers:[mkLayer('crtlab')];STACK.sel=0;V.sizeKey='';V.lastBKey='';TLN.load(j.timeline||null,STACK.layers);
   snap();refreshUI();renderInspector();if(r.skipped.length)toast('Skipped effects this version doesn’t have: '+r.skipped.join(', '),5000);
 }
 function recipeSection(host){
@@ -1560,7 +1561,7 @@ function recipeSection(host){
   host.appendChild(a.d);
 }
 function maskSection(host,l,m){
-  l.mask=l.mask||{...MASK_DEFAULTS};const mk=l.mask,a=accordion('Mask',true);
+  l.mask=l.mask||{...MASK_DEFAULTS};const mk=l.mask,a=accordion('Apply to…',true);a.b.appendChild(el('div','cl','Choose where this effect shows: everywhere, the person, the background, a brightness range, a colour, or paint it on.'));
   const eff=l.select==='all'?mk.src:l.select==='color'?'color':l.select==='drawn'?'drawn':'person';
   if(l.select==='all'){const r=el('div','ir');r.appendChild(el('span','l','Matte from'));const sel=document.createElement('select');
     [['person','Person'],['luma','Luma range'],['color','Colour key'],['drawn','Drawn']].forEach(([v,n])=>{const o=document.createElement('option');o.value=v;o.textContent=n;sel.appendChild(o);});
@@ -1571,6 +1572,8 @@ function maskSection(host,l,m){
     if(PERSON.state==='idle'||PERSON.state==='error')a.b.appendChild(Object.assign(el('button','btn','Load person model (about 14 MB)'),{onclick:()=>{PERSON.state='idle';loadPerson(true);}}));
     const mr=el('div','ir');mr.appendChild(el('span','l','Model'));const ms=document.createElement('select');[['selfie','Fast (selfie)'],['multi','Detailed (multiclass, 16 MB)']].forEach(([v,n])=>{const o=document.createElement('option');o.value=v;o.textContent=n;ms.appendChild(o);});ms.value=PERSON.model;ms.addEventListener('change',()=>{PERSON.model=ms.value;PERSON.state='starting';startPerson(ms.value);});mr.appendChild(ms);a.b.appendChild(mr);
     rowParam(a.b,{k:'on',t:'b',label:'Smooth over time'},PERSON.smooth,null);
+    {const q=el('div','ir');q.appendChild(el('span','l','Mask quality'));const qs=document.createElement('select');[['fast','Fast'],['balanced','Balanced'],['max','Max']].forEach(([v,n])=>{const o=document.createElement('option');o.value=v;o.textContent=n;qs.appendChild(o);});qs.value=PERSON.quality;qs.addEventListener('change',()=>{setMaskQuality(qs.value);toast('Stills and exports always use Max edges');});q.appendChild(qs);a.b.appendChild(q);
+      a.b.appendChild(Object.assign(el('button','btn','Compare 256 / 384 / 512 / 768'),{onclick:()=>compareMasks()}));}
   }
   if(eff==='luma'){rowRange(a.b,'From',()=>Math.round(mk.lo*100),v=>mk.lo=v/100,0,100,1);rowRange(a.b,'To',()=>Math.round(mk.hi*100),v=>mk.hi=v/100,0,100,1);}
   if(eff==='color'){rowParam(a.b,{k:'col',t:'color',label:'Key colour'},mk,null);rowRange(a.b,'Tolerance',()=>Math.round(mk.tol*100),v=>mk.tol=v/100,2,100,1);}
@@ -1584,6 +1587,22 @@ function maskSection(host,l,m){
   if(eff==='person')rowRange(a.b,'Edge snap',()=>mk.snap,v=>mk.snap=v,0,100,1);
   const pv=el('div','ir');pv.appendChild(el('span','l','Preview mask'));const cb=document.createElement('input');cb.type='checkbox';cb.checked=MPREV===l.uid;cb.addEventListener('change',()=>{MPREV=cb.checked?l.uid:0;});pv.appendChild(cb);a.b.appendChild(pv);
   host.appendChild(a.d);
+}
+/* run the person model at four capture sizes and show each matte with its time */
+async function compareMasks(){
+  if(PERSON.state!=='ready'&&!PERSON.synthetic){toast('Load the person model first');return;}
+  const sh=el('div','sheet'),box=el('div','rollbox',`<h3>Mask at four sizes</h3>`),grid=el('div','rollgrid');grid.style.gridTemplateColumns='repeat(2,1fr)';box.appendChild(grid);
+  const close=el('button','btn','Close');close.addEventListener('click',()=>sh.remove());box.appendChild(close);sh.appendChild(box);document.body.appendChild(sh);
+  const keep=PERSON.cap;
+  for(const cap of [256,384,512,768]){
+    const cell=el('div','rollcell');cell.innerHTML=`<div class="cl">${cap}px · measuring…</div>`;grid.appendChild(cell);
+    PERSON.cap=cap;PERSON.ms=0;const v0=PERSON.ver;const t0=performance.now();
+    while(PERSON.ver<v0+6&&performance.now()-t0<6000)await new Promise(r=>setTimeout(r,60));
+    const c=document.createElement('canvas');c.width=PERSON.w||1;c.height=PERSON.h||1;c.style.cssText='width:100%;background:#000';
+    if(PERSON.out){const g=c.getContext('2d'),im=g.createImageData(c.width,c.height);for(let i=0;i<PERSON.out.length;i++){const v=PERSON.out[i];im.data[i*4]=im.data[i*4+1]=im.data[i*4+2]=v;im.data[i*4+3]=255;}g.putImageData(im,0,0);}
+    cell.innerHTML='';cell.appendChild(c);cell.appendChild(el('div','cl',`${cap}px · ${c.width}×${c.height} mask · ${PERSON.ms?PERSON.ms.toFixed(0)+' ms per frame':'no result'}`));
+  }
+  PERSON.cap=keep;
 }
 /* paint the drawn matte straight on the picture */
 canvas.addEventListener('pointerdown',e=>{if(!DRAWN.on)return;e.stopImmediatePropagation();e.preventDefault();canvas.setPointerCapture(e.pointerId);canvas._paint=true;pnt(e);},true);
@@ -1698,14 +1717,14 @@ const el=(tag,cls,html)=>{const e=document.createElement(tag);if(cls)e.className
 
 /* ---------- history ---------- */
 const HIST=[],REDO=[];let lastSnap='';
-const stackState=()=>STACK.layers.map(l=>({m:l.module,p:l.module==='crtlab'?null:l.params,o:l.opacity,b:l.blend,s:l.showSource,sel:l.select,t:l.thr,pos:l.pos,z:l.size,seed:l.seed,v:l.visible,c:l.color,mk:l.mask,so:l.solo,md:l.mods}));
+const stackState=()=>STACK.layers.map(l=>({u:l.uid,m:l.module,p:l.module==='crtlab'?null:l.params,o:l.opacity,b:l.blend,s:l.showSource,sel:l.select,t:l.thr,pos:l.pos,z:l.size,seed:l.seed,v:l.visible,c:l.color,mk:l.mask,so:l.solo,md:l.mods}));
 function snap(){
   const s=JSON.stringify({p:P,l:stackState()});
   if(s!==lastSnap){if(lastSnap)HIST.push(lastSnap);if(HIST.length>60)HIST.shift();lastSnap=s;REDO.length=0;}
 }
 function applySnap(s){
   const o=JSON.parse(s);Object.assign(P,o.p);
-  STACK.layers=o.l.filter(x=>MODULES[x.m]).map(x=>{const l=mkLayer(x.m,x.p||undefined);Object.assign(l,{opacity:x.o,blend:x.b,showSource:x.s,select:x.sel,thr:x.t,pos:x.pos,size:x.z,seed:x.seed,visible:x.v});if(x.c)l.color=x.c;if(x.mk)l.mask=x.mk;l.solo=!!x.so;l.mods=x.md||[];return l;});
+  STACK.layers=o.l.filter(x=>MODULES[x.m]).map(x=>{const l=mkLayer(x.m,x.p||undefined);if(x.u!=null){l.uid=x.u;layerUid=Math.max(layerUid,x.u+1);}Object.assign(l,{opacity:x.o,blend:x.b,showSource:x.s,select:x.sel,thr:x.t,pos:x.pos,size:x.z,seed:x.seed,visible:x.v});if(x.c)l.color=x.c;if(x.mk)l.mask=x.mk;l.solo=!!x.so;l.mods=x.md||[];return l;});
   if(!STACK.layers.length)STACK.layers=[mkLayer('crtlab')];STACK.sel=Math.min(STACK.sel,STACK.layers.length-1);lastSnap=s;refreshUI();renderInspector();
 }
 function undo(){const s=HIST.pop();if(!s){toast('Nothing to undo');return;}REDO.push(lastSnap);applySnap(s);toast('Undo');}
@@ -2188,7 +2207,7 @@ function setDock(v,quiet){
 function buildDockTabs(){
   const dock=$i('dock');if(!dock||dock.querySelector('.dtabs'))return;
   const nav=el('nav','dtabs');nav.setAttribute('role','tablist');
-  [['fx','Effects'],['fuse','Fuse'],['layers','Layers']].forEach(([v,n])=>{const b=el('button','',n);b.dataset.v=v;b.setAttribute('role','tab');b.addEventListener('click',()=>setDock(v));nav.appendChild(b);});
+  [['fx','Effects'],['fuse','Fuse'],['layers','Stack']].forEach(([v,n])=>{const b=el('button','',n);b.dataset.v=v;b.setAttribute('role','tab');b.addEventListener('click',()=>setDock(v));nav.appendChild(b);});
   const g=$i('grab');g?g.after(nav):dock.prepend(nav);
   const v=lsGet('n0ise.dock','fx');setDock(v==='fuse'?'layers':v,true);
 }
@@ -2407,10 +2426,11 @@ function openSheet(blob,name,isVideo,meta){
   const file=new File([blob],name,{type:blob.type});
   const canShare=!!(navigator.canShare&&navigator.canShare({files:[file]}));
   const media=isVideo?`<video src="${url}" controls playsinline loop autoplay muted style="max-width:100%;max-height:56dvh;border-radius:6px"></video>`:`<img alt="Your finished export" src="${url}">`;
-  sh.innerHTML=`<div>${media}<p>${(blob.size/1048576).toFixed(1)} MB · ${name.split('.').pop().toUpperCase()}${meta&&meta.dur?' · '+fmtTime(meta.dur):''}</p><div class="xrow"><a class="btn primary" download="${name}" href="${url}">Download</a>${canShare?'<button class="btn" id="shr">Share</button>':''}<button class="btn" id="cls">Close</button>${meta&&meta.id?'<button class="btn" id="dis">Discard</button>':''}</div></div>`;
+  sh.innerHTML=`<div>${media}<p>${(blob.size/1048576).toFixed(1)} MB · ${name.split('.').pop().toUpperCase()}${meta&&meta.dur?' · '+fmtTime(meta.dur):''}</p><div class="xrow"><a class="btn primary" download="${name}" href="${url}">Download</a>${canShare?'<button class="btn" id="shr">Share</button>':''}<button class="btn" id="cls">Close</button>${!isVideo?'<button class="btn" id="to3">Open in 3D</button>':''}${meta&&meta.id?'<button class="btn" id="dis">Discard</button>':''}</div></div>`;
   document.body.appendChild(sh);
   const close=()=>{sh.remove();URL.revokeObjectURL(url);};
   $('#cls',sh).addEventListener('click',close);
+  {const b=$('#to3',sh);if(b)b.addEventListener('click',async()=>{await handoffPut(blob,{from:'camera'});location.href='studio.html#from=camera';});}
   {const d=$('#dis',sh);if(d)d.addEventListener('click',async()=>{await rollDelete(meta.id);close();camThumbUpdate();toast('Discarded');});}
   sh.addEventListener('pointerdown',e=>{if(e.target===sh)close();});
   const shr=$('#shr',sh);if(shr)shr.addEventListener('click',async()=>{try{await navigator.share({files:[file]});}catch(e){}});
@@ -2447,6 +2467,7 @@ async function openRoll(){
 }
 /* camera bodies (see cams.js): a Fuse recipe + frame shape + overlay, applied to the shared engine */
 let camIx=0,camStr=50,camText=false,camSaved=null,camOvT=0,camRec0=0,camRecOn=false;
+const DUO={sub:'#f2efe8',bg:'#0a0a0a',soft:12,fg:'',bgfx:''};
 let camCat='All',camFavs=[];
 const camVis=i=>{const c=CAMS[i];return camCat==='All'||(camCat==='★'?camFavs.includes(c.id):c.cat===camCat);};
 function setCamCat(n){camCat=n;lsSet('n0ise.camcat',n);const st=$('#camstrip');if(!st)return;
@@ -2458,12 +2479,16 @@ function camSurprise(){const pool=CAMS.map((c,i)=>i).filter(i=>i!==camIx);applyC
 function camMix(){const sl=camSim();if(!sl)return;const defs=Object.fromEntries(MODULES.camsim.params.map(p=>[p.k,p]));const base=SIMS[CAMS[camIx].sim]||{};
   Object.keys(base).forEach(k=>{const d=defs[k];if(!d||d.t==='color'||typeof base[k]!=='number'||k==='res'||k==='bits')return;const r=(d.max-d.min)*.2;sl.params[k]=Math.max(d.min,Math.min(d.max,base[k]+(Math.random()*2-1)*r));});
   sl.params.seed2=Math.floor(Math.random()*99);buzz(8);toast('Mixed within '+CAMS[camIx].name);}
+function duoApply(){const c=CAMS[camIx];if(c&&c.duo)applyCam(camIx,true);}
 function applyCam(i,quiet){
   camIx=(i+CAMS.length)%CAMS.length;const c=CAMS[camIx];lsSet('n0ise.cam',c.id);
   const layers=[];
   if(c.fx&&c.fx.length){const l=mkLayer('fuse');for(let k=1;k<=4;k++){fuseSet(l,k,null);l.params['on'+k]=false;}
     c.fx.forEach((id,k)=>{fuseSet(l,k+1,id);l.params['mx'+(k+1)]=c.mix[k]??100;});layers.push(l);}
   (c.mods||[]).forEach(m=>{if(MODULES[m.module])layers.push(mkLayer(m.module,m.params));});
+  if(c.duo){const so=layers.find(l=>l.module==='solid');if(so)Object.assign(so.params,{sub:DUO.sub,bg:DUO.bg,soft:DUO.soft,keep:0});
+    [['subject',DUO.fg],['background',DUO.bgfx]].forEach(([sel,id])=>{if(!id||!FXBY[id])return;const f=mkLayer('fuse');for(let k=1;k<=4;k++){fuseSet(f,k,null);f.params['on'+k]=false;}fuseSet(f,1,id);f.select=sel;layers.push(f);});}
+  if(layers.some(l=>MODULES[l.module]&&MODULES[l.module].needsMask))loadPerson(true);
   const sl=mkLayer('camsim');Object.assign(sl.params,SIMS[c.sim]||{});layers.push(sl);
   STACK.layers=layers;STACK.sel=layers.length-1;P.aspect=c.aspect;V.sizeKey='';V.lastBKey='';
   setCamStr(camStr);paintCamUI();applyPro();if(!quiet)buzz(8);
@@ -2479,6 +2504,7 @@ function paintCamUI(){
   const st=$('#camstrip');if(!st)return;
   [...st.children].forEach((b,i)=>{b.setAttribute('aria-pressed',i===camIx);});
   const t=st.children[camIx];if(t&&!st._dragging)st.scrollTo({left:t.offsetLeft-(st.clientWidth-t.offsetWidth)/2,behavior:st._first?'smooth':'auto'});st._first=true;
+  {const d=$('#camduo');if(d)d.hidden=!CAMS[camIx].duo;}
   const c=CAMS[camIx];{const f=$('#camfav');if(f){const on=camFavs.includes(c.id);f.textContent=on?'★':'☆';f.setAttribute('aria-pressed',on);}}
   $('#camname').textContent=c.name;$('#camsub').textContent=c.sub;const a=$('#camasp');if(a)a.textContent=P.aspect==='src'?'Full':P.aspect;
   {const bt=$('.cambot'),app=document.querySelector('.app');if(bt&&app){app.style.setProperty('--stagepad','0px');app.style.setProperty('--campad',bt.offsetHeight+'px');document.documentElement.style.setProperty('--campad',bt.offsetHeight+'px');V.sizeKey='';ST.freeze=0;}}
@@ -2623,18 +2649,24 @@ function buildCamUI(){
   const fav=el('button','camfav','☆');fav.id='camfav';fav.setAttribute('aria-label','Favourite this camera');fav.addEventListener('click',camFavToggle);
   info.append(Object.assign(el('b','','Camera'),{id:'camname'}),fav,Object.assign(el('span','','' ),{id:'camsub'}));
   const str=document.createElement('input');str.type='range';str.min=0;str.max=100;str.value=camStr;str.id='camstr';str.setAttribute('aria-label','Look strength');str.addEventListener('input',()=>setCamStr(+str.value));
+  const duo=el('div','camduo');duo.id='camduo';duo.hidden=true;
+  {const col=(l,k)=>{const w=el('label','',l),i=document.createElement('input');i.type='color';i.value=DUO[k];i.addEventListener('input',()=>{DUO[k]=i.value;duoApply();});w.appendChild(i);return w;};
+   const fxs=[['','None'],['halftone','Halftone'],['glitch','Glitch'],['pixel','Pixel'],['thermal','Thermal'],['matrix','Matrix'],['ascii','Text']];
+   const sel=(l,k)=>{const w=el('label','',l),s2=document.createElement('select');fxs.forEach(([v,n])=>{const o=document.createElement('option');o.value=v;o.textContent=n;s2.appendChild(o);});s2.value=DUO[k];s2.addEventListener('change',()=>{DUO[k]=s2.value;duoApply();});w.appendChild(s2);return w;};
+   const fe=el('label','','Edge'),ri=document.createElement('input');ri.type='range';ri.min=0;ri.max=60;ri.value=DUO.soft;ri.addEventListener('input',()=>{DUO.soft=+ri.value;const so=STACK.layers.find(l=>l.module==='solid');if(so)so.params.soft=DUO.soft;});fe.appendChild(ri);
+   duo.append(col('Subject','sub'),col('Background','bg'),fe,sel('Subject look','fg'),sel('Background look','bgfx'));}
   const strip=el('div','camstrip');strip.id='camstrip';strip.setAttribute('role','listbox');strip.setAttribute('aria-label','Cameras');
   CAMS.forEach((c,i)=>{const b=el('button','camt');b.setAttribute('role','option');b.innerHTML=glyph(c.glyph)+`<span>${c.name}</span>`;b.addEventListener('click',()=>{if(camIx!==i)applyCam(i);});strip.appendChild(b);});
   const cats=el('div','camcats');cats.id='camcats';cats.setAttribute('role','tablist');
   ['All','★','Film','Video','Digital','Glitch','Subject'].forEach(n=>{const b=el('button','',n);b.dataset.c=n;b.setAttribute('aria-pressed',n===camCat);b.addEventListener('click',()=>setCamCat(n));cats.appendChild(b);});
-  let sT=0;strip.addEventListener('scroll',()=>{strip._dragging=true;clearTimeout(sT);sT=setTimeout(()=>{strip._dragging=false;const mid=strip.scrollLeft+strip.clientWidth/2;let best=0,bd=1e9;[...strip.children].forEach((t,i)=>{const d=Math.abs(t.offsetLeft+t.offsetWidth/2-mid);if(d<bd){bd=d;best=i;}});if(best!==camIx)applyCam(best);},110);},{passive:true});
+  let sT=0;strip.addEventListener('scroll',()=>{strip._dragging=true;clearTimeout(sT);sT=setTimeout(()=>{strip._dragging=false;const mid=strip.scrollLeft+strip.clientWidth/2;let best=0,bd=1e9;[...strip.children].forEach((t,i)=>{if(t.hidden)return;const d=Math.abs(t.offsetLeft+t.offsetWidth/2-mid);if(d<bd){bd=d;best=i;}});if(best!==camIx)applyCam(best);},110);},{passive:true});
   const row=el('div','camrow');
   const roll=el('button','camroll','Roll');roll.id='camroll';roll.setAttribute('aria-label','Open roll');roll.addEventListener('click',openRoll);
   const sh=el('button','shutter');sh.id='shutter';sh.setAttribute('aria-label','Shutter. Tap for a photo, hold to record');
   const sw=el('button','cb camswap','Next');sw.setAttribute('aria-label','Next camera');sw.addEventListener('click',()=>camStep(1));
   row.append(roll,sh,sw);
   const modes=el('div','cammode');[['photo','Photo'],['video','Video']].forEach(([m,l])=>{const b=el('button','',l);b.dataset.m=m;b.setAttribute('aria-pressed',camMode===m);b.addEventListener('click',()=>{if(camRecorder.busy)return;camMode=m;lsSet('n0ise.cammode',m);modes.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x.dataset.m===m));sh.setAttribute('aria-label',m==='video'?'Shutter. Tap to start or stop recording':'Shutter. Tap for a photo, hold to record');});modes.appendChild(b);});
-  bot.append(info,str,cats,strip,modes,row);
+  bot.append(info,str,duo,cats,strip,modes,row);
   const rb=el('div','camrecbar');rb.id='camrec';rb.hidden=true;rb.innerHTML='<i></i><span class="rt">0:00</span>';
   const cd=el('div','camcount');cd.id='camcount';cd.hidden=true;const fp=el('div','camfpsv');fp.id='camfpsv';fp.hidden=true;
   const pro=el('div','campro');pro.id='campro';const lv=el('div','camlevel');lv.id='camlevel';lv.hidden=true;const hs=document.createElement('canvas');hs.id='camhist';hs.width=128;hs.height=48;hs.hidden=true;const sf=el('div','camflash');sf.id='camflash';
@@ -2793,9 +2825,20 @@ function wire(){
   hold.addEventListener('contextmenu',e=>e.preventDefault());
   addEventListener('keydown',e=>{
     if(e.target!==document.body)return;
-    if(e.code==='Space'){e.preventDefault();setH(true);}
-    else if(e.key==='z'&&e.shiftKey&&(e.metaKey||e.ctrlKey)){redo();}
-    else if(e.key==='z'&&(e.metaKey||e.ctrlKey||!e.shiftKey)){undo();}
+    const mod=e.metaKey||e.ctrlKey,k=e.key.toLowerCase();
+    if(mod&&k==='z'){e.preventDefault();e.shiftKey?redo():undo();return;}
+    if(mod&&k==='y'){e.preventDefault();redo();return;}
+    if(mod&&k==='d'){e.preventDefault();dupLayer();return;}
+    if(mod||e.altKey)return;
+    if(e.code==='Space'){e.preventDefault();if(ED.active()||TLN.tracks.length){TLN.play();}else setH(true);return;}
+    if(e.key==='?'||(e.key==='/'&&e.shiftKey)){helpSheet();return;}
+    if(k==='s'){const l=layer();l.solo=!l.solo;renderInspector();toast(l.solo?'Solo on':'Solo off');}
+    else if(k==='v'){const l=layer();l.visible=!l.visible;renderInspector();toast(l.visible?'Layer shown':'Layer hidden');}
+    else if(k==='d'){dupLayer();}
+    else if(k==='m'){mutateLayer();}
+    else if(k==='t'){TLN.show();}
+    else if(e.key==='ArrowLeft'||e.key==='ArrowRight'){const d=(e.key==='ArrowRight'?1:-1)*(e.shiftKey?1:1/30);if(TLN.open||ED.active()){e.preventDefault();TLN.seek(Math.max(0,(ED.active()?ED.t:TLN.t)+d));}}
+    else if(e.key==='['||e.key===']'){const a=STACK.layers,i=STACK.sel,j=i+(e.key==='['?-1:1);if(j>=0&&j<a.length){[a[i],a[j]]=[a[j],a[i]];STACK.sel=j;renderInspector();}}
   });
   addEventListener('keyup',e=>{if(e.code==='Space')setH(false);});
   canvas.addEventListener('pointermove',e=>{
@@ -3170,7 +3213,7 @@ function shareStack(){
 function loadStackHash(){
   const m=location.hash.match(/^#s=(.+)$/);if(!m)return;
   try{const a=JSON.parse(decodeURIComponent(escape(atob(m[1]))));
-    STACK.layers=a.filter(x=>MODULES[x.m]).map(x=>{const l=mkLayer(x.m,x.p||undefined);Object.assign(l,{opacity:x.o,blend:x.b,showSource:x.s,select:x.sel,thr:x.t,pos:x.pos,size:x.z,seed:x.seed,visible:x.v});if(x.c)l.color=x.c;if(x.mk)l.mask=x.mk;l.solo=!!x.so;l.mods=x.md||[];return l;});
+    STACK.layers=a.filter(x=>MODULES[x.m]).map(x=>{const l=mkLayer(x.m,x.p||undefined);if(x.u!=null){l.uid=x.u;layerUid=Math.max(layerUid,x.u+1);}Object.assign(l,{opacity:x.o,blend:x.b,showSource:x.s,select:x.sel,thr:x.t,pos:x.pos,size:x.z,seed:x.seed,visible:x.v});if(x.c)l.color=x.c;if(x.mk)l.mask=x.mk;l.solo=!!x.so;l.mods=x.md||[];return l;});
     if(!STACK.layers.length)STACK.layers=[mkLayer('crtlab')];}catch(e){}
 }
 const presetsOf=id=>{try{return JSON.parse(localStorage.getItem('n0ise.p.'+id)||'[]');}catch(e){return[];}};
@@ -3260,7 +3303,7 @@ function renderInspector0(){
   const col=IDENT[l.module]||'#ccc',dark=parseInt(col.slice(1,3),16)*.3+parseInt(col.slice(3,5),16)*.59+parseInt(col.slice(5,7),16)*.11<140;
   const ban=el('div','ban');ban.style.background=col;ban.style.color=dark?'#fff':'#111';
   ban.append(el('div','no',String(ix+1).padStart(2,'0')),el('div','nm',m.name));host.appendChild(ban);
-  const TABS3=[['look','Look'],['place','Place'],['motion','Motion'],['layer','Layer']];
+  const TABS3=[['look','Look'],['place','Apply'],['motion','Move'],['layer','Layer']];
   if(!TABS3.some(t=>t[0]===INS.tab))INS.tab='look';
   const tabs=el('div','itabs');tabs.setAttribute('role','tablist');
   TABS3.forEach(([id,n])=>{const b=el('button','',n);b.setAttribute('role','tab');b.setAttribute('aria-selected',id===INS.tab);b.addEventListener('click',()=>{INS.tab=id;buzz(6);renderInspector();});tabs.appendChild(b);});
@@ -3272,6 +3315,8 @@ function renderInspector0(){
   mk('Remix',()=>{remix(l);renderInspector();});
   mk('Share',shareStack);
   mk(l.visible?'Hide':'Show',()=>{l.visible=!l.visible;renderInspector();});
+  mk('Mutate',()=>mutateLayer());
+  mk('Open in 3D',()=>openIn3D());
   {const ab=mk(IDLE.on?'Alive on':'Alive off',()=>{IDLE.on=!IDLE.on;IDLE.force=true;lsSet('n0ise.alive',IDLE.on?'on':'off');renderInspector();});ab.setAttribute('aria-pressed',IDLE.on);}
   {const sb=mk(l.solo?'Unsolo':'Solo',()=>{l.solo=!l.solo;renderInspector();});sb.setAttribute('aria-pressed',!!l.solo);}
   if(ix>0)mk('Up',()=>{const a=STACK.layers;[a[ix-1],a[ix]]=[a[ix],a[ix-1]];STACK.sel=ix-1;renderInspector();});
@@ -3348,6 +3393,32 @@ function pickEffect(id){const e=effectLookup(id);if(!e)return;if(e.cam)pickCam(e
   const rc=lsGet('n0ise.recent',[]).filter(x=>x!==id);rc.unshift(id);lsSet('n0ise.recent',rc.slice(0,8));}
 function stepEffect(d){const list=effectList(),cur=list.findIndex(e=>e.id===effectId(layer())),n=list[((cur<0?0:cur)+d+list.length)%list.length];pickEffect(n.id);toast(n.name);buzz(12);}
 const toggleFav=id=>{const f=lsGet('n0ise.fav',[]),i=f.indexOf(id);if(i<0)f.push(id);else f.splice(i,1);lsSet('n0ise.fav',f);toast(i<0?'Added to favorites':'Removed from favorites');buzz(15);renderInspector();};
+async function openIn3D(){
+  try{ST.clean=true;await frames2();const blob=await new Promise(r=>canvas.toBlob(r,'image/png'));ST.clean=false;if(!blob)throw new Error('empty');
+    await handoffPut(blob,{from:'effects',name:'From Effects'});location.href='studio.html#from=effects';}
+  catch(e){ST.clean=false;toast('Couldn’t hand the picture over');}
+}
+async function takeHandoff(){
+  const m=location.hash.match(/^#from=(\w+)/);if(!m)return;const rec=await handoffTake();history.replaceState(null,'',location.pathname+location.search);
+  if(!rec){toast('Nothing to open. Send a picture from the other page again.');return;}
+  await loadFile(new File([rec.blob],'from-'+m[1]+'.png',{type:rec.blob.type||'image/png'}));toast('Opened from '+(m[1]==='3d'?'3D':m[1]));
+}
+function dupLayer(){
+  const l=layer();if(l.module==='crtlab'){toast('The CRT lab can’t be duplicated');return;}
+  const c=JSON.parse(JSON.stringify(l));c.uid=layerUid++;STACK.layers.splice(STACK.sel+1,0,c);STACK.sel++;snap();renderInspector();toast('Layer duplicated');
+}
+/* a safe variation of the selected layer: every numeric control moves up to 18% of its range */
+function mutateLayer(amt=.18){
+  const l=layer(),m=MODULES[l.module];if(!m||l.module==='crtlab'){toast('Pick an effect layer to mutate');return;}
+  m.params.forEach(p=>{if(p.t!=='r'||typeof l.params[p.k]!=='number'||/^(orig|seed)$/.test(p.k))return;const d=(p.max-p.min)*amt;l.params[p.k]=Math.max(p.min,Math.min(p.max,l.params[p.k]+(Math.random()*2-1)*d));});
+  l.seed=(l.seed||0)+1+(Math.random()*40|0);snap();renderInspector();toast('Mutated');buzz(8);
+}
+function helpSheet(){
+  if($('#helpsheet'))return;const sh=el('div','sheet');sh.id='helpsheet';
+  const keys=[['Z / Shift+Z','Undo / redo (Cmd or Ctrl)'],['D','Duplicate layer'],['S','Solo layer'],['V','Show or hide layer'],['M','Mutate: a safe variation'],['[ ]','Move layer down / up'],['T','Open Animate'],['Space','Play / pause when animating, else hold to compare'],['← →','Step a frame (Shift: one second)'],['?','This sheet']];
+  sh.innerHTML=`<div class="rollbox"><h3>Keys</h3>${keys.map(([a,b])=>`<div class="prrow"><span style="flex:none;min-width:96px;font-weight:700">${a}</span><span>${b}</span></div>`).join('')}<h3 style="margin-top:14px">Make your own look</h3><div class="prrow"><span>1. Pick a base look in Effects.</span></div><div class="prrow"><span>2. Add an effect in Stack, then tap +.</span></div><div class="prrow"><span>3. Choose where it applies in Look, then Apply to…</span></div><button class="btn" id="hsx">Close</button></div>`;
+  document.body.appendChild(sh);sh.querySelector('#hsx').addEventListener('click',()=>sh.remove());sh.addEventListener('pointerdown',e=>{if(e.target===sh)sh.remove();});
+}
 function wireTouch(){
   const stage=$('#stage'),pts=new Map();let t0=0,maxN=0,moved=0,lp=0,avgDx=0,avgDy=0;
   window.__multi=()=>pts.size>1;
@@ -3375,7 +3446,7 @@ function wireTouch(){
   const lefty=lsGet('n0ise.lefty',false);if(lefty)document.body.dataset.lefty='1';
   /* first-run coach: one dismissable card, three tips */
   if(!lsGet('n0ise.coach',false)&&(document.body.dataset.sheet!==undefined||innerWidth<700)){
-    const c=el('div','coach glass',`<b>Quick gestures</b><span>Drag the art to shape the effect</span><span>Hold the art to compare the original</span><span>Two-finger tap undoes, three-finger swipe changes effect</span>`);
+    const c=el('div','coach glass',`<b>Quick gestures</b><span>Drag to change it. Tap a look.</span><span>Hold the art to compare the original</span><span>Two-finger tap undoes, three-finger swipe changes effect</span>`);
     const b=el('button','','Got it');b.addEventListener('click',()=>{lsSet('n0ise.coach',true);c.remove();});c.appendChild(b);stage.appendChild(c);const gone=()=>{lsSet('n0ise.coach',true);c.remove();};setTimeout(gone,6000);canvas.addEventListener('pointerdown',gone,{once:true});
   }
 }
@@ -3549,9 +3620,34 @@ function wireSheet(){
   if(new URLSearchParams(location.search).get('cam'))setTimeout(()=>showCamGate('Allow the camera, then pick a camera body: CCTV, disposable, Super 8, instant and more.',true),300);
 })();
 /* test hook (read-only use from the console and tools/) */
-window.__n0={idleApply,idleRestore,ED,IDLE,TLN,camRecorder,fxRecorder,openCamera,applyCam,CAMS,CAMFX,fxIndex,SHEET,applyRecipe,currentRecipe,toRecipe,fromRecipe,modParams,updateSignals,SIG,runModuleGate,showSheet,STACK,mkLayer,MODULES,PERSON,DRAWN,setSource,syntheticPerson,renderStack,renderFrame,P,V,ST,SRC,TEX,maskFor,startPerson,loadPerson,renderInspector,layout};
+/* Short regression test for compositing, run from the console: await __n0.regress(). Stateless modules only, deterministic frames (ST.clean turns Alive off). */
+async function regress(){
+  const res=[],keep={L:STACK.layers,sel:STACK.sel,clean:ST.clean},px=new Uint8Array(4);
+  const frame=(t=1.25)=>{ST.clean=true;V.sizeKey=V.sizeKey;renderStack(t,1/30);const w=canvas.width,h=canvas.height,buf=new Uint8Array(w*h*4);gl.readPixels(0,0,w,h,gl.RGBA,gl.UNSIGNED_BYTE,buf);return buf;};
+  const same=(a,b)=>{if(a.length!==b.length)return[false,'size'];let m=0,sum=0;for(let i=0;i<a.length;i+=4){const d=Math.abs(a[i]-b[i])+Math.abs(a[i+1]-b[i+1])+Math.abs(a[i+2]-b[i+2]);if(d>m)m=d;sum+=d;}return[m<=3,'max '+m+' mean '+(sum/(a.length/4)).toFixed(3)];};
+  const mk=(ids,fn)=>{STACK.layers=ids.map(i=>mkLayer(i));fn&&fn(STACK.layers);STACK.sel=0;};
+  const T=(name,ok,d)=>res.push({name,pass:!!ok,detail:d});
+  try{
+    mk(['dither','kaleido']);frame();const f1=frame(),f2=frame();let r=same(f1,f2);T('same time, same pixels',r[0],r[1]);
+    mk(['kaleido','dither']);const fr=frame();r=same(f1,fr);T('order changes the picture',!r[0],r[1]);
+    mk(['dither','kaleido'],L=>{L[1].visible=false;});const fh=frame();mk(['dither']);const fo=frame();r=same(fh,fo);T('hidden layer equals removed layer',r[0],r[1]);
+    mk(['dither','kaleido'],L=>{L[1].opacity=0;});const f0=frame();r=same(f0,fo);T('opacity 0 equals removed layer',r[0],r[1]);
+    mk(['dither','kaleido'],L=>{L[1].solo=true;});const fs=frame();mk(['kaleido']);const fk=frame();r=same(fs,fk);T('solo equals that layer alone',r[0],r[1]);
+    mk(['dither','kaleido']);const a=frame();const j=currentRecipe('regress');applyRecipe(j);const b=frame();r=same(a,b);T('project save then restore gives the same frame',r[0],r[1]);
+    mk(['dither','kaleido']);const pv=frame();const blob=await new Promise(rs=>canvas.toBlob(rs,'image/png'));
+    ST.clean=true;renderStack(1.25,1/30);const blob2=await new Promise(rs=>canvas.toBlob(rs,'image/png'));
+    const dec=async bl=>{const bm=await createImageBitmap(bl),c=document.createElement('canvas');c.width=bm.width;c.height=bm.height;const g=c.getContext('2d');g.drawImage(bm,0,0);return g.getImageData(0,0,c.width,c.height).data;};
+    const png=await dec(blob2);T('png export size matches the preview',png.length===pv.length,png.length+' vs '+pv.length);
+    // PNG rows are top-down, readPixels rows are bottom-up
+    const w=canvas.width,h=canvas.height;let mx=0;for(let y=0;y<h;y+=7)for(let x=0;x<w;x+=7){const i=(y*w+x)*4,k=((h-1-y)*w+x)*4;mx=Math.max(mx,Math.abs(png[i]-pv[k])+Math.abs(png[i+1]-pv[k+1])+Math.abs(png[i+2]-pv[k+2]));}
+    T('png export pixels match the preview (tolerance 6)',mx<=6,'max '+mx);
+  }catch(e){T('test run',false,String(e&&e.message||e));}
+  STACK.layers=keep.L;STACK.sel=keep.sel;ST.clean=keep.clean;V.sizeKey='';
+  return res;
+}
+window.__n0={syntheticPerson,compareMasks,QUAL,PERSON,setMaskQuality,idleApply,regress,idleRestore,ED,IDLE,TLN,camRecorder,fxRecorder,openCamera,applyCam,CAMS,CAMFX,fxIndex,SHEET,applyRecipe,currentRecipe,toRecipe,fromRecipe,modParams,updateSignals,SIG,runModuleGate,showSheet,STACK,mkLayer,MODULES,PERSON,DRAWN,setSource,syntheticPerson,renderStack,renderFrame,P,V,ST,SRC,TEX,maskFor,startPerson,loadPerson,renderInspector,layout};
 {const v=lsGet('n0ise.alive',null);IDLE.on=v?v==='on':!IDLE.reduce;}
-TLN.mount(document.body);ED.mount();
+TLN.mount(document.body);ED.mount();setTimeout(takeHandoff,900);
 ED.onExport=()=>{
   if(fxRecorder.busy||!ED.active())return;toast('Exporting at normal speed. Keep this tab open.',4000);
   fxRecorder.start({canvas,fps:30,audioStream:ED.audioStream(),

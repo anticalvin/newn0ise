@@ -2,7 +2,7 @@
    Easing per key: linear, ease, hold, bounce. Loop region, scrub, wheel or pinch zoom. "Record" captures slider moves during playback
    as keyframes. The timeline owns its own clock (advanced by frame time while playing, or set by scrubbing), so the same timeline
    gives the same values at the same time in the preview, in stills and in a recording. It serialises into recipes and projects.
-   Track: {lay: layer index, k: param key | 'opacity' | 'cam', keys: [{t, v, e}]}. */
+   Track: {lay: layer uid (runtime; saved files store the layer's position and are mapped back on load), mod: module id, k: param key | 'opacity' | 'cam', keys: [{t, v, e}]}. */
 const bounce=t=>{const n=7.5625,d=2.75;if(t<1/d)return n*t*t;if(t<2/d){t-=1.5/d;return n*t*t+.75;}if(t<2.5/d){t-=2.25/d;return n*t*t+.9375;}t-=2.625/d;return n*t*t+.984375;};
 export const EASE={linear:t=>t,ease:t=>t*t*(3-2*t),hold:()=>0,bounce};
 export function createTimeline(c){
@@ -14,12 +14,14 @@ export function createTimeline(c){
     let i=0;while(i<ks.length-2&&ks[i+1].t<=t)i++;const a=ks[i],b=ks[i+1],f=(EASE[a.e]||EASE.ease)((t-a.t)/Math.max(1e-6,b.t-a.t));return a.v+(b.v-a.v)*f;
   };
   TL.valueAt=(tr,t)=>val(tr,t);
+  const layerOf=tr=>{const L=layers();let l=L.find(x=>x.uid===tr.lay);if(!l&&tr.mod&&c.hasCam()){l=L.find(x=>x.module===tr.mod);if(l)tr.lay=l.uid;}return l||null;};
+  const posOf=tr=>{const l=layerOf(tr);return l?layers().indexOf(l):-1;};
   TL.apply=()=>{
     const L=layers();
     for(const tr of TL.tracks){
       const v=val(tr,TL.t);if(v==null)continue;
       if(tr.k==='cam'){const i=Math.round(v);if(i!==lastCam){lastCam=i;setCam(i);}continue;}
-      const l=L[tr.lay];if(!l)continue;
+      const l=layerOf(tr);if(!l)continue;
       if(tr.k==='opacity')l.opacity=v;else if(l.params&&typeof l.params[tr.k]==='number')l.params[tr.k]=v;
     }
   };
@@ -32,15 +34,18 @@ export function createTimeline(c){
   TL.handle=null;TL.el=()=>host;
   TL.seek=t=>{if(TL.handle&&TL.handle.active()){TL.handle.seek(t);TL.t=TL.handle.t;draw();return;}TL.t=Math.max(0,Math.min(TL.dur,t));TL.apply();draw();};
   TL.play=on=>{if(TL.handle&&TL.handle.active()){TL.handle.play(on);paint();return;}TL.playing=on===undefined?!TL.playing:on;if(TL.playing&&TL.t>=TL.dur)TL.t=TL.loop[0];lastCam=-1;paint();};
-  TL.track=(lay,k,make)=>{let tr=TL.tracks.find(x=>x.lay===lay&&x.k===k);if(!tr&&make){tr={lay,k,keys:[]};TL.tracks.push(tr);}return tr;};
+  TL.track=(lay,k,make)=>{let tr=TL.tracks.find(x=>x.lay===lay&&x.k===k);if(!tr&&make){const lo=layers().find(x=>x.uid===lay);tr={lay,mod:lo?lo.module:null,k,keys:[]};TL.tracks.push(tr);}return tr;};
   TL.addKey=(lay,k,v,t=TL.t,e='ease')=>{
     const tr=TL.track(lay,k,true),ks=tr.keys,near=ks.find(x=>Math.abs(x.t-t)<.06);
     if(near){near.v=v;near.e=near.e||e;}else{ks.push({t:+t.toFixed(3),v,e});ks.sort((a,b)=>a.t-b.t);}
     build();draw();return tr;
   };
-  TL.capture=(V,k,v)=>{const pl=TL.handle&&TL.handle.active()?TL.handle.playing:TL.playing;if(!TL.rec||!pl)return;const lay=layers().findIndex(l=>l.params===V);if(lay>=0)TL.addKey(lay,k,v,TL.t,'linear');};
-  TL.serialize=()=>TL.tracks.length?{dur:TL.dur,loop:TL.loop.slice(),loopOn:TL.loopOn,tracks:JSON.parse(JSON.stringify(TL.tracks))}:null;
-  TL.load=d=>{TL.tracks=d&&d.tracks?JSON.parse(JSON.stringify(d.tracks)):[];if(d){TL.dur=d.dur||8;TL.loop=d.loop||[0,TL.dur];TL.loopOn=d.loopOn!==false;}TL.view=[0,TL.dur];TL.t=0;build();draw();};
+  TL.capture=(V,k,v)=>{const pl=TL.handle&&TL.handle.active()?TL.handle.playing:TL.playing;if(!TL.rec||!pl)return;const lo=layers().find(l=>l.params===V);if(lo)TL.addKey(lo.uid,k,v,TL.t,'linear');};
+  TL.serialize=()=>{const out=TL.tracks.map(tr=>({...JSON.parse(JSON.stringify(tr)),lay:tr.k==='cam'?0:posOf(tr)})).filter((tr,i)=>TL.tracks[i].k==='cam'||tr.lay>=0);return out.length?{v:2,dur:TL.dur,loop:TL.loop.slice(),loopOn:TL.loopOn,tracks:out}:null;};
+  TL.load=(d,L)=>{const lay=L||layers();TL.tracks=[];
+    if(d&&d.tracks){d.tracks.forEach(t=>{const tr=JSON.parse(JSON.stringify(t));if(tr.k!=='cam'){const l=lay[tr.lay];if(!l)return;tr.lay=l.uid;tr.mod=tr.mod||l.module;}TL.tracks.push(tr);});
+      TL.dur=d.dur||8;TL.loop=d.loop||[0,TL.dur];TL.loopOn=d.loopOn!==false;}
+    TL.view=[0,TL.dur];TL.t=0;build();draw();};
   /* ---- drawer ---- */
   const css=getComputedStyle(document.documentElement);
   const ink=()=>'#f2efe8',acc=()=>(css.getPropertyValue('--accent')||'#ff5a1f').trim()||'#ff5a1f';
@@ -64,7 +69,7 @@ export function createTimeline(c){
       g.fillStyle=acc();g.fillRect(t2x(TL.t,w)-1,0,2,h);}}
     list&&list.querySelectorAll('canvas.lane').forEach(cv=>drawLane(cv,TL.tracks[+cv.dataset.i]));
   }
-  const label=tr=>tr.k==='cam'?'Camera':'Layer '+(tr.lay+1)+' · '+(tr.k==='opacity'?'mix':tr.k);
+  const label=tr=>{if(tr.k==='cam')return 'Camera';const p=posOf(tr);return (p<0?'Deleted layer':'Layer '+(p+1))+' · '+(tr.k==='opacity'?'mix':tr.k);};
   function build(){
     if(!list)return;list.innerHTML='';
     TL.tracks.forEach((tr,i)=>{
@@ -86,7 +91,7 @@ export function createTimeline(c){
     cv.addEventListener('contextmenu',e=>{e.preventDefault();});
   }
   const EASE_NEXT={linear:'ease',ease:'hold',hold:'bounce',bounce:'linear'};
-  const currentValue=tr=>{if(tr.k==='cam')return c.getCam();const l=layers()[tr.lay];return l?(tr.k==='opacity'?l.opacity:l.params[tr.k]):0;};
+  const currentValue=tr=>{if(tr.k==='cam')return c.getCam();const l=layerOf(tr);return l?(tr.k==='opacity'?l.opacity:l.params[tr.k]):0;};
   TL.mount=parent=>{
     host=el('div','tl');host.hidden=true;host.setAttribute('aria-label','Timeline');
     host.innerHTML=`<div class="tlbar"><button class="tlplay">Play</button><button class="tlhome" aria-label="Back to start">|◀</button><button class="tlloop" aria-pressed="true">Loop</button><button class="tlrec" aria-pressed="false">Rec</button><span class="tltime"></span><button class="tlclose" aria-label="Close timeline">✕</button></div>
@@ -98,8 +103,8 @@ export function createTimeline(c){
     host.querySelector('.tlrec').addEventListener('click',e=>{TL.rec=!TL.rec;const pl=TL.handle&&TL.handle.active()?TL.handle.playing:TL.playing;if(TL.rec&&!pl)TL.play(true);paint();});
     host.querySelector('.tlclose').addEventListener('click',()=>TL.show(false));
     host.querySelector('.tldur').addEventListener('change',e=>{TL.dur=Math.max(1,Math.min(120,+e.target.value||8));TL.loop=[Math.min(TL.loop[0],TL.dur),TL.dur];TL.view=[0,TL.dur];draw();});
-    host.querySelector('.tlkey').addEventListener('click',()=>{const o=host.querySelector('.tlsel').selectedOptions[0];if(!o)return;const lay=+o.dataset.lay,k=o.dataset.k;
-      const v=k==='cam'?c.getCam():(()=>{const l=layers()[lay];return k==='opacity'?l.opacity:l.params[k];})();TL.addKey(lay,k,v,TL.t,host.querySelector('.tlease').value);});
+    host.querySelector('.tlkey').addEventListener('click',()=>{const o=host.querySelector('.tlsel').selectedOptions[0];if(!o)return;const lay=o.dataset.k==='cam'?0:+o.dataset.lay,k=o.dataset.k;
+      const v=k==='cam'?c.getCam():(()=>{const l=layers().find(x=>x.uid===lay);return k==='opacity'?l.opacity:l.params[k];})();TL.addKey(lay,k,v,TL.t,host.querySelector('.tlease').value);});
     /* scrub on the ruler; loop handles with shift-drag; wheel and pinch zoom */
     let scrub=false,pts=new Map(),pd=0;
     ruler.addEventListener('pointerdown',e=>{pts.set(e.pointerId,e.clientX);ruler.setPointerCapture(e.pointerId);if(pts.size===2){const a=[...pts.values()];pd=Math.abs(a[0]-a[1]);return;}
@@ -114,7 +119,7 @@ export function createTimeline(c){
   TL.fillParams=()=>{
     if(!host)return;const s=host.querySelector('.tlsel');s.innerHTML='';const L=layers();
     L.forEach((l,i)=>{const defs=params(l)||[];const g=document.createElement('optgroup');g.label='Layer '+(i+1)+' · '+l.module;
-      const add=(k,n)=>{const o=document.createElement('option');o.textContent=n;o.dataset.lay=i;o.dataset.k=k;g.appendChild(o);};
+      const add=(k,n)=>{const o=document.createElement('option');o.textContent=n;o.dataset.lay=l.uid;o.dataset.k=k;g.appendChild(o);};
       add('opacity','Mix');defs.filter(p=>(p.t==='r'||p.t===undefined)&&typeof l.params[p.k]==='number').forEach(p=>add(p.k,p.label||p.k));s.appendChild(g);});
     if(c.hasCam()){const o=document.createElement('option');o.textContent='Camera (look switching)';o.dataset.lay=0;o.dataset.k='cam';s.appendChild(o);}
   };

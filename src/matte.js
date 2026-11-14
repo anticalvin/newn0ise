@@ -8,9 +8,14 @@ const {V,PR,mkProg,mkRT,freeRT,bindRT,samp,draw,SRC,VS,HEAD}=G;
 export const PERSON={
   worker:null,state:'idle',err:'',model:'selfie',backend:'',prog:0,bytes:0,mb:0,
   w:0,h:0,ema:null,hold:null,out:null,tex:null,ver:0,inflight:false,fps:0,ms:0,flicker:0,
-  cap:256,synthetic:false,
+  cap:384,quality:'balanced',synthetic:false,
   smooth:{on:true,a:.5,lo:.38,hi:.62,mix:.6}
 };
+/* Mask quality. The model itself sees a small image, so the lever is the capture size and the edge refinement against the real picture.
+   Stills and exports always refine at the highest setting. */
+export const QUAL={fast:{cap:256,q:0},balanced:{cap:384,q:1},max:{cap:512,q:2}};
+export function setMaskQuality(k){if(!QUAL[k])return;PERSON.quality=k;PERSON.cap=QUAL[k].cap;try{localStorage.setItem('n0ise.maskq',k);}catch(e){}}
+try{const k=localStorage.getItem('n0ise.maskq');if(QUAL[k])setMaskQuality(k);}catch(e){}
 let _n=0,_t0=0,_sent=0;
 export function startPerson(model){
   if(PERSON.worker&&PERSON.state!=='error'&&(!model||model===PERSON.model))return;
@@ -101,13 +106,14 @@ void main(){
   o=vec4(vec3(m),1.);}`;
 const F_BLUR=HEAD+`uniform sampler2D uT;uniform vec2 uDir;uniform float uR;
 void main(){float s=0.,w=0.;for(int i=-6;i<=6;i++){float x=float(i)/6.;float k=exp(-x*x*2.2);s+=texture(uT,vUv+uDir*x*uR).r*k;w+=k;}o=vec4(vec3(s/w),1.);}`;
-const F_POST=HEAD+`uniform sampler2D uT,uSrc;uniform vec2 uTexel;uniform float uGrow,uSoft,uInv,uSnap;
+const F_POST=HEAD+`uniform sampler2D uT,uSrc;uniform vec2 uTexel;uniform float uGrow,uSoft,uInv,uSnap,uQ;
 float L3(vec3 c){return dot(c,vec3(.299,.587,.114));}
 void main(){
   float m=texture(uT,vUv).r;
-  if(uSnap>.001){ // edge snap: joint bilateral on the photo's own luma, so the matte follows hair and fingers
-    float l0=L3(texture(uSrc,vUv).rgb),s=0.,w=0.;
-    for(int j=-2;j<=2;j++)for(int i=-2;i<=2;i++){vec2 o2=vec2(float(i),float(j))*uTexel*2.;float k=exp(-pow((L3(texture(uSrc,vUv+o2).rgb)-l0)/(.08+.2*(1.-uSnap)),2.));s+=texture(uT,vUv+o2).r*k;w+=k;}
+  if(uSnap>.001){ // edge snap: joint bilateral on the photo itself, so the matte follows hair and fingers. Higher quality: wider, tighter, colour-aware.
+    vec3 c0=texture(uSrc,vUv).rgb;float l0=L3(c0),s=0.,w=0.;int R=2+int(uQ+.5);float sp=2.-.35*uQ,tol=.08+.2*(1.-uSnap);
+    for(int j=-4;j<=4;j++)for(int i=-4;i<=4;i++){if(abs(i)>R||abs(j)>R)continue;vec2 o2=vec2(float(i),float(j))*uTexel*sp;vec3 c=texture(uSrc,vUv+o2).rgb;
+      float d=uQ>.5?length(c-c0)*.7:abs(L3(c)-l0);float k=exp(-pow(d/tol,2.));s+=texture(uT,vUv+o2).r*k;w+=k;}
     m=mix(m,s/w,uSnap);}
   float mid=.5-uGrow*.45,e=max(uSoft,.04);
   m=smoothstep(mid-e,mid+e,m);
@@ -139,7 +145,7 @@ export function maskFor(mk,W,H,base,{reuse=true}={}){
   }
   const out=src===c?b:c;
   bindRT(out);const p=P_POST;p.use();samp(p,'uT',0,src.tex);samp(p,'uSrc',1,base);p.v2('uTexel',1/W,1/H);
-  p.f('uGrow',(mk.grow||0)/100);p.f('uSoft',fr>.5?.12:.06);p.f('uInv',mk.invert?1:0);p.f('uSnap',mode===0?(mk.snap||0)/100:0);draw();
+  p.f('uQ',G.ST.clean?2:(QUAL[PERSON.quality]||QUAL.balanced).q);p.f('uGrow',(mk.grow||0)/100);p.f('uSoft',fr>.5?.12:.06);p.f('uInv',mk.invert?1:0);p.f('uSnap',mode===0?(mk.snap||0)/100:0);draw();
   gl.bindVertexArray(null);gl.useProgram(null);
   return out.tex;
 }
