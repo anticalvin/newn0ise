@@ -5,6 +5,7 @@ import {createTimeline} from './timeline.js';
 import {createEditor} from './editor.js';
 import {createOverlays} from './overlay.js';
 import {installLooks} from './looks.js';
+import {createNodes} from './nodes.js';
 import {createPluginHost,SAFE as PLUG_SAFE} from './pluginhost.js';
 import {put as handoffPut,take as handoffTake} from './handoff.js';
 import {CAMSIM_PARAMS,CAMSIM_FRAG,SIMS} from './camsim.js';
@@ -3271,6 +3272,8 @@ function moduleThumb(id,w=160,h=120,over){
   const im=new ImageData(w,h),row=w*4;for(let y=0;y<h;y++)im.data.set(TH.buf.subarray((h-1-y)*row,(h-y)*row),y*row);
   cv.getContext('2d').putImageData(im,0,0);bindRT(null);return cv;
 }
+let NODES=null;
+const nodesView=()=>NODES||(NODES=createNodes({STACK,MODULES,IDENT,snap,undo,redo,rerender:q=>{refreshUI();q?renderStrip():renderInspector();},addEffect:()=>{setDock('layers');INS.gallery=true;renderInspector();},dupLayer,srcName:()=>SRC.name,toast:(...a)=>toast(...a),el:(...a)=>el(...a),showLayer:()=>{INS.gallery=false;setDock('layers');renderInspector();}}));
 function renderStrip(){
   const s=$i('strip');s.innerHTML='';
   STACK.layers.forEach((l,i)=>{
@@ -3287,6 +3290,7 @@ function renderStrip(){
       let to=0;xs.forEach((cx,j)=>{if(e.clientX>cx)to=j;});to=Math.min(STACK.layers.length-1,Math.max(0,to));
       if(to!==d.i){const a=STACK.layers,[mv]=a.splice(d.i,1);a.splice(to,0,mv);STACK.sel=to;snap();renderInspector();}});
     b.addEventListener('click',()=>{if(b._swallow){b._swallow=false;return;}STACK.sel=i;INS.gallery=false;renderInspector();});s.appendChild(b);});
+  const nb=el('button','add nvopen','Nodes');nb.setAttribute('aria-label','Open nodes view');nb.addEventListener('click',()=>nodesView().open_());s.appendChild(nb);
   const a=el('button','add','+');a.setAttribute('aria-label','Add effect');a.addEventListener('click',()=>{INS.gallery=!INS.gallery;renderInspector();});s.appendChild(a);
   const sk=el('button','btn','Skin');sk.style.cssText='flex:none;align-self:center';sk.addEventListener('click',cycleSkin);const lf=el('button','btn','Left');lf.title='Flip controls for left-handed use';lf.style.cssText='flex:none;align-self:center';lf.addEventListener('click',toggleLefty);s.append(lf,sk);
 }
@@ -3412,7 +3416,7 @@ function fuseBar(host,l){
 let FUSEPICK=0,FUSEFACE=false;
 function renderInspector(){
   const h=$i('insp'),st=h?h.scrollTop:0,g0=INS.gallery,m0=layer().module;
-  renderInspector0();
+  renderInspector0();if(NODES&&NODES.open)NODES.refresh();
   if(h&&g0===INS.gallery&&m0===layer().module)h.scrollTop=st;
 }
 function renderInspector0(){
@@ -3782,7 +3786,7 @@ async function regress(){
   STACK.layers=keep.L;STACK.sel=keep.sel;ST.clean=keep.clean;V.sizeKey='';
   return res;
 }
-window.__n0={PLUG,pluginsSheet,registerModule,fixWebmDuration,camRecStart,verifyFrames,AUD,syntheticPerson,compareMasks,QUAL,PERSON,setMaskQuality,idleApply,regress,idleRestore,ED,IDLE,TLN,camRecorder,fxRecorder,openCamera,applyCam,CAMS,CAMFX,fxIndex,SHEET,applyRecipe,currentRecipe,toRecipe,fromRecipe,modParams,updateSignals,SIG,runModuleGate,showSheet,STACK,mkLayer,MODULES,PERSON,DRAWN,setSource,syntheticPerson,renderStack,renderFrame,P,V,ST,SRC,TEX,maskFor,startPerson,loadPerson,renderInspector,layout};
+window.__n0={nodesView,PLUG,pluginsSheet,registerModule,fixWebmDuration,camRecStart,verifyFrames,AUD,syntheticPerson,compareMasks,QUAL,PERSON,setMaskQuality,idleApply,regress,idleRestore,ED,IDLE,TLN,camRecorder,fxRecorder,openCamera,applyCam,CAMS,CAMFX,fxIndex,SHEET,applyRecipe,currentRecipe,toRecipe,fromRecipe,modParams,updateSignals,SIG,runModuleGate,showSheet,STACK,mkLayer,MODULES,PERSON,DRAWN,setSource,syntheticPerson,renderStack,renderFrame,P,V,ST,SRC,TEX,maskFor,startPerson,loadPerson,renderInspector,layout};
 {const v=lsGet('n0ise.alive',null);IDLE.on=v?v==='on':!IDLE.reduce;}
 TLN.mount(document.body);ED.mount();setTimeout(takeHandoff,900);
 ED.onExport=()=>{

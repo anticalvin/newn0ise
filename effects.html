@@ -431,6 +431,15 @@ body[data-cam] .tl{bottom:var(--campad,0px);max-height:32dvh;border-bottom:1px s
 .edempty{padding:12px 4px;color:#8d8a82;font:500 11px/1.4 var(--lab)}
 .edinfo{flex:1;text-align:right;color:#b9b6ad;font:600 11px var(--lab);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .edwrap button:disabled,.edwrap select:disabled{opacity:.4}
+.nodesview{position:fixed;inset:0;z-index:150;background:#0a0a0a;display:flex;flex-direction:column}.nodesview[hidden]{display:none}
+.nvbar{display:flex;gap:6px;padding:calc(8px + env(safe-area-inset-top,0px)) 10px 8px;flex-wrap:wrap;border-bottom:1px solid #22201e}.nvbar .btn{min-height:44px}
+.nvsvg{flex:1;width:100%;min-height:0;display:block;cursor:grab;background:radial-gradient(circle,#1c1a18 1px,transparent 1px) 0 0/24px 24px}
+.nvsheet{padding:10px 12px calc(12px + env(safe-area-inset-bottom,0px));border-top:1px solid #22201e;background:#12110f;display:grid;gap:8px}
+.nvhead{display:flex;justify-content:space-between;align-items:baseline;font-size:15px}.nvhead span{color:#8d887f;font:11px ui-monospace,monospace}
+.nvrow{display:grid;grid-template-columns:76px 1fr;align-items:center;min-height:44px;color:#9a958c;font-size:12px}.nvrow input{width:100%}
+.nvbtns{display:flex;flex-wrap:wrap;gap:6px}.nvbtns .btn{min-height:44px;flex:1 1 30%}.nvhint{color:#9a958c;font-size:13px;padding:6px 2px}
+.nvtip{position:absolute;left:50%;transform:translateX(-50%);top:calc(70px + env(safe-area-inset-top,0px));background:#ff5a1f;color:#0a0a0a;padding:8px 14px;border-radius:18px;font:700 12px ui-monospace,monospace;pointer-events:none}
+.nvopen{width:auto;padding:0 14px;font:700 11px var(--lab);letter-spacing:.08em;text-transform:uppercase}
 .ovlane{height:34px;margin-top:4px}.ovpanel{display:grid;gap:4px;margin-top:6px;padding:8px;border:1px solid #22201e;border-radius:6px}.ovhead{display:flex;justify-content:space-between;align-items:center;font-size:12px}.ovrow{display:grid;grid-template-columns:92px 1fr;align-items:center;font-size:11px;color:var(--mute,#9a958c);min-height:30px}.ovrow input{width:100%}
 .edbar .edexp{background:var(--accent);border-color:var(--accent);color:#0a0a0a}
 .camduo{display:flex;flex-wrap:wrap;gap:6px;padding:0 12px;justify-content:center}
@@ -478,6 +487,6 @@ body[data-cam] .tl{bottom:var(--campad,0px);max-height:32dvh;border-bottom:1px s
   </main>
 </div>
 <input type="file" id="file" accept="image/*,video/*,audio/*,.mp3,.wav,.m4a,.ogg,.flac,.aac" hidden>
-<script type="module" src="assets/index.js?v=2be461a4"></script>
+<script type="module" src="assets/index.js?v=2460f32c"></script>
 </body>
 </html>
