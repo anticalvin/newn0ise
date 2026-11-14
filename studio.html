@@ -134,6 +134,16 @@ details.acc>.in{padding:0 12px 10px}
 /* no sideways scrolling anywhere: rows wrap */
 .chips{flex-wrap:wrap;overflow:visible}
 .restore{position:fixed;left:8px;right:8px;top:calc(8px + env(safe-area-inset-top,0px));z-index:60;display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 12px;background:#0a0a0a;border:1px solid #3a3835;color:#f2efe8;font:500 12px/1.35 var(--lab,monospace);border-radius:3px}.restore span{flex:1 1 200px}
+
+body[data-walk] #sheet,body[data-walk] header.bar,body[data-walk] .hud,body[data-walk] #empty{display:none!important}
+#walkui{position:fixed;inset:0;z-index:40;pointer-events:none;display:none}
+body[data-walk] #walkui{display:block}
+#walkui button{pointer-events:auto;min-height:44px;min-width:44px;padding:0 14px;border:1px solid #3a3835;background:rgba(10,10,10,.8);color:#f2efe8;font:600 12px var(--lab,monospace);text-transform:uppercase;letter-spacing:.08em;border-radius:3px}
+#walkX{position:absolute;left:10px;top:calc(10px + env(safe-area-inset-top,0px))}
+#walkJump{position:absolute;right:18px;bottom:calc(30px + env(safe-area-inset-bottom,0px));width:76px;height:76px;border-radius:50%!important}
+#walkHint{position:absolute;left:0;right:0;bottom:calc(10px + env(safe-area-inset-bottom,0px));text-align:center;font:500 11px var(--lab,monospace);color:#f2efe8;text-shadow:0 1px 2px #000;padding:0 12px}
+#walkStick{position:absolute;width:100px;height:100px;border:2px solid rgba(242,239,232,.6);border-radius:50%}
+#walkStick i{position:absolute;left:30px;top:30px;width:40px;height:40px;border-radius:50%;background:rgba(242,239,232,.8)}
 </style>
 </head>
 <body>
@@ -150,7 +160,7 @@ details.acc>.in{padding:0 12px 10px}
       <canvas id="gl" tabindex="0"></canvas>
       <div class="hud tl"><div class="seg" id="viewSeg"></div></div>
       <div class="hud tr"><button class="chipb" id="bFx" aria-pressed="true">FX</button></div>
-      <div class="hud bl" id="hudBL"><button class="chipb" id="bFrame">Frame</button><button class="chipb" id="bGrid" aria-pressed="true">Grid</button><button class="chipb" id="bSpin" aria-pressed="false">Spin</button></div>
+      <div class="hud bl" id="hudBL"><button class="chipb" id="bFrame">Frame</button><button class="chipb" id="bGrid" aria-pressed="true">Grid</button><button class="chipb" id="bWalk">Walk</button><button class="chipb" id="bSpin" aria-pressed="false">Spin</button></div>
       <div class="hud br" id="hudBR"><button class="chipb" id="bHold">Hold: original</button></div>
       <div class="empty" id="empty"><b>Bring a model, a photo or a scan.</b>glb · gltf · obj · stl · ply · splat · spz · audio — or use the Scan tab</div>
       <div class="drop">Drop files to import</div>
@@ -166,6 +176,6 @@ details.acc>.in{padding:0 12px 10px}
 <input type="file" id="file" multiple hidden accept="audio/*,.mp3,.wav,.m4a,.ogg,.flac,.glb,.gltf,.bin,.obj,.mtl,.stl,.ply,.splat,.spz,.ksplat,.sog,image/*,video/*">
 <section id="scan" hidden></section>
 <div id="fxov" class="bg"><div class="fxtop"><b>Effects</b><span>Pick and tune effects. They apply to the selected object only.</span><button class="btn pri" id="fxdone">Done</button></div><iframe id="fxif" title="n0ise effects" allow="autoplay"></iframe></div>
-<script type="module" src="assets/studio.js?v=e0763335"></script>
+<script type="module" src="assets/studio.js?v=1a9ce03d"></script>
 </body>
 </html>

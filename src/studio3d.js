@@ -9,6 +9,8 @@ import {MTLLoader} from 'three/addons/loaders/MTLLoader.js';
 import {STLLoader} from 'three/addons/loaders/STLLoader.js';
 import {PLYLoader} from 'three/addons/loaders/PLYLoader.js';
 import {GLTFExporter} from 'three/addons/exporters/GLTFExporter.js';
+import {createApi} from './studio-api.js';
+import {createWalk} from './walk.js';
 import {RoomEnvironment} from 'three/addons/environments/RoomEnvironment.js';
 import {createN0} from './studio-adapter.js';
 const N0=createN0();
@@ -29,6 +31,7 @@ const noGL=msg=>{const e=$('#err');e.hidden=false;e.textContent=msg;};
 const stage=$('#stage'),canvas=$('#gl');
 const S={objs:[],sel:null,view:'shaded',fx:true,hold:false,grid:true,spin:false,gizmo:null,q:.8,
   mask:{mode:2,focus:3,range:1.2,soft:.6,inv:false,amt:1},bg:'#0b0b0c',env:.5,liveUntil:0,ver:0};
+const AI={ws:null,url:'ws://localhost:8787',state:'off',btn:null};
 let renderer=null,gl=null;
 try{
   renderer=new THREE.WebGLRenderer({canvas,antialias:false,alpha:false,preserveDrawingBuffer:true,powerPreference:'high-performance'});
@@ -145,7 +148,7 @@ function registerObject(name,root,kind,{fit=true,size=1.8,meta={},box=null}={}){
     holder.updateMatrixWorld(true);const nb=new THREE.Box3().setFromObject(holder);
     if(!bb.isEmpty()&&!nb.isEmpty())holder.position.x=bb.max.x+(nb.max.x-nb.min.x)/2+.3-((nb.max.x+nb.min.x)/2-holder.position.x);
   }
-  world.add(holder);
+  world.add(holder);if(S.shadows)setShadowFlags(holder);
   if(kind!=='relief'&&S.rest)leaveRest();
   const o={id:++idc,name,kind,holder,root,vis:true,meta};
   holder.userData.objId=o.id;
@@ -200,8 +203,12 @@ const PRIMS={
   Sphere:()=>new THREE.SphereGeometry(.8,48,32),
   Cube:()=>new THREE.BoxGeometry(1.2,1.2,1.2),
   Torus:()=>new THREE.TorusGeometry(.7,.28,32,64),
-  Plane:()=>new THREE.PlaneGeometry(2,2,1,1)
+  Plane:()=>new THREE.PlaneGeometry(2,2,1,1),
+  Cylinder:()=>new THREE.CylinderGeometry(.6,.6,1.4,48),
+  Cone:()=>new THREE.ConeGeometry(.7,1.4,48),
+  Capsule:()=>new THREE.CapsuleGeometry(.4,.9,8,24)
 };
+function setShadowFlags(n){if(!n)return;n.traverse(m=>{if(m.isMesh&&!m.isSplatMesh){m.castShadow=!!S.shadows;m.receiveShadow=!!S.shadows;}});}
 function addPrimitive(k){
   const g=PRIMS[k]();if(k==='Plane')g.rotateX(-Math.PI/2);
   const m=new THREE.Mesh(g,new THREE.MeshStandardMaterial({color:0xb9b4ac,roughness:.55,metalness:.1}));
@@ -708,11 +715,11 @@ function frame(ts){
     av3Tick(t,dt);
     animTick(t);
     controls.autoRotate=S.spin;if(S.spin)bump();
-    controls.update(dt);
+    if(S.walk)walk.tick(dt);else controls.update(dt);
     if(selBox)selBox.update();
-    grid.visible=S.grid&&!S.exporting;
-    if(selBox)selBox.visible=!S.exporting&&S.sel!=null;
-    tcHelper.visible=!S.exporting&&!!(S.gizmo||S.pivot)&&S.sel!=null;
+    grid.visible=S.grid&&!S.exporting&&!S.walk;
+    if(selBox)selBox.visible=!S.exporting&&S.sel!=null&&!S.walk;
+    tcHelper.visible=!S.exporting&&!S.walk&&!!(S.gizmo||S.pivot)&&S.sel!=null;
     bgCol.set(S.bg);
     renderer.setRenderTarget(rt);renderer.setClearColor(bgCol,1);renderer.clear();renderer.render(scene,camera);
     const wantMask=S.fx&&!S.hold&&S.mask.mode===2;
@@ -726,13 +733,13 @@ function frame(ts){
       if(!fxTex)fxTex=N0.render(cTex,t,dt,live);
       ensureComp();
       const G=N0.GLH,p=compProg;
-      gl.bindVertexArray(G.vao);G.bindRT(null);p.use();
+      gl.bindVertexArray(G.vao);G.bindRT(null);gl.viewport(0,0,canvas.width,canvas.height);p.use();
       G.samp(p,'uO',0,cTex);G.samp(p,'uF',1,fxTex);G.samp(p,'uD',2,rtTex(rt.depthTexture));G.samp(p,'uM',3,rtTex(maskRT.texture));
       p.f('uMode',S.mask.mode);p.f('uAmt',S.mask.amt);p.f('uFocus',S.mask.focus);p.f('uRange',S.mask.range);p.f('uSoft',Math.max(.001,S.mask.soft));
       p.f('uInv',S.mask.inv?1:0);p.f('uMA',S.maskA||0);p.f('uCamN',camera.near);p.f('uCamF',camera.far);p.v2('uPx',1/curW,1/curH);
       G.draw();gl.bindVertexArray(null);gl.useProgram(null);
     }else{
-      N0.blit(cTex);
+      gl.viewport(0,0,canvas.width,canvas.height);N0.blit(cTex);
     }
     renderer.resetState();
     frames++;errN=0;
@@ -1771,7 +1778,7 @@ function buildScenePane(){
   add.appendChild(btn('Import files','pri',()=>$('#file').click()));
   Object.keys(PRIMS).forEach(k=>add.appendChild(btn('+ '+k,'',()=>addPrimitive(k))));
   add.appendChild(btn('+ Visualizer','',()=>addViz('waterfall')));
-  add.appendChild(btn('Save project','',saveProject));add.appendChild(btn('Open project','',()=>{const i=document.createElement('input');i.type='file';i.accept='.zip,application/zip';i.onchange=()=>i.files[0]&&importFiles([i.files[0]]);i.click();}));add.appendChild(btn('Copy look link','',lookLink));
+  add.appendChild(btn('Walk','',()=>$('#bWalk').click()));{const ab=btn('Connect AI','',()=>aiConnect());AI.btn=ab;add.appendChild(ab);}add.appendChild(btn('Save project','',saveProject));add.appendChild(btn('Open project','',()=>{const i=document.createElement('input');i.type='file';i.accept='.zip,application/zip';i.onchange=()=>i.files[0]&&importFiles([i.files[0]]);i.click();}));add.appendChild(btn('Copy look link','',lookLink));
   s1.appendChild(add);
   const note=el('div','note','Drop or import: glb, gltf (with its bin and textures), obj (+mtl), stl, ply (mesh, points or 3D Gaussian splat), splat, spz, ksplat, sog. Photos become relief. Videos open the turntable scanner.');s1.appendChild(note);
   inspEl=el('div');p.appendChild(inspEl);
@@ -2158,4 +2165,25 @@ function applyLookHash(){const m=location.hash.match(/^#look=(.+)$/);if(!m)retur
   if(o.v)S.view=o.v;if(o.bg)S.bg=o.bg;if(typeof o.e==='number'){S.env=o.e;scene.environmentIntensity=o.e;}if(o.m)Object.assign(S.mask,o.m);if(typeof o.f==='boolean')S.fx=o.f;applyView();bump();}catch(e){}}
 setTimeout(()=>{applyLookHash();offerRestore();},1200);
 
-window.__studio={zipStore,zipRead,projectFiles,loadProject,saveProject,AUTO,autoStep,fxRandomise,fxEnsure,fxClear,FX3,SG,addViz,AU,buildViz,vizUpdate,enterRest,leaveRest,restTick,setFx,autoDepth,buildDepth,restD,MATTERS,CUT,autoCut,refineMask,applyAlpha,S,N0,THREE,scene,camera,controls,renderer,importFiles,addPrimitive,sheet,SC,carve,surfaceNets,buildScan,makeRelief,pseudoDepth,photoToRelief,objById,selectObj,removeObj,bump,setTab,rebuildRelief,applyView,frameAll,exportImage,get rt(){return rt;}};
+
+/* ---------- walk mode, scene API and the AI bridge ---------- */
+const walk=createWalk({THREE,camera,controls,canvas,S,holderBox,sheet,bump,leaveRest,tcDetach:()=>tc.detach()});
+const api=createApi({THREE,S,scene,camera,controls,renderer,canvas,world,hemi,key,grid,PRIMS,addPrimitive,removeObj,objById,importOne,applyView,bump,frameAll,tick,walk,projectFiles,zipStore,GLTFExporter,renderObjList,refreshInspector,setShadowFlags,selectObj,waitFrames,requestResize:()=>{needResize=true;}});
+window.n0={run:api.run,describe:api.describe,walk};
+$('#bWalk')&&$('#bWalk').addEventListener('click',()=>walk.on?walk.exit():walk.enter({pos:[camera.position.x*.6,0,Math.max(2.5,camera.position.z*.8)],yaw:0}));
+function aiStatus(t){AI.state=t;if(AI.btn){AI.btn.textContent=t==='on'?'AI connected':t==='wait'?'Connecting…':'Connect AI';AI.btn.setAttribute('aria-pressed',t==='on');}}
+function aiConnect(url,auto){
+  if(AI.ws&&!auto){AI.want=false;try{AI.ws.close();}catch(e){}AI.ws=null;aiStatus('off');return;}
+  AI.want=true;AI.url=url||AI.url;aiStatus('wait');
+  let ws;try{ws=new WebSocket(AI.url);}catch(e){aiStatus('off');toast('Couldn’t open '+AI.url);return;}
+  AI.ws=ws;
+  ws.onopen=()=>{aiStatus('on');ws.send(JSON.stringify({hello:'n0ise-3d',v:1}));toast('AI connected');};
+  ws.onmessage=async ev=>{let m;try{m=JSON.parse(ev.data);}catch(e){return;}
+    if(m.id==null)return;
+    try{const result=await api.run(m.args||{});ws.send(JSON.stringify({id:m.id,result}));}catch(e){ws.send(JSON.stringify({id:m.id,error:String(e&&e.message||e)}));}};
+  ws.onclose=ev=>{if(AI.ws===ws){AI.ws=null;if(ev&&ev.code===4000){AI.want=false;toast('Another tab took over the AI connection');}aiStatus(AI.want?'wait':'off');if(AI.want)setTimeout(()=>{if(AI.want&&!AI.ws)aiConnect(AI.url,true);},2500);}};
+  ws.onerror=()=>{if(AI.ws===ws&&!AI.warned){AI.warned=true;toast('No AI bridge at '+AI.url+' yet. Start it with: node tools/mcp/server.mjs',5000);}};
+}
+{const q=new URLSearchParams(location.search).get('mcp');if(q){setTimeout(()=>aiConnect(q.startsWith('ws')?q:undefined),800);}}
+
+window.__studio={api,walk,aiConnect,zipStore,zipRead,projectFiles,loadProject,saveProject,AUTO,autoStep,fxRandomise,fxEnsure,fxClear,FX3,SG,addViz,AU,buildViz,vizUpdate,enterRest,leaveRest,restTick,setFx,autoDepth,buildDepth,restD,MATTERS,CUT,autoCut,refineMask,applyAlpha,S,N0,THREE,scene,camera,controls,renderer,importFiles,addPrimitive,sheet,SC,carve,surfaceNets,buildScan,makeRelief,pseudoDepth,photoToRelief,objById,selectObj,removeObj,bump,setTab,rebuildRelief,applyView,frameAll,exportImage,get rt(){return rt;}};
