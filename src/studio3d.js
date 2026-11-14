@@ -178,7 +178,7 @@ function removeObj(id){
   renderObjList&&renderObjList();refreshInspector&&refreshInspector();bump();markDirty();
 }
 function selectObj(id){
-  S.pivot=false;S.sel=id;const o=objById(id);if(o)S.fxTarget=id; // the look stays on the last picked object even after a tap on empty space
+  S.pivot=false;S.sel=id;const o=objById(id);if(o){lookSwitch(S.fxTarget,id);S.fxTarget=id;} // the look stays on the last picked object even after a tap on empty space
   if(tc.object&&(!o||tc.object!==o.holder))tc.detach();
   if(o&&S.gizmo){tc.attach(o.holder);tc.setMode(S.gizmo);}
   setSelBox();
@@ -693,8 +693,8 @@ const selMat=new THREE.MeshBasicMaterial({color:0xffffff,side:THREE.DoubleSide})
 const blkMat=new THREE.MeshBasicMaterial({color:0x000000,side:THREE.DoubleSide});
 /* mask of the look target. Meshes: the target draws white and everything else draws black into the same depth buffer, so an object in
    front of the target hides it and the look can never show through. Splats can't take a material: their own alpha is the mask. */
-function renderSelMask(){
-  const o=objById(S.fxTarget!=null?S.fxTarget:S.sel);if(!o||!maskRT){if(maskRT){renderer.setRenderTarget(maskRT);renderer.setClearColor(0x000000,0);renderer.clear();}S.maskA=0;return false;}
+function renderSelMask(oo){
+  const o=oo||objById(S.fxTarget!=null?S.fxTarget:S.sel);if(!o||!maskRT){if(maskRT){renderer.setRenderTarget(maskRT);renderer.setClearColor(0x000000,0);renderer.clear();}S.maskA=0;return false;}
   const isSp=o.kind==='splat'||(o.meta&&o.meta.mode==='splats');S.maskA=isSp?1:0;
   const vis=S.objs.map(x=>x.holder.visible);
   if(isSp)S.objs.forEach(x=>{x.holder.visible=x===o&&x.vis;});
@@ -711,6 +711,42 @@ function renderSelMask(){
   scene.environment=envOld;scene.background=bgOld;scene.fog=fogOld;
   S.objs.forEach((x,i)=>{x.holder.visible=vis[i];});grid.visible=gv;if(selBox)selBox.visible=sbv;tcHelper.visible=tv;
   return true;
+}
+
+/* ---- per-object looks (CRT Lab engine): each object can carry its own look. Picking an object loads its look into the controls,
+   editing writes it back, and every looked object is rendered and composited through its own mask. ---- */
+const cloneP=()=>JSON.parse(JSON.stringify(N0.P));
+let lookRT=[null,null],lookRTkey='';
+function lookObjs(){return S.objs.filter(o=>o.look&&o.vis!==false&&o.holder.visible);}
+function lookSwitch(prevId,id){
+  if(prevId===id||S.mask.mode!==2)return;
+  const pv=objById(prevId),nx=objById(id);
+  if(pv&&pv.look)pv.look=cloneP();
+  if(nx&&nx.look){Object.assign(N0.P,nx.look);if(typeof rebuildLook==='function'&&paneEls&&paneEls.look)rebuildLook();}
+  else if(nx&&S.fx&&S.engine!=='stack'&&!S.objs.some(x=>x.look)){nx.look=cloneP();} // the first picked object gets the look, as before
+  updateLookUI();
+}
+function addLook(o){if(!o)return;S.lookOff=false;o.look=cloneP();S.fx=true;S.mask.mode=2;bump();updateLookUI();toast('Look added to '+o.name);}
+function removeLook(o){if(!o)return;delete o.look;S.lookOff=true;bump();updateLookUI();toast('Look removed from '+o.name);}
+let lookUI=null;
+function updateLookUI(){if(!lookUI)return;const o=objById(S.fxTarget!=null?S.fxTarget:S.sel),n=S.objs.filter(x=>x.look).length;
+  lookUI.name.textContent=o?o.name:'Nothing picked';lookUI.add.textContent=o&&o.look?'Update look':'Add look';lookUI.add.disabled=!o;lookUI.rm.hidden=!(o&&o.look);
+  lookUI.cnt.textContent=n?n+(n===1?' object has a look':' objects have looks'):'No object has a look yet';}
+function drawLooks(cTex,t,dt,live,LO){
+  ensureComp();const G=N0.GLH,W=canvas.width,H=canvas.height,key=W+'x'+H;
+  if(lookRTkey!==key){lookRT.forEach(r=>r&&G.freeRT(r));lookRT=[G.mkRT(W,H),G.mkRT(W,H)];lookRTkey=key;}
+  const keep=cloneP();let base=cTex,wasT=S.fxTarget;
+  LO.forEach((o,i)=>{
+    Object.assign(N0.P,o.look);renderSelMask(o);
+    const fx=N0.render(base,t,dt,live),last=i===LO.length-1,dst=last?null:lookRT[i%2],p=compProg;
+    renderer.setRenderTarget(null);
+    gl.bindVertexArray(G.vao);G.bindRT(dst);if(!dst)gl.viewport(0,0,W,H);p.use();
+    G.samp(p,'uO',0,base);G.samp(p,'uF',1,fx);G.samp(p,'uD',2,rtTex(rt.depthTexture));G.samp(p,'uM',3,rtTex(maskRT.texture));
+    p.f('uMode',2);p.f('uAmt',S.mask.amt);p.f('uFocus',0);p.f('uRange',1);p.f('uSoft',.1);p.f('uInv',S.mask.inv?1:0);p.f('uMA',S.maskA||0);p.f('uCamN',camera.near);p.f('uCamF',camera.far);p.v2('uPx',1/curW,1/curH);
+    G.draw();gl.bindVertexArray(null);gl.useProgram(null);
+    if(dst)base=dst.tex;
+  });
+  Object.assign(N0.P,keep);S.fxTarget=wasT;
 }
 function updateFxNote(){const n=$('#fxnote');if(!n)return;const o=objById(S.fxTarget!=null?S.fxTarget:S.sel);
   const t=!S.fx||S.hold?'':S.mask.mode===2?(o?'Look on: '+o.name:'Look on: nothing selected. Tap an object.'):'';if(n.textContent!==t)n.textContent=t;}
@@ -742,11 +778,16 @@ function frame(ts){
     tcHelper.visible=!S.exporting&&!S.walk&&!!(S.gizmo||S.pivot)&&S.sel!=null;
     bgCol.set(S.bg);
     renderer.setRenderTarget(rt);renderer.setClearColor(bgCol,1);renderer.clear();renderer.render(scene,camera);
-    const wantMask=S.fx&&!S.hold&&S.mask.mode===2;
+    const wantMask=S.fx&&!S.hold&&S.mask.mode===2&&!(S.engine!=='stack'&&S.objs.some(x=>x.look));
     if(wantMask)renderSelMask();
     renderer.setRenderTarget(null);
     const cTex=rtTex(rt.texture);
-    if(S.fx&&!S.hold){
+    if(S.fx&&!S.hold&&S.mask.mode===2&&S.engine!=='stack'&&!S.lookOff&&!S.objs.some(x=>x.look)){const t0=objById(S.fxTarget!=null?S.fxTarget:S.sel);if(t0){t0.look=cloneP();updateLookUI();}}
+    const LO=S.fx&&!S.hold&&S.mask.mode===2&&S.engine!=='stack'?lookObjs():[];
+    if(LO.length){
+      const eo=objById(S.fxTarget);if(eo&&eo.look&&frames%6===0)eo.look=cloneP();
+      drawLooks(cTex,t,dt,performance.now()<S.liveUntil,LO);
+    }else if(S.fx&&!S.hold&&!(S.mask.mode===2&&S.engine!=='stack')){
       const live=performance.now()<S.liveUntil;
       let fxTex=null;
       if(S.engine==='stack'){if(fxReady()){fxTex=fxRender(cTex,t,dt);}}
@@ -1933,7 +1974,10 @@ function buildLookPane(){
   function syncMask(){mk.innerHTML='';
     if(S.mask.mode===1){sliderRow(mk,'Focus',()=>S.mask.focus,v=>{S.mask.focus=v;bump();},.2,30,.05);sliderRow(mk,'Range',()=>S.mask.range,v=>{S.mask.range=v;bump();},.05,12,.05);}
     if(S.mask.mode===1||S.mask.mode===3)sliderRow(mk,'Softness',()=>S.mask.soft,v=>{S.mask.soft=v;bump();},.02,6,.02);
-    if(S.mask.mode===2)mk.appendChild(el('div','note','Tap an object in the scene to pick it. The look is applied to that object only.'));
+    if(S.mask.mode===2&&S.engine!=='stack'){const bx=el('div','lookbox');const nm=el('div','sub','');const row=el('div','chips');
+      const add=btn('Add look','pri',()=>addLook(objById(S.fxTarget!=null?S.fxTarget:S.sel)));const rm=btn('Remove look','',()=>removeLook(objById(S.fxTarget!=null?S.fxTarget:S.sel)));
+      row.append(add,rm);const cnt=el('div','note','');bx.append(nm,row,cnt,el('div','note','Tap an object, shape its look with the controls below, then tap another and give it a different one. Each object keeps its own.'));mk.appendChild(bx);lookUI={name:nm,add,rm,cnt};updateLookUI();}
+    else if(S.mask.mode===2)mk.appendChild(el('div','note','Tap an object in the scene to pick it. The look is applied to that object only.'));
     if(S.mask.mode>0){const c=el('div','chips');const b=el('button','chip','Invert');b.setAttribute('aria-pressed',S.mask.inv);b.addEventListener('click',()=>{S.mask.inv=!S.mask.inv;b.setAttribute('aria-pressed',S.mask.inv);bump();});c.appendChild(b);
       if(S.mask.mode===1){const f=btn('Focus on target','',()=>{S.mask.focus=controls.getDistance();syncMask();bump();});c.appendChild(f);}mk.appendChild(c);}
   }
@@ -2227,4 +2271,4 @@ async function openInEffects(){
 setTimeout(async()=>{const m=location.hash.match(/^#from=(\w+)/);if(!m)return;const rec=await handoffTake();history.replaceState(null,'',location.pathname);
   if(!rec){toast('Nothing to open. Send a picture from the other page again.');return;}
   await photoToRelief(new File([rec.blob],'from-'+m[1]+'.png',{type:rec.blob.type||'image/png'}));toast('Opened from '+m[1]);},1400);
-window.__studio={openInEffects,worldEd,api,walk,aiConnect,zipStore,zipRead,projectFiles,loadProject,saveProject,AUTO,autoStep,fxRandomise,fxEnsure,fxClear,FX3,SG,addViz,AU,buildViz,vizUpdate,enterRest,leaveRest,restTick,setFx,autoDepth,buildDepth,restD,MATTERS,CUT,autoCut,refineMask,applyAlpha,S,N0,THREE,scene,camera,controls,renderer,importFiles,addPrimitive,sheet,SC,carve,surfaceNets,buildScan,makeRelief,pseudoDepth,photoToRelief,objById,selectObj,removeObj,bump,setTab,rebuildRelief,applyView,frameAll,exportImage,get rt(){return rt;}};
+window.__studio={S,N0,selectObj,addLook,removeLook,openInEffects,worldEd,api,walk,aiConnect,zipStore,zipRead,projectFiles,loadProject,saveProject,AUTO,autoStep,fxRandomise,fxEnsure,fxClear,FX3,SG,addViz,AU,buildViz,vizUpdate,enterRest,leaveRest,restTick,setFx,autoDepth,buildDepth,restD,MATTERS,CUT,autoCut,refineMask,applyAlpha,S,N0,THREE,scene,camera,controls,renderer,importFiles,addPrimitive,sheet,SC,carve,surfaceNets,buildScan,makeRelief,pseudoDepth,photoToRelief,objById,selectObj,removeObj,bump,setTab,rebuildRelief,applyView,frameAll,exportImage,get rt(){return rt;}};

@@ -89,6 +89,11 @@ export function createWorldEditor(c){
     const row=el('div','chips');
     playBtn=btn('Play','pri',async()=>{if(sim.playing){sim.pause();playBtn.textContent='Play';}else{try{const r=await sim.play();playBtn.textContent='Pause';if(!r.bodies)toast('Nothing has physics yet. Set an object to Falls first.');}catch(e){toast('Physics couldn’t load: '+(e.message||e),5000);}}});
     row.append(playBtn,btn('Reset','',()=>{sim.reset();playBtn.textContent='Play';}),btn('Walk','',()=>document.getElementById('bWalk').click()),btn('Undo','',doUndo),btn('Redo','',doRedo),btn('Open in Effects','',()=>c.openInEffects&&c.openInEffects()));top.appendChild(row);
+    const gv=sec(p,'Gravity');const gr=document.createElement('input');gr.type='range';gr.min=-30;gr.max=30;gr.step=.1;gr.value=-sim.st.g;
+    const gl=el('div','note','');const showG=()=>{gl.textContent=(Math.abs(sim.st.g)<.05?'Zero gravity':sim.st.g>0?'Upside down · ':'')+Math.abs(sim.st.g).toFixed(1)+' m/s²';};
+    const setG=v=>{sim.setGravity(-v);gr.value=v;showG();};gr.addEventListener('input',()=>setG(+gr.value));showG();
+    const gc=el('div','chips');[['Moon',1.6],['Earth',9.81],['Jupiter',24.8],['Zero',0],['Reverse',-9.81]].forEach(([l,v])=>gc.appendChild(btn(l,'',()=>{setG(v);if(!sim.playing)playBtn.click();})));
+    gv.append(gc,field('Pull',gr),gl,btn('Kick everything','',async()=>{try{await sim.kick();playBtn.textContent='Pause';}catch(e){toast('Physics couldn’t load: '+(e.message||e),5000);}}));
     const pl=sec(p,'Place');pl.appendChild(el('div','note','Tap a tile. It lands in the middle of your view, ready to drag.'));
     const grid=el('div','wgrid');LIB.forEach(([k,l])=>{const b=el('button','wtile');b.innerHTML=svg(k)+`<span>${l}</span>`;b.addEventListener('click',()=>place(k));grid.appendChild(b);});pl.appendChild(grid);
     detailsEl=el('div');p.appendChild(detailsEl);

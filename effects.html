@@ -219,7 +219,8 @@ input[type=range]::-webkit-slider-thumb{border-radius:0;width:9px;height:15px;ma
 :root[data-skin=utility] .acc{border-top:0}
 :root[data-skin=utility] .ban{border:1px solid #555}
 @media (pointer:coarse),(max-width:640px){.ir{min-height:44px}.ir .l{padding:12px 0}.ir input[type=range]{height:44px}.ir .v,.ir select,.ir .cb{min-height:40px}.pe button,.pe .sl{min-height:44px}.hd .btn,.ly{min-height:44px}.btn{min-height:44px}}
-.peek,.chipb,.srcmenu{display:none}
+.chipb,.srcmenu{display:none}
+.peek{display:block;flex:none;padding:0 0 4px;border-bottom:1px solid var(--line)}
 body[data-sheet] .peek,body[data-side] .peek{display:block;flex:none;padding:0 0 4px;border-bottom:1px solid var(--line)}
 body[data-sheet] .chipb,body[data-side] .chipb{display:block;position:absolute;top:8px;left:8px;z-index:5;min-height:44px;font:600 11px var(--lab);text-transform:uppercase;letter-spacing:.08em;background:#000a;color:#fff}
 body[data-sheet] #srcchip,body[data-side] #srcchip{left:96px}
@@ -336,6 +337,7 @@ body[data-dt=fuse] .ban,body[data-dt=fuse] .itabs{display:none}
 
 /* camera: bodies carousel, overlay, compact top row */
 body[data-cam] .dock,body[data-cam] header{display:none!important}
+.camhome{display:none}body[data-cam] .camhome{display:flex;align-items:center;position:fixed;z-index:60;top:calc(70px + env(safe-area-inset-top,0px));left:calc(12px + env(safe-area-inset-left,0px));min-height:44px;padding:0 14px;border-radius:22px;background:rgba(10,10,10,.5);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);color:#f2efe8;text-decoration:none;font:800 16px/1 var(--display);letter-spacing:-.02em}.camhome b{color:var(--accent)}
 body[data-cam] #stage{box-sizing:border-box;padding:calc(56px + env(safe-area-inset-top,0px)) 0 var(--campad,0px)}
 #camov{position:absolute;pointer-events:none;z-index:1}
 .camtop{display:flex;flex-wrap:nowrap;gap:6px}.camtop .cb{flex:1 1 0;min-width:0;padding:0 4px;font-size:clamp(10px,3vw,12px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;background:rgba(10,10,10,.72)}
@@ -377,8 +379,9 @@ body[data-cam] #stage{box-sizing:border-box;padding:calc(56px + env(safe-area-in
 .camtop .cb[aria-pressed=true],.cammoregrid .cb[aria-pressed=true]{background:#f2efe8;color:#0a0a0a}
 
 .camgate{position:fixed;inset:0;z-index:200;background:#0a0a0a;display:flex;align-items:center;justify-content:center;padding:20px}
+.cghome{position:absolute;top:calc(14px + env(safe-area-inset-top,0px));left:18px;color:#f2efe8;text-decoration:none;font:800 18px/1 var(--display);letter-spacing:-.02em;min-height:44px;display:flex;align-items:center}.cghome b{color:var(--accent)}
 .cgbox{max-width:420px;width:100%;display:flex;flex-direction:column;gap:16px}
-.cgbox b{font:800 clamp(44px,16vw,84px)/.9 var(--display);text-transform:uppercase;letter-spacing:-.04em;color:#f2efe8}
+.cgbox b{font:800 clamp(34px,11vw,72px)/.95 var(--display);text-transform:uppercase;letter-spacing:-.04em;color:#f2efe8}
 .cgbox p{font:500 14px/1.45 var(--lab);color:#b9b6ad}
 .cgbtns{display:flex;flex-direction:column;gap:8px}
 .cgbtns button{min-height:52px;border:1px solid #3a3835;background:#0a0a0a;color:#f2efe8;font:600 13px var(--lab);text-transform:uppercase;letter-spacing:.08em;border-radius:3px}
@@ -426,6 +429,7 @@ body[data-cam] .tl{bottom:var(--campad,0px);max-height:32dvh;border-bottom:1px s
 .edempty{padding:12px 4px;color:#8d8a82;font:500 11px/1.4 var(--lab)}
 .edinfo{flex:1;text-align:right;color:#b9b6ad;font:600 11px var(--lab);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .edwrap button:disabled,.edwrap select:disabled{opacity:.4}
+.ovlane{height:34px;margin-top:4px}.ovpanel{display:grid;gap:4px;margin-top:6px;padding:8px;border:1px solid #22201e;border-radius:6px}.ovhead{display:flex;justify-content:space-between;align-items:center;font-size:12px}.ovrow{display:grid;grid-template-columns:92px 1fr;align-items:center;font-size:11px;color:var(--mute,#9a958c);min-height:30px}.ovrow input{width:100%}
 .edbar .edexp{background:var(--accent);border-color:var(--accent);color:#0a0a0a}
 .camduo{display:flex;flex-wrap:wrap;gap:6px;padding:0 12px;justify-content:center}
 .camduo label{display:flex;align-items:center;gap:6px;font:600 10px var(--lab);text-transform:uppercase;letter-spacing:.06em;color:#b9b6ad}
@@ -448,6 +452,7 @@ body[data-cam] .tl{bottom:var(--campad,0px);max-height:32dvh;border-bottom:1px s
       <button class="btn primary" id="save">Save</button>
     </div>
   </header>
+  <a class="camhome" href="index.html" aria-label="n0ise home">n<b>0</b>ise</a>
   <nav class="ws" aria-label="Workspaces"><a href="effects.html?cam=1">Camera</a><a href="effects.html" aria-current="page">Effects</a><a href="studio.html">3D</a><a href="studio.html#world">World</a></nav>
   <main>
     <div class="stage" id="stage">
@@ -471,6 +476,6 @@ body[data-cam] .tl{bottom:var(--campad,0px);max-height:32dvh;border-bottom:1px s
   </main>
 </div>
 <input type="file" id="file" accept="image/*,video/*,audio/*,.mp3,.wav,.m4a,.ogg,.flac,.aac" hidden>
-<script type="module" src="assets/index.js?v=38a15f86"></script>
+<script type="module" src="assets/index.js?v=ab1ed4ea"></script>
 </body>
 </html>

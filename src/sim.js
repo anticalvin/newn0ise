@@ -69,7 +69,8 @@ export function createSim(c){
       saved.forEach((v,id)=>{const o=S.objs.find(x=>x.id===id);if(o){o.holder.position.copy(v.p);o.holder.quaternion.copy(v.q);}});
       world=null;items=[];saved.clear();bump();return{reset:true};
     },
-    setGravity(g){st.g=g;if(world)world.gravity={x:0,y:g,z:0};return{gravity:g};},
+    async kick(power=6){if(!world)await build();items.forEach(it=>{if(it.dynamic){it.body.applyImpulse({x:(Math.random()-.5)*power,y:power*.8+Math.random()*power*.4,z:(Math.random()-.5)*power},true);it.body.wakeUp();}});st.playing=true;return{kicked:items.filter(i=>i.dynamic).length};},
+    setGravity(g){st.g=g;if(world){world.gravity={x:0,y:g,z:0};items.forEach(it=>it.body.wakeUp());}return{gravity:g};},
     invalidate(){if(st.playing)return;world=null;items=[];},
     tick(dt){
       if(!st.playing||!world)return;

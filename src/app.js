@@ -3,6 +3,7 @@ import {CAMS,glyph,drawOverlay} from './cams.js';
 import {createRecorder,fmtTime} from './recorder.js';
 import {createTimeline} from './timeline.js';
 import {createEditor} from './editor.js';
+import {createOverlays} from './overlay.js';
 import {put as handoffPut,take as handoffTake} from './handoff.js';
 import {CAMSIM_PARAMS,CAMSIM_FRAG,SIMS} from './camsim.js';
 import {QUAL,setMaskQuality,PERSON,startPerson,feedPerson,syntheticPerson,DRAWN,paintDrawn,clearDrawn,maskFor,resetMatteGL,MASK_DEFAULTS} from './matte.js';
@@ -1669,6 +1670,7 @@ function idleApply(t){
 function idleRestore(){for(const [o,k,v] of IDLE.saved)o[k]=v;IDLE.saved.length=0;}
 const TLN=createTimeline({el:(...a)=>el(...a),layers:()=>STACK.layers,setCam:i=>{if(CAMMODE)applyCam(i,true);},getCam:()=>camIx,hasCam:()=>CAMMODE,params:l=>MODULES[l.module]?MODULES[l.module].params:[],toast:(...a)=>toast(...a),onToggle:on=>{V.sizeKey='';}});
 const ED=createEditor({el:(...a)=>el(...a),toast:(...a)=>toast(...a),setSource:(...a)=>setSource(...a),TLN});
+const OVL=createOverlays(ED,{el:(...a)=>el(...a),toast:(...a)=>toast(...a),setSource:(...a)=>setSource(...a),uploadSrc:()=>uploadSrc(),TLN});ED.srcHook=(...a)=>OVL.source(...a);ED.afterMount=h=>OVL.mount(h);
 TLN.handle=ED;
 function loop(now){
   requestAnimationFrame(loop);
@@ -1982,7 +1984,7 @@ async function toggleMic(){
 }
 /* ---- audio file as a source: five ways to see sound. The visualizer is a canvas source, so every effect applies to it. ---- */
 const AUD_MODES=['Waterfall','Radial','Scope','Ridges','Cymatics'];
-const AUD={s:{},sp:new Float32Array(64),bavg:0,beat:false,lastBeat:0,auto:false,cur:0,autoT:0,on:false,mode:0,gain:1,el:null,ctx:null,an:null,aL:null,aR:null,dest:null,cv:null,g:null,f:null,t:null,l:null,r:null,hist:[],bass:0,mid:0,hi:0,lvl:0,cen:.25,cn:3,cm:4,ph:0,url:'',name:''};
+const AUD={s:{},sp:new Float32Array(64),bavg:0,beat:false,lastBeat:0,auto:false,cur:0,autoT:0,on:false,mode:1,gain:1,el:null,ctx:null,an:null,aL:null,aR:null,dest:null,cv:null,g:null,f:null,t:null,l:null,r:null,hist:[],bass:0,mid:0,hi:0,lvl:0,cen:.25,cn:3,cm:4,ph:0,url:'',name:''};
 Object.assign(hooks,{AUD,stopAudio,group,el,chipRow,snap,refreshUI,stepGif,audFrame});
 
 function stopAudio(){
@@ -2000,7 +2002,7 @@ async function startAudio(file){
     node.connect(an);an.connect(ctx.destination);node.connect(sp);sp.connect(aL,0);sp.connect(aR,1);
     const dest=ctx.createMediaStreamDestination();node.connect(dest);
     ctx.resume().catch(()=>{});
-    await Promise.race([el.play(),new Promise((_,no)=>setTimeout(()=>no(new Error('timeout')),15000))]);
+    try{await Promise.race([el.play(),new Promise((_,no)=>setTimeout(()=>no(new Error('timeout')),6000))]);}catch(pe){if(el.error)throw pe;toast('Tap the screen to start the sound',2600);const go=()=>{ctx.resume();el.play().catch(()=>{});};document.addEventListener('pointerdown',go,{once:true});}
     if(ctx.state!=='running')document.addEventListener('pointerdown',()=>{ctx.resume();if(el.paused)el.play().catch(()=>{});},{once:true});
     Object.assign(AUD,{el,ctx,an,aL,aR,dest,f:new Uint8Array(an.frequencyBinCount),t:new Uint8Array(an.fftSize),l:new Uint8Array(aL.fftSize),r:new Uint8Array(aR.fftSize),hist:[],row:null,name:file.name});
   }catch(e){try{ctx.close();}catch(_){}URL.revokeObjectURL(AUD.url);toast(el.error&&el.error.code===4?'This browser can’t play that audio format. Try an mp3 or m4a.':e.message==='timeout'?'The audio took too long to start. Try a smaller file or tap the screen and try again.':'That audio file couldn’t be played');return;}
@@ -2694,7 +2696,7 @@ function buildCamUI(){
 }
 function showCamGate(msg,first){
   let g=$('#camgate');if(g)g.remove();g=el('div','camgate');g.id='camgate';
-  g.innerHTML=`<div class="cgbox"><b>Camera</b><p></p><div class="cgbtns"></div></div>`;g.querySelector('p').textContent=msg;
+  g.innerHTML=`<a class="cghome" href="index.html" aria-label="n0ise home">n<b>0</b>ise</a><div class="cgbox"><b>Camera</b><p></p><div class="cgbtns"></div></div>`;g.querySelector('p').textContent=msg;
   const row=g.querySelector('.cgbtns'),mk=(t,cls,fn)=>{const b=el('button',cls,t);b.addEventListener('click',fn);row.appendChild(b);};
   mk(first?'Open camera':'Try again','pri',async()=>{g.remove();await openCamera();});
   mk('Browse with a demo picture','',async()=>{g.remove();await openCamera({demo:true});});
@@ -3645,7 +3647,7 @@ async function regress(){
   STACK.layers=keep.L;STACK.sel=keep.sel;ST.clean=keep.clean;V.sizeKey='';
   return res;
 }
-window.__n0={syntheticPerson,compareMasks,QUAL,PERSON,setMaskQuality,idleApply,regress,idleRestore,ED,IDLE,TLN,camRecorder,fxRecorder,openCamera,applyCam,CAMS,CAMFX,fxIndex,SHEET,applyRecipe,currentRecipe,toRecipe,fromRecipe,modParams,updateSignals,SIG,runModuleGate,showSheet,STACK,mkLayer,MODULES,PERSON,DRAWN,setSource,syntheticPerson,renderStack,renderFrame,P,V,ST,SRC,TEX,maskFor,startPerson,loadPerson,renderInspector,layout};
+window.__n0={AUD,syntheticPerson,compareMasks,QUAL,PERSON,setMaskQuality,idleApply,regress,idleRestore,ED,IDLE,TLN,camRecorder,fxRecorder,openCamera,applyCam,CAMS,CAMFX,fxIndex,SHEET,applyRecipe,currentRecipe,toRecipe,fromRecipe,modParams,updateSignals,SIG,runModuleGate,showSheet,STACK,mkLayer,MODULES,PERSON,DRAWN,setSource,syntheticPerson,renderStack,renderFrame,P,V,ST,SRC,TEX,maskFor,startPerson,loadPerson,renderInspector,layout};
 {const v=lsGet('n0ise.alive',null);IDLE.on=v?v==='on':!IDLE.reduce;}
 TLN.mount(document.body);ED.mount();setTimeout(takeHandoff,900);
 ED.onExport=()=>{

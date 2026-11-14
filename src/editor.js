@@ -51,13 +51,14 @@ export function createEditor(c){
   function enter(k,t){
     if(ED.cur&&ED.cur.vid&&ED.cur!==k&&ED.cur.vid!==(k&&k.vid))ED.cur.vid.pause();
     ED.cur=k;if(!k)return;
-    if(k.kind==='video'){k.vid.playbackRate=Math.max(.0625,Math.min(16,k.speed));k.vid.muted=false;k.vid.currentTime=Math.max(0,Math.min(k.srcDur-.01,k.in+(t-k.at)*k.speed));setSource(k.vid,'Clip',true);if(ED.playing)k.vid.play().catch(()=>{});}
-    else setSource(k.canvas,'Clip',false);
+    if(k.kind==='video'){k.vid.playbackRate=Math.max(.0625,Math.min(16,k.speed));k.vid.muted=false;k.vid.currentTime=Math.max(0,Math.min(k.srcDur-.01,k.in+(t-k.at)*k.speed));(ED.srcHook||setSource)(k.vid,'Clip',true);if(ED.playing)k.vid.play().catch(()=>{});}
+    else (ED.srcHook||setSource)(k.canvas,'Clip',false);
   }
+  ED.refresh=()=>{if(ED.cur)enter(ED.cur,ED.t);};
   ED.seek=t=>{
     ED.t=Math.max(0,Math.min(len(),t));const a=activeAt(ED.t);
     if(a!==ED.cur||(a&&a.vid&&a.vid.paused&&performance.now()-lastSeek>60)){lastSeek=performance.now();if(a!==ED.cur)enter(a,ED.t);else a.vid.currentTime=Math.max(0,Math.min(a.srcDur-.01,a.in+(ED.t-a.at)*a.speed));}
-    TLN.t=ED.t;TLN.apply();draw();
+    TLN.t=ED.t;TLN.apply();draw();ED.afterTick&&ED.afterTick();
   };
   ED.play=on=>{
     ED.playing=on===undefined?!ED.playing:on;
@@ -74,7 +75,7 @@ export function createEditor(c){
       if(ED.t>=len()){ED.t=len();if(TLN.loopOn&&!ED.exporting){ED.seek(0);}else{ED.play(false);ED.onEnd&&ED.onEnd();}}
       else if(ED.cur&&ED.cur.kind==='image'&&ED.cur===a){/* held by the clock */}
     }
-    TLN.t=ED.t;TLN.apply();if(ED.playing||drag)draw();else if(anim())draw();
+    TLN.t=ED.t;TLN.apply();ED.afterTick&&ED.afterTick();if(ED.playing||drag||ED.afterDraw)draw();else if(anim())draw();
   };
   const anim=()=>ED.clips.some(k=>Math.abs(k.vx-k.at)>.002);
   /* ---- editing ---- */
@@ -108,6 +109,7 @@ export function createEditor(c){
       if(i===ED.sel){g.strokeStyle=getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()||'#ff5a1f';g.lineWidth=2;g.beginPath();g.roundRect(x0+1,y+1,cw-2,ch-2,3);g.stroke();g.fillStyle=g.strokeStyle;g.fillRect(x0,y,7,ch);g.fillRect(x0+cw-6,y,7,ch);}
     });
     g.fillStyle='#f2efe8';g.fillRect(t2x(ED.t,w)-1,0,2,h);
+    ED.afterDraw&&ED.afterDraw();
   }
   function loopDraw(){draw();raf=0;}
   /* ---- pointer: tap selects, drag the body reorders, drag a handle trims ---- */
@@ -148,7 +150,7 @@ export function createEditor(c){
     spd.addEventListener('change',()=>ED.setSpeed(+spd.value));
     host.querySelector('.edmute').addEventListener('click',e=>{ED.mute=!ED.mute;e.currentTarget.setAttribute('aria-pressed',ED.mute);if(audio)audio.mon.gain.value=ED.mute?0:1;});
     host.querySelector('.edexp').addEventListener('click',()=>ED.onExport&&ED.onExport());
-    wire2();sync();
+    wire2();sync();ED.afterMount&&ED.afterMount(host);
   };
   ED.setExporting=on=>{ED.exporting=on;};
   return ED;

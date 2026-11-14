@@ -32,6 +32,8 @@ vec3 yrgb(vec3 y){return vec3(y.x+1.402*y.z,y.x-.34414*y.y-.71414*y.z,y.x+1.772*
 vec3 heatmap(float t){
   vec3 a=vec3(0.,0.,.05),b=vec3(.28,0.,.5),c=vec3(.78,.1,.28),d=vec3(1.,.55,0.),e=vec3(1.,.95,.55);t=clamp(t,0.,1.);
   if(t<.22)return mix(a,b,t/.22);if(t<.5)return mix(b,c,(t-.22)/.28);if(t<.75)return mix(c,d,(t-.5)/.25);return mix(d,e,(t-.75)/.25);}
+float vn(vec2 p,float t){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);
+  return mix(mix(h21(i+t),h21(i+vec2(1.,0.)+t),f.x),mix(h21(i+vec2(0.,1.)+t),h21(i+vec2(1.,1.)+t),f.x),f.y);}
 vec4 fx(vec2 uv){
   float asp=uRes.x/uRes.y,fr=floor(uTime*30.),f24=floor(uTime*24.),sd=uSeed+u_seed2;
   vec3 raw=sm(uv);
@@ -73,6 +75,8 @@ vec4 fx(vec2 uv){
   /* tone */
   c=(c-.45)*exp2(u_contrast/100.)+.45;c=pow(max(c,vec3(0.)),vec3(exp2(-u_gamma/100.)));
   float lf=u_lift/100.*.4;c=c*(1.-lf)+u_lcol*lf*1.4;
+  /* every real sensor and film rolls highlights off toward warm white and lifts the toe a little; this is what keeps a look from feeling pasted on */
+  {float l0=dot(c,vec3(.299,.587,.114));float hd=smoothstep(.7,1.15,l0);c=mix(c,vec3(l0)*vec3(1.04,1.,.94),hd*.4);c=mix(c,c*c*(3.-2.*c),.18);}
   /* colour */
   c*=vec3(1.+u_temp/100.*.35,1.-u_tint/100.*.2,1.-u_temp/100.*.35);
   float l=dot(c,vec3(.299,.587,.114));c=mix(vec3(l),c,u_sat/100.);c=mix(c,vec3(l),u_mono/100.);
@@ -88,10 +92,11 @@ vec4 fx(vec2 uv){
   if(u_tube>0.)c*=mix(1.,smoothstep(.5,.44,rr),u_tube/100.);
   if(u_leak>0.){float lk=u_leak/100.*(.6+.4*sin(uTime*.7+sd));float e=exp(-uv.x*4.5)+exp(-(1.-uv.y)*5.)*.8;c+=u_lkc*e*lk*.75;}
   /* sensor noise, heavier in shadows */
-  vec2 cell=floor(uv*uRes/u_gsize);float w=1.2-.85*l;
-  float nz=(h21(cell+fr*1.37+sd)+h21(cell*1.7+fr*2.3+5.)-1.);
-  c+=nz*u_noise/100.*.36*w;
-  if(u_cnoise>0.)c+=(vec3(h21(cell+fr*3.),h21(cell+7.+fr*5.),h21(cell+13.+fr*7.))-.5)*u_cnoise/100.*.34*w;
+  vec2 cell=floor(uv*uRes/u_gsize),gp=uv*uRes/u_gsize;float w=.35+2.2*l*(1.-l)+.5*(1.-l);
+  float tg=fr*1.37+sd;
+  float nz=(vn(gp,tg)*.55+vn(gp*2.1,tg+3.)*.3+h21(cell+fr*2.3+5.)*.15)*2.-1.;
+  c+=nz*u_noise/100.*.34*w;
+  if(u_cnoise>0.){vec3 cn=vec3(vn(gp*.5,tg),vn(gp*.5,tg+7.),vn(gp*.5,tg+13.))-.5;c+=cn*u_cnoise/100.*.5*w;}
   c+=(h11(floor(uv.y*uRes.y/u_gsize)+fr*3.1+sd)-.5)*u_band/100.*.14;
   if(u_hot>0.&&h21(floor(uv*uRes)+fr*.1+sd)>1.-.0005*u_hot/100.*3.)c+=.8;
   /* film */
@@ -102,6 +107,7 @@ vec4 fx(vec2 uv){
   c*=1.+(h11(floor(uTime*18.)+sd)-.5)*u_flick/100.*.5;
   /* display */
   c*=1.-u_scan/100.*.42*(.5-.5*cos(q.y*lines*6.2831));
+  c+=(h21(uv*uRes+fr)-.5)/255.;
   return vec4(mix(raw,clamp(c,0.,1.),u_amt/100.),1.);
 }`;
 

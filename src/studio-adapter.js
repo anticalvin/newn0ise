@@ -16,7 +16,7 @@ export function createN0(){
     },
     resetGL(){Object.keys(T).forEach(k=>{G.freeRT(T[k]);delete T[k];});if(out)G.freeRT(out);out=null;V.sizeKey='';V.lastBKey='';V.palCache={key:'',v:null};V.textKey='';V.pIdx=0;RB.pbo=null;RB.sync=null;RB.size=0;},
     blit(srcTex){const gl=G.gl;gl.bindVertexArray(G.vaoEmpty);G.bindRT(null);gl.viewport(0,0,gl.canvas.width,gl.canvas.height);PR.orig.use();G.samp(PR.orig,'uSrc',0,srcTex);PR.orig.f('uSrcAsp',1);PR.orig.f('uScrAsp',1);G.draw();gl.bindVertexArray(null);gl.useProgram(null);},
-    GLH:{mkProg:f=>G.mkProg(G.VS,f),HEAD:G.HEAD,bindRT:G.bindRT,samp:G.samp,draw:G.draw,get vao(){return G.vaoEmpty;},get T(){return T;}},
+    GLH:{mkRT:(w,h)=>G.mkRT(w,h,{}),freeRT:G.freeRT,mkProg:f=>G.mkProg(G.VS,f),HEAD:G.HEAD,bindRT:G.bindRT,samp:G.samp,draw:G.draw,get vao(){return G.vaoEmpty;},get T(){return T;}},
     get HDR(){return V.HDR;}
   };
 }
