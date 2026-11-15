@@ -1820,8 +1820,22 @@ window.__embedRender=function(cv,w,h,t,dt){
   if(!window.__embedReady())return null;
   EMB.w=w;EMB.h=h;
   if(SRC.el!==cv){setSource(cv,'Studio',true);}else uploadSrc();
-  renderStack(t,dt);V.frameNo++;return canvas;
+  idleApply(t);try{renderStack(t,dt);}finally{idleRestore();}V.frameNo++;return canvas;
 };
+/* the 3D page gives every object its own effect stack: it can read the editor's stack, load one into the editor, or render a stored
+   stack for one object without touching what the editor is showing */
+const EMBO=new Map();
+window.__embedGet=()=>JSON.stringify({p:P,l:stackState()});
+window.__embedLoad=s=>{try{applySnap(s);}catch(e){console.error(e);}};
+window.__embedRenderObj=function(id,json,live,cv,w,h,t,dt){
+  if(live||!json)return window.__embedRender(cv,w,h,t,dt);
+  let e=EMBO.get(id);
+  if(!e||e.j!==json){try{const o=JSON.parse(json);e={j:json,p:o.p,l:layersFromSnap(o,false)};if(!e.l.length)return null;EMBO.set(id,e);}catch(_){return null;}}
+  const kl=STACK.layers,ks=STACK.sel,kp=JSON.stringify(P);
+  STACK.layers=e.l;STACK.sel=0;Object.assign(P,e.p);
+  try{return window.__embedRender(cv,w,h,t,dt);}finally{STACK.layers=kl;STACK.sel=ks;Object.assign(P,JSON.parse(kp));}
+};
+window.__embedDrop=id=>EMBO.delete(id);
 const FRAME_HOOKS=[];
 /* Alive: an effect is never frozen. Every ranged control of every layer breathes a few percent on slow sine waves (scale-like controls more). No seed jumps, no glitching.
    The offsets are applied just before the frame is drawn and removed straight after, so saved values and sliders never change. */
@@ -1829,6 +1843,7 @@ const IDLE={on:true,amt:.035,saved:[],reduce:matchMedia('(prefers-reduced-motion
 function idleApply(t){
   IDLE.saved.length=0;if(!IDLE.on||ST.clean||(IDLE.reduce&&!IDLE.force))return;
   STACK.layers.forEach((l,li)=>{
+    if(l.module==='crtlab'&&l.visible){[['curv',.06],['beam',.08],['bloomb',.08],['spot',.08],['efoc',.08],['bloom',.06],['brad',.08],['hal',.06],['diff',.08],['mpitch',.07],['mstr',.05],['scan',.04],['glare',.08],['para',.08],['cper',.08]].forEach(([k,a],i)=>{const d=CTL[k];if(!d||typeof P[k]!=='number')return;const base=P[k],span=d.max-d.min,w=Math.sin(t*(.27+.09*(i%5))+i*1.9)*.75+Math.sin(t*(.08+.03*(i%3))+i)*.25;IDLE.saved.push([P,k,base]);P[k]=Math.max(d.min,Math.min(d.max,base+span*a*w));});return;}
     if(!l.visible||l.module==='crtlab')return;const m=MODULES[l.module];if(!m||!l.params)return;
     /* every ranged control breathes, smoothly. Scale-like ones (size, zoom, cell, frequency, radius...) move the most.
        Whole-number controls with a small range are left alone so nothing steps or pops; the seed is never touched. */
@@ -1898,9 +1913,12 @@ function snap(){
   const s=JSON.stringify({p:P,l:stackState()});
   if(s!==lastSnap){if(lastSnap)HIST.push(lastSnap);if(HIST.length>60)HIST.shift();lastSnap=s;REDO.length=0;}
 }
+function layersFromSnap(o,keepUid){
+  return o.l.filter(x=>MODULES[x.m]).map(x=>{const l=mkLayer(x.m,x.p||undefined);if(keepUid&&x.u!=null){l.uid=x.u;layerUid=Math.max(layerUid,x.u+1);}Object.assign(l,{opacity:x.o,blend:x.b,showSource:x.s,select:x.sel,thr:x.t,pos:x.pos,size:x.z,seed:x.seed,visible:x.v});if(x.c)l.color=x.c;if(x.mk)l.mask=x.mk;l.solo=!!x.so;l.mods=x.md||[];return l;});
+}
 function applySnap(s){
   const o=JSON.parse(s);Object.assign(P,o.p);
-  STACK.layers=o.l.filter(x=>MODULES[x.m]).map(x=>{const l=mkLayer(x.m,x.p||undefined);if(x.u!=null){l.uid=x.u;layerUid=Math.max(layerUid,x.u+1);}Object.assign(l,{opacity:x.o,blend:x.b,showSource:x.s,select:x.sel,thr:x.t,pos:x.pos,size:x.z,seed:x.seed,visible:x.v});if(x.c)l.color=x.c;if(x.mk)l.mask=x.mk;l.solo=!!x.so;l.mods=x.md||[];return l;});
+  STACK.layers=layersFromSnap(o,true);
   if(!STACK.layers.length)STACK.layers=[mkLayer('crtlab')];STACK.sel=Math.min(STACK.sel,STACK.layers.length-1);lastSnap=s;refreshUI();renderInspector();
 }
 function undo(){const s=HIST.pop();if(!s){toast('Nothing to undo');return;}REDO.push(lastSnap);applySnap(s);toast('Undo');}

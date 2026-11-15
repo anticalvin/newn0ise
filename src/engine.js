@@ -631,8 +631,8 @@ R('beam','Electronics','sati','Saturation drift',0,100,0);
 R('beam','Geometry','curv','Curvature',-50,100,25);
 R('beam','Geometry','corner','Corner radius',0,100,25);
 R('beam','Geometry','over','Overscan',0,20,3);
-R('beam','Geometry','convs','Misconvergence',0,100,10);
-R('beam','Geometry','conve','Edge convergence',0,100,20);
+R('beam','Geometry','convs','Misconvergence',0,100,0);
+R('beam','Geometry','conve','Edge convergence',0,100,0);
 R('beam','Geometry','cdrift','Circuit drift',0,100,0);
 R('beam','Geometry','aging','Hardware aging',0,100,20);
 

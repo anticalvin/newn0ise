@@ -688,6 +688,17 @@ function fxRender(cTex,t,dt){
   gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
   return FXE.tex;
 }
+function fxRenderObj(cTex,id,json,live,t,dt){
+  const w=FXE.iw;if(!w||!w.__embedRenderObj)return null;FXE.src.width=curW;FXE.src.height=curH;
+  N0.blit(cTex);const g=FXE.src.getContext('2d');g.drawImage(canvas,0,0,curW,curH);
+  const out=w.__embedRenderObj(id,json,live,FXE.src,curW,curH,t,dt);if(!out)return null;
+  if(!FXE.tex){FXE.tex=gl.createTexture();}
+  gl.bindTexture(gl.TEXTURE_2D,FXE.tex);gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);
+  gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA8,gl.RGBA,gl.UNSIGNED_BYTE,out);gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,false);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+  return FXE.tex;
+}
 function ensureComp(){
   if(compProg)return;
   compProg=N0.GLH.mkProg(N0.GLH.HEAD+`
@@ -743,7 +754,18 @@ function renderSelMask(oo){
 const cloneP=()=>JSON.parse(JSON.stringify(N0.P));
 let lookRT=[null,null],lookRTkey='';
 function lookObjs(){return S.objs.filter(o=>o.look&&o.vis!==false&&o.holder.visible);}
+function stackObjs(){return S.objs.filter(o=>o.stack&&o.vis!==false&&o.holder.visible);}
+function stackSwitch(prevId,id){
+  const w=FXE.iw;if(!w||!w.__embedGet||prevId===id)return;
+  const pv=objById(prevId),nx=objById(id);
+  if(pv&&pv.stack)pv.stack=w.__embedGet();
+  if(nx&&nx.stack)w.__embedLoad(nx.stack);
+  updateLookUI();
+}
+function addStack(o){const w=FXE.iw;if(!o||!w||!w.__embedGet){toast('The effect engine is still loading.');return;}S.fx=true;S.mask.mode=2;o.stack=w.__embedGet();bump();updateLookUI();toast('Effects added to '+o.name);}
+function removeStack(o){if(!o)return;delete o.stack;if(FXE.iw&&FXE.iw.__embedDrop)FXE.iw.__embedDrop(o.id);bump();updateLookUI();toast('Effects removed from '+o.name);}
 function lookSwitch(prevId,id){
+  if(S.engine==='stack'){stackSwitch(prevId,id);return;}
   if(prevId===id||S.mask.mode!==2)return;
   const pv=objById(prevId),nx=objById(id);
   if(pv&&pv.look)pv.look=cloneP();
@@ -754,9 +776,9 @@ function lookSwitch(prevId,id){
 function addLook(o){if(!o)return;S.lookOff=false;o.look=cloneP();S.fx=true;S.mask.mode=2;bump();updateLookUI();toast('Look added to '+o.name);}
 function removeLook(o){if(!o)return;delete o.look;S.lookOff=true;bump();updateLookUI();toast('Look removed from '+o.name);}
 let lookUI=null;
-function updateLookUI(){if(!lookUI)return;const o=objById(S.fxTarget!=null?S.fxTarget:S.sel),n=S.objs.filter(x=>x.look).length;
-  lookUI.name.textContent=o?o.name:'Nothing picked';lookUI.add.textContent=o&&o.look?'Update look':'Add look';lookUI.add.disabled=!o;lookUI.rm.hidden=!(o&&o.look);
-  lookUI.cnt.textContent=n?n+(n===1?' object has a look':' objects have looks'):'No object has a look yet';}
+function updateLookUI(){if(!lookUI)return;const st=S.engine==='stack',key=st?'stack':'look',o=objById(S.fxTarget!=null?S.fxTarget:S.sel),n=S.objs.filter(x=>x[key]).length;
+  lookUI.name.textContent=o?o.name:'Nothing picked';lookUI.add.textContent=o&&o[key]?(st?'Update effects':'Update look'):(st?'Add effects':'Add look');lookUI.add.disabled=!o;lookUI.rm.textContent=st?'Remove effects':'Remove look';lookUI.rm.hidden=!(o&&o[key]);
+  lookUI.cnt.textContent=n?n+(n===1?' object has ':' objects have ')+(st?'effects':'a look'):'No object has '+(st?'effects':'a look')+' yet';}
 function drawLooks(cTex,t,dt,live,LO){
   ensureComp();const G=N0.GLH,W=canvas.width,H=canvas.height,key=W+'x'+H;
   if(lookRTkey!==key){lookRT.forEach(r=>r&&G.freeRT(r));lookRT=[G.mkRT(W,H),G.mkRT(W,H)];lookRTkey=key;}
@@ -772,6 +794,25 @@ function drawLooks(cTex,t,dt,live,LO){
     if(dst)base=dst.tex;
   });
   Object.assign(N0.P,keep);S.fxTarget=wasT;
+}
+function drawStackLooks(cTex,t,dt,SO){
+  ensureComp();const G=N0.GLH,W=canvas.width,H=canvas.height,key=W+'x'+H,w=FXE.iw;
+  if(lookRTkey!==key){lookRT.forEach(r=>r&&G.freeRT(r));lookRT=[G.mkRT(W,H),G.mkRT(W,H)];lookRTkey=key;}
+  const tgt=objById(S.fxTarget!=null?S.fxTarget:S.sel);
+  if(tgt&&tgt.stack&&frames%6===0)tgt.stack=w.__embedGet();
+  let base=cTex;const p=compProg;
+  SO.forEach((o,i)=>{
+    renderSelMask(o);
+    const fx=fxRenderObj(base,o.id,o.stack,!!tgt&&o===tgt,t,dt);if(!fx)return;
+    const last=i===SO.length-1,dst=last?null:lookRT[i%2];
+    renderer.setRenderTarget(null);
+    gl.bindVertexArray(G.vao);G.bindRT(dst);if(!dst)gl.viewport(0,0,W,H);p.use();
+    G.samp(p,'uO',0,base);G.samp(p,'uF',1,fx);G.samp(p,'uD',2,rtTex(rt.depthTexture));G.samp(p,'uM',3,rtTex(maskRT.texture));
+    p.f('uMode',2);p.f('uAmt',S.mask.amt);p.f('uFocus',0);p.f('uRange',1);p.f('uSoft',.1);p.f('uInv',S.mask.inv?1:0);p.f('uMA',S.maskA||0);p.f('uCamN',camera.near);p.f('uCamF',camera.far);p.v2('uPx',1/curW,1/curH);
+    G.draw();gl.bindVertexArray(null);gl.useProgram(null);
+    if(dst)base=dst.tex;else base=null;
+  });
+  if(base)N0.blit(base);
 }
 function updateFxNote(){const n=$('#fxnote');if(!n)return;const o=objById(S.fxTarget!=null?S.fxTarget:S.sel);
   const t=!S.fx||S.hold?'':S.mask.mode===2?(o?'Look on: '+o.name:'Look on: nothing selected. Tap an object.'):'';if(n.textContent!==t)n.textContent=t;}
@@ -813,7 +854,9 @@ function frame(ts){
     const cTex=rtTex(rt.texture);
     if(S.fx&&!S.hold&&S.mask.mode===2&&S.engine!=='stack'&&!S.lookOff&&!S.objs.some(x=>x.look)){const t0=objById(S.fxTarget!=null?S.fxTarget:S.sel);if(t0){t0.look=cloneP();updateLookUI();}}
     const LO=S.fx&&!S.hold&&S.mask.mode===2&&S.engine!=='stack'?lookObjs():[];
-    if(LO.length){
+    const SO=S.fx&&!S.hold&&S.mask.mode===2&&S.engine==='stack'&&fxReady()?stackObjs():[];
+    if(SO.length){drawStackLooks(cTex,t,dt,SO);}
+    else if(LO.length){
       const eo=objById(S.fxTarget);if(eo&&eo.look&&frames%6===0)eo.look=cloneP();
       drawLooks(cTex,t,dt,performance.now()<S.liveUntil,LO);
     }else if(S.fx&&!S.hold&&!(S.mask.mode===2&&S.engine!=='stack')){
@@ -2007,7 +2050,7 @@ function buildLookPane(){
   const p=paneEls.look,P=N0.P;
   const se=sec(p,'Effects');
   chipRow(se,[['crt','CRT Lab look'],['stack','All n0ise effects']],v=>(S.engine||'crt')===v,v=>{S.engine=v;if(v==='stack'){fxLoad();if(S.mask.mode===0){S.mask.mode=2;}if(S.sel==null&&S.objs.length)selectObj(S.objs[S.objs.length-1].id);}rebuildLook();bump();});
-  if(S.engine==='stack'){se.appendChild(btn('Edit effects','pri',fxOpen));se.appendChild(el('div','note',fxReady()?'The effect stack runs on the selected object. The background stays as it is.':'Loading the effect engine…'));}
+  if(S.engine==='stack'){se.appendChild(btn('Edit effects','pri',fxOpen));se.appendChild(el('div','note',fxReady()?'Edit the effect stack, then press Add effects to put it on the selected object. Pick another object to give it its own. The background stays as it is.':'Loading the effect engine…'));}
   const s0=sec(p,'Look stack');
   const top=el('div','chips');
   const fxb=btn('FX on','',()=>{});fxb.setAttribute('aria-pressed',S.fx);
@@ -2020,10 +2063,9 @@ function buildLookPane(){
   function syncMask(){mk.innerHTML='';
     if(S.mask.mode===1){sliderRow(mk,'Focus',()=>S.mask.focus,v=>{S.mask.focus=v;bump();},.2,30,.05);sliderRow(mk,'Range',()=>S.mask.range,v=>{S.mask.range=v;bump();},.05,12,.05);}
     if(S.mask.mode===1||S.mask.mode===3)sliderRow(mk,'Softness',()=>S.mask.soft,v=>{S.mask.soft=v;bump();},.02,6,.02);
-    if(S.mask.mode===2&&S.engine!=='stack'){const bx=el('div','lookbox');const nm=el('div','sub','');const row=el('div','chips');
-      const add=btn('Add look','pri',()=>addLook(objById(S.fxTarget!=null?S.fxTarget:S.sel)));const rm=btn('Remove look','',()=>removeLook(objById(S.fxTarget!=null?S.fxTarget:S.sel)));
-      row.append(add,rm);const cnt=el('div','note','');bx.append(nm,row,cnt,el('div','note','Tap an object, shape its look with the controls below, then tap another and give it a different one. Each object keeps its own.'));mk.appendChild(bx);lookUI={name:nm,add,rm,cnt};updateLookUI();}
-    else if(S.mask.mode===2)mk.appendChild(el('div','note','Tap an object in the scene to pick it. The look is applied to that object only.'));
+    if(S.mask.mode===2){const bx=el('div','lookbox');const nm=el('div','sub','');const row=el('div','chips');
+      const tgtO=()=>objById(S.fxTarget!=null?S.fxTarget:S.sel);const add=btn('Add look','pri',()=>S.engine==='stack'?addStack(tgtO()):addLook(tgtO()));const rm=btn('Remove look','',()=>S.engine==='stack'?removeStack(tgtO()):removeLook(tgtO()));
+      row.append(add,rm);const cnt=el('div','note','');bx.append(nm,row,cnt,el('div','note','Tap an object, shape its effects, then tap another and give it different ones. Each object keeps its own. The camera, the character and any object can have effects.'));mk.appendChild(bx);lookUI={name:nm,add,rm,cnt};updateLookUI();}
     if(S.mask.mode>0){const c=el('div','chips');const b=el('button','chip','Invert');b.setAttribute('aria-pressed',S.mask.inv);b.addEventListener('click',()=>{S.mask.inv=!S.mask.inv;b.setAttribute('aria-pressed',S.mask.inv);bump();});c.appendChild(b);
       if(S.mask.mode===1){const f=btn('Focus on target','',()=>{S.mask.focus=controls.getDistance();syncMask();bump();});c.appendChild(f);}mk.appendChild(c);}
   }
@@ -2302,6 +2344,9 @@ async function playWorld(){
   if(walk.on){walk.exit();return;}
   try{const o=await ensurePlayer();const h=o.holder;
     const start=S.start||[h.position.x,h.position.y,h.position.z];S.start=start;
+    /* the character joins the look of the world: if effects are on other objects and none is on the character yet, it gets the same, once */
+    if(!o.meta.fxAuto){const key=S.engine==='stack'?'stack':'look',srcO=S.objs.find(x=>x!==o&&x[key]);
+      if(srcO&&!o[key]){o.meta.fxAuto=true;o[key]=key==='stack'?srcO.stack:JSON.parse(JSON.stringify(srcO.look));S.fx=true;S.mask.mode=2;updateLookUI();toast('The character has the same effect as '+srcO.name+'. Change it in Look.',3500);}}
     PLAYER.goalHit=false;walk.enter({third:true,player:o,rig:o.rig,pos:[start[0],start[1],start[2]],camYaw:0});
   }catch(e){toast(String(e.message||e),4000);}
 }
