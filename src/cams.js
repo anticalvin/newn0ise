@@ -44,16 +44,6 @@ export const CAMS=[
   {id:'micro',cat:'Digital',name:'Microscope',sub:'Magnified, tube vignette, fringing',sim:'micro',aspect:'1:1',ov:{},glyph:'lens'},
   {id:'endo',cat:'Digital',name:'Endoscope',sub:'Wide ring light, warm tones',sim:'endo',aspect:'1:1',ov:{},glyph:'lens'},
   {id:'fpv',cat:'Digital',name:'Drone FPV',sub:'Wide analog link with dropouts',sim:'fpv',aspect:'16:9',ov:{},glyph:'dash'},
-  {id:'dogc',cat:'Animal',name:'Dog',sub:'Blue and yellow only, wide and low, quick to catch motion',sim:'dog',aspect:'4:3',ov:{},glyph:'lens'},
-  {id:'catc',cat:'Animal',name:'Cat',sub:'Dim-light vision with a wide, soft view',sim:'cat',aspect:'4:3',ov:{},glyph:'lens'},
-  {id:'horsec',cat:'Animal',name:'Horse',sub:'Very wide, dark at the edges, blind spots',sim:'horse',aspect:'16:9',ov:{},glyph:'lens'},
-  {id:'beec',cat:'Animal',name:'Bee',sub:'Facets, shifted toward violet',sim:'bee',aspect:'1:1',ov:{},glyph:'lens'},
-  {id:'flyc',cat:'Animal',name:'Fly',sub:'Compound eye: a mosaic of tiny views',sim:'fly',aspect:'1:1',ov:{},glyph:'lens'},
-  {id:'hawkc',cat:'Animal',name:'Hawk',sub:'Far sharper than yours, richer colour',sim:'hawk',aspect:'16:9',ov:{},glyph:'lens'},
-  {id:'viperc',cat:'Animal',name:'Pit viper',sub:'Heat only, blurred',sim:'viper',aspect:'4:3',ov:{},glyph:'dome'},
-  {id:'sharkc',cat:'Animal',name:'Shark',sub:'Blue-grey, contrasty, tunnelled',sim:'shark',aspect:'16:9',ov:{},glyph:'dome'},
-  {id:'owlc',cat:'Animal',name:'Owl',sub:'Seeing in the dark, a narrow bright tube',sim:'owl',aspect:'1:1',ov:{},glyph:'lens'},
-  {id:'mantisc',cat:'Animal',name:'Mantis shrimp',sub:'Too many colours at once',sim:'mantis',aspect:'4:3',ov:{},glyph:'lens'},
   {id:'ascii',cat:'Glitch',name:'Text cam',sub:'Picture drawn from characters',sim:'clean',aspect:'4:3',ov:{},glyph:'screen',fx:['ascii'],mix:[100]},
   {id:'moshc',cat:'Glitch',name:'Datamosh',sub:'Smeared motion, frozen blocks',sim:'mosh',aspect:'3:4',ov:{},glyph:'wave',fx:['mosh'],mix:[100]},
   {id:'psortc',cat:'Glitch',name:'Pixel sort',sub:'Streaks of sorted brightness',sim:'clean',aspect:'3:4',ov:{},glyph:'wave',mods:[{module:'psort'}]},
@@ -69,7 +59,17 @@ export const CAMS=[
   {id:'duo',cat:'Subject',name:'Two-colour',sub:'Subject and background in two flat colours',sim:'clean',aspect:'3:4',ov:{},glyph:'person',duo:true,mods:[{module:'solid'}]},
   {id:'sil',cat:'Subject',name:'Silhouette',sub:'Solid shape of the person in front',sim:'clean',aspect:'3:4',ov:{},glyph:'person',mods:[{module:'solid'}]},
   {id:'neonc',cat:'Subject',name:'Neon outline',sub:'Glowing contour of the person',sim:'clean',aspect:'3:4',ov:{},glyph:'person',mods:[{module:'neonedge'}]},
-  {id:'sigc',cat:'Subject',name:'Signal body',sub:'Person redrawn as moving signal lines',sim:'clean',aspect:'3:4',ov:{},glyph:'person',mods:[{module:'sigbody'}]}
+  {id:'sigc',cat:'Subject',name:'Signal body',sub:'Person redrawn as moving signal lines',sim:'clean',aspect:'3:4',ov:{},glyph:'person',mods:[{module:'sigbody'}]},
+  {id:'dogc',cat:'Animal',name:'Dog',sub:'Blue and yellow only, wide and low, quick to catch motion',sim:'dog',aspect:'4:3',ov:{},glyph:'lens'},
+  {id:'catc',cat:'Animal',name:'Cat',sub:'Dim-light vision with a wide, soft view',sim:'cat',aspect:'4:3',ov:{},glyph:'lens'},
+  {id:'horsec',cat:'Animal',name:'Horse',sub:'Very wide, dark at the edges, blind spots',sim:'horse',aspect:'16:9',ov:{},glyph:'lens'},
+  {id:'beec',cat:'Animal',name:'Bee',sub:'Facets, shifted toward violet',sim:'bee',aspect:'1:1',ov:{},glyph:'lens'},
+  {id:'flyc',cat:'Animal',name:'Fly',sub:'Compound eye: a mosaic of tiny views',sim:'fly',aspect:'1:1',ov:{},glyph:'lens'},
+  {id:'hawkc',cat:'Animal',name:'Hawk',sub:'Far sharper than yours, richer colour',sim:'hawk',aspect:'16:9',ov:{},glyph:'lens'},
+  {id:'viperc',cat:'Animal',name:'Pit viper',sub:'Heat only, blurred',sim:'viper',aspect:'4:3',ov:{},glyph:'dome'},
+  {id:'sharkc',cat:'Animal',name:'Shark',sub:'Blue-grey, contrasty, tunnelled',sim:'shark',aspect:'16:9',ov:{},glyph:'dome'},
+  {id:'owlc',cat:'Animal',name:'Owl',sub:'Seeing in the dark, a narrow bright tube',sim:'owl',aspect:'1:1',ov:{},glyph:'lens'},
+  {id:'mantisc',cat:'Animal',name:'Mantis shrimp',sub:'Too many colours at once',sim:'mantis',aspect:'4:3',ov:{},glyph:'lens'}
 ];
 
 /* flat camera glyphs, 56x40, currentColor only */

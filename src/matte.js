@@ -8,29 +8,39 @@ const {V,PR,mkProg,mkRT,freeRT,bindRT,samp,draw,SRC,VS,HEAD}=G;
 export const PERSON={
   worker:null,state:'idle',err:'',model:'selfie',backend:'',prog:0,bytes:0,mb:0,
   w:0,h:0,ema:null,hold:null,out:null,tex:null,ver:0,inflight:false,fps:0,ms:0,flicker:0,
-  cap:384,quality:'balanced',synthetic:false,
+  cap:384,quality:'balanced',synthetic:false,animals:true,abox:null,aboxT:0,
   smooth:{on:true,a:.5,lo:.38,hi:.62,mix:.6}
 };
 /* Mask quality. The model itself sees a small image, so the lever is the capture size and the edge refinement against the real picture.
    Stills and exports always refine at the highest setting. */
 export const QUAL={fast:{cap:256,q:0},balanced:{cap:384,q:1},max:{cap:512,q:2}};
+export function setAnimals(v){PERSON.animals=!!v;try{localStorage.setItem('n0ise.animals',v?'on':'off');}catch(e){}if(PERSON.worker){PERSON.worker.terminate();PERSON.worker=null;if(PERSON.aw){PERSON.aw.terminate();PERSON.aw=null;}PERSON.araw=null;PERSON.abox=null;PERSON.state='idle';PERSON.ema=null;startPerson();}}
 export function setMaskQuality(k){if(!QUAL[k])return;PERSON.quality=k;PERSON.cap=QUAL[k].cap;try{localStorage.setItem('n0ise.maskq',k);}catch(e){}}
+try{PERSON.animals=localStorage.getItem('n0ise.animals')!=='off';}catch(e){}
 try{const k=localStorage.getItem('n0ise.maskq');if(QUAL[k])setMaskQuality(k);}catch(e){}
 let _n=0,_t0=0,_sent=0;
 export function startPerson(model){
   if(PERSON.worker&&PERSON.state!=='error'&&(!model||model===PERSON.model))return;
   if(PERSON.worker){PERSON.worker.terminate();PERSON.worker=null;}
+  if(PERSON.aw){PERSON.aw.terminate();PERSON.aw=null;}
   if(model)PERSON.model=model;PERSON.state='loading';PERSON.err='';PERSON.prog=0;
-  const w=PERSON.worker=new Worker('seg.worker.js?v=1',{type:'module'});
+  const w=PERSON.worker=new Worker('seg.worker.js?v=2',{type:'module'});
   w.onmessage=e=>{
     const m=e.data;
     if(m.type==='progress'){PERSON.prog=m.p;PERSON.bytes=m.bytes;}
     else if(m.type==='ready'){PERSON.state='ready';PERSON.backend=m.backend;}
     else if(m.type==='error'){PERSON.state='error';PERSON.err=m.message;PERSON.inflight=false;}
-    else if(m.type==='mask'){PERSON.inflight=false;ingest(m.data,m.w,m.h,performance.now());}
+    else if(m.type==='mask'){PERSON.inflight=false;const d=m.data,ar=PERSON.araw;if(ar&&ar.length===d.length&&performance.now()-(PERSON.atime||0)<1500){for(let i=0;i<d.length;i++)if(ar[i]>d[i])d[i]=ar[i];}ingest(d,m.w,m.h,performance.now());}
   };
   w.onerror=e=>{PERSON.state='error';PERSON.err=String(e.message||'worker failed');PERSON.inflight=false;};
   w.postMessage({type:'init',model:PERSON.model});
+  if(PERSON.animals){
+    const a=PERSON.aw=new Worker('seg.worker.js?v=2',{type:'module'});PERSON.araw=null;PERSON.aready=false;PERSON.ainflight=false;
+    a.onmessage=e=>{const m=e.data;if(m.type==='ready')PERSON.aready=true;else if(m.type==='error'){PERSON.aready=false;PERSON.animalErr=m.message;}
+      else if(m.type==='mask'){PERSON.ainflight=false;PERSON.araw=m.data;PERSON.atime=performance.now();PERSON.aw_=m.w;PERSON.ah_=m.h;PERSON.abox=m.abox||null;if(m.abox)PERSON.aboxT=performance.now();}};
+    a.onerror=()=>{PERSON.aready=false;PERSON.ainflight=false;};
+    a.postMessage({type:'init',model:'deeplab'});
+  }
 }
 function ingest(raw,w,h,now){
   const n=w*h;
@@ -65,6 +75,7 @@ export function feedPerson(){
   const [sw,sh]=G.srcDims(src);if(!sw||!sh)return;
   const k=PERSON.cap/Math.max(sw,sh),w=Math.max(16,Math.round(sw*k)),h=Math.max(16,Math.round(sh*k));
   PERSON.inflight=true;_sent=performance.now();
+  if(PERSON.aw&&PERSON.aready&&!PERSON.ainflight&&((PERSON.af=(PERSON.af||0)+1)&1)){PERSON.ainflight=true;createImageBitmap(src,{resizeWidth:w,resizeHeight:h,resizeQuality:'low'}).then(bm=>PERSON.aw.postMessage({type:'frame',bitmap:bm,ts:Math.round(performance.now())},[bm])).catch(()=>{PERSON.ainflight=false;});}
   createImageBitmap(src,{resizeWidth:w,resizeHeight:h,resizeQuality:'low'}).then(bm=>PERSON.worker.postMessage({type:'frame',bitmap:bm,ts:Math.round(performance.now())},[bm])).catch(()=>{PERSON.inflight=false;});
 }
 /* a stand-in matte (centred ellipse) for the effect bench and tests, no model needed */

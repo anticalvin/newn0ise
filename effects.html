@@ -511,6 +511,17 @@ body[data-cam] .tl{bottom:var(--campad,0px);max-height:32dvh;border-bottom:1px s
 .camduo input[type=range]{width:90px;height:36px;accent-color:var(--accent)}
 .camduo select{min-height:36px;background:#0a0a0a;color:#f2efe8;border:1px solid #3a3835;font:600 11px var(--lab);border-radius:3px}
 .camduo[hidden]{display:none}
+
+/* shoot view: the picture, the shutter and the basic tools, nothing else */
+.camui.shoot .cambot>*:not(.cammode):not(.camrow){display:none}
+.camui.shoot .camtop .cb:not(#camx):not(#camflip):not(#camflashb):not(#camgridt):not(#camtimt){display:none}
+.camui.shoot .cammoregrid,.camui.shoot .campro{display:none!important}
+.camui.shoot .cambot{background:linear-gradient(0deg,rgba(0,0,0,.55),transparent);padding-top:0}
+.camui.shoot .camrow .camroll{opacity:.9}
+.camui.shoot .camswap{font-size:12px}
+.camshootb{position:absolute;right:58px;top:0;min-height:44px;padding:0 12px;border:0;background:none;color:#f2efe8;font:600 12px system-ui,sans-serif;pointer-events:auto;letter-spacing:.02em}
+.camui.ios .camshootb{color:var(--y)}
+#camzebra{position:absolute;pointer-events:none;z-index:2;image-rendering:pixelated}
 </style>
 </head>
 <body>
@@ -550,6 +561,6 @@ body[data-cam] .tl{bottom:var(--campad,0px);max-height:32dvh;border-bottom:1px s
   </main>
 </div>
 <input type="file" id="file" accept="image/*,video/*,audio/*,.mp3,.wav,.m4a,.ogg,.flac,.aac" hidden>
-<script type="module" src="assets/index.js?v=086ab873"></script>
+<script type="module" src="assets/index.js?v=30540ad5"></script>
 </body>
 </html>
