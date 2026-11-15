@@ -1480,7 +1480,7 @@ function renderFrame(t,dt,OUT){
     sA.f('uPer',Math.max(2.2,E.cper*k));
     sA.f('uSL',Math.max(.35,(.3+E.lbw/100*3.2+gen*1.5)*k));
     sA.f('uSC',Math.max(.6,(1.2+E.cbw/100*3.5)*k));
-    sA.f('uYC',+E.cmode===1?1:E.ycs/100);sA.f('uSnr',E.snr/100*(1+gen*.8));sA.f('uCoh',E.coh/100);sA.f('uSnow',E.snow/100);
+    sA.f('uYC',+E.cmode===1?1:E.ycs/100);sA.f('uSnr',E.snr/100*(1+gen*.8)*(window.__noiseK??1));sA.f('uCoh',E.coh/100);sA.f('uSnow',E.snow/100*(window.__noiseK??1));
     sA.f('uGhost',E.ghost/100);sA.f('uGD',E.gdel*k);sA.f('uJit',E.jit/100*12*k);sA.f('uDrift',E.drift/100*10*k);
     sA.f('uTrk',E.trk/100);sA.f('uTJ',E.tjit/100);sA.f('uRG',E.rgho/100);sA.f('uGS',E.gspr*k);sA.f('uGDec',E.gdec/100);sA.f('uHsw',E.hsw/100);sA.f('uDrop',E.drop/100);sA.f('uClip',E.clip/100);
     sA.f('uCsat',E.csat/100*(1-gen*.35));sA.f('uPhase',E.phs*Math.PI/180);

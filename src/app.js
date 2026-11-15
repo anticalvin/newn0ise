@@ -171,7 +171,7 @@ function defineModule(d){
         else if(p.t==='range2'){const a=v||p.def;pr.v2('u_'+p.k,a[0],a[1]);}
         else if(p.t==='curve'){pr.fv('u_'+p.k,new Float32Array(v||p.def));}
         else if(p.t==='image'){}
-        else pr.f('u_'+p.k,p.t==='b'?(v?1:0):+v);
+        else pr.f('u_'+p.k,p.t==='b'?(v?1:0):+v*((d.id==='camsim'&&(p.k==='noise'||p.k==='cnoise'))?(window.__noiseK??1):(d.id==='camsim'&&p.k==='barrel'&&window.__lensOff?0:1)));
       }
       if(d.bind)d.bind(pr,V,ctx);
       draw();
@@ -2606,9 +2606,9 @@ function openSheet(blob,name,isVideo,meta){
   const file=new File([blob],name,{type:blob.type});
   const canShare=!!(navigator.canShare&&navigator.canShare({files:[file]}));
   const media=isVideo?`<video src="${url}" controls playsinline loop autoplay muted style="max-width:100%;max-height:56dvh;border-radius:6px"></video>`:`<img alt="Your finished export" src="${url}">`;
-  sh.innerHTML=`<div>${media}<p>${(blob.size/1048576).toFixed(1)} MB · ${name.split('.').pop().toUpperCase()}${meta&&meta.dur?' · '+fmtTime(meta.dur):''}</p><div class="xrow"><a class="btn primary" download="${name}" href="${url}">Download</a>${canShare?'<button class="btn" id="shr">Share</button>':''}<button class="btn" id="cls">Close</button>${!isVideo?'<button class="btn" id="to3">Open in 3D</button>':''}${meta&&meta.id?'<button class="btn" id="dis">Discard</button>':''}</div></div>`;
+  sh.innerHTML=`<div>${media}<p>${(blob.size/1048576).toFixed(1)} MB · ${name.split('.').pop().toUpperCase()}${meta&&meta.dur?' · '+fmtTime(meta.dur):''}</p><div class="xrow">${canShare?'<button class="btn primary" id="shr">Save to Photos</button><a class="btn" download="${name}" href="${url}">Download file</a>':`<a class="btn primary" download="${name}" href="${url}">${/iPhone|iPad|Android/.test(navigator.userAgent)?'Save image':'Download'}</a>`}<button class="btn" id="cls">Close</button>${!isVideo?'<button class="btn" id="to3">Open in 3D</button>':''}${meta&&meta.id?'<button class="btn" id="dis">Discard</button>':''}</div></div>`;
   document.body.appendChild(sh);
-  const close=()=>{sh.remove();URL.revokeObjectURL(url);};
+  const close=()=>{sh.remove();URL.revokeObjectURL(url);if(meta&&meta.back)meta.back();};
   $('#cls',sh).addEventListener('click',close);
   {const b=$('#to3',sh);if(b)b.addEventListener('click',async()=>{await handoffPut(blob,{from:'camera'});location.href='studio.html#from=camera';});}
   {const d=$('#dis',sh);if(d)d.addEventListener('click',async()=>{await rollDelete(meta.id);close();camThumbUpdate();toast('Discarded');});}
@@ -2639,7 +2639,7 @@ async function openRoll(){
   if(!l.length)box.appendChild(el('p','','Nothing here yet. Tap the shutter for a photo, hold it to record.'));
   l.forEach(c=>{const u=URL.createObjectURL(c.blob);urls.push(u);const b=el('button','rollitem');b.setAttribute('aria-label','Open '+c.name);
     b.innerHTML=c.isVideo?`<video src="${u}" muted playsinline></video>`:`<img alt="" src="${u}">`;
-    b.addEventListener('click',()=>{close();openSheet(c.blob,c.name,c.isVideo);});
+    b.addEventListener('click',()=>{close();openSheet(c.blob,c.name,c.isVideo,{id:c.id,dur:c.dur,back:openRoll});});
     const d=el('button','rolldel','×');d.setAttribute('aria-label','Delete');d.addEventListener('click',async e=>{e.stopPropagation();await rollDelete(c.id);b.remove();d.remove();camThumbUpdate();});
     const w=el('div','rollcell');w.append(b,d);grid.appendChild(w);});
   box.appendChild(grid);const cl=el('button','btn','Close');box.appendChild(cl);sh.appendChild(box);document.body.appendChild(sh);
@@ -2655,6 +2655,10 @@ function setCamCat(n){camCat=n;lsSet('n0ise.camcat',n);const st=$('#camstrip');i
   if(!camVis(camIx)){const f=CAMS.findIndex((c,i)=>camVis(i));if(f>=0)applyCam(f);else toast('No favourites yet. Tap the star on a camera.');}else paintCamUI();}
 function camStep(d){let i=camIx;for(let k=0;k<CAMS.length;k++){i=(i+d+CAMS.length)%CAMS.length;if(camVis(i))break;}applyCam(i);}
 function camFavToggle(){const id=CAMS[camIx].id,k=camFavs.indexOf(id);if(k<0)camFavs.push(id);else camFavs.splice(k,1);lsSet('n0ise.camfavs',camFavs);paintCamUI();if(camCat==='★')setCamCat('★');}
+/* frame shape: follows the way you hold the phone (a 3:4 camera becomes 4:3 when you turn it), unless you lock a shape */
+let camAspLock=lsGet('n0ise.camasplock','')||'';
+const camAsp=a=>{if(camAspLock)return camAspLock;const m=/^(\d+):(\d+)$/.exec(a);if(!m)return a;const w=+m[1],h=+m[2];return innerWidth>innerHeight*1.05&&w<h?h+':'+w:a;};
+function camAspSet(v){camAspLock=v||'';lsSet('n0ise.camasplock',camAspLock);if(!camAspLock)P.aspect=camAsp(CAMS[camIx].aspect);V.sizeKey='';paintCamUI();}
 const camRecent=[];
 function camAutoStep(){const vis=CAMS.map((c,i)=>i).filter(camVis);if(vis.length<2)return;const avoid=camRecent.slice(-Math.min(8,vis.length-1));
   const pool=vis.filter(i=>i!==camIx&&!avoid.includes(i));const i=pool[Math.random()*pool.length|0];camRecent.push(camIx);if(camRecent.length>30)camRecent.shift();applyCam(i);}
@@ -2673,7 +2677,7 @@ function applyCam(i,quiet){
     [['subject',DUO.fg],['background',DUO.bgfx]].forEach(([sel,id])=>{if(!id||!FXBY[id])return;const f=mkLayer('fuse');for(let k=1;k<=4;k++){fuseSet(f,k,null);f.params['on'+k]=false;}fuseSet(f,1,id);f.select=sel;layers.push(f);});}
   if(layers.some(l=>MODULES[l.module]&&MODULES[l.module].needsMask))loadPerson(true);
   const sl=mkLayer('camsim');Object.assign(sl.params,SIMS[c.sim]||{});layers.push(sl);
-  STACK.layers=layers;STACK.sel=layers.length-1;P.aspect=c.aspect;V.sizeKey='';V.lastBKey='';
+  STACK.layers=layers;STACK.sel=layers.length-1;P.aspect=camAsp(c.aspect);V.sizeKey='';V.lastBKey='';
   setCamStr(camStr);paintCamUI();applyPro();if(!quiet)buzz(8);
 }
 function setCamStr(v){camStr=v;const l=STACK.layers.find(x=>x.module==='camsim');if(l)l.params.amt=v*2;}
@@ -2842,7 +2846,7 @@ function buildCamUI(){
   const top=el('div','camtop');
   top.append(btn('camx','✕','Close camera',()=>closeCamera()),btn('camflip','Flip','Flip camera',async()=>{await startCam(true);setPM(camFacing==='user');readCaps();applyCam(camIx,true);applyPro();}),
     btn('camflashb','Flash','Flash',()=>{setFlash(PRO.flash==='off'?'on':PRO.flash==='on'?(proCaps.torch?'torch':'off'):'off');}),
-    btn('camasp','3:4','Frame shape',e=>{const o=['3:4','1:1','4:3','9:16','16:9','src'],i=(o.indexOf(P.aspect)+1)%o.length;P.aspect=o[i];V.sizeKey='';paintCamUI();}),
+    btn('camasp','3:4','Frame shape',e=>{const o=['3:4','1:1','4:3','9:16','16:9','src'],i=(o.indexOf(P.aspect)+1)%o.length;P.aspect=o[i];if(camAspLock)camAspLock=o[i],lsSet('n0ise.camasplock',o[i]);V.sizeKey='';paintCamUI();}),
     btn('campb','Pro','Pro controls',e=>{const on=u.classList.toggle('pro');u.classList.remove('more');e.currentTarget.setAttribute('aria-pressed',on);if(on)renderPro();}),
     btn('cammore','More','More controls',e=>{const on=u.classList.toggle('more');u.classList.remove('pro');$('#campb').setAttribute('aria-pressed',false);e.currentTarget.setAttribute('aria-pressed',on);}));
   const more=el('div','cammoregrid');
@@ -2894,7 +2898,7 @@ function buildCamUI(){
   const cd=el('div','camcount');cd.id='camcount';cd.hidden=true;const fp=el('div','camfpsv');fp.id='camfpsv';fp.hidden=true;
   const pro=el('div','campro');pro.id='campro';const lv=el('div','camlevel');lv.id='camlevel';lv.hidden=true;const hs=document.createElement('canvas');hs.id='camhist';hs.width=128;hs.height=48;hs.hidden=true;const sf=el('div','camflash');sf.id='camflash';const zb2=document.createElement('canvas');zb2.id='camzebra';zb2.hidden=true;
   u.append(ov,zb2,lv,hs,sf,top,more,pro,bot,rb,cd,fp,el('i','g1'),el('i','g2'),el('i','g3'),el('i','g4'));stage.appendChild(u);
-  IOSCAM=installIosCam({u,$,el,PRO,applyPro,hwSet,buzz,toast,lsGet,lsSet,caps:()=>proCaps,body:()=>CAMS[camIx],wipe:()=>wipe(),refit:()=>{V.sizeKey='';paintCamUI();}});
+  IOSCAM=installIosCam({u,$,el,PRO,applyPro,hwSet,buzz,toast,lsGet,lsSet,caps:()=>proCaps,body:()=>CAMS[camIx],wipe:()=>wipe(),refit:()=>{V.sizeKey='';paintCamUI();},toggleLens,cycleNoise,aspLock:()=>camAspLock,setAspLock:()=>camAspSet(camAspLock?'':P.aspect)});
   {const k=lsGet('n0ise.camkind',null);if(k&&k!==camKind)setKind(k,true);u.dataset.kind=camKind;}
   let hold=0,holdRec=false,downBusy=false;
   const takePhoto=async()=>{if(camBusy)return;camBusy=true;
@@ -2918,7 +2922,7 @@ function buildCamUI(){
   sh.addEventListener('contextmenu',e=>e.preventDefault());
   document.addEventListener('keydown',e=>{if(CAMMODE&&e.code==='Space'&&!/INPUT|TEXTAREA|SELECT/.test((e.target||{}).tagName||'')){e.preventDefault();if(camRecorder.busy&&camRecorder.state==='recording')camRecorder.stop('user');else if(!camRecorder.busy)camMode==='video'?camRecStart():takePhoto();}});
   setInterval(()=>{if(!CAMMODE)return;if(camFps){fp.hidden=false;fp.textContent=Math.round(V.fps)+' fps';}else fp.hidden=true;drawCamOv();histTick();aidTick();},camRecOn?100:250);
-  addEventListener('resize',()=>{if(CAMMODE)setTimeout(paintCamUI,60);});
+  addEventListener('resize',()=>{if(CAMMODE)setTimeout(()=>{if(!camAspLock){const a=camAsp(CAMS[camIx].aspect);if(a!==P.aspect){P.aspect=a;V.sizeKey='';}}paintCamUI();},60);});
   camThumbUpdate();
 }
 function showTapGate(){
@@ -3430,7 +3434,7 @@ function renderStrip(){
     b.addEventListener('click',()=>{if(b._swallow){b._swallow=false;return;}STACK.sel=i;INS.gallery=false;renderInspector();});s.appendChild(b);});
   const nb=el('button','add nvopen','Nodes');nb.setAttribute('aria-label','Open nodes view');nb.addEventListener('click',()=>nodesView().open_());s.appendChild(nb);
   const a=el('button','add','+');a.setAttribute('aria-label','Add effect');a.addEventListener('click',()=>{INS.gallery=!INS.gallery;renderInspector();});s.appendChild(a);
-  const sk=el('button','btn','Skin');sk.style.cssText='flex:none;align-self:center';sk.addEventListener('click',cycleSkin);const lf=el('button','btn','Left');lf.title='Flip controls for left-handed use';lf.style.cssText='flex:none;align-self:center';lf.addEventListener('click',toggleLefty);s.append(lf,sk);
+  const sk=el('button','btn','Skin');sk.style.cssText='flex:none;align-self:center';sk.addEventListener('click',cycleSkin);const nz=el('button','btn','Noise: '+['off','low','full'][[0,.3,1].indexOf(window.__noiseK)]);nz.id='nzb';nz.style.cssText='flex:none;align-self:center';nz.title='Digital snow and sensor noise on every look';nz.addEventListener('click',cycleNoise);const lens=el('button','btn','No fisheye');lens.id='lensb';lens.style.cssText='flex:none;align-self:center';lens.title='Turn off barrel and fisheye distortion on every look';lens.setAttribute('aria-pressed',!!window.__lensOff);lens.addEventListener('click',toggleLens);const lf=el('button','btn','Left');lf.title='Flip controls for left-handed use';lf.style.cssText='flex:none;align-self:center';lf.addEventListener('click',toggleLefty);s.append(nz,lens,lf,sk);
 }
 const SKINS=['lab','parchment','utility'];
 function cycleSkin(){const cur=document.documentElement.dataset.skin||'lab',n=SKINS[(SKINS.indexOf(cur)+1)%SKINS.length];setSkin(n);toast('Skin: '+n);}
@@ -3643,8 +3647,8 @@ function renderInspector0(){
 }
 /* ---- WP4: mobile quality of life ---- */
 const buzz=(ms=8)=>{try{navigator.vibrate&&navigator.vibrate(ms);}catch(e){}};
-const lsGet=(k,d)=>{try{return JSON.parse(localStorage.getItem(k)||'null')||d;}catch(e){return d;}};
-const lsSet=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}};
+function lsGet(k,d){try{return JSON.parse(localStorage.getItem(k)||'null')||d;}catch(e){return d;}}
+function lsSet(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}
 /* one taxonomy for engines and camera filters, so similar looks sit together. Face effects live only in 'Face'. */
 const CAM_FAMILY={clean:'Color',chrome:'Color',aqua:'Color',solar:'Color',thermal:'Color',duo:'Color',tri:'Color',neon:'Color',fire:'Color',cyber:'Color',sunset:'Color',forest:'Color',invert:'Color',poster:'Color',xray:'Color',
  noir:'Film',lomo:'Film',vintage:'Film',kodak:'Film',fuji:'Film',cinema:'Film',super8:'Film',night:'Film',vhs:'Signal / CRT',crt:'Signal / CRT',
@@ -3722,6 +3726,11 @@ function wireTouch(){
     const b=el('button','','Got it');b.addEventListener('click',()=>{lsSet('n0ise.coach',true);c.remove();});c.appendChild(b);stage.appendChild(c);const gone=()=>{lsSet('n0ise.coach',true);c.remove();};setTimeout(gone,6000);canvas.addEventListener('pointerdown',gone,{once:true});
   }
 }
+/* digital snow: one switch for the tape snow and the sensor noise on every look */
+window.__noiseK=(()=>{try{const v=localStorage.getItem('n0ise.noisek');return v===null?.3:+JSON.parse(v);}catch(e){return .3;}})();
+window.__lensOff=lsGet('n0ise.lensoff',false)===true||lsGet('n0ise.lensoff',false)==='true';
+function toggleLens(){window.__lensOff=!window.__lensOff;lsSet('n0ise.lensoff',window.__lensOff);toast(window.__lensOff?'Fisheye off':'Fisheye on');const b=$('#lensb');if(b)b.setAttribute('aria-pressed',window.__lensOff);const bb=$('#camlens');if(bb)bb.setAttribute('aria-pressed',window.__lensOff);}
+function cycleNoise(){const o=[0,.3,1],i=(o.indexOf(window.__noiseK)+1)%o.length;window.__noiseK=o[i];lsSet('n0ise.noisek',o[i]);toast(['Digital noise off','Digital noise low','Digital noise full'][i]);const b=$('#nzb');if(b)b.textContent='Noise: '+['off','low','full'][i];}
 function toggleLefty(){const on=document.body.dataset.lefty===undefined;if(on)document.body.dataset.lefty='1';else delete document.body.dataset.lefty;lsSet('n0ise.lefty',on);toast(on?'Left-handed layout':'Right-handed layout');}
 /* drag on canvas drives the selected module's hero params */
 function wireHero(){
@@ -3730,7 +3739,9 @@ function wireHero(){
   addEventListener('pointerup',()=>on=false);
   canvas.addEventListener('pointermove',e=>{
     if(!on||ST.paint||!(e.buttons||e.pointerType==='touch')||(window.__multi&&window.__multi()))return;
-    const l=layer(),m=MODULES[l.module];const hero=m.schema.hero||[];if(!hero.length)return;
+    const l=layer(),m=MODULES[l.module];let hero=(m.schema.hero||[]).slice();
+    if(hero.length<2&&l.module!=='crtlab'){const more=m.params.filter(p=>(p.t===undefined||p.t==='r')&&p.max!==undefined&&!hero.includes(p.k)&&!/seed|mix|amt|opacity/i.test(p.k)).slice(0,2-hero.length).map(p=>p.k);hero=hero.concat(more);}
+    if(!hero.length)return;
     const r=canvas.getBoundingClientRect(),ux=(e.clientX-r.left)/r.width,uy=1-(e.clientY-r.top)/r.height;
     const V=l.module==='crtlab'?P:l.params,defs=l.module==='crtlab'?CTL:Object.fromEntries(m.params.map(p=>[p.k,p]));
     [ux,uy].forEach((u,i)=>{const k=hero[i];if(!k||!defs[k])return;const p=defs[k];if(p.t&&p.t!=='r'&&p.t!==undefined&&p.t!=='r')return;V[k]=p.min+(p.max-p.min)*Math.min(1,Math.max(0,u));});
@@ -3948,7 +3959,7 @@ const PALETTE=createPalette({recent:()=>lsGet('n0ise.recent',[]),items:()=>{
     A('Mutate this layer',()=>mutateLayer(),'variation remix'),A('Duplicate layer',()=>dupLayer(),'copy'),A('Undo',()=>undo()),A('Redo',()=>redo()),
     A('Compare before and after',click('cmpbtn'),'wipe original'),A('Animate',()=>TLN.show(),'timeline keyframes'),A('Reset everything',click('reset'),'clear start over'),
     A('Power on or off',click('power'),'bypass'),A('Plugins',()=>pluginsSheet(),'n0fx'),A('Keys and help',()=>helpSheet(),'shortcuts'),
-    A('Go to Camera',go('effects.html?cam=1')),A('Go to 3D',go('studio.html'),'model studio'),A('Go to World',go('studio.html#world'),'physics walk'),A('Go to Lab',go('lab.html'),'p5 sketch code generative'),A('Go home',go('index.html'))];
+    A('Go to Camera',go('effects.html?cam=1')),A('Go to 3D',go('studio.html'),'model studio'),A('Go to World builder',go('studio.html#world'),'physics walk level'),A('Go to Lab',go('lab.html'),'p5 sketch code generative'),A('Go home',go('index.html'))];
   return[...acts,...looks,...fx];}});
 {const fb=document.getElementById('find');if(fb)fb.addEventListener('click',()=>PALETTE.open());}
 window.__n0.PALETTE=PALETTE;

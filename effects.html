@@ -342,7 +342,7 @@ body[data-dt=fuse] .ban,body[data-dt=fuse] .itabs{display:none}
 
 /* camera: bodies carousel, overlay, compact top row */
 body[data-cam] .dock,body[data-cam] header{display:none!important}
-.camhome{display:none}body[data-cam] .camhome{display:flex;align-items:center;position:fixed;z-index:60;top:calc(70px + env(safe-area-inset-top,0px));left:calc(12px + env(safe-area-inset-left,0px));min-height:44px;padding:0 14px;border-radius:22px;background:rgba(10,10,10,.5);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);color:#f2efe8;text-decoration:none;font:800 16px/1 var(--display);letter-spacing:-.02em}.camhome b{color:var(--accent)}
+.camhome{display:none}body[data-cam] .camhome{display:none!important;align-items:center;position:fixed;z-index:60;top:calc(70px + env(safe-area-inset-top,0px));left:calc(12px + env(safe-area-inset-left,0px));min-height:44px;padding:0 14px;border-radius:22px;background:rgba(10,10,10,.5);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);color:#f2efe8;text-decoration:none;font:800 16px/1 var(--display);letter-spacing:-.02em}.camhome b{color:var(--accent)}
 body[data-cam] #stage{box-sizing:border-box;padding:calc(56px + env(safe-area-inset-top,0px)) 0 var(--campad,0px)}
 #camov{position:absolute;pointer-events:none;z-index:1}
 .camtop{display:flex;flex-wrap:nowrap;gap:6px}.camtop .cb{flex:1 1 0;min-width:0;padding:0 4px;font-size:clamp(10px,3vw,12px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;background:rgba(10,10,10,.72)}
@@ -541,7 +541,7 @@ body[data-cam] .tl{bottom:var(--campad,0px);max-height:32dvh;border-bottom:1px s
     </div>
   </header>
   <a class="camhome" href="index.html" aria-label="n0ise home">n<b>0</b>ise</a>
-  <nav class="ws" aria-label="Workspaces"><a href="effects.html?cam=1">Camera</a><a href="effects.html" aria-current="page">Effects</a><a href="studio.html">3D</a><a href="studio.html#world">World</a><a href="lab.html">Lab</a></nav>
+  <nav class="ws" aria-label="Workspaces"><a href="effects.html?cam=1">Camera</a><a href="effects.html" aria-current="page">Effects</a><a href="studio.html">3D</a><a href="lab.html">Lab</a></nav>
   <main>
     <div class="stage" id="stage">
       <button class="pill chipb" id="artonly" aria-label="Show or hide controls">Art only</button>
@@ -564,6 +564,6 @@ body[data-cam] .tl{bottom:var(--campad,0px);max-height:32dvh;border-bottom:1px s
   </main>
 </div>
 <input type="file" id="file" accept="image/*,video/*,audio/*,.mp3,.wav,.m4a,.ogg,.flac,.aac" hidden>
-<script type="module" src="assets/index.js?v=4566185c"></script>
+<script type="module" src="assets/index.js?v=f800cbdd"></script>
 </body>
 </html>

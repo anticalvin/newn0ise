@@ -2314,6 +2314,34 @@ const worldEd=createWorldEditor({playWorld:()=>playWorld(),setStart:()=>setStart
 if(physHost)physUI.section(physHost);
 worldEd.build(paneEls.world);
 if(/^#world/.test(location.hash)){setTab('world');worldEd.starter();}
+/* launch screen: the front door of 3D. Skipped when a link brings a picture or asks for the world builder. */
+{const L=document.getElementById('launch');
+  if(L){const q=location.hash;
+    const close=()=>{L.classList.add('out');setTimeout(()=>{L.hidden=true;L.classList.remove('out');cancelAnimationFrame(L._raf);},350);};
+    const go={
+      level:async()=>{close();setTab('world');worldEd.starter();await worldEd.level();},
+      photo:()=>{close();const f=$('#file');f.accept='image/*';f.onchange=async()=>{await importFiles(f.files);f.value='';f.accept=FILE_ACCEPT;f.onchange=null;};f.click();},
+      model:()=>{close();$('#file').click();},
+      scan:()=>{close();setTab('scan');},
+      scene:()=>{close();setTab('scene');}
+    };
+    L.querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=>go[b.dataset.go]()));
+    addEventListener('keydown',e=>{if(!L.hidden&&e.key==='Escape')close();});
+    if(/^#(world|from=|look=)/.test(q))L.hidden=true;
+    else{L.hidden=false;
+      const cv=L.querySelector('canvas'),g=cv.getContext('2d'),reduce=matchMedia('(prefers-reduced-motion:reduce)').matches;
+      const acc=getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()||'#ff5a1f';
+      const V=[];for(const x of[-1,1])for(const y of[-1,1])for(const z of[-1,1])V.push([x,y,z]);
+      const draw=t=>{const dpr=Math.min(2,devicePixelRatio||1),W=cv.width=innerWidth*dpr,H=cv.height=innerHeight*dpr;g.clearRect(0,0,W,H);
+        const hz=H*.58;g.lineWidth=1*dpr;g.strokeStyle='rgba(242,239,232,.14)';
+        for(let i=0;i<22;i++){const k=((i+t*.0004)%22)/22,y=hz+(H-hz)*k*k;g.beginPath();g.moveTo(0,y);g.lineTo(W,y);g.stroke();}
+        for(let i=-14;i<=14;i++){g.beginPath();g.moveTo(W/2+i*W*.012,hz);g.lineTo(W/2+i*W*.16,H);g.stroke();}
+        const a=t*.0004,b=.5,s=Math.min(W,H)*.2,cx=W*.74,cy=H*.3,P=V.map(([x,y,z])=>{let X=x*Math.cos(a)-z*Math.sin(a),Z=x*Math.sin(a)+z*Math.cos(a),Y=y*Math.cos(b)-Z*Math.sin(b);Z=y*Math.sin(b)+Z*Math.cos(b);const f=1/(3.4-Z*.5);return[cx+X*s*f*2,cy+Y*s*f*2];});
+        g.strokeStyle=acc;g.lineWidth=1.6*dpr;g.globalAlpha=.8;for(let i=0;i<8;i++)for(let j=i+1;j<8;j++){const d=(V[i][0]!==V[j][0])+(V[i][1]!==V[j][1])+(V[i][2]!==V[j][2]);if(d===1){g.beginPath();g.moveTo(P[i][0],P[i][1]);g.lineTo(P[j][0],P[j][1]);g.stroke();}}g.globalAlpha=1;
+        if(!reduce&&!L.hidden)L._raf=requestAnimationFrame(draw);};
+      draw(0);}
+  }}
+
 $('#bWalk')&&$('#bWalk').addEventListener('click',()=>walk.on?walk.exit():walk.enter({pos:[camera.position.x*.6,0,Math.max(2.5,camera.position.z*.8)],yaw:0}));
 function aiStatus(t){AI.state=t;if(AI.btn){AI.btn.textContent=t==='on'?'AI connected':t==='wait'?'Connecting…':'Connect AI';AI.btn.setAttribute('aria-pressed',t==='on');}}
 function aiConnect(url,auto){

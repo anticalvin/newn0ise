@@ -107,7 +107,8 @@ export function createWorldEditor(c){
     const grid=el('div','wgrid');LIB.forEach(([k,l])=>{const b=el('button','wtile');b.innerHTML=svg(k)+`<span>${l}</span>`;b.addEventListener('click',()=>place(k));grid.appendChild(b);});pl.appendChild(grid);
     detailsEl=el('div');p.appendChild(detailsEl);
     const w=sec(p,'World');
-    const tod=document.createElement('input');tod.type='range';tod.min=0;tod.max=24;tod.step=.1;tod.value=ed.tod;tod.addEventListener('input',()=>applyTime(+tod.value));w.appendChild(field('Time of day',tod));
+    const tod=document.createElement('input');tod.type='range';tod.min=0;tod.max=24;tod.step=.1;tod.value=ed.tod;tod.addEventListener('input',()=>applyTime(+tod.value));const sk=el('div','chips');[['Sunrise',6.6,0],['Midday',12,0],['Golden hour',17.6,0],['Dusk',19.4,25],['Night',23,0],['Misty',9,22]].forEach(([l,h,f])=>sk.appendChild(btn(l,'',()=>{S.worldFog=f;fg.value=f;tod.value=h;applyTime(h);})));w.appendChild(sk);
+    w.appendChild(field('Time of day',tod));
     const fg=document.createElement('input');fg.type='range';fg.min=0;fg.max=120;fg.step=5;fg.value=0;fg.addEventListener('input',()=>{S.worldFog=+fg.value||0;applyTime(ed.tod);});w.appendChild(field('Fog distance',fg));
     const tg=el('div','chips');
     const chip=(l,on,fn)=>{const b=el('button','chip',l);b.setAttribute('aria-pressed',on);b.addEventListener('click',()=>{on=!on;b.setAttribute('aria-pressed',on);fn(on);});tg.appendChild(b);};
@@ -126,5 +127,5 @@ export function createWorldEditor(c){
     if((e.metaKey||e.ctrlKey)&&e.key==='z'){e.preventDefault();e.shiftKey?doRedo():doUndo();}
     else if(e.key==='Delete'||e.key==='Backspace'){const o=objById(S.sel);if(o){push();removeObj(o.id);renderDetails();}}
     else if(e.key==='w')setGizmo('translate');else if(e.key==='e')setGizmo('rotate');else if(e.key==='r')setGizmo('scale');});
-  return {build,starter,place,undo:doUndo,redo:doRedo,ed};
+  return {build,starter,level:levelStarter,place,undo:doUndo,redo:doRedo,ed};
 }

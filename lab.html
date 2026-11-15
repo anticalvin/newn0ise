@@ -17,13 +17,18 @@ button:focus-visible,select:focus-visible,textarea:focus-visible,a:focus-visible
 header strong{font:800 24px/1 var(--n-display);letter-spacing:-.02em}header strong a{color:inherit;text-decoration:none}header strong{white-space:nowrap}
 @media (max-width:650px){header strong{font-size:19px}header .tag{display:none}}
 @media (min-width:1001px){main{height:calc(100dvh - 67px - 37px)}}
+.moods{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 12px}.moods button{min-height:36px;padding:0 10px}.rowb{display:flex;gap:6px;margin:6px 0 12px}.rowb input{flex:1;min-width:0;min-height:44px;background:var(--n-raise);border:1px solid var(--n-line);color:var(--n-ink);padding:0 10px;font:inherit;border-radius:var(--n-rad)}.control .x{float:right;border:0;background:none;color:var(--muted);min-height:24px;padding:0 4px}#slots{max-width:150px}
 </style></head><body>
 <header><div><strong><a href="index.html" aria-label="n0ise home">n<span>0</span>ise</a> / lab</strong><span class="tag">GENERATIVE WORKSPACE / 001</span></div><div><span class="pill">● P5 ENGINE</span> &nbsp; <button id="new">+ NEW SKETCH</button></div></header>
-<nav class="ws" aria-label="Workspaces"><a href="effects.html?cam=1">Camera</a><a href="effects.html">Effects</a><a href="studio.html">3D</a><a href="studio.html#world">World</a><a href="lab.html" aria-current="page">Lab</a></nav>
+<nav class="ws" aria-label="Workspaces"><a href="effects.html?cam=1">Camera</a><a href="effects.html">Effects</a><a href="studio.html">3D</a><a href="lab.html" aria-current="page">Lab</a></nav>
 <main>
-<section class="panel"><div class="head"><div><div class="eyebrow">01 / SOURCE</div><h2>Sketch editor</h2></div><select id="preset" aria-label="Choose sketch"><option value="flow">Flow field</option><option value="orbit">Orbital study</option><option value="grid">Signal grid</option></select></div><textarea id="code" class="editor" spellcheck="false" aria-label="p5 sketch code"></textarea><div class="bar"><button class="primary" id="run">▶ RUN CODE</button><button id="reset">RESET</button><button id="save">SAVE LOCAL</button></div></section>
-<section class="panel"><div class="head"><div><div class="eyebrow">02 / OUTPUT</div><h2>Live canvas</h2></div><div><button id="pause">PAUSE</button> <button id="export">↓ PNG</button> <button id="tofx" title="Send this frame to Effects">→ EFFECTS</button></div></div><div class="stage"><iframe id="preview" title="Live p5 sketch" sandbox="allow-scripts allow-downloads"></iframe></div><div class="status"><span id="status">Preparing canvas…</span><div id="error" role="alert"></div></div></section>
-<section class="panel"><div class="head"><div><div class="eyebrow">03 / MODULATE</div><h2>Parameters</h2></div><span class="pill">LIVE</span></div><div class="side"><h3>SKETCH CONTROLS</h3><div id="controls"></div><button class="wide" id="random">↝ RANDOMIZE PARAMETERS</button><button class="wide" id="seed">↻ NEW SEED</button><div class="bottom"><h3>HOW IT WORKS</h3><p class="hint">Write standard p5.js using setup() and draw(). Read values from params.speed, params.density, params.scale, and params.hue. Change sliders while your sketch runs. Save locally, remix, and export a still.</p><button class="wide" id="duplicate">DUPLICATE TO EDITOR</button><p class="hint">Ctrl / Cmd + Enter runs the sketch. The preview is isolated from the editor.</p></div></div></section>
+<section class="panel"><div class="head"><div><div class="eyebrow">01 / SOURCE</div><h2>Sketch editor</h2></div><select id="preset" aria-label="Choose sketch"><option value="flow">Flow field</option><option value="orbit">Orbital study</option><option value="grid">Signal grid</option></select></div><textarea id="code" class="editor" spellcheck="false" aria-label="p5 sketch code"></textarea><div class="bar"><button class="primary" id="run">▶ RUN CODE</button><button id="copy">COPY</button><button id="dl">↓ .JS</button><button id="reset">RESET</button><button id="save">SAVE LOCAL</button><button id="saveas">SAVE AS…</button><select id="slots" aria-label="My sketches"><option value="">MY SKETCHES</option></select></div></section>
+<section class="panel"><div class="head"><div><div class="eyebrow">02 / OUTPUT</div><h2>Live canvas</h2></div><div><select id="aspect" aria-label="Canvas shape"><option value="1">1:1</option><option value="0.8">4:5</option><option value="1.7778">16:9</option><option value="0.5625">9:16</option></select> <button id="pause">PAUSE</button> <button id="rec" title="Record 6 seconds">● REC 6s</button> <button id="export">↓ PNG</button> <button id="tofx" title="Send this frame to Effects">→ EFFECTS</button></div></div><div class="stage"><iframe id="preview" title="Live p5 sketch" sandbox="allow-scripts allow-downloads"></iframe></div><div class="status"><span id="status">Preparing canvas…</span><div id="error" role="alert"></div></div></section>
+<section class="panel"><div class="head"><div><div class="eyebrow">03 / MODULATE</div><h2>Parameters</h2></div><span class="pill">LIVE</span></div><div class="side"><h3>SKETCH CONTROLS</h3><div id="controls"></div><h3>MOOD</h3><div id="moods" class="moods"></div>
+<h3>PHOTO IN</h3><p class="hint">Load a picture and any sketch can read it. Try Halftone, Pixels or Text tones.</p>
+<div class="rowb"><button id="photo">LOAD PHOTO</button><button id="unphoto">CLEAR</button><input id="photof" type="file" accept="image/*" hidden></div>
+<h3>ADD A SLIDER</h3><div class="rowb"><input id="cname" placeholder="name, e.g. wobble" maxlength="16" aria-label="New slider name"><button id="cadd">ADD</button></div>
+<button class="wide" id="random">↝ RANDOMIZE PARAMETERS</button><button class="wide" id="seed">↻ NEW SEED</button><div class="bottom"><h3>HOW IT WORKS</h3><p class="hint">Write standard p5.js using setup() and draw(). Read values from params.speed, density, scale, hue, sat, bright and trail, plus any slider you add. lum(u,v) and px(u,v) read your loaded photo. Change sliders while your sketch runs. Save locally, remix, and export a still.</p><button class="wide" id="duplicate">DUPLICATE TO EDITOR</button><p class="hint">Ctrl / Cmd + Enter runs the sketch. The preview is isolated from the editor.</p></div></div></section>
 </main>
 <script>
 const presets={
@@ -86,15 +91,153 @@ function draw() {
   }
 }`
 };
-const specs=[['speed',0,5,.05,1],['density',5,180,1,90],['scale',.1,8,.1,2],['hue',0,360,1,95]];
+
+const H0="function setup() {\n  createCanvas(700, 700);\n  colorMode(HSB, 360, 100, 100, 100);\n  noStroke();\n}\n";
+Object.assign(presets,{
+halftone:H0+`function draw() {
+  background(0, 0, 6);
+  const s = max(6, floor(64 - params.density * 0.3));
+  for (let y = s / 2; y < height; y += s) for (let x = s / 2; x < width; x += s) {
+    const b = lum(x / width, y / height + sin(frameCount * 0.02 * params.speed) * 0.02);
+    fill(params.hue, params.sat * 0.5, params.bright);
+    circle(x, y, s * b * 1.2);
+  }
+}`,
+pixels:H0+`function draw() {
+  background(0, 0, 4);
+  const s = max(5, floor(70 - params.density * 0.35));
+  for (let y = 0; y < height; y += s) for (let x = 0; x < width; x += s) {
+    const c = px(x / width, y / height), b = lum(x / width, y / height);
+    if (c) fill(color(c[0], c[1], c[2])); else fill((params.hue + b * 60) % 360, params.sat, b * params.bright);
+    rect(x, y, s - 1, s - 1);
+  }
+}`,
+text:H0+`const ramp = ' .:-=+*#%@';
+function draw() {
+  background(0, 0, 4);
+  textFont('monospace'); textAlign(CENTER, CENTER);
+  const s = max(8, floor(40 - params.density * 0.15)); textSize(s);
+  for (let y = s / 2; y < height; y += s) for (let x = s / 2; x < width; x += s) {
+    const b = constrain(lum(x / width, y / height) + sin(frameCount * 0.03 * params.speed + x * 0.01) * 0.05, 0, 0.999);
+    fill(params.hue, params.sat * 0.4, params.bright);
+    text(ramp[floor(b * ramp.length)], x, y);
+  }
+}`,
+waves:H0+`function draw() {
+  background(0, 0, 5, 100 - params.trail);
+  noFill(); strokeWeight(1.3);
+  const rows = floor(params.density / 3) + 10, gap = height / rows;
+  for (let r = 0; r < rows; r++) {
+    stroke(params.hue, params.sat * 0.5, params.bright, 85);
+    beginShape();
+    for (let x = 0; x <= width; x += 5) {
+      const b = lum(x / width, r / rows);
+      vertex(x, r * gap + 12 - (b * 34 + noise(x * 0.01 * params.scale, r * 0.3, frameCount * 0.01 * params.speed) * 30) * (1 - r / rows * 0.2));
+    }
+    endShape();
+  }
+}`,
+spiral:H0+`function draw() {
+  background(0, 0, 5, 100 - params.trail);
+  translate(width / 2, height / 2);
+  const n = params.density * 7;
+  for (let i = 0; i < n; i++) {
+    const a = i * 0.618034 * TAU + frameCount * 0.002 * params.speed;
+    const r = sqrt(i / n) * 330;
+    fill((params.hue + i * 0.15) % 360, params.sat, params.bright, 80);
+    circle(cos(a) * r, sin(a) * r, 2 + params.scale * 1.6 * (i / n) * 3);
+  }
+}`,
+bubbles:H0+`function draw() {
+  background(0, 0, 5, 100 - params.trail);
+  for (let i = 0; i < params.density; i++) {
+    const t = frameCount * 0.004 * params.speed;
+    const x = noise(i * 9.1, t) * width, y = noise(i * 3.7, t + 40) * height;
+    const d = 20 + noise(i * 1.3, t * 2) * 60 * params.scale;
+    fill((params.hue + i * 3) % 360, params.sat * 0.8, params.bright, 18);
+    circle(x, y, d);
+    fill((params.hue + i * 3) % 360, params.sat * 0.5, 100, 40);
+    circle(x - d * 0.18, y - d * 0.2, d * 0.18);
+  }
+}`,
+kaleido:H0+`function draw() {
+  background(0, 0, 5, 100 - params.trail);
+  translate(width / 2, height / 2);
+  const seg = 6 + floor(params.scale);
+  for (let k = 0; k < seg; k++) {
+    push(); rotate(TAU / seg * k); if (k % 2) scale(1, -1);
+    for (let i = 0; i < params.density / 3; i++) {
+      const t = frameCount * 0.01 * params.speed + i * 0.35;
+      fill((params.hue + i * 7) % 360, params.sat, params.bright, 70);
+      circle(60 + i * 8 + sin(t) * 40, cos(t * 1.3) * 60, 6 + noise(i, t) * 22);
+    }
+    pop();
+  }
+}`,
+lissajous:H0+`function draw() {
+  background(0, 0, 5, 100 - max(params.trail, 85));
+  translate(width / 2, height / 2); noFill(); strokeWeight(1.4);
+  const t = frameCount * 0.01 * params.speed;
+  for (let j = 0; j < 5; j++) {
+    stroke((params.hue + j * 18) % 360, params.sat, params.bright, 80);
+    beginShape();
+    for (let a = 0; a < TAU; a += 0.02) vertex(sin(a * (3 + j) + t) * 300, sin(a * (2 + floor(params.scale)) + t * 1.3 + j) * 300);
+    endShape();
+  }
+}`,
+ripple:H0+`function draw() {
+  background(0, 0, 5);
+  noFill(); strokeWeight(1.5);
+  for (let k = 0; k < 4; k++) {
+    const cx = width * (0.2 + 0.6 * noise(k * 5, frameCount * 0.002 * params.speed)), cy = height * (0.2 + 0.6 * noise(k * 5 + 9, frameCount * 0.002 * params.speed));
+    for (let r = 0; r < params.density; r++) {
+      const d = (r * 8 + frameCount * params.speed * 1.5) % (params.density * 8);
+      stroke((params.hue + k * 30) % 360, params.sat, params.bright, 70 - d / (params.density * 8) * 70);
+      circle(cx, cy, d * params.scale * 0.5);
+    }
+  }
+}`,
+truchet:H0+`function draw() {
+  background(0, 0, 5);
+  const s = max(14, floor(90 - params.density * 0.4)); noFill(); strokeWeight(2.2);
+  for (let y = 0; y < height; y += s) for (let x = 0; x < width; x += s) {
+    const n = noise(x * 0.01 * params.scale, y * 0.01 * params.scale, frameCount * 0.004 * params.speed);
+    stroke((params.hue + n * 80) % 360, params.sat, params.bright);
+    if (n > 0.5) { arc(x, y, s, s, 0, HALF_PI); arc(x + s, y + s, s, s, PI, PI + HALF_PI); }
+    else { arc(x + s, y, s, s, HALF_PI, PI); arc(x, y + s, s, s, PI + HALF_PI, TAU); }
+  }
+}`
+});
+const LABELS={flow:'Flow field',orbit:'Orbital study',grid:'Signal grid',halftone:'Halftone dots',pixels:'Pixels',text:'Text tones',waves:'Line waves',spiral:'Spiral bloom',bubbles:'Soft bubbles',kaleido:'Kaleidoscope',lissajous:'Lissajous threads',ripple:'Ripples',truchet:'Truchet tiles'};
+const PHOTO=['halftone','pixels','text','waves'];
+let specs=[['speed',0,5,.05,1],['density',5,180,1,90],['scale',.1,8,.1,2],['hue',0,360,1,95],['sat',0,100,1,75],['bright',10,100,1,95],['trail',0,95,1,0]];const BASE=specs.length;let aspect=1,photoURL='';
 const $=id=>document.getElementById(id);
 let params=Object.fromEntries(specs.map(([k,,,,v])=>[k,v]));let paused=false;let current='flow';
-function controls(){ $('controls').innerHTML='';for(const [key,min,max,step] of specs){const wrap=document.createElement('div');wrap.className='control';const label=document.createElement('label');label.textContent=key.toUpperCase();const output=document.createElement('output');output.textContent=params[key];label.append(output);const input=document.createElement('input');Object.assign(input,{type:'range',min,max,step,value:params[key]});input.addEventListener('input',()=>{params[key]=Number(input.value);output.textContent=input.value;send({type:'params',params})});wrap.append(label,input);$('controls').append(wrap)}}
+function controls(){ $('controls').innerHTML='';for(const [key,min,max,step] of specs){const wrap=document.createElement('div');wrap.className='control';const label=document.createElement('label');label.textContent=key.toUpperCase();const output=document.createElement('output');output.textContent=params[key];label.append(output);const input=document.createElement('input');Object.assign(input,{type:'range',min,max,step,value:params[key]});input.addEventListener('input',()=>{params[key]=Number(input.value);output.textContent=input.value;send({type:'params',params})});if(specs.indexOf(specs.find(q=>q[0]===key))>=BASE){const x=document.createElement('button');x.className='x';x.textContent='✕';x.setAttribute('aria-label','Remove slider '+key);x.onclick=()=>{specs=specs.filter(q=>q[0]!==key);delete params[key];controls();send({type:'params',params})};label.prepend(x)}wrap.append(label,input);$('controls').append(wrap)}}
 function send(message){$('preview').contentWindow?.postMessage(message,'*')}
-function run(){paused=false;$('pause').textContent='PAUSE';$('error').textContent='';$('status').textContent='Loading p5.js…';const code=$('code').value;const boot=`<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#050505;display:grid;place-items:center}canvas{max-width:100%;max-height:100%;object-fit:contain}</style></head><body><script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.11.11/p5.min.js" onerror="parent.postMessage({n0ise:true,type:'error',message:'p5.js did not load. Check your connection, then press Run code.'},'*')"><\/script><script>let params=${JSON.stringify(params)};let sketchSeed=${Math.floor(Math.random()*1000000)};window.onerror=(message)=>parent.postMessage({n0ise:true,type:'error',message:String(message)},'*');window.addEventListener('message',e=>{if(e.data.type==='params')params=e.data.params;if(e.data.type==='pause'){e.data.paused?noLoop():loop()}if(e.data.type==='seed'){randomSeed(e.data.seed);noiseSeed(e.data.seed)}if(e.data.type==='export'){let c=document.querySelector('canvas');if(c)parent.postMessage({n0ise:true,type:'image',to:e.data.to,data:c.toDataURL('image/png')},'*')}});try{${code}\nconst userSetup=window.setup;window.setup=function(){if(typeof userSetup==='function')userSetup();randomSeed(sketchSeed);noiseSeed(sketchSeed);parent.postMessage({n0ise:true,type:'ready'},'*')};}catch(e){parent.postMessage({n0ise:true,type:'error',message:e.stack||String(e)},'*')}<\/script></body></html>`;$('preview').srcdoc=boot}
+function run(){paused=false;$('pause').textContent='PAUSE';$('error').textContent='';$('status').textContent='Loading p5.js…';const code=$('code').value;const boot=`<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#050505;display:grid;place-items:center}canvas{max-width:100%;max-height:100%;object-fit:contain}</style></head><body><script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.11.11/p5.min.js" onerror="parent.postMessage({n0ise:true,type:'error',message:'p5.js did not load. Check your connection, then press Run code.'},'*')"><\/script><script>let params=${JSON.stringify(params)};let sketchSeed=${Math.floor(Math.random()*1000000)};window.srcImg=null;window.lum=function(u,v){const c=window.px(u,v);if(c)return (0.3*c[0]+0.59*c[1]+0.11*c[2])/255;return 0.5+0.5*Math.sin(Math.hypot(u-0.5,v-0.5)*14-(typeof frameCount==='number'?frameCount:0)*0.03)};window.px=function(u,v){const im=window.srcImg;if(!im||!im.width)return null;if(!im._p){im.loadPixels();im._p=1}const x=Math.min(im.width-1,Math.max(0,Math.floor(u*im.width))),y=Math.min(im.height-1,Math.max(0,Math.floor(v*im.height))),i=(y*im.width+x)*4;return [im.pixels[i],im.pixels[i+1],im.pixels[i+2]]};window.onerror=(message)=>parent.postMessage({n0ise:true,type:'error',message:String(message)},'*');window.addEventListener('message',e=>{if(e.data.type==='params')params=e.data.params;if(e.data.type==='pause'){e.data.paused?noLoop():loop()}if(e.data.type==='seed'){randomSeed(e.data.seed);noiseSeed(e.data.seed)}if(e.data.type==='photo'){window.srcImg=null;if(e.data.url)loadImage(e.data.url,i=>{window.srcImg=i})}if(e.data.type==='rec'){const c=document.querySelector('canvas');if(c&&window.MediaRecorder){const ts=['video/mp4','video/webm;codecs=vp9','video/webm'],t=ts.find(x=>MediaRecorder.isTypeSupported(x));const mr=new MediaRecorder(c.captureStream(30),t?{mimeType:t}:{}),ch=[];mr.ondataavailable=ev=>ch.push(ev.data);mr.onstop=()=>parent.postMessage({n0ise:true,type:'video',blob:new Blob(ch,{type:mr.mimeType||'video/webm'})},'*');mr.start();setTimeout(()=>mr.stop(),e.data.ms||6000)}else parent.postMessage({n0ise:true,type:'error',message:'This browser cannot record the canvas.'},'*')}if(e.data.type==='export'){let c=document.querySelector('canvas');if(c)parent.postMessage({n0ise:true,type:'image',to:e.data.to,data:c.toDataURL('image/png')},'*')}});try{${code}\nconst userSetup=window.setup;window.setup=function(){if(typeof userSetup==='function')userSetup();{const ar=${aspect};if(ar!==1){let w=700,h=700;if(ar>1)h=Math.round(700/ar);else w=Math.round(700*ar);resizeCanvas(w,h)}}randomSeed(sketchSeed);noiseSeed(sketchSeed);parent.postMessage({n0ise:true,type:'ready'},'*')};}catch(e){parent.postMessage({n0ise:true,type:'error',message:e.stack||String(e)},'*')}<\/script></body></html>`;$('preview').srcdoc=boot}
+function fillPresets(){const sel=$('preset');sel.innerHTML='<optgroup label="Studies">'+['flow','orbit','grid'].map(k=>'<option value="'+k+'">'+LABELS[k]+'</option>').join('')+'</optgroup><optgroup label="Basic effects">'+Object.keys(LABELS).slice(3).map(k=>'<option value="'+k+'">'+LABELS[k]+(PHOTO.includes(k)?' · photo':'')+'</option>').join('')+'</optgroup>';}
 function load(name){current=name;$('preset').value=name;$('code').value=presets[name];run()}
-$('run').onclick=run;$('reset').onclick=()=>load(current);$('preset').onchange=e=>load(e.target.value);$('new').onclick=()=>{$('code').value='function setup() {\n  createCanvas(700, 700);\n}\n\nfunction draw() {\n  background(10);\n  // Your next experiment starts here.\n}\n';run()};$('pause').onclick=()=>{paused=!paused;send({type:'pause',paused});$('pause').textContent=paused?'RESUME':'PAUSE'};$('seed').onclick=()=>send({type:'seed',seed:Math.floor(Math.random()*1e9)});$('random').onclick=()=>{for(const [k,min,max,step] of specs)params[k]=Number((Math.round((min+Math.random()*(max-min))/step)*step).toFixed(2));controls();send({type:'params',params})};$('save').onclick=()=>{localStorage.setItem('n0ise-lab-sketch',JSON.stringify({code:$('code').value,params}));$('status').textContent='Saved in this browser'};$('duplicate').onclick=()=>{const stamp='// REMIX '+new Date().toLocaleString()+'\n';$('code').value=stamp+$('code').value;$('code').focus()};$('export').onclick=()=>send({type:'export'});$('tofx').onclick=()=>send({type:'export',to:'fx'});document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key==='Enter'){e.preventDefault();run()}});window.addEventListener('message',e=>{if(e.source!==$('preview').contentWindow||!e.data?.n0ise)return;if(e.data.type==='ready')$('status').textContent='● LIVE / 700 × 700';if(e.data.type==='error'){$('error').textContent=e.data.message;$('status').textContent='Sketch error'}if(e.data.type==='image'&&e.data.to==='fx'){/* hand the frame to Effects through the shared one-shot store; nothing is uploaded */
+$('run').onclick=run;$('reset').onclick=()=>load(current);$('preset').onchange=e=>load(e.target.value);$('new').onclick=()=>{$('code').value='function setup() {\n  createCanvas(700, 700);\n}\n\nfunction draw() {\n  background(10);\n  // Your next experiment starts here.\n}\n';run()};$('pause').onclick=()=>{paused=!paused;send({type:'pause',paused});$('pause').textContent=paused?'RESUME':'PAUSE'};$('seed').onclick=()=>send({type:'seed',seed:Math.floor(Math.random()*1e9)});$('random').onclick=()=>{for(const [k,min,max,step] of specs)params[k]=Number((Math.round((min+Math.random()*(max-min))/step)*step).toFixed(2));controls();send({type:'params',params})};$('save').onclick=()=>{localStorage.setItem('n0ise-lab-sketch',JSON.stringify({code:$('code').value,params}));$('status').textContent='Saved in this browser'};$('duplicate').onclick=()=>{const stamp='// REMIX '+new Date().toLocaleString()+'\n';$('code').value=stamp+$('code').value;$('code').focus()};$('export').onclick=()=>send({type:'export'});$('tofx').onclick=()=>send({type:'export',to:'fx'});document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key==='Enter'){e.preventDefault();run()}});window.addEventListener('message',e=>{if(e.source!==$('preview').contentWindow||!e.data?.n0ise)return;if(e.data.type==='ready'){$('status').textContent='● LIVE / '+(aspect>1?'700 × '+Math.round(700/aspect):'  '+Math.round(700*Math.min(1,aspect))+' × 700');if(photoURL)send({type:'photo',url:photoURL})}if(e.data.type==='video'){const b=e.data.blob,a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='n0ise-lab-'+Date.now()+(b.type.includes('mp4')?'.mp4':'.webm');a.click();$('status').textContent='Recording saved';$('rec').textContent='● REC 6s'}if(e.data.type==='error'){$('error').textContent=e.data.message;$('status').textContent='Sketch error'}if(e.data.type==='image'&&e.data.to==='fx'){/* hand the frame to Effects through the shared one-shot store; nothing is uploaded */
 $('status').textContent='Opening in Effects…';Promise.all([import('./src/handoff.js'),fetch(e.data.data).then(r=>r.blob())]).then(([h,b])=>h.put(b,{from:'lab'})).then(()=>{location.href='effects.html#from=lab'}).catch(()=>{$('status').textContent='Could not send it. Use ↓ PNG and open the file in Effects.'});return}if(e.data.type==='image'){const a=document.createElement('a');a.href=e.data.data;a.download='n0ise-lab-'+Date.now()+'.png';a.click()}});
 try{const saved=JSON.parse(localStorage.getItem('n0ise-lab-sketch'));if(saved?.code){$('code').value=saved.code;params={...params,...saved.params}}else $('code').value=presets.flow}catch{$('code').value=presets.flow}controls();run();
+
+/* ---- more ways to edit ---- */
+fillPresets();
+const MOODS={Ember:[18,85],Ocean:[205,70],Forest:[135,55],Violet:[270,55],Rose:[340,70],Gold:[45,80],Mono:[0,0]};
+for(const [n,[h,sa]] of Object.entries(MOODS)){const b=document.createElement('button');b.textContent=n;b.onclick=()=>{params.hue=h;params.sat=sa;controls();send({type:'params',params})};$('moods').append(b)}
+$('aspect').onchange=e=>{aspect=+e.target.value;run()};
+$('photo').onclick=()=>$('photof').click();
+$('photof').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{const im=new Image();im.onload=()=>{const c=document.createElement('canvas'),k=Math.min(1,900/Math.max(im.width,im.height));c.width=Math.round(im.width*k);c.height=Math.round(im.height*k);c.getContext('2d').drawImage(im,0,0,c.width,c.height);photoURL=c.toDataURL('image/jpeg',.9);send({type:'photo',url:photoURL});if(!PHOTO.includes(current))$('status').textContent='Photo loaded. Pick a Photo sketch to use it.';else $('status').textContent='Photo loaded'};im.src=r.result};r.readAsDataURL(f);e.target.value=''};
+$('unphoto').onclick=()=>{photoURL='';send({type:'photo',url:''});$('status').textContent='Photo cleared'};
+$('cadd').onclick=()=>{const n=($('cname').value||'').trim().replace(/[^a-zA-Z0-9_]/g,'');if(!n||specs.some(q=>q[0]===n)){$('status').textContent=n?'That slider already exists':'Give the slider a name first';return}specs.push([n,0,100,1,50]);params[n]=50;$('cname').value='';controls();send({type:'params',params});$('status').textContent='Use params.'+n+' in your code'};
+$('rec').onclick=()=>{$('rec').textContent='● REC…';send({type:'rec',ms:6000})};
+$('copy').onclick=async()=>{try{await navigator.clipboard.writeText($('code').value);$('status').textContent='Code copied'}catch{$('code').select();$('status').textContent='Press copy on your keyboard'}};
+$('dl').onclick=()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([$('code').value],{type:'text/javascript'}));a.download='sketch-'+current+'.js';a.click()};
+const SL='n0ise-lab-slots',slotsGet=()=>{try{return JSON.parse(localStorage.getItem(SL))||{}}catch{return{}}};
+function fillSlots(){const o=slotsGet();$('slots').innerHTML='<option value="">MY SKETCHES</option>'+Object.keys(o).map(k=>'<option>'+k.replace(/</g,'&lt;')+'</option>').join('')}
+$('saveas').onclick=()=>{const n=(prompt('Name this sketch')||'').trim().slice(0,30);if(!n)return;const o=slotsGet();o[n]={code:$('code').value,params,specs,aspect};localStorage.setItem(SL,JSON.stringify(o));fillSlots();$('slots').value=n;$('status').textContent='Saved as '+n};
+$('slots').onchange=e=>{const v=slotsGet()[e.target.value];if(!v)return;specs=v.specs||specs;params={...params,...v.params};aspect=v.aspect||1;$('aspect').value=String(aspect==1?1:aspect);$('code').value=v.code;controls();run()};
+fillSlots();
 if('serviceWorker' in navigator&&location.protocol!=='file:')navigator.serviceWorker.register('sw.js').catch(()=>{});
 </script></body></html>

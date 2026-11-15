@@ -7,17 +7,17 @@
 const R=(k,label,min,max,def,sec,extra)=>({k,label,min,max,def,sec,...extra});
 const C=(k,label,def,sec)=>({k,t:'color',label,def,sec});
 export const CAMSIM_PARAMS=[
-  R('amt','Strength',0,200,100,'Body',{hero:true}),R('seed2','Variation',0,99,0,'Body'),
+  R('amt','Strength',0,200,100,'Body'),R('seed2','Variation',0,99,0,'Body'),
   R('zoom','Digital zoom',1,8,1,'Lens',{step:.1}),R('barrel','Barrel distortion',-60,100,0,'Lens'),R('soft','Softness',0,100,0,'Lens',{hero:true}),R('ca','Colour fringe',0,100,0,'Lens'),
   R('bloom','Bloom',0,100,0,'Lens'),R('bsize','Bloom size',0,100,40,'Lens'),R('bthr','Bloom threshold',0,100,60,'Lens'),C('btint','Bloom tint','#ffffff','Lens'),
   R('halo','Halation',0,100,0,'Lens'),R('mosaic','Compound eye',0,100,0,'Lens'),R('vig','Vignette',0,100,0,'Lens'),R('tube','Tube mask',0,100,0,'Lens'),
-  R('res','Sensor lines',60,1080,1080,'Sensor',{step:10,hero:true}),R('sharp','Sharpening halos',0,100,0,'Sensor'),
+  R('res','Sensor lines',60,1080,1080,'Sensor',{step:10}),R('sharp','Sharpening halos',0,100,0,'Sensor'),
   R('cbleed','Chroma bleed',0,100,0,'Sensor'),R('cshift','Chroma shift',-100,100,0,'Sensor'),
-  R('noise','Noise',0,100,0,'Sensor',{hero:true}),R('gsize','Grain size',1,6,1.5,'Sensor',{step:.5}),R('cnoise','Colour noise',0,100,0,'Sensor'),
+  R('noise','Noise',0,100,0,'Sensor'),R('gsize','Grain size',1,6,1.5,'Sensor',{step:.5}),R('cnoise','Colour noise',0,100,0,'Sensor'),
   R('band','Row banding',0,100,0,'Sensor'),R('hot','Hot pixels',0,100,0,'Sensor'),
   R('ev','Exposure',-100,100,0,'Exposure'),R('pump','Auto-exposure pump',0,100,0,'Exposure'),R('flash','Flash falloff',0,100,0,'Exposure'),
   R('shoulder','Highlight shoulder',0,100,0,'Exposure'),
-  R('contrast','Contrast',-100,100,0,'Tone'),R('gamma','Midtones',-100,100,0,'Tone'),R('lift','Lifted blacks',0,100,0,'Tone'),C('lcol','Black tint','#808080','Tone'),
+  R('contrast','Contrast',-100,100,0,'Tone',{hero:true}),R('gamma','Midtones',-100,100,0,'Tone'),R('lift','Lifted blacks',0,100,0,'Tone'),C('lcol','Black tint','#808080','Tone'),
   R('temp','Warmth',-100,100,0,'Colour'),R('tint','Green / magenta',-100,100,0,'Colour'),R('sat','Saturation',0,250,100,'Colour'),R('mono','Black and white',0,100,0,'Colour'),C('cast','Colour cast','#ffffff','Colour'),R('castamt','Cast amount',0,100,0,'Colour'),
   R('heat','Thermal palette',0,100,0,'Colour'),R('dich','Red-green blind',0,100,0,'Colour'),
   R('bits','Bit depth',2,8,8,'Digital',{step:.5}),R('blocks','Compression blocks',0,100,0,'Digital'),
