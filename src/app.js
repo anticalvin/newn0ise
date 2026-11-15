@@ -3298,12 +3298,16 @@ const SKINS=['lab','parchment','utility'];
 function cycleSkin(){const cur=document.documentElement.dataset.skin||'lab',n=SKINS[(SKINS.indexOf(cur)+1)%SKINS.length];setSkin(n);toast('Skin: '+n);}
 function setSkin(n){document.documentElement.dataset.skin=n;try{localStorage.setItem('n0ise.skin',n);}catch(e){}}
 
+/* In the 3D and World pages the gallery hides looks that only make sense on a flat picture (paper, print, plotted lines, generators
+   that ignore the scene, face and subject tools). "Show all" brings them back. */
+const SCENE_ONLY=document.documentElement.dataset.embed==='1';
+const SCENE_HIDE=new Set(['Print','Lines','Source','Subject','Face','Structure','Pattern','Modulation']);
 function renderGallery(host){
-  const g=el('div','gal'),all=allEffects(),fams=['All',...UFAM_ORDER.filter(f=>all.some(e=>e.fam===f)),...new Set(all.map(e=>e.fam).filter(f=>!UFAM_ORDER.includes(f)))];
+  const g=el('div','gal'),all=allEffects().filter(e=>!(SCENE_ONLY&&!INS.showAll&&SCENE_HIDE.has(e.fam))),fams=['All',...UFAM_ORDER.filter(f=>all.some(e=>e.fam===f)),...new Set(all.map(e=>e.fam).filter(f=>!UFAM_ORDER.includes(f)))];
   if(!fams.includes(INS.cat))INS.cat='All';
   const cats=el('div','cats');fams.forEach(f=>{const b=el('button','',f);b.setAttribute('aria-pressed',INS.cat===f);b.addEventListener('click',()=>{INS.cat=f;renderInspector();});cats.appendChild(b);});
   const grid=el('div','grid');
-  all.filter(e=>INS.cat==='All'?e.fam!=='Face':e.fam===INS.cat).forEach(e=>{
+  all.filter(e=>(INS.cat==='All'?e.fam!=='Face':e.fam===INS.cat)&&!(SCENE_ONLY&&!INS.showAll&&SCENE_HIDE.has(e.fam))).forEach(e=>{
     const t=el('button','tile'),i=document.createElement('i');
     if(e.m){const m=e.m;t.append(moduleThumb(m.id),i,el('span','',m.name));i.style.background=IDENT[m.id]||'#888';
       t.addEventListener('click',()=>{
@@ -3316,6 +3320,7 @@ function renderGallery(host){
   const md=el('div','cats');['Replace this effect','Add as new layer'].forEach((n,i)=>{const b=el('button','',n);b.setAttribute('aria-pressed',!!INS.addMode===!!i);b.addEventListener('click',()=>{INS.addMode=!!i;md.querySelectorAll('button').forEach((x,j)=>x.setAttribute('aria-pressed',!!INS.addMode===!!j));});md.appendChild(b);});
   const q=document.createElement('input');q.type='search';q.placeholder='Search effects';q.className='gq';q.setAttribute('aria-label','Search effects');
   q.addEventListener('input',()=>{const s=q.value.trim().toLowerCase();grid.querySelectorAll('.tile').forEach(x=>{x.hidden=!!s&&!x.textContent.toLowerCase().includes(s);});});
+  if(SCENE_ONLY){const sa=el('button','',INS.showAll?'Only 3D-friendly looks':'Show flat-picture looks too');sa.style.cssText='margin:6px 0';sa.addEventListener('click',()=>{INS.showAll=!INS.showAll;renderInspector();});g.append(sa);}
   g.append(md,q,cats,grid);host.appendChild(g);
 }
 function remix(l){

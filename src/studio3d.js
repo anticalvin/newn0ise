@@ -12,6 +12,7 @@ import {GLTFExporter} from 'three/addons/exporters/GLTFExporter.js';
 import {createApi} from './studio-api.js';
 import {createWalk} from './walk.js';
 import {createSim} from './sim.js';
+import {createPhysUI} from './physui.js';
 import {createRecorder,fmtTime} from './recorder.js';
 import {P3D,build as buildPhoto,loadCanvas,sampleCanvas} from './photo3d.js';
 import {rigHuman} from './rig.js';
@@ -212,8 +213,16 @@ const PRIMS={
   Plane:()=>new THREE.PlaneGeometry(2,2,1,1),
   Cylinder:()=>new THREE.CylinderGeometry(.6,.6,1.4,48),
   Cone:()=>new THREE.ConeGeometry(.7,1.4,48),
-  Capsule:()=>new THREE.CapsuleGeometry(.4,.9,8,24)
+  Capsule:()=>new THREE.CapsuleGeometry(.4,.9,8,24),
+  Ramp:()=>{const sh=new THREE.Shape();sh.moveTo(0,0);sh.lineTo(2.4,0);sh.lineTo(0,1);sh.closePath();const g=new THREE.ExtrudeGeometry(sh,{depth:1.6,bevelEnabled:false});g.translate(-1.2,-.5,-.8);return g;},
+  Stairs:()=>{const parts=[];for(let i=0;i<5;i++){const b=new THREE.BoxGeometry(.5,.25*(i+1),1.6);b.translate(-1+i*.5+.25,.125*(i+1)-.6,0);parts.push(b);}return mergeGeo(parts);},
+  Wall:()=>new THREE.BoxGeometry(3,1.6,.25),
+  Pyramid:()=>new THREE.ConeGeometry(.9,1.2,4,1).rotateY(Math.PI/4),
+  Ring:()=>new THREE.TorusGeometry(.8,.1,24,64)
 };
+function mergeGeo(list){let n=0,ni=0;const nonIdx=list.map(g=>g.index?g.toNonIndexed():g);nonIdx.forEach(g=>n+=g.attributes.position.count);
+  const pos=new Float32Array(n*3),nor=new Float32Array(n*3);let o=0;nonIdx.forEach(g=>{pos.set(g.attributes.position.array,o*3);nor.set(g.attributes.normal.array,o*3);o+=g.attributes.position.count;});
+  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(pos,3));g.setAttribute('normal',new THREE.BufferAttribute(nor,3));return g;}
 function setShadowFlags(n){if(!n)return;n.traverse(m=>{if(m.isMesh&&!m.isSplatMesh){m.castShadow=!!S.shadows;m.receiveShadow=!!S.shadows;}});}
 /* photographs as objects (brightness-based, not recovered depth) */
 function addPhoto(kind,cv){
@@ -1137,7 +1146,7 @@ function makeRelief(name,cv,depth,{quick=false,dw,dh,photo=null,px=null}={}){
    MATTERS is the swap point: each entry is {label, run(canvas,onProg) -> {data:Float32Array 0..1, w, h}}.
    modnet runs in matte.worker.js (WebGPU or WASM). fallback needs no model (border flood fill). */
 const BUILD='step5-life1';
-const CUT={on:localStorage.getItem('n0.autocut')!=='0',workerP:null,jobs:new Map(),seq:0};
+const CUT={on:localStorage.getItem('n0.autocut')==='1',workerP:null,jobs:new Map(),seq:0};
 function resizeBilinear(s,sw,sh,dw,dh){
   if(sw===dw&&sh===dh)return s;
   const o=new Float32Array(dw*dh),fx=sw>1?(sw-1)/Math.max(1,dw-1):0,fy=sh>1?(sh-1)/Math.max(1,dh-1):0;
@@ -1300,15 +1309,15 @@ function buildCutSection(o){
   const chips=el('div','chips');
   const kb=el('button','chip','Keep background');kb.setAttribute('aria-pressed',!!m.keepBg);
   kb.onclick=()=>{m.keepBg=!m.keepBg;kb.setAttribute('aria-pressed',m.keepBg);applyAlpha(m);rebuildRelief(o);};
-  const ab=el('button','chip','Auto-cut on drop');ab.setAttribute('aria-pressed',CUT.on);
+  const ab=el('button','chip','Remove background on drop');ab.setAttribute('aria-pressed',CUT.on);
   ab.onclick=()=>{CUT.on=!CUT.on;localStorage.setItem('n0.autocut',CUT.on?'1':'0');ab.setAttribute('aria-pressed',CUT.on);};
   chips.append(kb,ab);r.appendChild(chips);
   chipRow(r,[['auto','Auto'],['modnet','People'],['u2net','Accurate']],v=>CUT.model===v,v=>{CUT.model=v;localStorage.setItem('n0.cutmodel',v);});
   const acts=el('div','chips');
   acts.append(
-    btn('Cut out subject','',()=>autoCut(o)),
+    btn('Remove background','pri',()=>autoCut(o)),
     btn('Reset cut','',()=>{if(m.alpha0){setAlpha(o,Float32Array.from(m.alpha0));refreshInspector();}else toast('Nothing to reset yet.');}),
-    btn('Undo auto-cut','',()=>{m.alpha=null;m.cutBy='none';applyAlpha(m);rebuildRelief(o);refreshInspector();}),
+    btn('Restore background','',()=>{m.alpha=null;m.cutBy='none';applyAlpha(m);rebuildRelief(o);refreshInspector();}),
     btn(m.refine?'Close refine':'Refine','',()=>{m.refine=!m.refine;refreshInspector();}));
   r.appendChild(acts);
   if(m.cutErr)r.appendChild(el('div','note','Cut-out model error: '+m.cutErr));
@@ -1852,27 +1861,38 @@ const sec=(parent,title,right)=>{const s=el('div','sec');if(title){const t=el('d
 const btn=(label,cls,fn)=>{const b=el('button','btn '+(cls||''),label);b.addEventListener('click',fn);return b;};
 
 /* ---------- SCENE pane ---------- */
-let objListEl,inspEl,inspSyncs=[];
+let objListEl,inspEl,inspSyncs=[],physHost=null;
 function buildScenePane(){
   const p=paneEls.scene;
   const s1=sec(p,'Objects');
   objListEl=el('div','olist');s1.appendChild(objListEl);
-  const add=el('div','chips');add.style.marginTop='8px';
-  add.appendChild(btn('Import files','pri',()=>$('#file').click()));
-  Object.keys(PRIMS).forEach(k=>add.appendChild(btn('+ '+k,'',()=>addPrimitive(k))));
-  add.appendChild(btn('+ Visualizer','',()=>addViz('waterfall')));
-  add.appendChild(btn('+ Human','',async()=>{try{await api.run({cmd:'add',type:'human'});api.run({cmd:'camera',frame:true});}catch(e){toast(e.message||String(e));}}));
-  Object.keys(P3D).forEach(k=>add.appendChild(btn('+ '+P3D[k].name,'',()=>pickPhoto(k))));add.appendChild(btn('Sample photo','',()=>addPhoto('fold',sampleCanvas())));
-  add.appendChild(btn('Walk','',()=>$('#bWalk').click()));{const ab=btn('Connect AI','',()=>aiConnect());AI.btn=ab;add.appendChild(ab);}add.appendChild(btn('Save project','',saveProject));add.appendChild(btn('Open project','',()=>{const i=document.createElement('input');i.type='file';i.accept='.zip,application/zip';i.onchange=()=>i.files[0]&&importFiles([i.files[0]]);i.click();}));add.appendChild(btn('Copy look link','',lookLink));
-  s1.appendChild(add);
+  const grp=(title,open)=>{const d=el('details','acc');if(open)d.open=true;d.innerHTML=`<summary>${title}</summary>`;const inn=el('div','in');inn.classList.add('chips');d.appendChild(inn);s1.appendChild(d);return inn;};
+  const top=el('div','chips');top.style.margin='8px 0';top.append(btn('Import files','pri',()=>$('#file').click()),btn('Sample photo','',()=>addPhoto('fold',sampleCanvas())));s1.appendChild(top);
+  const gS=grp('Shapes',true);Object.keys(PRIMS).forEach(k=>gS.appendChild(btn('+ '+k,'',()=>addPrimitive(k))));
+  const gC=grp('Characters and sound');
+  gC.appendChild(btn('+ Human','',async()=>{try{await api.run({cmd:'add',type:'human'});api.run({cmd:'camera',frame:true});}catch(e){toast(e.message||String(e));}}));
+  gC.appendChild(btn('+ Visualizer','',()=>addViz('waterfall')));
+  const gP=grp('Photo to 3D');Object.keys(P3D).forEach(k=>gP.appendChild(btn('+ '+P3D[k].name,'',()=>pickPhoto(k))));
+  const gJ=grp('Project');
+  gJ.appendChild(btn('Walk','',()=>$('#bWalk').click()));{const ab=btn('Connect AI','',()=>aiConnect());AI.btn=ab;gJ.appendChild(ab);}gJ.appendChild(btn('Save project','',saveProject));
+  gJ.appendChild(btn('Open project','',()=>{const i=document.createElement('input');i.type='file';i.accept='.zip,application/zip';i.onchange=()=>i.files[0]&&importFiles([i.files[0]]);i.click();}));gJ.appendChild(btn('Copy look link','',lookLink));
   const note=el('div','note','Drop or import: glb, gltf (with its bin and textures), obj (+mtl), stl, ply (mesh, points or 3D Gaussian splat), splat, spz, ksplat, sog. Photos become relief. Videos open the turntable scanner.');s1.appendChild(note);
   inspEl=el('div');p.appendChild(inspEl);
+  physHost=el('div');p.appendChild(physHost);
   autoPanel(p);
   const s3=sec(p,'Stage');
   sliderRow(s3,'Environment',()=>S.env,v=>{S.env=v;scene.environmentIntensity=v;hemi.intensity=.2+v*.7;bump();},0,2,.05);
   sliderRow(s3,'Key light',()=>key.intensity,v=>{key.intensity=v;bump();},0,6,.1);
   const bgrow=el('div','row');bgrow.innerHTML='<label>Background</label><input type="color" value="#0b0b0c" style="width:100%;height:28px;border:1px solid var(--line);background:none;padding:0"><output></output>';
   bgrow.querySelector('input').addEventListener('input',e=>{S.bg=e.target.value;bump();});s3.appendChild(bgrow);
+  const sg=el('div','chips');
+  const tgc=(label,on,fn)=>{const b=el('button','chip',label);b.setAttribute('aria-pressed',on);b.addEventListener('click',()=>{on=!on;b.setAttribute('aria-pressed',on);fn(on);});sg.appendChild(b);};
+  tgc('Ground plane',false,v=>api.run({cmd:'environment',ground:v?{color:'#8a8d82',size:60}:false}));
+  tgc('Shadows',!!S.shadows,v=>api.run({cmd:'environment',shadows:v}));
+  tgc('Grid',true,v=>api.run({cmd:'environment',grid:v}));
+  s3.appendChild(sg);
+  sliderRow(s3,'Light angle',()=>S.lightAz??45,v=>{S.lightAz=v;const r=Math.hypot(key.position.x,key.position.z)||4,a=v*Math.PI/180;key.position.x=Math.cos(a)*r;key.position.z=Math.sin(a)*r;bump();},0,360,1,v=>Math.round(v)+'°');
+  sliderRow(s3,'Light height',()=>S.lightEl??50,v=>{S.lightEl=v;key.position.y=2+v/100*8;bump();},0,100,1,v=>Math.round(v)+'%');
   chipRow(s3,[['.5','Draft'],['.8','Normal'],['1','High']],v=>String(S.q)===v,v=>{S.q=parseFloat(v);needResize=true;});
 }
 function renderObjList(){
@@ -1905,6 +1925,7 @@ function refreshInspector(soft){
   ax.forEach(a=>inspSyncs.push(sliderRow(s,'Pos '+a.toUpperCase(),()=>h.position[a],v=>{h.position[a]=v;bump();},-6,6,.01).sync));
   inspSyncs.push(sliderRow(s,'Turn',()=>THREE.MathUtils.radToDeg(h.rotation.y),v=>{h.rotation.y=THREE.MathUtils.degToRad(v);bump();},-180,180,1,v=>Math.round(v)+'°').sync);
   inspSyncs.push(sliderRow(s,'Size',()=>h.scale.x,v=>{h.scale.setScalar(v);bump();},.05,6,.01).sync);
+  if(window.__physUI&&S.tab!=='world')window.__physUI.body(inspEl,o);
   if(o.kind==='relief'){
     const m=o.meta,rb=()=>{clearTimeout(reliefT);reliefT=setTimeout(()=>rebuildRelief(o),60);};
     const r=sec(inspEl,'Relief',m.depthing?'working…':(m.depthBy||'flat'));
@@ -2144,7 +2165,7 @@ function buildHud(){
 }
 
 /* ---------- boot ---------- */
-studioDefaults();buildTabs();buildHud();buildScenePane();buildScanPane();
+window.__sheet=sheet;studioDefaults();buildTabs();buildHud();buildScenePane();buildScanPane();
 if(renderer){buildLookPane();}
 buildExportPane();wireSheet();
 setTab('scene');
@@ -2285,10 +2306,12 @@ async function playWorld(){
   }catch(e){toast(String(e.message||e),4000);}
 }
 function setStart(){const o=S.objs.find(x=>x.meta&&x.meta.player);const t=o?o.holder.position:controls.target;S.start=[t.x,0,t.z];toast('Start set here');}
-const sim=createSim({THREE,S,bump});
+const sim=createSim({THREE,S,bump,removeObj});
+const physUI=window.__physUI=createPhysUI({sim,S,THREE,camera,controls,addPrimitive,el,sec,btn,toast,chipRow,sliderRow,bump,renderObjList,selectObj});
 const api=createApi({sim,THREE,S,scene,camera,controls,renderer,canvas,world,hemi,key,grid,PRIMS,addPrimitive,removeObj,objById,importOne,applyView,bump,frameAll,tick,walk,projectFiles,zipStore,GLTFExporter,renderObjList,refreshInspector,setShadowFlags,selectObj,waitFrames,requestResize:()=>{needResize=true;}});
 window.n0={run:api.run,describe:api.describe,walk,sim,playWorld};window.__playWorld=playWorld;
 const worldEd=createWorldEditor({playWorld:()=>playWorld(),setStart:()=>setStart(),openInEffects:()=>openInEffects(),THREE,S,api,sim,walk,camera,canvas,controls,tc,objById,selectObj,removeObj,bump,el,sec,btn,toast,renderObjList});
+if(physHost)physUI.section(physHost);
 worldEd.build(paneEls.world);
 if(/^#world/.test(location.hash)){setTab('world');worldEd.starter();}
 $('#bWalk')&&$('#bWalk').addEventListener('click',()=>walk.on?walk.exit():walk.enter({pos:[camera.position.x*.6,0,Math.max(2.5,camera.position.z*.8)],yaw:0}));
