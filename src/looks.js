@@ -268,6 +268,76 @@ vec4 fx(vec2 uv){
   if(dp<0.){vec3 paper=vec3(.93,.91,.86)*(.97+.03*fbm(uv*40.));return vec4(paper,1.);}
   return vec4(table,1.);}`});
 
+  /* ---- projector, tape and instant-film habits ---- */
+  const TH='float tH(vec2 p){return fract(sin(dot(p,vec2(12.9898,78.233)))*43758.5453);}\n';
+
+  defineModule({id:'halation',family:'Film',name:'Halation',
+    params:[{k:'amt',label:'Strength',min:0,max:100,def:60,sec:'Glow',hero:true},{k:'rad',label:'Spread',min:0,max:100,def:50,sec:'Glow',hero:true},{k:'thr',label:'Threshold',min:40,max:95,def:65,sec:'Glow',hero:true}],
+    frag:SS+`
+vec4 fx(vec2 uv){
+  vec3 c=texture(uSrc,uv).rgb;vec2 px=1./uRes;float R=(6.+u_rad/100.*26.)*S;vec3 acc=vec3(0.);
+  for(int i=0;i<16;i++){float g=float(i)*2.39996,rr=sqrt((float(i)+.5)/16.)*R;vec3 s=texture(uSrc,uv+vec2(cos(g),sin(g))*rr*px).rgb;acc+=s*smoothstep(u_thr/100.,1.,luma(s));}
+  acc/=16.;vec3 hal=vec3(acc.r*1.6,acc.g*.45,acc.b*.15)*u_amt/100.*2.;
+  return vec4(1.-(1.-c)*(1.-clamp(hal,0.,1.)),1.);}`});
+
+  defineModule({id:'tapewobble',family:'Signal / CRT',name:'Tape Wobble',
+    params:[{k:'wob',label:'Wobble',min:0,max:100,def:40,sec:'Tape',hero:true},{k:'drop',label:'Dropouts',min:0,max:100,def:30,sec:'Tape',hero:true},{k:'head',label:'Head noise',min:0,max:100,def:50,sec:'Tape',hero:true}],
+    frag:SS+TH+`
+vec4 fx(vec2 uv){
+  float t=uTime;float w=(sin(uv.y*40.+t*3.)*.0015+sin(uv.y*7.-t*1.3)*.002)*u_wob/100.*3.;
+  float band=smoothstep(.07,0.,uv.y);
+  w+=band*(tH(vec2(floor(t*30.),floor(uv.y*240.)))-.5)*.08*u_head/100.;
+  float ln=floor(uv.y*180.),dr=step(1.-u_drop/100.*.02,tH(vec2(ln,floor(t*12.))));
+  vec3 c=vec3(texture(uSrc,vec2(uv.x+w+.0012,uv.y)).r,texture(uSrc,vec2(uv.x+w,uv.y)).g,texture(uSrc,vec2(uv.x+w-.0012,uv.y)).b);
+  float xs=.2+tH(vec2(ln,3.))*.1,xe=xs+tH(vec2(ln,4.))*.5;
+  c=mix(c,vec3(.9)*(.6+.4*tH(uv*uRes+t)),dr*.9*step(xs,uv.x)*step(uv.x,xe));
+  c+=band*.05*tH(uv*uRes+t)*u_head/100.;
+  return vec4(c,1.);}`});
+
+  defineModule({id:'gateweave',family:'Film',name:'Projector Gate',
+    params:[{k:'weave',label:'Gate weave',min:0,max:100,def:45,sec:'Projector',hero:true},{k:'flick',label:'Flicker',min:0,max:100,def:40,sec:'Projector',hero:true},{k:'scr',label:'Scratches',min:0,max:100,def:50,sec:'Projector',hero:true}],
+    frag:SS+TH+`
+vec4 fx(vec2 uv){
+  float t=floor(uTime*18.);
+  float jx=(tH(vec2(t,1.))-.5)*.006*u_weave/100.*3.,jy=(tH(vec2(t,2.))-.5)*.008*u_weave/100.*3.;
+  vec3 c=texture(uSrc,uv+vec2(jx,jy)).rgb;c*=1.+(tH(vec2(t,3.))-.5)*.25*u_flick/100.;
+  float sc=0.;
+  for(int i=0;i<3;i++){float fi=float(i),x=tH(vec2(t+fi*7.,fi)),on=step(.55,tH(vec2(t,fi+9.))),w=abs(uv.x-x);
+    sc+=on*(1.-smoothstep(0.,.0016,w))*step(tH(vec2(floor(uv.y*20.),t+fi)),.85);}
+  c=mix(c,vec3(.95,.93,.85),clamp(sc*u_scr/100.,0.,.8));
+  c*=1.-.7*pow(length((uv-.5)*vec2(1.2,1.)),2.);
+  return vec4(c,1.);}`});
+
+  defineModule({id:'rollshutter',family:'Warp',name:'Rolling Shutter',
+    params:[{k:'amt',label:'Skew',min:0,max:100,def:50,sec:'Shake',hero:true},{k:'rate',label:'Shake rate',min:1,max:40,def:12,step:1,sec:'Shake',hero:true},{k:'jello',label:'Jello',min:0,max:100,def:35,sec:'Shake',hero:true}],
+    frag:SS+`
+vec4 fx(vec2 uv){
+  float t=uTime,r=u_rate/10.;float sk=sin(t*r)*.5+sin(t*r*2.3)*.3;
+  float x=uv.x+(uv.y-.5)*sk*u_amt/100.*.12+sin(uv.y*14.+t*r*3.)*u_jello/100.*.01;
+  return texture(uSrc,vec2(x,uv.y));}`});
+
+  defineModule({id:'sodium',family:'Color',name:'Sodium Night',
+    params:[{k:'split',label:'Colour split',min:0,max:100,def:65,sec:'Grade',hero:true},{k:'crush',label:'Crush blacks',min:0,max:100,def:40,sec:'Grade',hero:true},{k:'sat',label:'Colour',min:0,max:100,def:55,sec:'Grade',hero:true}],
+    frag:SS+`
+vec4 fx(vec2 uv){
+  vec3 c=texture(uSrc,uv).rgb;float l=luma(c);
+  c=mix(c,c*mix(vec3(.55,.8,1.05),vec3(1.1,.9,.6),smoothstep(.2,.8,l)),u_split/100.);
+  c=pow(max(c,vec3(0.)),vec3(1.+u_crush/100.*.7));
+  c+=vec3(.04,.1,.16)*(1.-l)*.5*u_split/100.;
+  c=mix(vec3(luma(c)),c,u_sat/100.*1.6+.2);
+  return vec4(clamp(c,0.,1.),1.);}`});
+
+  defineModule({id:'develop',family:'Film',name:'Develop',
+    params:[{k:'dur',label:'Develop time (s)',min:2,max:12,def:5,step:.5,sec:'Print',hero:true},{k:'hold',label:'Hold (s)',min:1,max:10,def:3,step:.5,sec:'Print',hero:true},{k:'cast',label:'Early cast',min:0,max:100,def:60,sec:'Print',hero:true}],
+    frag:SS+`
+vec4 fx(vec2 uv){
+  vec3 c=texture(uSrc,uv).rgb;float per=u_dur+u_hold,ph=fract(uTime/per)*per;
+  float d=smoothstep(0.,1.,clamp(ph/u_dur,0.,1.)),m=pow(d,1.6);
+  vec3 haze=mix(vec3(.55,.62,.6),vec3(.8,.82,.78),d)*(.7+.3*luma(c));
+  vec3 dev=mix(haze,mix(vec3(luma(c)),c,m),m);
+  dev*=mix(mix(vec3(1.),vec3(.8,1.,.95),u_cast/100.),vec3(1.),m);
+  return vec4(clamp(dev,0.,1.),1.);}`});
+
   /* ---- named recipes: whole stacks that open on a sample and stay editable ---- */
   const RECIPES=[
     {name:'Night evidence',note:'Two takes combined, then a contact sheet through a security camera',layers:[['doubletake',{mode:1,mix:90}],['contactstrip',{n:6,every:1.2}],['camsim','cctv']]},
@@ -281,6 +351,10 @@ vec4 fx(vec2 uv){
     {name:'Fast burst',note:'Trails from a burst of shots with a lens streak',layers:[['bursttrail',{len:75}],['anamorph',{}]]},
     {name:'Lens at night',note:'Focus hunting with streaks from the lights',layers:[['focushunt',{}],['anamorph',{thr:60,len:70}]]},
     {name:'Instant summer',note:'A faded instant print on a table, cross-processed',layers:[['crosscurve',{sh:30,hi:60}],['instantframe',{}],['dusthair',{dust:20,hair:10}]]},
+    {name:'Projector night',note:'Home movie with halation, scratches and dust',layers:[['gateweave',{}],['halation',{}],['dusthair',{dust:25}]]},
+    {name:'Tape hotel',note:'Sodium-lit street through worn tape',layers:[['sodium',{}],['tapewobble',{}]]},
+    {name:'Phone jello',note:'Hand-held shake with a rolling shutter and a leak',layers:[['rollshutter',{}],['lightleak',{amt:30}]]},
+    {name:'Developing',note:'An instant print that slowly comes up',layers:[['develop',{}],['instantframe',{}]]},
     {name:'Impossible window',note:'Time woven through a slow scan',layers:[['loom',{w:14,lag:85}],['scanner',{per:8,bw:10}]]}];
   return {RECIPES};
 }

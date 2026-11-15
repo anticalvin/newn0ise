@@ -3,21 +3,21 @@
    the overlay is plain 2D drawing so the live view and the saved photo or video are made by the same code. */
 export const CAMS=[
   {id:'cctv',cat:'Video',name:'CCTV',sub:'Wide lens, tape-grade video, pumping exposure',sim:'cctv',aspect:'4:3',ov:{stamp:'cctv'},glyph:'dome'},
-  {id:'dash',cat:'Video',name:'Dashcam',sub:'Wide windscreen view, hard compression',sim:'dash',aspect:'16:9',ov:{stamp:'date'},glyph:'dash'},
+  {id:'dash',cat:'Video',name:'Dashcam',sub:'Wide windscreen view, hard compression',sim:'dash',aspect:'16:9',ov:{stamp:'date',speed:true},glyph:'dash'},
   {id:'door',cat:'Video',name:'Doorbell',sub:'Fisheye, cool and flat at the front step',sim:'door',aspect:'3:4',ov:{},glyph:'dome'},
-  {id:'ccd',cat:'Digital',name:'CCD 03',sub:'Compact digital: flash, sharpening halos, fringing',sim:'ccd',aspect:'3:4',ov:{stamp:'date'},glyph:'compact'},
-  {id:'web',cat:'Video',name:'Webcam 00',sub:'Low-res cam from the early web',sim:'web',aspect:'4:3',ov:{},glyph:'phone'},
-  {id:'disp',cat:'Film',name:'Disposable',sub:'Plastic lens, hard flash, heavy corners',sim:'disp',aspect:'3:4',ov:{stamp:'date'},glyph:'toy'},
+  {id:'ccd',cat:'Digital',name:'CCD 03',sub:'Compact digital: flash, sharpening halos, fringing',sim:'ccd',aspect:'3:4',ov:{stamp:'date',af:true},glyph:'compact'},
+  {id:'web',cat:'Video',name:'Webcam 00',sub:'Low-res cam from the early web',sim:'web',aspect:'4:3',ov:{live:true},glyph:'phone'},
+  {id:'disp',cat:'Film',name:'Disposable',sub:'Plastic lens, hard flash, heavy corners',sim:'disp',aspect:'3:4',ov:{stamp:'date',shots:true},glyph:'toy'},
   {id:'holga',cat:'Film',name:'Toy film',sub:'Soft plastic lens, light leaks, deep vignette',sim:'holga',aspect:'1:1',ov:{},glyph:'toy'},
   {id:'inst',cat:'Film',name:'Instant',sub:'Faded print with a white border',sim:'inst',aspect:'1:1',ov:{frame:'instant'},glyph:'instant'},
-  {id:'handy',cat:'Video',name:'Handy',sub:'Tape camcorder: chroma bleed, tracking, comb',sim:'handy',aspect:'4:3',ov:{rec:true},glyph:'camcorder'},
-  {id:'s8',cat:'Film',name:'Super 8',sub:'Small-gauge film: weave, halation, scratches',sim:'s8',aspect:'4:3',ov:{frame:'gate'},glyph:'film'},
+  {id:'handy',cat:'Video',name:'Handy',sub:'Tape camcorder: chroma bleed, tracking, comb',sim:'handy',aspect:'4:3',ov:{rec:true,batt:true},glyph:'camcorder'},
+  {id:'s8',cat:'Film',name:'Super 8',sub:'Small-gauge film: weave, halation, scratches',sim:'s8',aspect:'4:3',ov:{frame:'gate',fcount:true},glyph:'film'},
   {id:'noir',cat:'Film',name:'Noir 35',sub:'Black and white stock, coarse grain',sim:'noir',aspect:'3:4',ov:{},glyph:'slr'},
   {id:'night',cat:'Digital',name:'Night',sub:'Light-amplifier tube, green and noisy',sim:'night',aspect:'3:4',ov:{nv:true},glyph:'slr'},
-  {id:'heat',cat:'Digital',name:'Heat',sub:'Thermal sensor, low resolution',sim:'heat',aspect:'3:4',ov:{cross:true},glyph:'phone'},
+  {id:'heat',cat:'Digital',name:'Heat',sub:'Thermal sensor, low resolution',sim:'heat',aspect:'3:4',ov:{cross:true,scale:true},glyph:'phone'},
   {id:'sig',cat:'Glitch',name:'Signal',sub:'Bad analog feed: tearing, bleed, noise',sim:'sig',aspect:'4:3',ov:{rec:'play'},glyph:'camcorder'},
   {id:'prism',cat:'Glitch',name:'Prism',sub:'Split light and mirrored facets',sim:'prism',fx:['prism','kaleido'],mix:[100,35],aspect:'1:1',ov:{},glyph:'toy'},
-  {id:'clean',cat:'Digital',name:'Studio',sub:'Clean, a little sharpening and bloom',sim:'clean',aspect:'3:4',ov:{},glyph:'compact'},
+  {id:'clean',cat:'Digital',name:'Studio',sub:'Clean, a little sharpening and bloom',sim:'clean',aspect:'3:4',ov:{af:true},glyph:'compact'},
   {id:'neg35',cat:'Film',name:'35mm negative',sub:'Colour negative stock, soft and warm',sim:'neg35',aspect:'3:4',ov:{},glyph:'slr'},
   {id:'slide',cat:'Film',name:'Slide film',sub:'Saturated reversal film, deep contrast',sim:'slide',aspect:'3:4',ov:{},glyph:'slr'},
   {id:'xpro',cat:'Film',name:'Cross process',sub:'Slide film in the wrong chemistry',sim:'xpro',aspect:'3:4',ov:{},glyph:'slr'},
@@ -26,12 +26,12 @@ export const CAMS=[
   {id:'expired',cat:'Film',name:'Expired instant',sub:'Old instant film: faded, leaking, stained',sim:'expired',aspect:'1:1',ov:{frame:'instant'},glyph:'instant'},
   {id:'p110',cat:'Film',name:'110 pocket',sub:'Tiny negative, heavy grain and corners',sim:'p110',aspect:'4:3',ov:{stamp:'date'},glyph:'toy'},
   {id:'pinhole',cat:'Film',name:'Pinhole',sub:'No lens: soft, dark corners, long exposure',sim:'pinhole',aspect:'1:1',ov:{},glyph:'lens'},
-  {id:'vhslp',cat:'Video',name:'VHS LP',sub:'Slow-speed tape: smear, tracking, noise',sim:'vhslp',aspect:'4:3',ov:{rec:true},glyph:'camcorder'},
-  {id:'hi8',cat:'Video',name:'Hi8',sub:'Handycam tape, cleaner colour than VHS',sim:'hi8',aspect:'4:3',ov:{rec:true},glyph:'camcorder'},
-  {id:'beta',cat:'Video',name:'Betamax',sub:'Sharper tape, warm and a little tired',sim:'beta',aspect:'4:3',ov:{rec:true},glyph:'camcorder'},
-  {id:'eng',cat:'Video',name:'News camera',sub:'Broadcast field camera, crisp and bright',sim:'eng',aspect:'16:9',ov:{rec:true},glyph:'camcorder'},
-  {id:'satfeed',cat:'Video',name:'Satellite feed',sub:'Blocky live link with dropouts',sim:'satfeed',aspect:'16:9',ov:{stamp:'cctv'},glyph:'screen'},
-  {id:'flip03',cat:'Digital',name:'Flip phone',sub:'Tiny sensor from a 2003 flip phone',sim:'flip03',aspect:'3:4',ov:{},glyph:'phone'},
+  {id:'vhslp',cat:'Video',name:'VHS LP',sub:'Slow-speed tape: smear, tracking, noise',sim:'vhslp',aspect:'4:3',ov:{rec:true,batt:true},glyph:'camcorder'},
+  {id:'hi8',cat:'Video',name:'Hi8',sub:'Handycam tape, cleaner colour than VHS',sim:'hi8',aspect:'4:3',ov:{rec:true,batt:true},glyph:'camcorder'},
+  {id:'beta',cat:'Video',name:'Betamax',sub:'Sharper tape, warm and a little tired',sim:'beta',aspect:'4:3',ov:{rec:true,batt:true},glyph:'camcorder'},
+  {id:'eng',cat:'Video',name:'News camera',sub:'Broadcast field camera, crisp and bright',sim:'eng',aspect:'16:9',ov:{rec:true,batt:true},glyph:'camcorder'},
+  {id:'satfeed',cat:'Video',name:'Satellite feed',sub:'Blocky live link with dropouts',sim:'satfeed',aspect:'16:9',ov:{stamp:'cctv',link:true},glyph:'screen'},
+  {id:'flip03',cat:'Digital',name:'Flip phone',sub:'Tiny sensor from a 2003 flip phone',sim:'flip03',aspect:'3:4',ov:{flip:true},glyph:'phone'},
   {id:'campho',cat:'Digital',name:'Camera phone',sub:'Early phone camera, crunchy sharpening',sim:'campho',aspect:'4:3',ov:{},glyph:'phone'},
   {id:'eyecam',cat:'Video',name:'Eye cam',sub:'Console webcam: noisy, sharp, auto-exposing',sim:'eyecam',aspect:'4:3',ov:{},glyph:'phone'},
   {id:'body',cat:'Video',name:'Bodycam',sub:'Wide lens, flat contrast, compressed',sim:'body',aspect:'16:9',ov:{stamp:'cctv'},glyph:'dome'},
@@ -103,6 +103,24 @@ export function drawOverlay(g,w,h,c,o={}){
     text(`${pad(d.getDate())}.${pad(d.getMonth()+1)}.${d.getFullYear()}`,m,h-m,u*.034,'#f2efe8');
     text('SP',w-m,h-m,u*.034,'#f2efe8','right');
   }
+
+  const now=o.now!=null?o.now:performance.now()/1000;
+  const battery=(x,y,bw,bh,lvl)=>{g.strokeStyle='#f2efe8';g.lineWidth=Math.max(1.5,u*.004);g.strokeRect(x,y,bw,bh);g.fillStyle='#f2efe8';g.fillRect(x+bw,y+bh*.3,bw*.07,bh*.4);
+    g.fillStyle=lvl<.2?'#ff5a4a':'#f2efe8';g.fillRect(x+bw*.08,y+bh*.14,(bw*.84)*lvl,bh*.72);};
+  if(v.batt){const tc=o.t||0,lvl=Math.max(.12,.82-(now%1800)/1800*.5);battery(w-m-u*.075,m+u*.075,u*.075,u*.036,lvl);
+    const left=3600-Math.floor(tc);text(`TAPE ${pad(Math.floor(left/60)%60)}:${pad(left%60)}`,w/2,h-m,u*.032,'#f2efe8','center');}
+  if(v.fcount){text(`FRAME ${String(Math.floor(now*18)%10000).padStart(4,'0')}`,m,h-m,u*.034,'#f2efe8');text('18 FPS',w-m,h-m,u*.034,'#f2efe8','right');}
+  if(v.shots){const left=24-((o.shots||0)%25);text(String(left),w-m,m+u*.08,u*.085,'#ffd23a','right');text('SHOTS',w-m,m+u*.115,u*.026,'#f2efe8','right',500);}
+  if(v.af){const L=u*.07,cx=w/2,cy=h/2;g.strokeStyle='rgba(242,239,232,.9)';g.lineWidth=Math.max(1.5,u*.004);g.beginPath();
+    for(const[x,y,sx,sy]of[[cx-L,cy-L,1,1],[cx+L,cy-L,-1,1],[cx-L,cy+L,1,-1],[cx+L,cy+L,-1,-1]]){g.moveTo(x,y+sy*L*.4);g.lineTo(x,y);g.lineTo(x+sx*L*.4,y);}g.stroke();
+    text('F2.8  1/125  ISO 200',m,h-m,u*.03,'#f2efe8');text('AF',w-m,h-m,u*.03,'#f2efe8','right');}
+  if(v.speed){text(`${58+Math.floor(Math.sin(now*.3)*6)} km/h`,m,m+u*.05,u*.05,'#f2efe8');text('51.5072 N  0.1276 W',w-m,h-m,u*.028,'#f2efe8','right',500);}
+  if(v.scale){const bx=w-m-u*.035,by=h*.2,bh=h*.6,gr=g.createLinearGradient(0,by+bh,0,by);['#1a0b4a','#8c1d5a','#e8591e','#ffd26b','#fff7e0'].forEach((c,i)=>gr.addColorStop(i/4,c));
+    g.fillStyle=gr;g.fillRect(bx,by,u*.035,bh);text('42.0',bx-u*.012,by+u*.026,u*.028,'#f2efe8','right');text('12.0',bx-u*.012,by+bh,u*.028,'#f2efe8','right');text(`${(36+Math.sin(now*.7)*1.4).toFixed(1)}°C`,w/2,h/2-u*.09,u*.032,'#f2efe8','center');}
+  if(v.live){g.fillStyle='#56d06a';g.beginPath();g.arc(m+u*.012,m+u*.022,u*.011,0,7);g.fill();text('LIVE',m+u*.035,m+u*.034,u*.032,'#f2efe8');text('320×240',w-m,h-m,u*.028,'#f2efe8','right',500);}
+  if(v.flip){for(let i=0;i<4;i++){g.fillStyle=i<3?'#f2efe8':'rgba(242,239,232,.3)';const bh=u*.012*(i+1);g.fillRect(m+i*u*.016,m+u*.04-bh,u*.01,bh);}
+    battery(w-m-u*.075,m+u*.008,u*.07,u*.034,.7);text('Menu',m,h-m,u*.04,'#f2efe8','left',500);text('Back',w-m,h-m,u*.04,'#f2efe8','right',500);}
+  if(v.link){text(`LINK ${87+Math.floor(Math.sin(now*.9)*5)}%`,m,m+u*.04,u*.036,'#f2efe8');text('SAT 7 · KU',w-m,m+u*.04,u*.03,'#f2efe8','right',500);}
   if(v.nv){text('NV',m,m+u*.04,u*.04,'#f2efe8');text('IR',w-m,m+u*.04,u*.04,'#f2efe8','right');}
   if(v.cross||v.nv){const L=u*.05,k=.2;g.strokeStyle='rgba(242,239,232,.85)';g.lineWidth=Math.max(1.5,u*.004);
     if(v.cross){const cx=w/2,cy=h/2;g.beginPath();g.moveTo(cx-L,cy);g.lineTo(cx-L*.3,cy);g.moveTo(cx+L*.3,cy);g.lineTo(cx+L,cy);g.moveTo(cx,cy-L);g.lineTo(cx,cy-L*.3);g.moveTo(cx,cy+L*.3);g.lineTo(cx,cy+L);g.stroke();}

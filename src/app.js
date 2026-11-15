@@ -7,6 +7,7 @@ import {createOverlays} from './overlay.js';
 import {installLooks} from './looks.js';
 import {createNodes} from './nodes.js';
 import {installIosCam} from './camios.js';
+import {createWipe} from './wipe.js';
 import {createPluginHost,SAFE as PLUG_SAFE} from './pluginhost.js';
 import {put as handoffPut,take as handoffTake} from './handoff.js';
 import {CAMSIM_PARAMS,CAMSIM_FRAG,SIMS} from './camsim.js';
@@ -1630,6 +1631,34 @@ function pluginsSheet(){
   box.append(bar,imp,ta,act,out,el('h3','','Installed'),list,btn('Close','',()=>sh.remove()));
   document.body.appendChild(sh);draw();sh.addEventListener('pointerdown',e=>{if(e.target===sh)sh.remove();});
 }
+
+/* ---- compare, breed ---- */
+let WIPE=null;
+const wipe=()=>WIPE||(WIPE=createWipe({canvas,stage:$('#stage'),getSrc:()=>SRC.el,el:(...a)=>el(...a)}));
+function recipeLayers(r){return r.layers.map(([id,p])=>{if(!MODULES[id])return null;const l=mkLayer(id);if(id==='camsim'){Object.assign(l.params,SIMS[p]||{});}else Object.assign(l.params,p||{});return l;}).filter(Boolean);}
+function loadLookRecipe(r){STACK.layers=recipeLayers(r);STACK.sel=0;V.sizeKey='';V.lastBKey='';snap();refreshUI();renderInspector();}
+/* Breeding: the child takes a mix of layers from both parents; modules both parents share get their controls blended, everything gets a small safe nudge. */
+function breedStacks(A,B){
+  const ok=l=>MODULES[l.module]&&l.module!=='crtlab',pa=A.filter(ok),pb=B.filter(ok);
+  if(!pa.length&&!pb.length)return[];
+  const tag=(arr,who)=>arr.map((l,i)=>({l,who,pos:arr.length>1?i/(arr.length-1):.5}));
+  const pool=[...tag(pa,'a'),...tag(pb,'b')].sort(()=>Math.random()-.5),seen=new Set(),pick=[];
+  const n=Math.max(2,Math.min(5,Math.round((pa.length+pb.length)/2)+(Math.random()<.4?1:0)));
+  for(const x of pool){if(pick.length>=n)break;if(seen.has(x.l.module))continue;seen.add(x.l.module);pick.push(x);}
+  pick.sort((x,y)=>x.pos-y.pos);
+  return pick.map(x=>{const m=MODULES[x.l.module],l=mkLayer(x.l.module);Object.assign(l.params,JSON.parse(JSON.stringify(x.l.params)));
+    const other=(x.who==='a'?pb:pa).find(o=>o.module===x.l.module);
+    m.params.forEach(p=>{if(p.t!=='r'||typeof l.params[p.k]!=='number'||/seed/i.test(p.k))return;const span=p.max-p.min;
+      if(other&&typeof other.params[p.k]==='number'){const t=.25+Math.random()*.5;l.params[p.k]=l.params[p.k]*(1-t)+other.params[p.k]*t;}
+      let v=l.params[p.k]+(Math.random()-.5)*span*.12;v=Math.max(p.min,Math.min(p.max,v));if(p.step>=1)v=Math.round(v);l.params[p.k]=v;});
+    return l;});
+}
+function breedWith(partner){
+  if(!SRC.el||SRC.name==='Test card')setSource(demoCanvas(),'Sample',false);
+  const B=partner==='random'?recipeLayers(LOOKS.RECIPES[Math.random()*LOOKS.RECIPES.length|0]):recipeLayers(LOOKS.RECIPES.find(r=>r.name===partner)||LOOKS.RECIPES[0]);
+  const child=breedStacks(STACK.layers,B);if(!child.length){toast('Nothing to breed yet. Add an effect first.');return;}
+  STACK.layers=child;STACK.sel=0;V.sizeKey='';V.lastBKey='';snap();refreshUI();renderInspector();toast('New look: '+child.map(l=>MODULES[l.module].name).join(' + ')+'. Undo to go back.',4000);
+}
 function recipeSection(host){
   const a=accordion('Recipe',false);
   const row=el('div','chips');
@@ -1637,11 +1666,14 @@ function recipeSection(host){
     Object.assign(el('button','btn','Download .json'),{onclick:()=>{const j=currentRecipe('n0ise recipe');deliver(new Blob([JSON.stringify(j,null,1)],{type:'application/json'}),'n0ise-recipe.json');}}),
     Object.assign(el('button','btn','Open file'),{onclick:()=>{const f=document.createElement('input');f.type='file';f.accept='.json,application/json';f.onchange=async()=>{try{applyRecipe(JSON.parse(await f.files[0].text()));toast('Recipe loaded');}catch(e){toast(String(e.message||e));}};f.click();}}));
   a.b.appendChild(row);
+  {a.b.appendChild(el('div','sub','Breed looks'));const br=el('div','chips'),sel=document.createElement('select');sel.setAttribute('aria-label','Partner look');
+    [['random','A random recipe'],...LOOKS.RECIPES.map(r=>[r.name,r.name])].forEach(([v,n])=>{const o=document.createElement('option');o.value=v;o.textContent=n;sel.appendChild(o);});
+    br.append(sel,Object.assign(el('button','btn','Breed'),{onclick:()=>breedWith(sel.value)}));a.b.appendChild(br);
+    a.b.appendChild(el('div','cl','Crosses your stack with the partner, blends the shared controls and nudges them. Tap again for another child, undo to go back.'));}
   {const rh=el('div','sub','Recipes');a.b.appendChild(rh);
     LOOKS.RECIPES.forEach(r=>{const x=el('div','ir');const b=el('button','btn',r.name);b.title=r.note;b.addEventListener('click',()=>{
       if(!SRC.el||SRC.name==='Test card'){setSource(demoCanvas(),'Sample',false);}
-      const ls=r.layers.map(([id,p])=>{if(!MODULES[id])return null;const l=mkLayer(id);if(id==='camsim'){Object.assign(l.params,SIMS[p]||{});}else Object.assign(l.params,p||{});return l;}).filter(Boolean);
-      STACK.layers=ls;STACK.sel=0;V.sizeKey='';V.lastBKey='';snap();refreshUI();renderInspector();toast(r.name+': '+r.note,3500);});x.appendChild(b);a.b.appendChild(x);});}
+      loadLookRecipe(r);toast(r.name+': '+r.note,3500);});x.appendChild(b);a.b.appendChild(x);});}
   loadStackPresets().forEach(r=>{const x=el('div','ir');const b=el('button','btn',r.name);b.addEventListener('click',()=>{try{applyRecipe(r.j);}catch(e){toast(String(e.message||e));}});
     const d=el('button','btn','×');d.setAttribute('aria-label','Delete preset');d.addEventListener('click',()=>{localStorage.setItem(SPKEY,JSON.stringify(loadStackPresets().filter(q=>q.id!==r.id)));renderInspector();});x.append(b,d);a.b.appendChild(x);});
   a.b.appendChild(el('div','cl','A recipe holds the whole stack, its signals and the CRT settings. It is also a project file.'));
@@ -2577,7 +2609,7 @@ function camMix(){const sl=camSim();if(!sl)return;const defs=Object.fromEntries(
   sl.params.seed2=Math.floor(Math.random()*99);buzz(8);toast('Mixed within '+CAMS[camIx].name);}
 function duoApply(){const c=CAMS[camIx];if(c&&c.duo)applyCam(camIx,true);}
 function applyCam(i,quiet){
-  camIx=(i+CAMS.length)%CAMS.length;const c=CAMS[camIx];lsSet('n0ise.cam',c.id);
+  camIx=(i+CAMS.length)%CAMS.length;const c=CAMS[camIx];lsSet('n0ise.cam',c.id);if(!quiet&&IOSCAM&&CAMMODE)IOSCAM.play('select');
   const layers=[];
   if(c.fx&&c.fx.length){const l=mkLayer('fuse');for(let k=1;k<=4;k++){fuseSet(l,k,null);l.params['on'+k]=false;}
     c.fx.forEach((id,k)=>{fuseSet(l,k+1,id);l.params['mx'+(k+1)]=c.mix[k]??100;});layers.push(l);}
@@ -2598,7 +2630,7 @@ function drawCamOv(){
     const tb=$('.camtop'),bb=$('.cambot'),cut=(a,b)=>Math.max(0,a-b);let top=0,bot=0;
     if(tb)top=cut(tb.getBoundingClientRect().bottom,r.top);if(bb)bot=cut(r.bottom,bb.getBoundingClientRect().top);
     gb.style.clipPath='inset('+top+'px 0 '+bot+'px 0)';}}
-  drawOverlay(ov.getContext('2d'),w,h,CAMS[camIx],{text:camText,t:camRecOn?(performance.now()-camRec0)/1000:0,recOn:camRecOn});
+  drawOverlay(ov.getContext('2d'),w,h,CAMS[camIx],{shots:camShots,text:camText,t:camRecOn?(performance.now()-camRec0)/1000:0,recOn:camRecOn});
 }
 function paintCamUI(){
   const st=$('#camstrip');if(!st)return;
@@ -2611,14 +2643,14 @@ function paintCamUI(){
   drawCamOv();
 }
 function composite(){const o=document.createElement('canvas');o.width=canvas.width;o.height=canvas.height;const g=o.getContext('2d');g.drawImage(canvas,0,0);
-  drawOverlay(g,o.width,o.height,CAMS[camIx],{keep:true,text:camText,t:camRecOn?(performance.now()-camRec0)/1000:0,recOn:camRecOn});return o;}
+  drawOverlay(g,o.width,o.height,CAMS[camIx],{keep:true,shots:camShots,text:camText,t:camRecOn?(performance.now()-camRec0)/1000:0,recOn:camRecOn});return o;}
 async function camShoot(){
   ST.clean=true;await frames2();const o=composite();ST.clean=false;
   const blob=await new Promise(r=>o.toBlob(r,'image/jpeg',.93));
-  if(blob){const u=$('#camui');u.classList.add('flash');setTimeout(()=>u.classList.remove('flash'),120);buzz(25);await rollAdd(blob,stamp()+'.jpg',false);}
+  if(blob){camShots++;lsSet('n0ise.shots',camShots);const u=$('#camui');u.classList.add('flash');setTimeout(()=>u.classList.remove('flash'),120);buzz(25);await rollAdd(blob,stamp()+'.jpg',false);}
 }
 /* ---- camera recording on the shared recorder (src/recorder.js) ---- */
-let IOSCAM=null;
+let IOSCAM=null,camShots=0;try{camShots=+(localStorage.getItem('n0ise.shots')||0)||0;}catch(e){}
 let camMode='photo',camKind='photo',camAspBack='';
 const camRecUI=()=>{const u=$('#camui'),sh=$('#shutter');if(!u||!sh)return;const st=camRecorder.state;u.dataset.rec=st;
   sh.classList.toggle('rec',st==='recording'||st==='stopping');sh.disabled=st==='stopping'||st==='saving';
@@ -2630,7 +2662,7 @@ const camRecorder=createRecorder({
   onWarn:m=>toast(m,4000),
   onError:e=>toast(String(e&&e.message||e),5000)
 });
-function camRecStart(){
+function camRecStart(){if(IOSCAM)IOSCAM.play('recstart');
   const k=Math.min(1,1280/Math.max(canvas.width,canvas.height,1)),cc=document.createElement('canvas');cc.width=Math.max(2,Math.round(canvas.width*k)&~1);cc.height=Math.max(2,Math.round(canvas.height*k)&~1);const g=cc.getContext('2d');
   camRec0=performance.now();
   const hook=()=>{if(!camRecorder.due())return;g.drawImage(canvas,0,0,cc.width,cc.height);drawOverlay(g,cc.width,cc.height,CAMS[camIx],{keep:true,text:camText,t:(performance.now()-camRec0)/1000,recOn:true});camRecorder.frame();};
@@ -2778,7 +2810,7 @@ function buildCamUI(){
   const cd=el('div','camcount');cd.id='camcount';cd.hidden=true;const fp=el('div','camfpsv');fp.id='camfpsv';fp.hidden=true;
   const pro=el('div','campro');pro.id='campro';const lv=el('div','camlevel');lv.id='camlevel';lv.hidden=true;const hs=document.createElement('canvas');hs.id='camhist';hs.width=128;hs.height=48;hs.hidden=true;const sf=el('div','camflash');sf.id='camflash';
   u.append(ov,lv,hs,sf,top,more,pro,bot,rb,cd,fp,el('i','g1'),el('i','g2'),el('i','g3'),el('i','g4'));stage.appendChild(u);
-  IOSCAM=installIosCam({u,$,el,PRO,applyPro,hwSet,buzz,toast,lsGet,lsSet,caps:()=>proCaps,refit:()=>{V.sizeKey='';paintCamUI();}});
+  IOSCAM=installIosCam({u,$,el,PRO,applyPro,hwSet,buzz,toast,lsGet,lsSet,caps:()=>proCaps,body:()=>CAMS[camIx],wipe:()=>wipe(),refit:()=>{V.sizeKey='';paintCamUI();}});
   {const k=lsGet('n0ise.camkind',null);if(k&&k!==camKind)setKind(k,true);u.dataset.kind=camKind;}
   let hold=0,holdRec=false,downBusy=false;
   const takePhoto=async()=>{if(camBusy)return;camBusy=true;
@@ -3764,8 +3796,14 @@ function wireSheet(){
     try{
       initGL();initLUT();
       setSource(demoCanvas(),'Demo');
+      /* first visit: open on a finished look that is already moving, not on an empty editor */
+      if(!/[?&](cam|embed)=1/.test(location.search)&&!localStorage.getItem('n0ise.seen')&&!location.hash){
+        try{localStorage.setItem('n0ise.seen','1');}catch(e){}
+        const r=LOOKS.RECIPES.find(q=>q.name==='Sunday roll');if(r){setTimeout(()=>{loadLookRecipe(r);toast('Drag to change it.',4500);},600);}
+      }
     }catch(e){console.error(e);noGL('Setup failed: '+String(e.message||e).slice(0,500));}
   }
+  {const cb=document.getElementById('cmpbtn');if(cb)cb.addEventListener('click',()=>{const on=wipe().toggle();cb.setAttribute('aria-pressed',on);});}
   lastSnap=JSON.stringify(P);
   refreshUI();
   setSkin((()=>{try{return localStorage.getItem('n0ise.skin');}catch(e){return null;}})()||'lab');
@@ -3813,7 +3851,7 @@ async function regress(){
   STACK.layers=keep.L;STACK.sel=keep.sel;ST.clean=keep.clean;V.sizeKey='';
   return res;
 }
-window.__n0={nodesView,PLUG,pluginsSheet,registerModule,fixWebmDuration,camRecStart,verifyFrames,AUD,syntheticPerson,compareMasks,QUAL,PERSON,setMaskQuality,idleApply,regress,idleRestore,ED,IDLE,TLN,camRecorder,fxRecorder,openCamera,applyCam,CAMS,CAMFX,fxIndex,SHEET,applyRecipe,currentRecipe,toRecipe,fromRecipe,modParams,updateSignals,SIG,runModuleGate,showSheet,STACK,mkLayer,MODULES,PERSON,DRAWN,setSource,syntheticPerson,renderStack,renderFrame,P,V,ST,SRC,TEX,maskFor,startPerson,loadPerson,renderInspector,layout};
+window.__n0={breedStacks,breedWith,wipe,loadLookRecipe,nodesView,PLUG,pluginsSheet,registerModule,fixWebmDuration,camRecStart,verifyFrames,AUD,syntheticPerson,compareMasks,QUAL,PERSON,setMaskQuality,idleApply,regress,idleRestore,ED,IDLE,TLN,camRecorder,fxRecorder,openCamera,applyCam,CAMS,CAMFX,fxIndex,SHEET,applyRecipe,currentRecipe,toRecipe,fromRecipe,modParams,updateSignals,SIG,runModuleGate,showSheet,STACK,mkLayer,MODULES,PERSON,DRAWN,setSource,syntheticPerson,renderStack,renderFrame,P,V,ST,SRC,TEX,maskFor,startPerson,loadPerson,renderInspector,layout};
 {const v=lsGet('n0ise.alive',null);IDLE.on=v?v==='on':!IDLE.reduce;}
 TLN.mount(document.body);ED.mount();setTimeout(takeHandoff,900);
 ED.onExport=()=>{

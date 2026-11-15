@@ -10,6 +10,7 @@ const SVG={
   timer:'<svg viewBox="0 0 24 24"><circle cx="12" cy="13.5" r="7"/><path d="M12 13.5V9.5M10 3h4"/></svg>',
   sun:'<svg viewBox="0 0 26 26"><circle cx="13" cy="13" r="4.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M13 2v3.5M13 20.5V24M2 13h3.5M20.5 13H24M5.2 5.2l2.5 2.5M18.3 18.3l2.5 2.5M5.2 20.8l2.5-2.5M18.3 7.7l2.5-2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" fill="none"/></svg>'
 };
+import {createCamSound} from './camsound.js';
 export function installIosCam(c){
   const {u,$,el,PRO,applyPro,hwSet,buzz,toast,lsGet,lsSet}=c;
   const on=lsGet('n0ise.camskin','ios')!=='lab';u.classList.toggle('ios',on);
@@ -25,17 +26,13 @@ export function installIosCam(c){
   if(more){
     const sk=el('button','cb','iOS look');sk.id='camskin';sk.setAttribute('aria-pressed',on);sk.addEventListener('click',()=>{const v=!u.classList.contains('ios');u.classList.toggle('ios',v);sk.setAttribute('aria-pressed',v);lsSet('n0ise.camskin',v?'ios':'lab');});
     const ck=el('button','cb','Click');ck.setAttribute('aria-label','Shutter click sound');ck.setAttribute('aria-pressed',clickOn);ck.addEventListener('click',()=>{clickOn=!clickOn;ck.setAttribute('aria-pressed',clickOn);lsSet('n0ise.camclick',clickOn?'on':'off');if(clickOn)sound();});
-    more.append(sk,ck);
+    const cm=el('button','cb','Compare');cm.setAttribute('aria-pressed',false);cm.addEventListener('click',()=>{const on=c.wipe&&c.wipe().toggle();cm.setAttribute('aria-pressed',!!on);});
+    more.append(sk,ck,cm);
   }
-  /* the click: two short filtered noise bursts, like a shutter curtain */
-  let ac=null;
-  function sound(){
-    if(!clickOn)return;
-    try{ac=ac||new (window.AudioContext||window.webkitAudioContext)();if(ac.state==='suspended')ac.resume();const t=ac.currentTime;
-      const click=(at,f,g)=>{const n=Math.floor(ac.sampleRate*.05),b=ac.createBuffer(1,n,ac.sampleRate),d=b.getChannelData(0);for(let i=0;i<n;i++)d[i]=(Math.random()*2-1)*Math.exp(-i/(n*.14));
-        const s=ac.createBufferSource();s.buffer=b;const bp=ac.createBiquadFilter();bp.type='bandpass';bp.frequency.value=f;bp.Q.value=.9;const gn=ac.createGain();gn.gain.value=g;s.connect(bp);bp.connect(gn);gn.connect(ac.destination);s.start(at);};
-      click(t,2600,.55);click(t+.075,1700,.4);}catch(e){}
-  }
+  /* sounds belong to the camera body: the shutter, the film advance, the tape load */
+  const cs=createCamSound();
+  const play=kind=>{if(!clickOn&&kind!=='x')return;cs.play(kind,c.body&&c.body());};
+  const sound=()=>play('shutter');
   /* grid lines live in a box that follows the picture itself, so they never cross the buttons */
   const gb=el('div','camgridbox');u.prepend(gb);
   /* full screen: the picture keeps its own aspect ratio but the stage runs edge to edge, the bars float over it */
@@ -92,5 +89,5 @@ export function installIosCam(c){
   };
   layer.addEventListener('pointerup',end);layer.addEventListener('pointercancel',end);
   layer.addEventListener('contextmenu',e=>e.preventDefault());
-  return {sound,applyFull,hideFocus(){fx.classList.remove('show','dim');lock.classList.remove('on');locked=false;PRO.afLock=false;},paintSun};
+  return {sound,play,applyFull,hideFocus(){fx.classList.remove('show','dim');lock.classList.remove('on');locked=false;PRO.afLock=false;},paintSun};
 }
