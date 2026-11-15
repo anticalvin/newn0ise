@@ -4,7 +4,7 @@
 |---|---|---|
 | Temporal Loom | Datamosh (one stored frame), Echo | New: per-thread memory plus an over/under weave. **Built, behind `?flags=loom`.** |
 | Ink Migration | Riso, Engraving, Halftone | Overlaps; only the animated drift of ink between plates is new. Add as a Riso option. |
-| Reaction Print | Cymatics (visualizer), Contour | Reaction-diffusion needs several ping-pong buffers; high cost. Later, with a lite fallback. |
+| Reaction Print | Cymatics (visualizer), Contour | New. **Built as `reactprint` (Print family):** one stored frame, activator minus inhibitor per frame, pattern value read back from the ink and paper colours, so no extra buffers. Lite fallback is a two-tone print. |
 | Relief Press | Emboss, Engraving | Mostly covered. Skip unless depth input is available. |
 | Slit Glass | Time and Glitch families, line jitter | Needs a ring of frames (8 to 32). Do after the frame-history API exists. |
 | Feedback Garden | Datamosh, Echo, CRT persistence | Mostly covered by feedback plus Echo; a growth rule would be the only new part. |

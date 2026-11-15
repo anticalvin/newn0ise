@@ -8,6 +8,7 @@ import {installLooks} from './looks.js';
 import {createNodes} from './nodes.js';
 import {installIosCam} from './camios.js';
 import {createWipe} from './wipe.js';
+import {createPalette} from './palette.js';
 import {createPluginHost,SAFE as PLUG_SAFE} from './pluginhost.js';
 import {put as handoffPut,take as handoffTake} from './handoff.js';
 import {CAMSIM_PARAMS,CAMSIM_FRAG,SIMS} from './camsim.js';
@@ -1295,6 +1296,39 @@ vec4 fx(vec2 uv){
   return vec4(c,1.);}`,
   bind(pr,V,ctx){const jump=ctx.t<LOOM.last-1e-4||ctx.t-LOOM.last>.5||(ST.clean&&!LOOM.wasClean);LOOM.last=ctx.t;LOOM.wasClean=!!ST.clean;
     pr.f('u_reset',jump?1:0);pr.f('u_lite',ST.lite?1:0);histBind(pr,'loom',ctx);},after(pr,V,ctx){histSave('loom',ctx);}});
+/* Reaction Print: the photo is the seed of a Turing pattern. Every frame the stored picture is pushed one step further by a short-range
+   activator and a wider inhibitor, so spots, coral and fingerprint ridges grow out of the dark areas and keep following the image.
+   One stored frame (like Datamosh). The pattern value is read back from the ink and paper colours, so no extra buffer is needed.
+   Resets on a seek, a loop or an export start, per render size, so thumbnails never disturb the main picture. Lite: a plain two-tone print. */
+const REACT={};
+defineModule({id:'reactprint',family:'Print',name:'Reaction Print',
+  params:[
+    {k:'size',label:'Pattern size',min:2,max:14,def:5,step:.5,sec:'Growth',hero:true},{k:'grow',label:'Growth',min:0,max:100,def:60,sec:'Growth',hero:true},
+    {k:'hold',label:'Follow the photo',min:0,max:100,def:45,sec:'Growth',hero:true},{k:'worm',label:'Stripes or spots',min:0,max:100,def:50,sec:'Growth'},
+    {k:'ink',t:'color',label:'Ink',def:'#16130f',sec:'Print'},{k:'pap',t:'color',label:'Paper',def:'#efe9dc',sec:'Print'}],
+  presets:[{name:'Coral',v:{size:5,grow:60,hold:45,worm:50,ink:'#16130f',pap:'#efe9dc'}},{name:'Fingerprint',v:{size:3,grow:80,hold:25,worm:15,ink:'#1b2a6b',pap:'#f4f1ea'}},
+    {name:'Leopard',v:{size:9,grow:70,hold:35,worm:95,ink:'#2a1608',pap:'#e2b25c'}},{name:'Etched',v:{size:2.5,grow:45,hold:85,worm:40,ink:'#0a0a0a',pap:'#ff5a1f'}}],
+  hist:true,
+  frag:SS+`
+uniform sampler2D u_prev;uniform float u_reset,u_lite;
+float rv(vec2 p){vec3 d=u_ink-u_pap;return clamp(dot(texture(u_prev,clamp(p,0.,1.)).rgb-u_pap,d)/max(dot(d,d),1e-4),0.,1.);}
+vec4 fx(vec2 uv){
+  float L=dot(texture(uSrc,uv).rgb,vec3(.299,.587,.114));
+  float seed=clamp((.55-L)*1.6+.5+(h21(uv*uRes+uSeed)-.5)*.25,0.,1.);
+  float v;
+  if(u_reset>.5||u_lite>.5){v=u_lite>.5?smoothstep(.45,.55,seed):seed;}
+  else{
+    vec2 px=1./uRes;float r=u_size*S,a=0.,b=0.,ph=h21(uv*uRes+uTime)*6.2832;
+    for(int i=0;i<10;i++){float an=float(i)*.62832+ph;vec2 d=vec2(cos(an),sin(an));a+=rv(uv+d*px*r*(.4+.6*fract(float(i)*.618)));b+=rv(uv+d*px*r*(1.6+1.4*fract(float(i)*.618)));}
+    float c=rv(uv);a=(a/10.+c)*.5;b/=10.;
+    v=c+(a-b)*(1.5+u_grow/100.*5.)-(u_worm/100.-.5)*.04;
+    v=mix(v,seed,u_hold/100.*.12);
+    v=clamp((v-.5)*(1.02+u_grow/100.*.1)+.5,0.,1.);
+  }
+  return vec4(mix(u_pap,u_ink,v),1.);}`,
+  bind(pr,V,ctx){const k=ctx.W+'x'+ctx.H,q=REACT[k]||(REACT[k]={last:-1e9,clean:false,ink:''}),col=String(V.ink)+V.pap;
+    const jump=ctx.t<q.last-1e-4||ctx.t-q.last>.5||(ST.clean&&!q.clean)||col!==q.ink;q.last=ctx.t;q.clean=!!ST.clean;q.ink=col;
+    pr.f('u_reset',jump?1:0);pr.f('u_lite',ST.lite?1:0);histBind(pr,'reactprint',ctx);},after(pr,V,ctx){histSave('reactprint',ctx);}});
 const LOOKS=installLooks({defineModule,SS,histBind,histSave,histRT,PR,samp,bindRT,draw,ST});
 const PLUG=createPluginHost({defineModule,MODULES,SS,histBind,histSave,CAMS,RECIPES:LOOKS.RECIPES,ST,VS,HEAD,GLSL_LIB,toast:(...a)=>toast(...a),onChange:()=>{try{renderInspector();}catch(e){}}});PLUG.load();
 /*WP6:END*/
@@ -3653,7 +3687,7 @@ function mutateLayer(amt=.18){
 }
 function helpSheet(){
   if($('#helpsheet'))return;const sh=el('div','sheet');sh.id='helpsheet';
-  const keys=[['Z / Shift+Z','Undo / redo (Cmd or Ctrl)'],['D','Duplicate layer'],['S','Solo layer'],['V','Show or hide layer'],['M','Mutate: a safe variation'],['[ ]','Move layer down / up'],['T','Open Animate'],['Space','Play / pause when animating, else hold to compare'],['← →','Step a frame (Shift: one second)'],['?','This sheet']];
+  const keys=[['Z / Shift+Z','Undo / redo (Cmd or Ctrl)'],['D','Duplicate layer'],['S','Solo layer'],['V','Show or hide layer'],['M','Mutate: a safe variation'],['[ ]','Move layer down / up'],['T','Open Animate'],['Space','Play / pause when animating, else hold to compare'],['← →','Step a frame (Shift: one second)'],['Cmd/Ctrl+K or /','Find any effect, look or action'],['?','This sheet']];
   sh.innerHTML=`<div class="rollbox"><h3>Keys</h3>${keys.map(([a,b])=>`<div class="prrow"><span style="flex:none;min-width:96px;font-weight:700">${a}</span><span>${b}</span></div>`).join('')}<h3 style="margin-top:14px">Make your own look</h3><div class="prrow"><span>1. Pick a base look in Effects.</span></div><div class="prrow"><span>2. Add an effect in Stack, then tap +.</span></div><div class="prrow"><span>3. Choose where it applies in Look, then Apply to…</span></div><button class="btn" id="hsx">Close</button></div>`;
   document.body.appendChild(sh);sh.querySelector('#hsx').addEventListener('click',()=>sh.remove());sh.addEventListener('pointerdown',e=>{if(e.target===sh)sh.remove();});
 }
@@ -3901,7 +3935,23 @@ async function regress(){
   STACK.layers=keep.L;STACK.sel=keep.sel;ST.clean=keep.clean;V.sizeKey='';
   return res;
 }
-window.__n0={breedStacks,breedWith,wipe,loadLookRecipe,nodesView,PLUG,pluginsSheet,registerModule,fixWebmDuration,camRecStart,verifyFrames,AUD,syntheticPerson,compareMasks,QUAL,PERSON,setMaskQuality,idleApply,regress,idleRestore,ED,IDLE,TLN,camRecorder,fxRecorder,openCamera,applyCam,CAMS,CAMFX,fxIndex,SHEET,applyRecipe,currentRecipe,toRecipe,fromRecipe,modParams,updateSignals,SIG,runModuleGate,showSheet,STACK,mkLayer,MODULES,PERSON,DRAWN,setSource,syntheticPerson,renderStack,renderFrame,P,V,ST,SRC,TEX,maskFor,startPerson,loadPerson,renderInspector,layout};
+window.__n0={breedStacks,breedWith,wipe,loadLookRecipe,nodesView,PLUG,pluginsSheet,registerModule,fixWebmDuration,camRecStart,verifyFrames,AUD,syntheticPerson,compareMasks,QUAL,PERSON,setMaskQuality,idleApply,regress,idleRestore,ED,IDLE,TLN,camRecorder,fxRecorder,openCamera,applyCam,CAMS,CAMFX,fxIndex,SHEET,applyRecipe,currentRecipe,toRecipe,fromRecipe,modParams,updateSignals,SIG,runModuleGate,showSheet,STACK,mkLayer,MODULES,DRAWN,setSource,renderStack,renderFrame,P,V,ST,SRC,TEX,maskFor,startPerson,loadPerson,renderInspector,layout};
+/* Find anything (Cmd/Ctrl+K, "/", or the Find button): every effect, look and action in one list */
+const PALETTE=createPalette({recent:()=>lsGet('n0ise.recent',[]),items:()=>{
+  const click=id=>()=>{const b=document.getElementById(id);if(b)b.click();},go=h=>()=>{location.href=h;};
+  const fx=allEffects().filter(e=>e.id!=='fuse').map(e=>({id:e.id,name:e.name,kind:e.fam,hint:'effect',run:alt=>{
+    if(alt&&!(e.id==='crtlab'&&STACK.layers.some(l=>l.module==='crtlab'))){STACK.layers.push(mkLayer(e.f?'fuse':e.id));STACK.sel=STACK.layers.length-1;if(e.f)for(let s=2;s<=4;s++)STACK.layers[STACK.sel].params['f'+s]=0;}
+    pickEffect(e.id);snap();refreshUI();renderInspector();toast(e.name+(alt?' added':''));}}));
+  const looks=LOOKS.RECIPES.map(r=>({id:'look:'+r.name,name:r.name,kind:'Look',hint:r.note||'',run:()=>{loadLookRecipe(r);toast(r.name);}}));
+  const A=(name,run,hint)=>({id:'act:'+name,name,kind:'Action',hint:hint||'',run});
+  const acts=[A('Open a photo or video',()=>$('#file').click(),'upload import'),A('Save or export',click('save'),'download png video gif'),A('Shuffle',()=>shuffle(),'random surprise'),
+    A('Mutate this layer',()=>mutateLayer(),'variation remix'),A('Duplicate layer',()=>dupLayer(),'copy'),A('Undo',()=>undo()),A('Redo',()=>redo()),
+    A('Compare before and after',click('cmpbtn'),'wipe original'),A('Animate',()=>TLN.show(),'timeline keyframes'),A('Reset everything',click('reset'),'clear start over'),
+    A('Power on or off',click('power'),'bypass'),A('Plugins',()=>pluginsSheet(),'n0fx'),A('Keys and help',()=>helpSheet(),'shortcuts'),
+    A('Go to Camera',go('effects.html?cam=1')),A('Go to 3D',go('studio.html'),'model studio'),A('Go to World',go('studio.html#world'),'physics walk'),A('Go to Lab',go('lab.html'),'p5 sketch code generative'),A('Go home',go('index.html'))];
+  return[...acts,...looks,...fx];}});
+{const fb=document.getElementById('find');if(fb)fb.addEventListener('click',()=>PALETTE.open());}
+window.__n0.PALETTE=PALETTE;
 {const v=lsGet('n0ise.alive',null);IDLE.on=v?v==='on':!IDLE.reduce;}
 TLN.mount(document.body);ED.mount();setTimeout(takeHandoff,900);
 ED.onExport=()=>{
