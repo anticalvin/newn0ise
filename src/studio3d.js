@@ -16,6 +16,7 @@ import {createPhysUI} from './physui.js';
 import {createRecorder,fmtTime} from './recorder.js';
 import {P3D,build as buildPhoto,loadCanvas,sampleCanvas} from './photo3d.js';
 import {rigHuman} from './rig.js';
+import {createSurface} from './surface.js';
 import {put as handoffPut,take as handoffTake} from './handoff.js';
 import {createWorldEditor} from './world-editor.js';
 import {RoomEnvironment} from 'three/addons/environments/RoomEnvironment.js';
@@ -181,7 +182,8 @@ function removeObj(id){
   renderObjList&&renderObjList();refreshInspector&&refreshInspector();bump();markDirty();
 }
 function selectObj(id){
-  S.pivot=false;S.sel=id;const o=objById(id);if(o){lookSwitch(S.fxTarget,id);S.fxTarget=id;} // the look stays on the last picked object even after a tap on empty space
+  S.pivot=false;S.sel=id;const o=objById(id);if(o){lookSwitch(S.fxTarget,id);S.fxTarget=id;}
+  try{surfRefresh();}catch(e){} // the look stays on the last picked object even after a tap on empty space
   if(tc.object&&(!o||tc.object!==o.holder))tc.detach();
   if(o&&S.gizmo){tc.attach(o.holder);tc.setMode(S.gizmo);}
   setSelBox();
@@ -844,7 +846,8 @@ function frame(ts){
     tcHelper.visible=!S.exporting&&!S.walk&&!!(S.gizmo||S.pivot)&&S.sel!=null;
     /* anything that changes the picture without a bump() (visualizers, physics, spin, walking, recording, auto mode, breathing reliefs) must also
        invalidate the cached look frame, otherwise the effect keeps showing the first baked frame */
-    S.animating=!!(S.walk||S.spin||(typeof sim!=='undefined'&&sim.playing)||(typeof stRec!=='undefined'&&stRec.state==='recording')||AUTO.on||S.objs.some(o=>(o.kind==='viz'&&o.vis)||(o.kind==='relief'&&o.meta&&(o.meta.breathe||o.meta.furMats))));
+    SURF.tick(t);
+    S.animating=!!(SURF.any()||S.walk||S.spin||(typeof sim!=='undefined'&&sim.playing)||(typeof stRec!=='undefined'&&stRec.state==='recording')||AUTO.on||S.objs.some(o=>(o.kind==='viz'&&o.vis)||(o.kind==='relief'&&o.meta&&(o.meta.breathe||o.meta.furMats))));
     if(S.animating){S.ver++;N0.SRC.ver=S.ver;S.liveUntil=performance.now()+120;}
     bgCol.set(S.bg);
     renderer.setRenderTarget(rt);renderer.setClearColor(bgCol,1);renderer.clear();renderer.render(scene,camera);
@@ -2046,8 +2049,38 @@ function ctlRow(parent,c){
   else if(c.t==='c'){const w=el('div');w.appendChild(el('div','sub',c.l));chipRow(w,c.opts,v=>String(P[c.k])===String(v),v=>{P[c.k]=v;bump();});parent.appendChild(w);}
   else{const w=el('div','chips');const b=el('button','chip',c.l);b.setAttribute('aria-pressed',!!P[c.k]);b.addEventListener('click',()=>{P[c.k]=!P[c.k];b.setAttribute('aria-pressed',!!P[c.k]);bump();});w.appendChild(b);parent.appendChild(w);}
 }
+
+
+/* Surface shader: effects in the object's own material. They follow the surface instead of masking the screen. */
+const SURF=createSurface({THREE,S,objById});
+let surfBox=null;
+function surfRefresh(){
+  if(!surfBox)return;surfBox.innerHTML='';
+  const o=objById(S.sel!=null?S.sel:S.fxTarget);
+  if(!o){surfBox.appendChild(el('div','note','Pick an object to give it a surface look.'));return;}
+  const st=o.surf||{m:'',amt:1,sc:1,sp:1,c1:'#ffffff',c2:'#000000'};
+  surfBox.appendChild(el('div','sub',o.name));
+  const chips=el('div','chips');
+  const none=el('button','chip','None');none.setAttribute('aria-pressed',!st.m);none.addEventListener('click',()=>{SURF.clear(o);bump();surfRefresh();});chips.appendChild(none);
+  SURF.SURF.forEach(([id,label])=>{const b=el('button','chip',label);b.setAttribute('aria-pressed',st.m===id);b.addEventListener('click',()=>{SURF.pick(o,id);bump();surfRefresh();});chips.appendChild(b);});
+  surfBox.appendChild(chips);
+  if(st.m){
+    const ed=(k,v)=>{SURF.set(o,{[k]:v});bump();};
+    sliderRow(surfBox,'Amount',()=>o.surf.amt,v=>ed('amt',v),0,1,.01);
+    sliderRow(surfBox,'Scale',()=>o.surf.sc,v=>ed('sc',v),.3,4,.05);
+    sliderRow(surfBox,'Speed',()=>o.surf.sp,v=>ed('sp',v),0,4,.05);
+    const cr=el('div','chips');
+    [['c1','Colour A'],['c2','Colour B']].forEach(([k,l])=>{const w=el('label','chip',l+' ');const i=document.createElement('input');i.type='color';i.value=o.surf[k];i.style.cssText='width:34px;height:26px;border:0;background:none;vertical-align:middle;padding:0';i.addEventListener('input',()=>ed(k,i.value));w.appendChild(i);cr.appendChild(w);});
+    surfBox.appendChild(cr);
+    const all=el('div','chips');
+    all.append(btn('Copy to all objects','',()=>{S.objs.forEach(x=>{if(x!==o&&!(x.kind==='viz'||x.kind==='splat'))SURF.set(x,{...o.surf});});bump();toast('Surface look copied to every object');}),
+      btn('Remove from all','',()=>{S.objs.forEach(x=>SURF.clear(x));bump();surfRefresh();}));
+    surfBox.appendChild(all);
+  }
+}
 function buildLookPane(){
   const p=paneEls.look,P=N0.P;
+  {const ss=sec(p,'Surface shader');ss.appendChild(el('div','note','Effects built into the object\u2019s own material. They turn and move with it, and work on the character while you play.'));surfBox=el('div');ss.appendChild(surfBox);surfRefresh();}
   const se=sec(p,'Effects');
   chipRow(se,[['crt','CRT Lab look'],['stack','All n0ise effects']],v=>(S.engine||'crt')===v,v=>{S.engine=v;if(v==='stack'){fxLoad();if(S.mask.mode===0){S.mask.mode=2;}if(S.sel==null&&S.objs.length)selectObj(S.objs[S.objs.length-1].id);}rebuildLook();bump();});
   if(S.engine==='stack'){se.appendChild(btn('Edit effects','pri',fxOpen));se.appendChild(el('div','note',fxReady()?'Edit the effect stack, then press Add effects to put it on the selected object. Pick another object to give it its own. The background stays as it is.':'Loading the effect engine…'));}

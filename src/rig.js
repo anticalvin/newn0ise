@@ -42,7 +42,9 @@ export function rigHuman(THREE,root){
     if(!n.isMesh||!n.material)return;
     (Array.isArray(n.material)?n.material:[n.material]).forEach(m=>{
       if(m.userData.rigged)return;m.userData.rigged=true;
-      m.onBeforeCompile=sh=>{
+      const prev=m.onBeforeCompile;
+      m.onBeforeCompile=(sh,r)=>{
+        if(prev)prev(sh,r);
         sh.uniforms.uPh=U.uPh;sh.uniforms.uAmt=U.uAmt;sh.uniforms.uPlay=U.uPlay;
         sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\n'+GLSL);
         sh.vertexShader=sh.vertexShader.replace('#include <begin_vertex>','vec3 transformed=rigPose(position);');
