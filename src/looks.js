@@ -134,6 +134,140 @@ vec4 fx(vec2 uv){
   vec3 col=mix(u_bg,ic,ink);col+=vec3(1.,.55,.25)*hd*.5*step(prog,.999)*step(.001,prog);
   return vec4(col,1.);}`});
 
+  /* ---- 2010s phone and film habits: leaks, miniature focus, dust, cross-processing, panorama mistakes, burst trails ---- */
+  const H21='float lkH(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}\n';
+
+  defineModule({id:'lightleak',family:'Film',name:'Light Leak',
+    params:[{k:'amt',label:'Strength',min:0,max:100,def:55,sec:'Leak',hero:true},{k:'spd',label:'Drift speed',min:0,max:100,def:25,sec:'Leak',hero:true},{k:'warm',label:'Warmth',min:0,max:100,def:55,sec:'Leak',hero:true},
+      {k:'haze',label:'Edge haze',min:0,max:100,def:50,sec:'Advanced'}],
+    frag:SS+`
+vec4 fx(vec2 uv){
+  vec3 c=texture(uSrc,uv).rgb;float t=uTime*(.02+u_spd/100.*.12);
+  vec2 p1=vec2(1.05+.1*sin(t*3.1),.3+.35*sin(t*1.7)),p2=vec2(-.05+.08*sin(t*2.3),.75+.25*sin(t*1.1+1.));
+  float d1=length((uv-p1)*vec2(1.,1.6)),d2=length((uv-p2)*vec2(1.,1.3));
+  float l=exp(-d1*d1*5.)+.7*exp(-d2*d2*7.);
+  l+=.2*fbm(uv*3.+t)*u_haze/100.*smoothstep(.2,1.,max(abs(uv.x-.5),abs(uv.y-.5))*2.);
+  vec3 w=mix(vec3(.9,.18,.06),vec3(1.,.8,.45),clamp(l,0.,1.)*(.4+u_warm/100.*.6));
+  vec3 leak=clamp(w*l*u_amt/100.*1.2,0.,1.);
+  return vec4(1.-(1.-c)*(1.-leak),1.);}`});
+
+  defineModule({id:'tiltshift',family:'Optical',name:'Tilt Shift',
+    params:[{k:'pos',label:'Focus line',min:0,max:100,def:50,sec:'Focus',hero:true},{k:'band',label:'Sharp band',min:5,max:60,def:20,sec:'Focus',hero:true},{k:'blur',label:'Blur',min:0,max:100,def:60,sec:'Focus',hero:true},
+      {k:'sat',label:'Miniature colour',min:0,max:100,def:35,sec:'Advanced'},{k:'tilt',label:'Tilt angle',min:-45,max:45,def:0,sec:'Advanced'}],
+    frag:SS+`
+vec4 fx(vec2 uv){
+  float a=radians(u_tilt);vec2 q=uv-.5;float y=q.x*sin(a)+q.y*cos(a)+.5;
+  float d=abs(y-u_pos/100.);float k=smoothstep(u_band/200.,u_band/200.+.35,d);
+  float r=k*u_blur/100.*14.*S;vec3 acc=vec3(0.);
+  for(int i=0;i<16;i++){float g=float(i)*2.39996,rr=sqrt((float(i)+.5)/16.)*r;acc+=texture(uSrc,uv+vec2(cos(g),sin(g))*rr/uRes).rgb;}
+  vec3 c=acc/16.;float l=luma(c);c=mix(vec3(l),c,1.+u_sat/100.*.8);c=(c-.5)*(1.+u_sat/100.*.15)+.5;
+  return vec4(clamp(c,0.,1.),1.);}`});
+
+  defineModule({id:'dusthair',family:'Film',name:'Dust and Hair',
+    params:[{k:'dust',label:'Dust',min:0,max:100,def:40,sec:'Scan',hero:true},{k:'hair',label:'Hairs',min:0,max:100,def:25,sec:'Scan',hero:true},{k:'flick',label:'Flicker',min:0,max:100,def:40,sec:'Scan',hero:true}],
+    frag:SS+H21+`
+vec4 fx(vec2 uv){
+  vec3 c=texture(uSrc,uv).rgb;float fr=floor(uTime*mix(.8,6.,u_flick/100.));
+  vec2 g=uv*uRes/(18.*S),id=floor(g),f=fract(g)-.5;float r=lkH(id+fr*7.13+uSeed);
+  float on=step(1.-u_dust/100.*.05,r);vec2 o=(vec2(lkH(id+3.1),lkH(id+9.7))-.5)*.5;float sz=.04+lkH(id+5.)*.1;
+  float sp=on*smoothstep(sz,sz*.4,length(f-o)),br=step(.5,lkH(id+2.));
+  vec2 hg=uv*uRes/(220.*S),hid=floor(hg),hf=fract(hg);float hr=lkH(hid+floor(uTime*.3+lkH(hid)*5.)*3.7);
+  float hon=step(1.-u_hair/100.*.12,hr),ang=lkH(hid+1.)*6.28;vec2 q=hf-.5;
+  float cr=dot(q,vec2(cos(ang),sin(ang))),al=dot(q,vec2(-sin(ang),cos(ang)));
+  float hair=hon*(1.-smoothstep(.0,.012,abs(al+.25*cr*cr)))*step(abs(cr),.4);
+  c=mix(c,vec3(br),clamp(sp*.8,0.,1.));c=mix(c,vec3(.03),hair*.7);
+  return vec4(c,1.);}`});
+
+  defineModule({id:'crosscurve',family:'Film',name:'Cross Process',
+    params:[{k:'sh',label:'Shadow tint',min:0,max:100,def:55,sec:'Curves',hero:true},{k:'hi',label:'Highlight tint',min:0,max:100,def:45,sec:'Curves',hero:true},{k:'con',label:'Contrast',min:0,max:100,def:40,sec:'Curves',hero:true},
+      {k:'sat',label:'Colour',min:0,max:100,def:60,sec:'Advanced'}],
+    frag:SS+`
+vec4 fx(vec2 uv){
+  vec3 c=texture(uSrc,uv).rgb;float k=u_con/100.;
+  vec3 o=vec3(mix(c.r,smoothstep(0.,1.,c.r)*1.08-.02,k*1.2),mix(c.g,smoothstep(0.,1.,c.g),k*.5),mix(c.b,c.b*.8+.12,k));
+  float l=luma(o);o+=vec3(0.,.07,.08)*u_sh/100.*(1.-l)+vec3(.1,.07,-.06)*u_hi/100.*l;
+  o=mix(vec3(luma(o)),o,.8+u_sat/100.*.7);
+  return vec4(clamp(o,0.,1.),1.);}`});
+
+  defineModule({id:'panosweep',family:'Time',name:'Panorama Mistake',
+    params:[{k:'shift',label:'Seam shift',min:0,max:100,def:35,sec:'Stitch',hero:true},{k:'seams',label:'Seams',min:2,max:12,def:5,step:1,sec:'Stitch',hero:true},{k:'wob',label:'Wobble',min:0,max:100,def:40,sec:'Stitch',hero:true}],
+    frag:SS+`
+vec4 fx(vec2 uv){
+  float N=floor(u_seams+.5),bi=floor(uv.x*N),t=uTime*.4;
+  float r1=fract(sin(bi*12.9898)*43758.5453),r2=fract(sin(bi*78.233)*12345.6789);
+  float f=fract(uv.x*N);
+  vec2 o=vec2((r1-.5)*u_shift/100.*.12*sin(t+r2*6.28),sin(t*.8+bi)*u_wob/100.*.03*(r2-.5)*2.);
+  float seam=smoothstep(0.,.05,f)*smoothstep(1.,.95,f);
+  vec3 a=texture(uSrc,uv+o).rgb,g=texture(uSrc,uv-o*1.6).rgb;
+  return vec4(mix(g,a,.5+.5*seam),1.);}`});
+
+  defineModule({id:'bursttrail',family:'Time',name:'Burst Trail',
+    params:[{k:'len',label:'Trail length',min:0,max:100,def:70,sec:'Trail',hero:true},{k:'dx',label:'Drift across',min:-20,max:20,def:0,step:1,sec:'Trail',hero:true},{k:'dy',label:'Drift up',min:-20,max:20,def:0,step:1,sec:'Trail',hero:true},
+      {k:'tint',label:'Warm tint',min:0,max:100,def:40,sec:'Advanced'}],
+    hist:true,
+    frag:SS+PREV+`
+vec4 fx(vec2 uv){
+  vec3 live=texture(uSrc,uv).rgb;vec2 d=vec2(u_dx,u_dy)/uRes*3.*S;
+  vec3 p=texture(u_prev,clamp(uv+d,0.,1.)).rgb;float dec=.8+u_len/100.*.19;
+  vec3 c=max(live,p*dec*mix(vec3(1.),vec3(1.,.96,.88),u_tint/100.));
+  if(u_reset>.5)c=live;
+  return vec4(c,1.);}`,
+    bind(pr,V,ctx){pr.f('u_reset',resetFlag('bursttrail',ctx)?1:0);histBind(pr,'bursttrail',ctx);},after(pr,V,ctx){histSave('bursttrail',ctx);}});
+
+  defineModule({id:'focushunt',family:'Optical',name:'Focus Hunt',
+    params:[{k:'depth',label:'Max blur',min:0,max:100,def:55,sec:'Lens',hero:true},{k:'rate',label:'Hunt speed',min:0,max:100,def:30,sec:'Lens',hero:true},{k:'bright',label:'Bokeh highlights',min:0,max:100,def:40,sec:'Lens',hero:true}],
+    frag:SS+`
+vec4 fx(vec2 uv){
+  float t=uTime*(.15+u_rate/100.*.8);
+  float hunt=smoothstep(0.,1.,.5+.5*sin(t))*smoothstep(0.,1.,.5+.5*sin(t*.37+1.));
+  uv=(uv-.5)*(1.-hunt*.012)+.5;
+  float r=hunt*u_depth/100.*16.*S;vec3 acc=vec3(0.);float ws=0.;
+  for(int i=0;i<24;i++){float g=float(i)*2.39996,rr=sqrt((float(i)+.5)/24.)*r;
+    vec3 s=texture(uSrc,uv+vec2(cos(g),sin(g))*rr/uRes).rgb;float w=1.+u_bright/100.*pow(luma(s),3.)*5.;acc+=s*w;ws+=w;}
+  return vec4(acc/ws,1.);}`});
+
+  defineModule({id:'overcook',family:'Light',name:'Overcooked HDR',
+    params:[{k:'detail',label:'Detail',min:0,max:100,def:60,sec:'Tone',hero:true},{k:'sat',label:'Colour',min:0,max:100,def:45,sec:'Tone',hero:true},{k:'glow',label:'Halo',min:0,max:100,def:30,sec:'Tone',hero:true}],
+    frag:SS+`
+vec4 fx(vec2 uv){
+  vec3 c=texture(uSrc,uv).rgb;vec2 px=1./uRes;float R=(10.+u_glow/100.*14.)*S;vec3 b=c;
+  for(int i=0;i<8;i++){float a=float(i)*.7854;vec2 d=vec2(cos(a),sin(a))*px;b+=texture(uSrc,uv+d*R).rgb+texture(uSrc,uv+d*R*2.).rgb;}
+  b/=17.;vec3 o=c+(c-b)*u_detail/100.*2.6;
+  o=mix(vec3(luma(o)),o,1.+u_sat/100.*.9);o=pow(clamp(o,0.,1.),vec3(.92));o+=b*u_glow/100.*.12;
+  return vec4(clamp(o,0.,1.),1.);}`});
+
+  defineModule({id:'anamorph',family:'Light',name:'Anamorphic Streak',
+    params:[{k:'len',label:'Streak length',min:0,max:100,def:60,sec:'Flare',hero:true},{k:'thr',label:'Threshold',min:40,max:95,def:70,sec:'Flare',hero:true},{k:'tint',label:'Cool tint',min:0,max:100,def:40,sec:'Flare',hero:true}],
+    frag:SS+`
+vec4 fx(vec2 uv){
+  vec3 c=texture(uSrc,uv).rgb;float L=u_len/100.*.45,th=u_thr/100.;vec3 acc=vec3(0.);float ws=0.;
+  for(int i=-16;i<=16;i++){float f=float(i)/16.;vec3 s=texture(uSrc,uv+vec2(f*L,0.)).rgb;
+    float h=max(0.,luma(s)-th)/(1.-th+.001),w=exp(-f*f*3.);acc+=s*h*w;ws+=w;}
+  acc/=ws;vec3 tn=mix(vec3(1.),vec3(.55,.72,1.),u_tint/100.);
+  return vec4(1.-(1.-c)*(1.-clamp(acc*tn*1.4,0.,1.)),1.);}`});
+
+  defineModule({id:'instantframe',family:'Film',name:'Instant Frame',
+    params:[{k:'bord',label:'Border',min:0,max:100,def:40,sec:'Frame',hero:true},{k:'tilt',label:'Tilt',min:0,max:100,def:60,sec:'Frame',hero:true},{k:'fade',label:'Instant fade',min:0,max:100,def:40,sec:'Frame',hero:true}],
+    frag:SS+`
+float sdb(vec2 p,vec2 h){vec2 d=abs(p)-h;return length(max(d,vec2(0.)))+min(max(d.x,d.y),0.);}
+vec4 fx(vec2 uv){
+  float asp=uRes.x/uRes.y;float a=radians((u_tilt/100.-.5)*8.);
+  vec2 q=(uv-.5)*vec2(asp,1.);q=mat2(cos(a),-sin(a),sin(a),cos(a))*q;
+  float s=.74,m=.03+u_bord/100.*.05,ex=m*2.2;
+  vec2 ph=vec2(asp,1.)*.5*s;float pcy=(ex-m)*.5;
+  vec2 paperC=vec2(0.,pcy-ex*.5+m*.5),paperH=vec2(ph.x+m,ph.y+(m+ex)*.5);
+  vec3 table=vec3(.1,.095,.09)+.02*fbm(uv*6.);
+  float sd=sdb(q-paperC-vec2(.012,-.016),paperH);table*=1.-.5*(1.-smoothstep(0.,.05,sd));
+  float dp=sdb(q-paperC,paperH);
+  vec2 pq=q-vec2(0.,pcy);
+  if(abs(pq.x)<ph.x&&abs(pq.y)<ph.y){
+    vec3 c=texture(uSrc,pq/(2.*ph)+.5).rgb;float f=u_fade/100.;
+    c=mix(c,c*.86+vec3(.07,.06,.05),f);c=mix(c,c*vec3(1.05,1.,.9),f*.6);
+    float e=smoothstep(.0,.03,min(ph.x-abs(pq.x),ph.y-abs(pq.y)));c*=.9+.1*e;
+    return vec4(c,1.);}
+  if(dp<0.){vec3 paper=vec3(.93,.91,.86)*(.97+.03*fbm(uv*40.));return vec4(paper,1.);}
+  return vec4(table,1.);}`});
+
   /* ---- named recipes: whole stacks that open on a sample and stay editable ---- */
   const RECIPES=[
     {name:'Night evidence',note:'Two takes combined, then a contact sheet through a security camera',layers:[['doubletake',{mode:1,mix:90}],['contactstrip',{n:6,every:1.2}],['camsim','cctv']]},
@@ -141,6 +275,12 @@ vec4 fx(vec2 uv){
     {name:'Moving tapestry',note:'A slit-scan strip woven into threads',layers:[['photofinish',{spd:3}],['loom',{w:8,weave:80}]]},
     {name:'Future relic',note:'Thread-drawn emboss on old film',layers:[['blindemboss',{depth:70,ang:200}],['plotter',{sp:8,auto:true}],['camsim','expired']]},
     {name:'Memory exhibition',note:'A held first shot beside the present, on a contact sheet',layers:[['doubletake',{mode:3}],['contactstrip',{n:4,every:1.5}]]},
+    {name:'Sunday roll',note:'Cross-processed film with a leak and a bit of dust',layers:[['crosscurve',{}],['lightleak',{amt:50}],['dusthair',{}]]},
+    {name:'Pocket miniature',note:'Tilt-shift focus under an over-processed HDR grade',layers:[['overcook',{}],['tiltshift',{}]]},
+    {name:'Panorama mistake',note:'A sweep that did not stitch, with a warm leak',layers:[['panosweep',{}],['lightleak',{amt:35,warm:70}]]},
+    {name:'Fast burst',note:'Trails from a burst of shots with a lens streak',layers:[['bursttrail',{len:75}],['anamorph',{}]]},
+    {name:'Lens at night',note:'Focus hunting with streaks from the lights',layers:[['focushunt',{}],['anamorph',{thr:60,len:70}]]},
+    {name:'Instant summer',note:'A faded instant print on a table, cross-processed',layers:[['crosscurve',{sh:30,hi:60}],['instantframe',{}],['dusthair',{dust:20,hair:10}]]},
     {name:'Impossible window',note:'Time woven through a slow scan',layers:[['loom',{w:14,lag:85}],['scanner',{per:8,bw:10}]]}];
   return {RECIPES};
 }
