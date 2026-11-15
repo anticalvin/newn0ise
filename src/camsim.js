@@ -10,7 +10,7 @@ export const CAMSIM_PARAMS=[
   R('amt','Strength',0,200,100,'Body',{hero:true}),R('seed2','Variation',0,99,0,'Body'),
   R('zoom','Digital zoom',1,8,1,'Lens',{step:.1}),R('barrel','Barrel distortion',-60,100,0,'Lens'),R('soft','Softness',0,100,0,'Lens',{hero:true}),R('ca','Colour fringe',0,100,0,'Lens'),
   R('bloom','Bloom',0,100,0,'Lens'),R('bsize','Bloom size',0,100,40,'Lens'),R('bthr','Bloom threshold',0,100,60,'Lens'),C('btint','Bloom tint','#ffffff','Lens'),
-  R('halo','Halation',0,100,0,'Lens'),R('vig','Vignette',0,100,0,'Lens'),R('tube','Tube mask',0,100,0,'Lens'),
+  R('halo','Halation',0,100,0,'Lens'),R('mosaic','Compound eye',0,100,0,'Lens'),R('vig','Vignette',0,100,0,'Lens'),R('tube','Tube mask',0,100,0,'Lens'),
   R('res','Sensor lines',60,1080,1080,'Sensor',{step:10,hero:true}),R('sharp','Sharpening halos',0,100,0,'Sensor'),
   R('cbleed','Chroma bleed',0,100,0,'Sensor'),R('cshift','Chroma shift',-100,100,0,'Sensor'),
   R('noise','Noise',0,100,0,'Sensor',{hero:true}),R('gsize','Grain size',1,6,1.5,'Sensor',{step:.5}),R('cnoise','Colour noise',0,100,0,'Sensor'),
@@ -19,7 +19,7 @@ export const CAMSIM_PARAMS=[
   R('shoulder','Highlight shoulder',0,100,0,'Exposure'),
   R('contrast','Contrast',-100,100,0,'Tone'),R('gamma','Midtones',-100,100,0,'Tone'),R('lift','Lifted blacks',0,100,0,'Tone'),C('lcol','Black tint','#808080','Tone'),
   R('temp','Warmth',-100,100,0,'Colour'),R('tint','Green / magenta',-100,100,0,'Colour'),R('sat','Saturation',0,250,100,'Colour'),R('mono','Black and white',0,100,0,'Colour'),C('cast','Colour cast','#ffffff','Colour'),R('castamt','Cast amount',0,100,0,'Colour'),
-  R('heat','Thermal palette',0,100,0,'Colour'),
+  R('heat','Thermal palette',0,100,0,'Colour'),R('dich','Red-green blind',0,100,0,'Colour'),
   R('bits','Bit depth',2,8,8,'Digital',{step:.5}),R('blocks','Compression blocks',0,100,0,'Digital'),
   R('weave','Gate weave',0,100,0,'Tape and gate'),R('skew','Rolling skew',0,100,0,'Tape and gate'),R('jitter','Line jitter',0,100,0,'Tape and gate'),R('head','Head switching',0,100,0,'Tape and gate'),
   R('comb','Interlace comb',0,100,0,'Tape and gate'),R('scan','Scanlines',0,100,0,'Tape and gate'),
@@ -48,6 +48,8 @@ vec4 fx(vec2 uv){
   vec2 q=p+.5;
   float lines=min(u_res,uRes.y);vec2 cells=vec2(lines*asp,lines);bool low=lines<uRes.y-1.;
   q.x+=mod(floor(q.y*lines),2.)*u_comb/100.*.006*sin(uTime*5.+sd);
+  float facet=1.;
+  if(u_mosaic>0.){float n=mix(200.,22.,u_mosaic/100.);vec2 g=vec2(n*asp,n);vec2 h=q*g;float row=floor(h.y),od=mod(row,2.)*.5;h.x+=od;vec2 fc=fract(h)-.5;facet=1.-.4*u_mosaic/100.*smoothstep(.28,.5,length(fc));q=vec2(floor(h.x)+.5-od,row+.5)/g;}
   vec2 cq=low?(floor(q*cells)+.5)/cells:q;
   /* optics: softness and the pixel footprint of the virtual sensor */
   float rd=max(low?.5/cells.x:0.,u_soft/100.*.006);vec2 o1=vec2(rd,rd*asp),o2=o1*2.;
@@ -71,6 +73,7 @@ vec4 fx(vec2 uv){
   /* exposure */
   c*=exp2(u_ev/100.*2.)*(1.+u_pump/100.*.4*sin(uTime*.9+sin(uTime*.37+sd)*2.));
   c*=1.+u_flash/100.*(2.4*(1.-smoothstep(0.,.85,rr*1.15))-.7);
+  c*=facet;
   c=mix(c,c/(1.+c*.9)*1.55,u_shoulder/100.);
   /* tone */
   c=(c-.45)*exp2(u_contrast/100.)+.45;c=pow(max(c,vec3(0.)),vec3(exp2(-u_gamma/100.)));
@@ -80,6 +83,7 @@ vec4 fx(vec2 uv){
   /* colour */
   c*=vec3(1.+u_temp/100.*.35,1.-u_tint/100.*.2,1.-u_temp/100.*.35);
   float l=dot(c,vec3(.299,.587,.114));c=mix(vec3(l),c,u_sat/100.);c=mix(c,vec3(l),u_mono/100.);
+  if(u_dich>0.){vec3 dc=vec3(dot(c,vec3(.625,.375,0.)),dot(c,vec3(.7,.3,0.)),dot(c,vec3(0.,.3,.7)));c=mix(c,dc,u_dich/100.);}
   c*=mix(vec3(1.),u_cast*1.15,u_castamt/100.);
   if(u_heat>0.)c=mix(c,heatmap(l*1.1),u_heat/100.);
   /* digital: bit depth and block compression */
@@ -92,12 +96,12 @@ vec4 fx(vec2 uv){
   if(u_tube>0.)c*=mix(1.,smoothstep(.5,.44,rr),u_tube/100.);
   if(u_leak>0.){float lk=u_leak/100.*(.6+.4*sin(uTime*.7+sd));float e=exp(-uv.x*4.5)+exp(-(1.-uv.y)*5.)*.8;c+=u_lkc*e*lk*.75;}
   /* sensor noise, heavier in shadows */
-  vec2 cell=floor(uv*uRes/u_gsize),gp=uv*uRes/u_gsize;float w=.35+2.2*l*(1.-l)+.5*(1.-l);
+  float gs=max(1.,u_gsize*.7);vec2 cell=floor(uv*uRes/gs),gp=uv*uRes/gs;float w=.35+2.2*l*(1.-l)+.5*(1.-l);
   float tg=fr*1.37+sd;
   float nz=(vn(gp,tg)*.55+vn(gp*2.1,tg+3.)*.3+h21(cell+fr*2.3+5.)*.15)*2.-1.;
-  c+=nz*u_noise/100.*.34*w;
-  if(u_cnoise>0.){vec3 cn=vec3(vn(gp*.5,tg),vn(gp*.5,tg+7.),vn(gp*.5,tg+13.))-.5;c+=cn*u_cnoise/100.*.5*w;}
-  c+=(h11(floor(uv.y*uRes.y/u_gsize)+fr*3.1+sd)-.5)*u_band/100.*.14;
+  c+=nz*u_noise/100.*.25*w;
+  if(u_cnoise>0.){vec3 cn=vec3(vn(gp*.5,tg),vn(gp*.5,tg+7.),vn(gp*.5,tg+13.))-.5;c+=cn*u_cnoise/100.*.36*w;}
+  c+=(h11(floor(uv.y*uRes.y/gs)+fr*3.1+sd)-.5)*u_band/100.*.14;
   if(u_hot>0.&&h21(floor(uv*uRes)+fr*.1+sd)>1.-.0005*u_hot/100.*3.)c+=.8;
   /* film */
   if(u_dust>0.){vec2 dc=floor(uv*uRes/5.);float hd=h21(dc+floor(uTime*12.)*7.13+sd);
@@ -113,47 +117,57 @@ vec4 fx(vec2 uv){
 
 /* one preset per camera body: only what that body does */
 export const SIMS={
-  neg35:{lift:20,lcol:'#6a5a4a',contrast:28,sat:118,cast:'#ffd9b0',castamt:55,noise:38,gsize:2,halo:28,vig:34,dust:16,shoulder:25,bloom:12,bthr:60,temp:12},
-  slide:{contrast:42,sat:150,cast:'#ffd9b0',castamt:30,noise:18,gsize:1.5,vig:26,dust:10,shoulder:18,halo:12},
-  xpro:{contrast:50,sat:140,cast:'#9dffb0',castamt:45,lcol:'#2a4a6a',lift:10,noise:28,vig:30,temp:-20,tint:30},
-  bleach:{sat:45,contrast:60,noise:40,gsize:2.5,vig:30,shoulder:12,dust:8},
-  mf120:{soft:10,contrast:20,sat:105,noise:16,gsize:1.2,vig:18,shoulder:20,bloom:8,bthr:65,cast:'#fff1de',castamt:20},
-  expired:{lift:42,lcol:'#7a8a6a',contrast:-18,sat:70,cast:'#ffe0b0',castamt:55,tint:25,noise:36,gsize:2.5,leak:48,vig:40,dust:36,scr:12,soft:46},
-  p110:{soft:35,contrast:15,sat:96,cast:'#e6ffe0',castamt:30,vig:62,noise:44,gsize:3,leak:20,dust:40,barrel:12},
-  pinhole:{soft:70,vig:80,contrast:12,lift:16,sat:80,noise:30,gsize:2.5,leak:24,dust:34,bloom:25,bthr:50},
-  vhslp:{res:240,soft:40,cbleed:90,cshift:40,jitter:60,head:70,scan:42,comb:40,noise:46,cnoise:36,band:55,bits:6,pump:25,sat:120,contrast:12,lift:14,flick:12},
-  hi8:{res:360,soft:24,cbleed:55,cshift:25,ca:30,jitter:34,head:32,scan:24,comb:20,noise:30,cnoise:22,band:24,bits:7,sat:118,contrast:14,flick:8},
-  beta:{res:330,soft:22,cbleed:45,jitter:14,head:18,scan:28,comb:14,noise:18,cnoise:14,sat:88,contrast:6,lift:16,lcol:'#6a5a44',cast:'#f0d8b0',castamt:60,vig:26,temp:20},
-  eng:{res:540,sharp:75,ca:10,pump:12,sat:128,contrast:42,shoulder:32,noise:8,cnoise:6,vig:8,scan:8,cbleed:15,ev:12},
-  satfeed:{res:200,blocks:80,bits:5,jitter:30,band:60,noise:36,cnoise:40,sat:90,cast:'#e0f0ff',castamt:30,comb:30,flick:20,pump:35,head:20},
-  flip03:{res:150,blocks:50,bits:5,sharp:60,soft:20,noise:40,cnoise:40,sat:96,contrast:30,pump:30,ca:20,barrel:18},
-  campho:{res:200,blocks:72,bits:4.5,sharp:80,noise:48,cnoise:46,sat:84,contrast:30,pump:25,vig:12,cast:'#ffffc0',castamt:45},
-  eyecam:{res:288,sharp:70,noise:36,cnoise:30,pump:35,sat:80,skew:35,blocks:30,cast:'#e6f4e8',castamt:35,contrast:16,band:12},
-  body:{res:360,barrel:55,sharp:50,ca:18,pump:35,sat:60,contrast:30,blocks:35,bits:7,noise:24,cnoise:16,vig:36,cast:'#d4e2f0',castamt:40,shoulder:30},
-  baby:{res:180,mono:100,cast:'#d0ffd8',castamt:60,noise:55,band:40,bits:5,blocks:50,pump:40,scan:20,flick:25,ev:20,soft:30},
+  neg35:{lift:20,lcol:'#6a5a4a',contrast:28,sat:118,cast:'#ffd9b0',castamt:55,noise:26,gsize:1.5,halo:28,vig:34,dust:16,shoulder:25,bloom:12,bthr:60,temp:12},
+  slide:{contrast:42,sat:150,cast:'#ffd9b0',castamt:30,noise:13,gsize:1.5,vig:26,dust:10,shoulder:18,halo:12},
+  xpro:{contrast:50,sat:140,cast:'#9dffb0',castamt:45,lcol:'#2a4a6a',lift:10,noise:20,vig:30,temp:-20,tint:30},
+  bleach:{sat:45,contrast:60,noise:28,gsize:1.8,vig:30,shoulder:12,dust:8},
+  mf120:{soft:10,contrast:20,sat:105,noise:12,gsize:1.2,vig:18,shoulder:20,bloom:8,bthr:65,cast:'#fff1de',castamt:20},
+  expired:{lift:42,lcol:'#7a8a6a',contrast:-18,sat:70,cast:'#ffe0b0',castamt:55,tint:25,noise:26,gsize:1.8,leak:48,vig:40,dust:36,scr:12,soft:46},
+  p110:{soft:35,contrast:15,sat:96,cast:'#e6ffe0',castamt:30,vig:62,noise:30,gsize:2,leak:20,dust:40,barrel:12},
+  pinhole:{soft:70,vig:80,contrast:12,lift:16,sat:80,noise:22,gsize:1.8,leak:24,dust:34,bloom:25,bthr:50},
+  vhslp:{res:240,soft:40,cbleed:90,cshift:40,jitter:60,head:70,scan:42,comb:40,noise:33,cnoise:26,band:55,bits:6,pump:25,sat:120,contrast:12,lift:14,flick:12},
+  hi8:{res:360,soft:24,cbleed:55,cshift:25,ca:30,jitter:34,head:32,scan:24,comb:20,noise:22,cnoise:16,band:24,bits:7,sat:118,contrast:14,flick:8},
+  beta:{res:330,soft:22,cbleed:45,jitter:14,head:18,scan:28,comb:14,noise:13,cnoise:10,sat:88,contrast:6,lift:16,lcol:'#6a5a44',cast:'#f0d8b0',castamt:60,vig:26,temp:20},
+  eng:{res:540,sharp:75,ca:10,pump:12,sat:128,contrast:42,shoulder:32,noise:6,cnoise:4,vig:8,scan:8,cbleed:15,ev:12},
+  satfeed:{res:200,blocks:80,bits:5,jitter:30,band:60,noise:26,cnoise:29,sat:90,cast:'#e0f0ff',castamt:30,comb:30,flick:20,pump:35,head:20},
+  flip03:{res:150,blocks:50,bits:5,sharp:60,soft:20,noise:29,cnoise:29,sat:96,contrast:30,pump:30,ca:20,barrel:18},
+  campho:{res:200,blocks:72,bits:4.5,sharp:80,noise:35,cnoise:33,sat:84,contrast:30,pump:25,vig:12,cast:'#ffffc0',castamt:45},
+  eyecam:{res:288,sharp:70,noise:26,cnoise:22,pump:35,sat:80,skew:35,blocks:30,cast:'#e6f4e8',castamt:35,contrast:16,band:12},
+  body:{res:360,barrel:55,sharp:50,ca:18,pump:35,sat:60,contrast:30,blocks:35,bits:7,noise:17,cnoise:12,vig:36,cast:'#d4e2f0',castamt:40,shoulder:30},
+  baby:{res:180,mono:100,cast:'#d0ffd8',castamt:60,noise:40,band:40,bits:5,blocks:50,pump:40,scan:20,flick:25,ev:20,soft:30},
   gbc:{res:120,mono:100,cast:'#9bbc0f',castamt:100,bits:2,contrast:40,sharp:50,scan:12},
-  amber:{res:240,mono:100,cast:'#ffb000',castamt:100,scan:40,bloom:50,bthr:35,soft:25,noise:20,vig:50,barrel:35,contrast:30,flick:10},
+  amber:{res:240,mono:100,cast:'#ffb000',castamt:100,scan:40,bloom:50,bthr:35,soft:25,noise:14,vig:50,barrel:35,contrast:30,flick:10},
   lcdg:{res:180,sat:140,scan:25,soft:15,bits:5,contrast:30,sharp:40},
-  eink:{res:200,mono:100,bits:2,contrast:-10,lift:35,lcol:'#c8c8c0',cast:'#e8e6dc',castamt:100,noise:18,gsize:2,soft:20},
+  eink:{res:200,mono:100,bits:2,contrast:-10,lift:35,lcol:'#c8c8c0',cast:'#e8e6dc',castamt:100,noise:13,gsize:2,soft:20},
   ledm:{res:64,bits:4,sat:200,contrast:35,bloom:55,bthr:30,bsize:20},
-  micro:{soft:12,tube:70,vig:25,sat:120,contrast:30,bloom:20,ca:30,noise:14,cast:'#e8f0ff',castamt:25,zoom:1.8},
-  endo:{res:300,tube:80,barrel:70,bloom:40,bthr:45,sat:130,cast:'#ffc0b0',castamt:40,contrast:30,noise:22,ca:22,ev:15,vig:20},
-  fpv:{res:360,barrel:45,ca:40,jitter:16,skew:20,noise:30,cnoise:28,band:26,sat:125,contrast:26,bits:6.5,pump:30,blocks:25,flick:10},
-  mosh:{soft:6,noise:10,blocks:40,bits:6},
-  cctv:{res:288,barrel:38,soft:34,sharp:62,ca:14,ev:-14,pump:30,contrast:36,lift:18,lcol:'#4a5a50',sat:42,mono:34,cast:'#b8d4b4',castamt:60,bits:6,blocks:55,vig:34,noise:38,gsize:2,cnoise:24,band:22,scan:34,comb:34,flick:8,hot:30},
-  dash:{res:540,barrel:24,soft:16,sharp:52,ca:30,pump:36,contrast:30,shoulder:38,sat:82,cast:'#d8e0e8',castamt:36,bits:7,blocks:34,vig:30,noise:14,cnoise:10,bloom:28,bthr:62},
-  door:{res:400,barrel:78,soft:30,sharp:56,ca:24,pump:40,contrast:20,sat:68,cast:'#c9dcec',castamt:55,bits:7,blocks:40,vig:52,noise:26,cnoise:18,band:10},
-  ccd:{res:480,soft:10,sharp:78,ca:46,bloom:36,bsize:30,bthr:56,btint:'#ffd0f4',flash:56,shoulder:12,contrast:26,sat:126,cast:'#e8f0ff',castamt:30,blocks:30,noise:14,cnoise:22,vig:12},
-  web:{res:240,soft:14,sharp:82,skew:30,ca:16,pump:46,contrast:10,sat:84,cast:'#d4ecd0',castamt:42,bits:6,blocks:46,vig:18,noise:42,cnoise:38,band:12,ev:10},
-  disp:{soft:38,barrel:14,ca:28,flash:70,shoulder:26,contrast:26,lift:14,lcol:'#5a4a40',sat:118,cast:'#ffe2c0',castamt:50,bloom:14,vig:56,noise:40,gsize:2,cnoise:12,leak:30,dust:22},
-  holga:{soft:62,barrel:10,ca:42,vig:76,lift:20,lcol:'#4a4a38',sat:92,cast:'#ffe9c8',castamt:35,leak:56,noise:32,gsize:3,bloom:20,bthr:50,dust:30,contrast:22},
-  inst:{soft:42,lift:34,lcol:'#7a8a78',contrast:-12,sat:84,cast:'#fff0dc',castamt:55,bloom:26,bthr:55,vig:30,noise:22,gsize:2,leak:18,shoulder:30},
-  handy:{res:240,soft:30,sharp:20,ca:22,cbleed:76,cshift:30,jitter:46,head:46,scan:40,comb:30,noise:34,cnoise:28,band:40,bits:7,pump:20,contrast:16,sat:112,vig:22,flick:6,lift:10},
-  s8:{noise:72,gsize:3,weave:56,flick:42,halo:56,soft:34,vig:46,lift:26,lcol:'#6a4a30',sat:104,cast:'#ffd6a0',castamt:55,dust:56,scr:56,leak:20,shoulder:30,contrast:18,bloom:14,bthr:60},
-  noir:{mono:100,contrast:56,noise:52,gsize:2.5,halo:28,vig:38,lift:7,weave:12,dust:22,scr:18,shoulder:20},
-  night:{res:360,mono:100,cast:'#6cff7a',castamt:100,tube:80,bloom:66,bsize:56,bthr:44,noise:76,gsize:2,band:18,pump:30,contrast:30,ev:26,soft:18,sharp:30,vig:34},
-  heat:{res:180,heat:100,soft:40,noise:16,gsize:2,scan:18,contrast:15,pump:15,sharp:20},
-  sig:{res:300,jitter:72,head:72,cbleed:62,cshift:62,comb:50,scan:30,band:56,noise:40,cnoise:36,bits:6,blocks:30,ca:36,flick:26,soft:25,pump:30,sat:122},
+  micro:{soft:12,tube:70,vig:25,sat:120,contrast:30,bloom:20,ca:30,noise:10,cast:'#e8f0ff',castamt:25,zoom:1.8},
+  endo:{res:300,tube:80,barrel:70,bloom:40,bthr:45,sat:130,cast:'#ffc0b0',castamt:40,contrast:30,noise:16,ca:22,ev:15,vig:20},
+  fpv:{res:360,barrel:45,ca:40,jitter:16,skew:20,noise:22,cnoise:20,band:26,sat:125,contrast:26,bits:6.5,pump:30,blocks:25,flick:10},
+  mosh:{soft:6,noise:7,blocks:40,bits:6},
+  cctv:{res:288,barrel:38,soft:34,sharp:62,ca:14,ev:-14,pump:30,contrast:36,lift:18,lcol:'#4a5a50',sat:42,mono:34,cast:'#b8d4b4',castamt:60,bits:6,blocks:55,vig:34,noise:27,gsize:2,cnoise:17,band:22,scan:34,comb:34,flick:8,hot:30},
+  dash:{res:540,barrel:24,soft:16,sharp:52,ca:30,pump:36,contrast:30,shoulder:38,sat:82,cast:'#d8e0e8',castamt:36,bits:7,blocks:34,vig:30,noise:10,cnoise:7,bloom:28,bthr:62},
+  door:{res:400,barrel:78,soft:30,sharp:56,ca:24,pump:40,contrast:20,sat:68,cast:'#c9dcec',castamt:55,bits:7,blocks:40,vig:52,noise:19,cnoise:13,band:10},
+  ccd:{res:480,soft:10,sharp:78,ca:46,bloom:36,bsize:30,bthr:56,btint:'#ffd0f4',flash:56,shoulder:12,contrast:26,sat:126,cast:'#e8f0ff',castamt:30,blocks:30,noise:10,cnoise:16,vig:12},
+  web:{res:240,soft:14,sharp:82,skew:30,ca:16,pump:46,contrast:10,sat:84,cast:'#d4ecd0',castamt:42,bits:6,blocks:46,vig:18,noise:30,cnoise:27,band:12,ev:10},
+  disp:{soft:38,barrel:14,ca:28,flash:70,shoulder:26,contrast:26,lift:14,lcol:'#5a4a40',sat:118,cast:'#ffe2c0',castamt:50,bloom:14,vig:56,noise:28,gsize:1.5,cnoise:12,leak:30,dust:22},
+  holga:{soft:62,barrel:10,ca:42,vig:76,lift:20,lcol:'#4a4a38',sat:92,cast:'#ffe9c8',castamt:35,leak:56,noise:22,gsize:2,bloom:20,bthr:50,dust:30,contrast:22},
+  inst:{soft:42,lift:34,lcol:'#7a8a78',contrast:-12,sat:84,cast:'#fff0dc',castamt:55,bloom:26,bthr:55,vig:30,noise:16,gsize:2,leak:18,shoulder:30},
+  handy:{res:240,soft:30,sharp:20,ca:22,cbleed:76,cshift:30,jitter:46,head:46,scan:40,comb:30,noise:24,cnoise:20,band:40,bits:7,pump:20,contrast:16,sat:112,vig:22,flick:6,lift:10},
+  s8:{noise:46,gsize:2,weave:56,flick:42,halo:56,soft:34,vig:46,lift:26,lcol:'#6a4a30',sat:104,cast:'#ffd6a0',castamt:55,dust:56,scr:56,leak:20,shoulder:30,contrast:18,bloom:14,bthr:60},
+  noir:{mono:100,contrast:56,noise:34,gsize:1.8,halo:28,vig:38,lift:7,weave:12,dust:22,scr:18,shoulder:20},
+  night:{res:360,mono:100,cast:'#6cff7a',castamt:100,tube:80,bloom:66,bsize:56,bthr:44,noise:46,gsize:1.5,band:18,pump:30,contrast:30,ev:26,soft:18,sharp:30,vig:34},
+  heat:{res:180,heat:100,soft:40,noise:12,gsize:2,scan:18,contrast:15,pump:15,sharp:20},
+  sig:{res:300,jitter:72,head:72,cbleed:62,cshift:62,comb:50,scan:30,band:56,noise:29,cnoise:26,bits:6,blocks:30,ca:36,flick:26,soft:25,pump:30,sat:122},
   prism:{soft:10,ca:36,bloom:26,bthr:55,vig:10},
-  clean:{sharp:16,bloom:8,bthr:70,vig:10,contrast:8,sat:106,shoulder:10,noise:4}
+  dog:{res:540,dich:100,soft:16,barrel:26,vig:24,sat:92,contrast:8,ev:6,pump:14,cast:'#e8f0ff',castamt:18,noise:6},
+  cat:{res:480,dich:70,soft:18,barrel:34,ev:26,pump:22,tube:28,bloom:24,bthr:48,vig:26,sat:72,contrast:12,noise:8,lift:6,cast:'#dcf0ff',castamt:22},
+  horse:{res:480,dich:70,barrel:48,vig:58,soft:14,sat:86,contrast:10,pump:14,cast:'#f0ffe8',castamt:16,noise:4},
+  bee:{mosaic:58,res:420,temp:-34,tint:-16,sat:160,contrast:22,bloom:24,bthr:50,soft:10,cast:'#b890ff',castamt:36,flick:6,noise:6,ca:24},
+  fly:{mosaic:92,res:360,barrel:58,sat:96,contrast:20,flick:26,jitter:10,vig:36,soft:12,cast:'#e0f4e0',castamt:20,noise:6},
+  hawk:{res:1080,sharp:70,zoom:1.6,sat:148,contrast:24,vig:26,tube:14,soft:0,ca:10,shoulder:16,noise:2},
+  viper:{res:240,heat:88,soft:40,bloom:22,bthr:46,noise:8,gsize:2,contrast:16,pump:12,vig:20},
+  shark:{res:480,mono:78,barrel:32,contrast:38,tube:32,soft:20,cast:'#74a8c8',castamt:82,vig:34,ev:-8,noise:10,pump:18,bloom:14,bthr:55},
+  owl:{res:540,ev:28,tube:48,barrel:12,bloom:30,bthr:42,sat:34,mono:34,cast:'#d8e8c8',castamt:30,vig:28,soft:14,pump:20,noise:10,contrast:18},
+  mantis:{res:720,sat:230,ca:44,contrast:30,mosaic:18,bloom:22,bthr:52,btint:'#ffd8ff',soft:6,sharp:44,noise:2,tint:12},
+  clean:{sharp:16,bloom:8,bthr:70,vig:10,contrast:8,sat:106,shoulder:10,noise:3}
 };

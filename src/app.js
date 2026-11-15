@@ -2603,7 +2603,10 @@ function setCamCat(n){camCat=n;lsSet('n0ise.camcat',n);const st=$('#camstrip');i
   if(!camVis(camIx)){const f=CAMS.findIndex((c,i)=>camVis(i));if(f>=0)applyCam(f);else toast('No favourites yet. Tap the star on a camera.');}else paintCamUI();}
 function camStep(d){let i=camIx;for(let k=0;k<CAMS.length;k++){i=(i+d+CAMS.length)%CAMS.length;if(camVis(i))break;}applyCam(i);}
 function camFavToggle(){const id=CAMS[camIx].id,k=camFavs.indexOf(id);if(k<0)camFavs.push(id);else camFavs.splice(k,1);lsSet('n0ise.camfavs',camFavs);paintCamUI();if(camCat==='★')setCamCat('★');}
-function camSurprise(){const pool=CAMS.map((c,i)=>i).filter(i=>i!==camIx);applyCam(pool[Math.random()*pool.length|0]);}
+const camRecent=[];
+function camAutoStep(){const vis=CAMS.map((c,i)=>i).filter(camVis);if(vis.length<2)return;const avoid=camRecent.slice(-Math.min(8,vis.length-1));
+  const pool=vis.filter(i=>i!==camIx&&!avoid.includes(i));const i=pool[Math.random()*pool.length|0];camRecent.push(camIx);if(camRecent.length>30)camRecent.shift();applyCam(i);}
+function camSurprise(){const pool=CAMS.map((c,i)=>i).filter(i=>i!==camIx&&!camRecent.slice(-6).includes(i));camRecent.push(camIx);applyCam(pool[Math.random()*pool.length|0]);}
 function camMix(){const sl=camSim();if(!sl)return;const defs=Object.fromEntries(MODULES.camsim.params.map(p=>[p.k,p]));const base=SIMS[CAMS[camIx].sim]||{};
   Object.keys(base).forEach(k=>{const d=defs[k];if(!d||d.t==='color'||typeof base[k]!=='number'||k==='res'||k==='bits')return;const r=(d.max-d.min)*.2;sl.params[k]=Math.max(d.min,Math.min(d.max,base[k]+(Math.random()*2-1)*r));});
   sl.params.seed2=Math.floor(Math.random()*99);buzz(8);toast('Mixed within '+CAMS[camIx].name);}
@@ -2768,7 +2771,7 @@ function buildCamUI(){
   more.append(btn('cammir','Mirror','Mirror the preview only. Saved files are never mirrored.',e=>{setPM(!camPM);e.currentTarget.setAttribute('aria-pressed',camPM);}),
     btn('camgrid','Grid','Grid lines',e=>{camGrid=!camGrid;u.classList.toggle('grid',camGrid);e.currentTarget.setAttribute('aria-pressed',camGrid);}),
     btn('cammic','Mic','Let sound move the look',e=>{toggleMic();setTimeout(()=>e.currentTarget.setAttribute('aria-pressed',audio.on),600);}),
-    btn('camauto','Auto','Change camera every few seconds',e=>{camAuto=!camAuto;e.currentTarget.setAttribute('aria-pressed',camAuto);clearInterval(camAutoT);if(camAuto)camAutoT=setInterval(()=>camStep(1),4000);}),
+    btn('camauto','Auto','Change camera every few seconds',e=>{camAuto=!camAuto;e.currentTarget.setAttribute('aria-pressed',camAuto);clearInterval(camAutoT);if(camAuto){camAutoStep();camAutoT=setInterval(camAutoStep,2600);}}),
     btn('camtxt','Text','Show date and readout text',e=>{camText=!camText;lsSet('n0ise.camtext',camText);e.currentTarget.setAttribute('aria-pressed',camText);drawCamOv();}),
     btn('camtim','Timer off','Self timer',e=>{camTimer=camTimer===0?3:camTimer===3?10:0;e.currentTarget.textContent=camTimer?'Timer '+camTimer+'s':'Timer off';}),
     btn('cammicrec','Sound','Record with microphone sound',e=>{camMic=!camMic;e.currentTarget.setAttribute('aria-pressed',camMic);if(camMic)toast('Videos will include microphone sound');}),
@@ -2791,7 +2794,7 @@ function buildCamUI(){
   const strip=el('div','camstrip');strip.id='camstrip';strip.setAttribute('role','listbox');strip.setAttribute('aria-label','Cameras');
   CAMS.forEach((c,i)=>{const b=el('button','camt');b.setAttribute('role','option');b.innerHTML=glyph(c.glyph)+`<span>${c.name}</span>`;b.addEventListener('click',()=>{if(camIx!==i)applyCam(i);});strip.appendChild(b);});
   const cats=el('div','camcats');cats.id='camcats';cats.setAttribute('role','tablist');
-  ['All','★','Film','Video','Digital','Glitch','Subject'].forEach(n=>{const b=el('button','',n);b.dataset.c=n;b.setAttribute('aria-pressed',n===camCat);b.addEventListener('click',()=>setCamCat(n));cats.appendChild(b);});
+  ['All','★','Film','Video','Digital','Animal','Glitch','Time','Subject'].forEach(n=>{const b=el('button','',n);b.dataset.c=n;b.setAttribute('aria-pressed',n===camCat);b.addEventListener('click',()=>setCamCat(n));cats.appendChild(b);});
   let sT=0;strip.addEventListener('scroll',()=>{strip._dragging=true;clearTimeout(sT);sT=setTimeout(()=>{strip._dragging=false;const mid=strip.scrollLeft+strip.clientWidth/2;let best=0,bd=1e9;[...strip.children].forEach((t,i)=>{if(t.hidden)return;const d=Math.abs(t.offsetLeft+t.offsetWidth/2-mid);if(d<bd){bd=d;best=i;}});if(best!==camIx)applyCam(best);},110);},{passive:true});
   const row=el('div','camrow');
   const roll=el('button','camroll','Roll');roll.id='camroll';roll.setAttribute('aria-label','Open roll');roll.addEventListener('click',openRoll);
@@ -3566,7 +3569,7 @@ const CAM_FAMILY={clean:'Color',chrome:'Color',aqua:'Color',solar:'Color',therma
  noir:'Film',lomo:'Film',vintage:'Film',kodak:'Film',fuji:'Film',cinema:'Film',super8:'Film',night:'Film',vhs:'Signal / CRT',crt:'Signal / CRT',
  bubble:'Y2K',lchrome:'Y2K',holo:'Y2K',aero:'Y2K',digicam:'Y2K',webcam:'Y2K',lcd:'Y2K',vapor:'Y2K',vga:'Y2K',gboy:'Pixel',ps1:'Pixel',bayer:'Dither',ign:'Dither',linedith:'Lines',hatch:'Lines',contour:'Lines',wavel:'Lines',sketch:'Lines',stitch:'Pixel',mosaic:'Pixel',lego:'Pixel',ledm:'Pixel',emboss:'Light',tilt:'Light',streak:'Light',longexp:'Time',rgbtear:'Glitch',fish:'Warp',swirl:'Warp',ripple:'Warp',acid:'Color',pop:'Color',halftone:'Print',pixel:'Pixel',ascii:'Glyph',matrix:'Glyph',glitch:'Glitch',mosh:'Glitch',bloom:'Light',dream:'Light',
  prism:'Warp',kaleido:'Warp',mirror:'Warp',liquid:'Warp',paint:'Warp',grid:'Warp',ghost:'Time',tunnel:'Time',slit:'Time'};
-const UFAM_ORDER=['Source','Subject','Mix','Color','Y2K','Film','Signal / CRT','Dither','Print','Pixel','Glyph','Lines','Glitch','Light','Warp','Time','Face'];
+const UFAM_ORDER=['Source','Subject','Mix','Color','Y2K','Film','Signal / CRT','Dither','Print','Pixel','Glyph','Lines','Glitch','Light','Warp','Time','Studio','Face'];
 const camFam=f=>f.face?'Face':(f.custom||f.cat==='custom')?'Mine':CAM_FAMILY[f.id]||'Color';
 const modFam=m=>RAIL_FAMILY[m.id]||m.family;
 const famRank=f=>{const i=UFAM_ORDER.indexOf(f);return i<0?99:i;};

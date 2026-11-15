@@ -268,8 +268,8 @@ void main(){
       float nw=h21(vec2(fx,ln+fr*7.1+uSeed));
       float n=nw;
       if(uCoh>.001)n=mix(nw,vn3(vec3(xs*.15,ln*.8,t*3.)),uCoh);
-      sig+=(n-.5)*uSnr*2.4;
-      sig+=step(1.-uSnow*.12,h21(vec2(fx+3.,ln+fr+uSeed)))*uSnow*1.2;
+      sig+=(n-.5)*uSnr*1.9;
+      sig+=step(1.-uSnow*.12,h21(vec2(fx+3.,ln+fr+uSeed)))*uSnow*.8;
     }
     sig=clamp(sig,loC,hiC);
     float wL=exp(-dx*dx/(2.*sL*sL)),wC=exp(-dx*dx/(2.*sC*sC));

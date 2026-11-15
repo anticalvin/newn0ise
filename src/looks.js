@@ -338,6 +338,131 @@ vec4 fx(vec2 uv){
   dev*=mix(mix(vec3(1.),vec3(.8,1.,.95),u_cast/100.),vec3(1.),m);
   return vec4(clamp(dev,0.,1.),1.);}`});
 
+  /* ---- studio: the things a retoucher or colourist reaches for. Quiet by default, never loud ---- */
+  defineModule({id:'beauty',family:'Studio',name:'Skin Retouch',
+    params:[{k:'smooth',label:'Smoothing',min:0,max:100,def:65,sec:'Skin',hero:true},{k:'detail',label:'Keep texture',min:0,max:100,def:45,sec:'Skin',hero:true},{k:'glow',label:'Glow',min:0,max:100,def:25,sec:'Skin',hero:true},
+      {k:'skin',label:'Skin tones only',min:0,max:100,def:70,sec:'Advanced'},{k:'rad',label:'Radius',min:0,max:100,def:50,sec:'Advanced'}],
+    frag:SS+`
+vec4 fx(vec2 uv){
+  vec3 c=texture(uSrc,uv).rgb;vec2 px=1./uRes;float R=(2.+u_rad/100.*6.)*S,l0=luma(c),sig=.07+(1.-u_detail/100.)*.14;
+  vec3 acc=c;float W=1.;
+  for(int i=0;i<14;i++){float a=float(i)*2.39996,r=sqrt(float(i)+.5)/3.7;vec3 s=texture(uSrc,uv+vec2(cos(a),sin(a))*r*R*px).rgb;float w=exp(-pow((luma(s)-l0)/sig,2.));acc+=s*w;W+=w;}
+  vec3 sm=acc/W,o=sm+(c-sm)*(.25+u_detail/100.*.75);
+  float sk=smoothstep(.02,.07,c.r-c.g)*smoothstep(0.,.05,c.g-c.b)*(1.-smoothstep(.28,.45,c.r-c.g));
+  float m=u_smooth/100.*mix(1.,sk,u_skin/100.);o=mix(c,o,m);
+  o+=sm*u_glow/100.*.09*m;
+  return vec4(clamp(o,0.,1.),1.);}`});
+
+  defineModule({id:'clarity',family:'Studio',name:'Clarity',
+    params:[{k:'amt',label:'Amount',min:0,max:100,def:45,sec:'Local contrast',hero:true},{k:'rad',label:'Radius',min:0,max:100,def:50,sec:'Local contrast',hero:true},{k:'prot',label:'Protect ends',min:0,max:100,def:60,sec:'Local contrast',hero:true}],
+    frag:SS+`
+vec4 fx(vec2 uv){
+  vec3 c=texture(uSrc,uv).rgb;vec2 px=1./uRes;float R=(6.+u_rad/100.*28.)*S;vec3 b=c;
+  for(int i=0;i<8;i++){float a=float(i)*.7854;vec2 d=vec2(cos(a),sin(a))*px;b+=texture(uSrc,uv+d*R).rgb+texture(uSrc,uv+d*R*.5).rgb;}
+  b/=17.;float l=luma(c),w=mix(1.,4.*l*(1.-l),u_prot/100.);
+  return vec4(clamp(c+(c-b)*u_amt/100.*1.8*w,0.,1.),1.);}`});
+
+  defineModule({id:'highkey',family:'Studio',name:'High Key',
+    params:[{k:'lift',label:'Brightness',min:0,max:100,def:55,sec:'Light',hero:true},{k:'air',label:'Airy shadows',min:0,max:100,def:45,sec:'Light',hero:true},{k:'glow',label:'Soft glow',min:0,max:100,def:30,sec:'Light',hero:true}],
+    frag:SS+`
+vec4 fx(vec2 uv){
+  vec3 c=texture(uSrc,uv).rgb;vec2 px=1./uRes;float R=14.*S;vec3 b=c;
+  for(int i=0;i<8;i++){float a=float(i)*.7854;b+=texture(uSrc,uv+vec2(cos(a),sin(a))*px*R).rgb;}
+  b/=9.;vec3 o=c*(1.+u_lift/100.*.25);o=1.-pow(clamp(1.-o,0.,1.),vec3(1.+u_lift/100.*.55));
+  o=mix(o,vec3(.985),u_air/100.*.3*(1.-luma(o)));o=mix(o,1.-(1.-o)*(1.-b),u_glow/100.*.6);
+  o=mix(vec3(luma(o)),o,.92);return vec4(clamp(o,0.,1.),1.);}`});
+
+  defineModule({id:'lowkey',family:'Studio',name:'Low Key',
+    params:[{k:'depth',label:'Darkness',min:0,max:100,def:65,sec:'Light',hero:true},{k:'size',label:'Pool of light',min:0,max:100,def:50,sec:'Light',hero:true},{k:'warm',label:'Warmth',min:0,max:100,def:35,sec:'Light',hero:true},
+      {k:'pos',label:'Light position',min:0,max:100,def:50,sec:'Advanced'},{k:'crush',label:'Crush blacks',min:0,max:100,def:40,sec:'Advanced'}],
+    frag:SS+`
+vec4 fx(vec2 uv){
+  vec3 c=texture(uSrc,uv).rgb;float d=length((uv-vec2(u_pos/100.,.45))*vec2(uRes.x/uRes.y,1.));
+  float lit=1.-smoothstep(.04,.25+u_size/100.*.9,d);vec3 o=pow(c,vec3(1.+u_crush/100.*.8));
+  o*=mix(1.,lit*1.2+.03,u_depth/100.);o*=mix(vec3(1.),vec3(1.07,.98,.88),u_warm/100.*lit);
+  return vec4(clamp(o,0.,1.),1.);}`});
+
+  defineModule({id:'tealorange',family:'Studio',name:'Teal and Orange',
+    params:[{k:'split',label:'Split',min:0,max:100,def:55,sec:'Grade',hero:true},{k:'con',label:'Contrast',min:0,max:100,def:40,sec:'Grade',hero:true},{k:'sat',label:'Colour',min:0,max:100,def:50,sec:'Grade',hero:true}],
+    frag:SS+`
+vec4 fx(vec2 uv){
+  vec3 c=texture(uSrc,uv).rgb;float l=luma(c);
+  c=mix(c,c*mix(vec3(.74,1.,1.08),vec3(1.12,1.,.84),smoothstep(.15,.85,l)),u_split/100.);
+  c=(c-.5)*(1.+u_con/100.*.4)+.5;c=mix(vec3(luma(c)),c,.7+u_sat/100.*.6);
+  return vec4(clamp(c,0.,1.),1.);}`});
+
+  defineModule({id:'cinebars',family:'Studio',name:'Cinema Frame',
+    params:[{k:'ar',label:'Frame shape',min:1.33,max:2.6,def:2.39,step:.01,sec:'Frame',hero:true},{k:'curve',label:'Film curve',min:0,max:100,def:55,sec:'Frame',hero:true},{k:'glow',label:'Highlight glow',min:0,max:100,def:30,sec:'Frame',hero:true}],
+    frag:SS+`
+vec4 fx(vec2 uv){
+  vec3 c=texture(uSrc,uv).rgb;vec2 px=1./uRes;float R=12.*S;vec3 b=c;
+  for(int i=0;i<8;i++){float a=float(i)*.7854;b+=max(texture(uSrc,uv+vec2(cos(a),sin(a))*px*R).rgb-.6,0.);}
+  c+=b/9.*u_glow/100.*1.2*vec3(1.,.9,.8);
+  vec3 s=c*c*(3.-2.*c);c=mix(c,s,u_curve/100.);c=mix(vec3(luma(c)),c,1.05);
+  float vh=uRes.x/(u_ar*uRes.y);if(vh<1.&&abs(uv.y-.5)>vh*.5)c=vec3(0.);
+  return vec4(clamp(c,0.,1.),1.);}`});
+
+  defineModule({id:'promist',family:'Studio',name:'Pro Mist',
+    params:[{k:'amt',label:'Diffusion',min:0,max:100,def:45,sec:'Filter',hero:true},{k:'size',label:'Spread',min:0,max:100,def:50,sec:'Filter',hero:true},{k:'warm',label:'Warm',min:0,max:100,def:30,sec:'Filter',hero:true}],
+    frag:SS+`
+vec4 fx(vec2 uv){
+  vec3 c=texture(uSrc,uv).rgb;vec2 px=1./uRes;float R=(8.+u_size/100.*26.)*S;vec3 b=c;
+  for(int i=0;i<8;i++){float a=float(i)*.7854;vec2 d=vec2(cos(a),sin(a))*px;b+=texture(uSrc,uv+d*R).rgb+texture(uSrc,uv+d*R*2.).rgb;}
+  b/=17.;vec3 hi=max(b-.35,0.)*1.5;vec3 o=1.-(1.-c)*(1.-hi*u_amt/100.*.8);
+  o*=mix(vec3(1.),vec3(1.05,1.,.93),u_warm/100.*u_amt/100.);o=(o-.5)*(1.-u_amt/100.*.1)+.5;
+  return vec4(clamp(o,0.,1.),1.);}`});
+
+  defineModule({id:'splittone',family:'Studio',name:'Split Tone',
+    params:[{k:'sh',label:'Shadow hue',min:0,max:360,def:210,step:1,sec:'Tone',hero:true},{k:'hi',label:'Highlight hue',min:0,max:360,def:38,step:1,sec:'Tone',hero:true},{k:'amt',label:'Amount',min:0,max:100,def:45,sec:'Tone',hero:true},
+      {k:'bal',label:'Balance',min:-50,max:50,def:0,sec:'Advanced'}],
+    frag:SS+`
+vec3 hue3(float h){return clamp(abs(mod(h/60.+vec3(0.,4.,2.),6.)-3.)-1.,0.,1.);}
+vec4 fx(vec2 uv){
+  vec3 c=texture(uSrc,uv).rgb;float l=luma(c),b=u_bal/100.;
+  vec3 t=mix(hue3(u_sh),hue3(u_hi),smoothstep(.2+b,.8+b,l));
+  return vec4(clamp(mix(c,c*(.4+t*1.2),u_amt/100.*.75),0.,1.),1.);}`});
+
+  defineModule({id:'gradnd',family:'Studio',name:'Graduated Filter',
+    params:[{k:'pos',label:'Horizon',min:0,max:100,def:55,sec:'Filter',hero:true},{k:'str',label:'Darken sky',min:0,max:100,def:45,sec:'Filter',hero:true},{k:'warm',label:'Warm tint',min:0,max:100,def:25,sec:'Filter',hero:true},
+      {k:'soft',label:'Softness',min:5,max:100,def:40,sec:'Advanced'}],
+    frag:SS+`
+vec4 fx(vec2 uv){
+  vec3 c=texture(uSrc,uv).rgb;float h=u_pos/100.,w=u_soft/200.+.01,m=smoothstep(h-w,h+w,uv.y);
+  c*=exp2(-m*u_str/100.*2.2)*mix(vec3(1.),vec3(1.1,.96,.8),m*u_warm/100.);
+  return vec4(clamp(c,0.,1.),1.);}`});
+
+  defineModule({id:'bwpro',family:'Studio',name:'Black and White Pro',
+    params:[{k:'flt',t:'c',label:'Filter',opts:['None','Yellow','Orange','Red','Green','Blue'],def:2,sec:'Mono',hero:true},{k:'con',label:'Contrast',min:0,max:100,def:45,sec:'Mono',hero:true},{k:'grain',label:'Grain',min:0,max:100,def:14,sec:'Mono',hero:true},
+      {k:'tone',label:'Warm paper',min:0,max:100,def:20,sec:'Advanced'}],
+    frag:SS+`
+vec4 fx(vec2 uv){
+  vec3 c=texture(uSrc,uv).rgb;int f=int(u_flt+.5);
+  vec3 w=f==1?vec3(.45,.5,.05):f==2?vec3(.6,.37,.03):f==3?vec3(.8,.2,0.):f==4?vec3(.15,.75,.1):f==5?vec3(.05,.25,.7):vec3(.3,.59,.11);
+  float l=dot(c,w);l=mix(l,l*l*(3.-2.*l),u_con/100.);l=mix(l,smoothstep(.02,.98,l),u_con/200.);
+  l+=(vnoise(uv*uRes/(1.4*S)+floor(uTime*12.)*7.1)-.5)*u_grain/100.*.2*(1.-abs(l-.5)*1.2);
+  vec3 o=vec3(l)*mix(vec3(1.),vec3(1.05,1.,.92),u_tone/100.);
+  return vec4(clamp(o,0.,1.),1.);}`});
+
+  defineModule({id:'portra',family:'Studio',name:'Portrait Film',
+    params:[{k:'warm',label:'Warm skin',min:0,max:100,def:55,sec:'Stock',hero:true},{k:'fade',label:'Soft toe',min:0,max:100,def:45,sec:'Stock',hero:true},{k:'soft',label:'Gentle contrast',min:0,max:100,def:40,sec:'Stock',hero:true}],
+    frag:SS+`
+vec4 fx(vec2 uv){
+  vec3 c=texture(uSrc,uv).rgb;float l=luma(c);c=mix(vec3(l),c,.92);
+  c=c*(1.-u_fade/100.*.07)+u_fade/100.*.04*vec3(1.,.97,.93);
+  c*=mix(vec3(1.),vec3(1.06,1.,.92),smoothstep(.35,1.,l)*u_warm/100.);
+  c+=vec3(-.008,.012,.012)*(1.-l)*u_fade/100.;
+  c=(c-.5)*(1.-u_soft/100.*.14)+.5;return vec4(clamp(c,0.,1.),1.);}`});
+
+  defineModule({id:'rimlight',family:'Studio',name:'Rim Light',
+    params:[{k:'ang',label:'Light angle',min:0,max:360,def:40,step:1,sec:'Rim',hero:true},{k:'wid',label:'Width',min:2,max:30,def:9,sec:'Rim',hero:true},{k:'amt',label:'Strength',min:0,max:100,def:55,sec:'Rim',hero:true},
+      {k:'tone',t:'c',label:'Light colour',opts:['Cool','Warm','White'],def:0,sec:'Advanced'}],
+    frag:SS+`
+vec4 fx(vec2 uv){
+  vec3 c=texture(uSrc,uv).rgb;float a=radians(u_ang);vec2 d=vec2(cos(a),sin(a))*u_wid*S/uRes;
+  float e=max(0.,luma(texture(uSrc,uv-d).rgb)-luma(texture(uSrc,uv+d).rgb));e=smoothstep(.02,.3,e);
+  vec3 t=u_tone<.5?vec3(.55,.8,1.):u_tone<1.5?vec3(1.,.78,.5):vec3(1.);
+  return vec4(clamp(c+t*e*u_amt/100.*.9,0.,1.),1.);}`});
+
   /* ---- named recipes: whole stacks that open on a sample and stay editable ---- */
   const RECIPES=[
     {name:'Night evidence',note:'Two takes combined, then a contact sheet through a security camera',layers:[['doubletake',{mode:1,mix:90}],['contactstrip',{n:6,every:1.2}],['camsim','cctv']]},
@@ -355,6 +480,12 @@ vec4 fx(vec2 uv){
     {name:'Tape hotel',note:'Sodium-lit street through worn tape',layers:[['sodium',{}],['tapewobble',{}]]},
     {name:'Phone jello',note:'Hand-held shake with a rolling shutter and a leak',layers:[['rollshutter',{}],['lightleak',{amt:30}]]},
     {name:'Developing',note:'An instant print that slowly comes up',layers:[['develop',{}],['instantframe',{}]]},
+    {name:'Beauty portrait',note:'Soft skin, warm film tones and a touch of diffusion',layers:[['beauty',{}],['portra',{}],['promist',{amt:30}]]},
+    {name:'Editorial mono',note:'Orange-filter black and white with crisp local contrast',layers:[['bwpro',{}],['clarity',{amt:40}]]},
+    {name:'Cinema night',note:'Teal and orange in a wide frame with a soft highlight glow',layers:[['tealorange',{}],['cinebars',{}]]},
+    {name:'Clean product',note:'Bright, airy and sharp, like a white sweep',layers:[['highkey',{}],['clarity',{amt:35,prot:70}]]},
+    {name:'Moody portrait',note:'A pool of light, a cool rim and a split tone',layers:[['lowkey',{}],['rimlight',{}],['splittone',{}]]},
+    {name:'Golden landscape',note:'Graduated sky, clarity and warm film',layers:[['gradnd',{}],['clarity',{}],['portra',{warm:70}]]},
     {name:'Impossible window',note:'Time woven through a slow scan',layers:[['loom',{w:14,lag:85}],['scanner',{per:8,bw:10}]]}];
   return {RECIPES};
 }
