@@ -2594,6 +2594,10 @@ function drawCamOv(){
   const ov=$('#camov');if(!ov||!CAMMODE)return;const r=canvas.getBoundingClientRect(),st=$('#stage').getBoundingClientRect();
   const w=Math.round(r.width),h=Math.round(r.height);if(ov.width!==w||ov.height!==h){ov.width=w;ov.height=h;}
   ov.style.left=(r.left-st.left)+'px';ov.style.top=(r.top-st.top)+'px';ov.style.width=w+'px';ov.style.height=h+'px';
+  {const gb=$('.camgridbox');if(gb){gb.style.left=ov.style.left;gb.style.top=ov.style.top;gb.style.width=w+'px';gb.style.height=h+'px';
+    const tb=$('.camtop'),bb=$('.cambot'),cut=(a,b)=>Math.max(0,a-b);let top=0,bot=0;
+    if(tb)top=cut(tb.getBoundingClientRect().bottom,r.top);if(bb)bot=cut(r.bottom,bb.getBoundingClientRect().top);
+    gb.style.clipPath='inset('+top+'px 0 '+bot+'px 0)';}}
   drawOverlay(ov.getContext('2d'),w,h,CAMS[camIx],{text:camText,t:camRecOn?(performance.now()-camRec0)/1000:0,recOn:camRecOn});
 }
 function paintCamUI(){
@@ -2774,7 +2778,7 @@ function buildCamUI(){
   const cd=el('div','camcount');cd.id='camcount';cd.hidden=true;const fp=el('div','camfpsv');fp.id='camfpsv';fp.hidden=true;
   const pro=el('div','campro');pro.id='campro';const lv=el('div','camlevel');lv.id='camlevel';lv.hidden=true;const hs=document.createElement('canvas');hs.id='camhist';hs.width=128;hs.height=48;hs.hidden=true;const sf=el('div','camflash');sf.id='camflash';
   u.append(ov,lv,hs,sf,top,more,pro,bot,rb,cd,fp,el('i','g1'),el('i','g2'),el('i','g3'),el('i','g4'));stage.appendChild(u);
-  IOSCAM=installIosCam({u,$,el,PRO,applyPro,hwSet,buzz,toast,lsGet,lsSet,caps:()=>proCaps});
+  IOSCAM=installIosCam({u,$,el,PRO,applyPro,hwSet,buzz,toast,lsGet,lsSet,caps:()=>proCaps,refit:()=>{V.sizeKey='';paintCamUI();}});
   {const k=lsGet('n0ise.camkind',null);if(k&&k!==camKind)setKind(k,true);u.dataset.kind=camKind;}
   let hold=0,holdRec=false,downBusy=false;
   const takePhoto=async()=>{if(camBusy)return;camBusy=true;

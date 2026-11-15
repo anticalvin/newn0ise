@@ -36,6 +36,13 @@ export function installIosCam(c){
         const s=ac.createBufferSource();s.buffer=b;const bp=ac.createBiquadFilter();bp.type='bandpass';bp.frequency.value=f;bp.Q.value=.9;const gn=ac.createGain();gn.gain.value=g;s.connect(bp);bp.connect(gn);gn.connect(ac.destination);s.start(at);};
       click(t,2600,.55);click(t+.075,1700,.4);}catch(e){}
   }
+  /* grid lines live in a box that follows the picture itself, so they never cross the buttons */
+  const gb=el('div','camgridbox');u.prepend(gb);
+  /* full screen: the picture keeps its own aspect ratio but the stage runs edge to edge, the bars float over it */
+  let fullOn=lsGet('n0ise.camfull','on')!=='off';
+  const applyFull=()=>{u.classList.toggle('full',fullOn);document.body.dataset.camfull=fullOn?'1':'';if(!fullOn)delete document.body.dataset.camfull;c.refit&&c.refit();};
+  if(more){const fb=el('button','cb','Full screen');fb.setAttribute('aria-pressed',fullOn);fb.addEventListener('click',()=>{fullOn=!fullOn;fb.setAttribute('aria-pressed',fullOn);lsSet('n0ise.camfull',fullOn?'on':'off');applyFull();});more.append(fb);}
+  applyFull();
   /* focus layer */
   const layer=el('div','camtap');u.prepend(layer);
   const fx=el('div','cfocus');fx.innerHTML='<i class="sq"></i><i class="sunline"></i><span class="sun">'+SVG.sun+'</span>';layer.appendChild(fx);
@@ -85,5 +92,5 @@ export function installIosCam(c){
   };
   layer.addEventListener('pointerup',end);layer.addEventListener('pointercancel',end);
   layer.addEventListener('contextmenu',e=>e.preventDefault());
-  return {sound,hideFocus(){fx.classList.remove('show','dim');lock.classList.remove('on');locked=false;PRO.afLock=false;},paintSun};
+  return {sound,applyFull,hideFocus(){fx.classList.remove('show','dim');lock.classList.remove('on');locked=false;PRO.afLock=false;},paintSun};
 }

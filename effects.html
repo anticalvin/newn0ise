@@ -457,6 +457,13 @@ body[data-cam] #stage{box-sizing:border-box;padding:calc(56px + env(safe-area-in
 @keyframes cfin{from{transform:scale(1.5);opacity:0}to{transform:scale(1);opacity:1}}
 @keyframes cflock{0%{transform:scale(1)}40%{transform:scale(1.12)}100%{transform:scale(1)}}
 @media (prefers-reduced-motion:reduce){.cfocus.show,.cfocus.lock .sq{animation:none}}
+.camui .g1,.camui .g2,.camui .g3,.camui .g4{display:none!important}
+.camgridbox{position:absolute;pointer-events:none;display:none;z-index:1;background:linear-gradient(90deg,transparent calc(33.33% - .5px),rgba(255,255,255,.42) 0 calc(33.33% + .5px),transparent 0 calc(66.66% - .5px),rgba(255,255,255,.42) 0 calc(66.66% + .5px),transparent 0),linear-gradient(0deg,transparent calc(33.33% - .5px),rgba(255,255,255,.42) 0 calc(33.33% + .5px),transparent 0 calc(66.66% - .5px),rgba(255,255,255,.42) 0 calc(66.66% + .5px),transparent 0)}
+.camui.grid .camgridbox{display:block}
+/* full screen: the stage runs edge to edge under the bottom bar; the picture keeps its own aspect ratio and sits right under the top bar */
+body[data-cam][data-camfull] #stage{padding-bottom:0;align-items:start}
+.camui.ios.full .cambot{background:linear-gradient(0deg,rgba(0,0,0,.86) 0,rgba(0,0,0,.6) 85%,rgba(0,0,0,.3));-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px)}
+.camui.full .camtap{bottom:0}
 .camt[hidden]{display:none}
 .tl{position:fixed;left:0;right:0;bottom:0;z-index:150;background:#0a0a0a;border-top:1px solid #3a3835;color:#f2efe8;font:600 11px var(--lab);padding:6px 8px calc(8px + env(safe-area-inset-bottom,0px));max-height:46dvh;overflow-y:auto}
 .tl[hidden]{display:none}
@@ -534,6 +541,6 @@ body[data-cam] .tl{bottom:var(--campad,0px);max-height:32dvh;border-bottom:1px s
   </main>
 </div>
 <input type="file" id="file" accept="image/*,video/*,audio/*,.mp3,.wav,.m4a,.ogg,.flac,.aac" hidden>
-<script type="module" src="assets/index.js?v=1eb0f098"></script>
+<script type="module" src="assets/index.js?v=db494ff4"></script>
 </body>
 </html>
