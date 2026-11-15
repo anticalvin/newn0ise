@@ -6,6 +6,7 @@ import {createEditor} from './editor.js';
 import {createOverlays} from './overlay.js';
 import {installLooks} from './looks.js';
 import {createNodes} from './nodes.js';
+import {installIosCam} from './camios.js';
 import {createPluginHost,SAFE as PLUG_SAFE} from './pluginhost.js';
 import {put as handoffPut,take as handoffTake} from './handoff.js';
 import {CAMSIM_PARAMS,CAMSIM_FRAG,SIMS} from './camsim.js';
@@ -1738,18 +1739,22 @@ window.__embedRender=function(cv,w,h,t,dt){
   renderStack(t,dt);V.frameNo++;return canvas;
 };
 const FRAME_HOOKS=[];
-/* Alive: an effect is never frozen. Each layer's main controls drift a few percent on slow sine waves and the grain seed crawls.
+/* Alive: an effect is never frozen. Every ranged control of every layer breathes a few percent on slow sine waves (scale-like controls more). No seed jumps, no glitching.
    The offsets are applied just before the frame is drawn and removed straight after, so saved values and sliders never change. */
 const IDLE={on:true,amt:.035,saved:[],reduce:matchMedia('(prefers-reduced-motion:reduce)').matches};
 function idleApply(t){
   IDLE.saved.length=0;if(!IDLE.on||ST.clean||(IDLE.reduce&&!IDLE.force))return;
   STACK.layers.forEach((l,li)=>{
     if(!l.visible||l.module==='crtlab')return;const m=MODULES[l.module];if(!m||!l.params)return;
-    const keys=m.schema.hero.length?m.schema.hero:m.params.filter(p=>p.t==='r'&&!/^(orig|seed)$/.test(p.k)).slice(0,2).map(p=>p.k);
-    keys.slice(0,3).forEach((k,i)=>{const p=m.params.find(x=>x.k===k);if(!p||p.t!=='r'||typeof l.params[k]!=='number'||!(p.max>p.min))return;
-      const base=l.params[k],span=p.max-p.min,w=Math.sin(t*(.45+.17*i)+li*1.7+i*2.1)*.7+Math.sin(t*(.13+.05*i)+i)*.3;
-      IDLE.saved.push([l.params,k,base]);l.params[k]=Math.max(p.min,Math.min(p.max,base+span*IDLE.amt*w));});
-    IDLE.saved.push([l,'seed',l.seed]);l.seed=(l.seed||0)+Math.floor(t*2)%997;
+    /* every ranged control breathes, smoothly. Scale-like ones (size, zoom, cell, frequency, radius...) move the most.
+       Whole-number controls with a small range are left alone so nothing steps or pops; the seed is never touched. */
+    m.params.forEach((p,i)=>{
+      if(p.t!=='r'||/seed/i.test(p.k)||/^(orig|opacity|mix|ev|temp|flash|shoulder)$/.test(p.k)||typeof l.params[p.k]!=='number'||!(p.max>p.min))return;
+      if(p.step>=1&&p.max-p.min<24)return;
+      const k=p.k,base=l.params[k],span=p.max-p.min,scaly=/size|scale|zoom|cell|freq|width|radius|spread|amount|strength|block|pixel|px|density|period|length|depth/i.test(k+' '+(p.l||p.label||''));
+      const w=Math.sin(t*(.31+.11*(i%5))+li*1.7+i*2.3)*.75+Math.sin(t*(.09+.04*(i%3))+i*.9+li)*.25;
+      let v=base+span*(scaly?.085:.04)*w;if(p.step>=1)v=Math.round(v);
+      IDLE.saved.push([l.params,k,base]);l.params[k]=Math.max(p.min,Math.min(p.max,v));});
   });
 }
 function idleRestore(){for(const [o,k,v] of IDLE.saved)o[k]=v;IDLE.saved.length=0;}
@@ -2609,7 +2614,8 @@ async function camShoot(){
   if(blob){const u=$('#camui');u.classList.add('flash');setTimeout(()=>u.classList.remove('flash'),120);buzz(25);await rollAdd(blob,stamp()+'.jpg',false);}
 }
 /* ---- camera recording on the shared recorder (src/recorder.js) ---- */
-let camMode='photo';
+let IOSCAM=null;
+let camMode='photo',camKind='photo',camAspBack='';
 const camRecUI=()=>{const u=$('#camui'),sh=$('#shutter');if(!u||!sh)return;const st=camRecorder.state;u.dataset.rec=st;
   sh.classList.toggle('rec',st==='recording'||st==='stopping');sh.disabled=st==='stopping'||st==='saving';
   const bar=$('#camrec');if(bar){bar.hidden=!(st==='recording'||st==='stopping'||st==='saving');bar.querySelector('.rt').textContent=st==='saving'?'Saving…':fmtTime(camRecorder.sec||0);}};
@@ -2657,11 +2663,11 @@ async function applyPro(){
     sl.params.temp=tw+(hw?0:Math.max(-100,Math.min(100,(PRO.wb-5600)/30)));}
   else{sl.params.temp=tw;if(proCaps.whiteBalanceMode)hwSet({whiteBalanceMode:'continuous'});}
   if(PRO.focus>=0&&rng(proCaps,'focusDistance'))hwSet({focusMode:'manual',focusDistance:PRO.focus});
-  else if(proCaps.focusMode&&proCaps.focusMode.includes('continuous'))hwSet({focusMode:'continuous'});
+  else if(!PRO.afLock&&proCaps.focusMode&&proCaps.focusMode.includes('continuous'))hwSet({focusMode:'continuous'});
 }
 const flashBtnLabel=()=>PRO.flash==='off'?'Flash':PRO.flash==='on'?'Flash on':'Torch';
 async function setFlash(mode){
-  PRO.flash=mode;const b=$('#camflashb');if(b){b.textContent=flashBtnLabel();b.setAttribute('aria-pressed',mode!=='off');}
+  PRO.flash=mode;const b=$('#camflashb');if(b){if(!b.querySelector('svg'))b.textContent=flashBtnLabel();b.setAttribute('aria-pressed',mode!=='off');b.title=flashBtnLabel();}
   if(proCaps.torch)await hwSet({torch:mode==='torch'});
   if(mode==='torch'&&!proCaps.torch)toast('This browser can’t switch the torch. Flash will use a bright screen on the front camera.');
 }
@@ -2756,16 +2762,28 @@ function buildCamUI(){
   const sh=el('button','shutter');sh.id='shutter';sh.setAttribute('aria-label','Shutter. Tap for a photo, hold to record');
   const sw=el('button','cb camswap','Next');sw.setAttribute('aria-label','Next camera');sw.addEventListener('click',()=>camStep(1));
   row.append(roll,sh,sw);
-  const modes=el('div','cammode');[['photo','Photo'],['video','Video']].forEach(([m,l])=>{const b=el('button','',l);b.dataset.m=m;b.setAttribute('aria-pressed',camMode===m);b.addEventListener('click',()=>{if(camRecorder.busy)return;camMode=m;lsSet('n0ise.cammode',m);modes.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x.dataset.m===m));sh.setAttribute('aria-label',m==='video'?'Shutter. Tap to start or stop recording':'Shutter. Tap for a photo, hold to record');});modes.appendChild(b);});
+  const modes=el('div','cammode');
+  const KINDS=[['video','Video'],['photo','Photo'],['square','Square'],['burst','Burst']];
+  const setKind=(m,quiet)=>{if(camRecorder.busy)return;const was=camKind;camKind=m;camMode=m==='video'?'video':'photo';lsSet('n0ise.cammode',camMode);lsSet('n0ise.camkind',m);u.dataset.kind=m;
+    if(m==='square'&&was!=='square'){camAspBack=P.aspect;P.aspect='1:1';V.sizeKey='';}else if(was==='square'&&m!=='square'){P.aspect=camAspBack||'3:4';V.sizeKey='';}
+    modes.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x.dataset.m===m));
+    sh.setAttribute('aria-label',m==='video'?'Shutter. Tap to start or stop recording':m==='burst'?'Shutter. Tap for a burst of photos':'Shutter. Tap for a photo, hold to record');if(!quiet){buzz(6);paintCamUI();}};
+  KINDS.forEach(([m,l])=>{const b=el('button','',l);b.dataset.m=m;b.setAttribute('aria-pressed',camKind===m);b.addEventListener('click',()=>setKind(m));modes.appendChild(b);});
   bot.append(info,str,duo,cats,strip,modes,row);
   const rb=el('div','camrecbar');rb.id='camrec';rb.hidden=true;rb.innerHTML='<i></i><span class="rt">0:00</span>';
   const cd=el('div','camcount');cd.id='camcount';cd.hidden=true;const fp=el('div','camfpsv');fp.id='camfpsv';fp.hidden=true;
   const pro=el('div','campro');pro.id='campro';const lv=el('div','camlevel');lv.id='camlevel';lv.hidden=true;const hs=document.createElement('canvas');hs.id='camhist';hs.width=128;hs.height=48;hs.hidden=true;const sf=el('div','camflash');sf.id='camflash';
   u.append(ov,lv,hs,sf,top,more,pro,bot,rb,cd,fp,el('i','g1'),el('i','g2'),el('i','g3'),el('i','g4'));stage.appendChild(u);
+  IOSCAM=installIosCam({u,$,el,PRO,applyPro,hwSet,buzz,toast,lsGet,lsSet,caps:()=>proCaps});
+  {const k=lsGet('n0ise.camkind',null);if(k&&k!==camKind)setKind(k,true);u.dataset.kind=camKind;}
   let hold=0,holdRec=false,downBusy=false;
   const takePhoto=async()=>{if(camBusy)return;camBusy=true;
     for(let n=camTimer;n>0;n--){cd.hidden=false;cd.textContent=n;buzz(8);await new Promise(r=>setTimeout(r,1000));}cd.hidden=true;
-    try{await withFlash(camShoot);}finally{camBusy=false;}};
+    try{
+      if(IOSCAM)IOSCAM.sound();
+      if(camKind==='burst'){for(let i=0;i<8;i++){await camShoot();buzz(6);await new Promise(r=>setTimeout(r,90));}toast('Burst of 8 saved to the roll');}
+      else await withFlash(camShoot);
+    }finally{camBusy=false;}};
   sh.addEventListener('pointerdown',e=>{e.preventDefault();try{sh.setPointerCapture(e.pointerId);}catch(_){}
     downBusy=camRecorder.state==='stopping'||camRecorder.state==='saving'||camBusy;holdRec=false;if(downBusy)return;
     if(camRecorder.state==='recording')return; /* the release below stops it */

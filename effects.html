@@ -410,6 +410,53 @@ body[data-cam] #stage{box-sizing:border-box;padding:calc(56px + env(safe-area-in
 .camcats button[aria-pressed=true]{color:#f2efe8;border-bottom-color:var(--accent)}
 .camfav{position:absolute;right:14px;top:0;min-width:44px;min-height:44px;border:0;background:none;color:#f2efe8;font-size:22px}
 .caminfo{position:relative}.camfav{pointer-events:auto}
+/* 2016 iOS camera skin */
+.camui.ios{--y:#ffcc00;font-family:-apple-system,"SF Pro Text","Helvetica Neue",system-ui,sans-serif}
+.camui.ios .camtop{left:0;right:0;top:0;padding:calc(6px + env(safe-area-inset-top,0px)) 4px 0;height:calc(56px + env(safe-area-inset-top,0px));box-sizing:border-box;background:#000;gap:0;align-items:flex-start}
+.camui.ios .camtop .cb{background:none;border:0;border-radius:0;color:#fff;padding:0;min-height:44px;display:flex;align-items:center;justify-content:center;font:600 13px -apple-system,system-ui,sans-serif;text-transform:none;letter-spacing:0;white-space:nowrap}
+.camui.ios .camtop .cb svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.camui.ios .camtop .cb[aria-pressed=true]{background:none;color:var(--y)}
+.camui.ios #camx{order:0}.camui.ios #camflashb{order:1}.camui.ios #camgridt{order:2}.camui.ios #camtimt{order:3}.camui.ios #camasp{order:4}.camui.ios #campb{order:5}.camui.ios #cammore{order:6}.camui.ios #camflip{order:7}
+.camui:not(.ios) #camgridt,.camui:not(.ios) #camtimt{display:none}
+.camui.ios .cammoregrid .cb{background:rgba(28,28,30,.92);border:0;border-radius:8px;font-family:-apple-system,system-ui,sans-serif;text-transform:none;letter-spacing:0}
+.camui.ios .cammoregrid .cb[aria-pressed=true]{background:var(--y);color:#000}
+.camui.ios .cambot{background:#000;gap:2px;padding-top:6px}
+.camui.ios .caminfo b{font:600 12px -apple-system,system-ui,sans-serif;text-transform:none;letter-spacing:.02em;color:var(--y)}
+.camui.ios .caminfo span{display:none}
+.camui.ios #camstr{accent-color:var(--y)}
+.camui.ios .camcats button{font:600 11px -apple-system,system-ui,sans-serif;text-transform:none;letter-spacing:0;color:#8e8e93}
+.camui.ios .camcats button[aria-pressed=true]{color:var(--y);border-bottom-color:transparent}
+.camui.ios .camt{background:transparent;border:0;color:#8e8e93;border-radius:10px}
+.camui.ios .camt[aria-pressed=true]{background:rgba(255,204,0,.13);color:var(--y)}
+.camui.ios .camt span{font:600 10px -apple-system,system-ui,sans-serif;text-transform:none;letter-spacing:0}
+.camui.ios .cammode{gap:0;padding:0}
+.camui.ios .cammode button{min-width:76px;min-height:44px;background:none;border:0;border-radius:0;color:#fff;opacity:.85;font:600 13px -apple-system,system-ui,sans-serif;letter-spacing:.04em;text-transform:uppercase}
+.camui.ios .cammode button[aria-pressed=true]{background:none;color:var(--y);opacity:1}
+.camui.ios .camrow{padding:0 28px}
+.camui.ios .shutter{width:66px;height:66px;border:4px solid #fff}
+.camui.ios .shutter::after{inset:3px}
+.camui.ios .shutter:active::after{background:#bdbdbd}
+.camui.ios[data-kind=video] .shutter::after{background:#ff3b30}
+.camui.ios .shutter.rec::after{inset:16px;border-radius:5px;background:#ff3b30}
+.camui.ios .camrow .camroll{width:44px;height:44px;min-height:44px;border:1px solid #48484a;border-radius:8px;background:#1c1c1e;color:#fff;font:600 10px -apple-system,system-ui,sans-serif}
+.camui.ios .camrow .camswap{width:44px;height:44px;min-height:44px;border:0;border-radius:50%;background:#1c1c1e;color:#fff;font:600 10px -apple-system,system-ui,sans-serif;text-transform:none;padding:0}
+.camui.ios .g1,.camui.ios .g2,.camui.ios .g3,.camui.ios .g4{background:rgba(255,255,255,.32)}
+.camtap{position:absolute;left:0;right:0;top:calc(56px + env(safe-area-inset-top,0px));bottom:var(--campad,200px);pointer-events:auto;touch-action:none;z-index:0;-webkit-user-select:none;user-select:none}
+.cfocus{position:absolute;width:76px;height:76px;margin:-38px 0 0 -38px;pointer-events:none;opacity:0;z-index:2}
+.cfocus.show{opacity:1;animation:cfin .3s cubic-bezier(.2,1.3,.4,1)}
+.cfocus.show.dim{opacity:.55;transition:opacity .5s}
+.cfocus .sq{position:absolute;inset:0;border:1.5px solid #ffcc00;box-shadow:0 0 0 .5px rgba(0,0,0,.3);background:linear-gradient(#ffcc00,#ffcc00) 50% 0/1.5px 7px no-repeat,linear-gradient(#ffcc00,#ffcc00) 50% 100%/1.5px 7px no-repeat,linear-gradient(#ffcc00,#ffcc00) 0 50%/7px 1.5px no-repeat,linear-gradient(#ffcc00,#ffcc00) 100% 50%/7px 1.5px no-repeat}
+.cfocus .sunline{position:absolute;left:calc(100% + 22px);top:-38px;bottom:-38px;width:1.5px;background:#ffcc00;opacity:.85}
+.cfocus .sun{position:absolute;left:calc(100% + 9px);top:50%;width:26px;height:26px;margin-top:-13px;color:#ffcc00;background:rgba(0,0,0,.001)}
+.cfocus .sun svg{width:26px;height:26px;display:block}
+.cfocus.lock .sq{animation:cflock .45s ease-out}
+.clock{position:absolute;top:10px;left:50%;transform:translateX(-50%);background:#ffcc00;color:#000;font:700 12px -apple-system,system-ui,sans-serif;letter-spacing:.04em;padding:6px 10px;border-radius:5px;opacity:0;pointer-events:none;transition:opacity .15s}
+.clock.on{opacity:1}
+.czoom{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);min-width:48px;height:48px;border-radius:24px;border:0;background:rgba(0,0,0,.55);color:#ffcc00;font:700 14px -apple-system,system-ui,sans-serif;display:none;align-items:center;justify-content:center;padding:0 10px}
+.czoom.on{display:flex}
+@keyframes cfin{from{transform:scale(1.5);opacity:0}to{transform:scale(1);opacity:1}}
+@keyframes cflock{0%{transform:scale(1)}40%{transform:scale(1.12)}100%{transform:scale(1)}}
+@media (prefers-reduced-motion:reduce){.cfocus.show,.cfocus.lock .sq{animation:none}}
 .camt[hidden]{display:none}
 .tl{position:fixed;left:0;right:0;bottom:0;z-index:150;background:#0a0a0a;border-top:1px solid #3a3835;color:#f2efe8;font:600 11px var(--lab);padding:6px 8px calc(8px + env(safe-area-inset-bottom,0px));max-height:46dvh;overflow-y:auto}
 .tl[hidden]{display:none}
@@ -487,6 +534,6 @@ body[data-cam] .tl{bottom:var(--campad,0px);max-height:32dvh;border-bottom:1px s
   </main>
 </div>
 <input type="file" id="file" accept="image/*,video/*,audio/*,.mp3,.wav,.m4a,.ogg,.flac,.aac" hidden>
-<script type="module" src="assets/index.js?v=db4c1cc1"></script>
+<script type="module" src="assets/index.js?v=1eb0f098"></script>
 </body>
 </html>
