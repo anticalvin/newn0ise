@@ -102,6 +102,8 @@ setup(d3,({W,H,t,px,py,put,col})=>{
   for(let i=0;i<8;i++)for(let j=i+1;j<8;j++){const p=V[i],q=V[j],d=(p[2]!==q[2])+(p[3]!==q[3])+(V[i][4]!==V[j][4]);if(d!==1)continue;
     const n=Math.round(Math.hypot(p[0]-q[0],p[1]-q[1]));for(let k=0;k<=n;k++){const u=k/n;put(Math.round(p[0]+(q[0]-p[0])*u),Math.round(p[1]+(q[1]-p[1])*u),255,col);}}
 });
+/* lab: a flow field of drifting marks that bends toward the pointer */
+{const N=90,P=Array.from({length:N},(_,i)=>[Math.abs(Math.sin(i*12.9898)*43758.5453)%1,Math.abs(Math.sin(i*78.233)*12543.31)%1]);
 setup(d5,({W,H,t,px,py,hot,put,col})=>{
   for(const p of P){
     const a=Math.sin(p[0]*6.3+t*.5)*1.7+Math.cos(p[1]*5.1-t*.4)*1.7+Math.atan2(py-p[1],px-p[0])*hot*.6,sp=reduce?0:.004;

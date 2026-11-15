@@ -2846,7 +2846,7 @@ function buildCamUI(){
   const top=el('div','camtop');
   top.append(btn('camx','✕','Close camera',()=>closeCamera()),btn('camflip','Flip','Flip camera',async()=>{await startCam(true);setPM(camFacing==='user');readCaps();applyCam(camIx,true);applyPro();}),
     btn('camflashb','Flash','Flash',()=>{setFlash(PRO.flash==='off'?'on':PRO.flash==='on'?(proCaps.torch?'torch':'off'):'off');}),
-    btn('camasp','3:4','Frame shape',e=>{const o=['3:4','1:1','4:3','9:16','16:9','src'],i=(o.indexOf(P.aspect)+1)%o.length;P.aspect=o[i];if(camAspLock)camAspLock=o[i],lsSet('n0ise.camasplock',o[i]);V.sizeKey='';paintCamUI();}),
+    btn('camasp','3:4','Frame shape',e=>{const o=['3:4','4:5','1:1','3:2','4:3','16:9','21:9','9:16','src'],i=(o.indexOf(P.aspect)+1)%o.length;P.aspect=o[i];if(camAspLock)camAspLock=o[i],lsSet('n0ise.camasplock',o[i]);V.sizeKey='';paintCamUI();}),
     btn('campb','Pro','Pro controls',e=>{const on=u.classList.toggle('pro');u.classList.remove('more');e.currentTarget.setAttribute('aria-pressed',on);if(on)renderPro();}),
     btn('cammore','More','More controls',e=>{const on=u.classList.toggle('more');u.classList.remove('pro');$('#campb').setAttribute('aria-pressed',false);e.currentTarget.setAttribute('aria-pressed',on);}));
   const more=el('div','cammoregrid');
@@ -2879,7 +2879,7 @@ function buildCamUI(){
   const strip=el('div','camstrip');strip.id='camstrip';strip.setAttribute('role','listbox');strip.setAttribute('aria-label','Cameras');
   CAMS.forEach((c,i)=>{const b=el('button','camt');b.setAttribute('role','option');b.innerHTML=glyph(c.glyph)+`<span>${c.name}</span>`;b.addEventListener('click',()=>{if(camIx!==i)applyCam(i);else setShoot(true);});strip.appendChild(b);});
   const cats=el('div','camcats');cats.id='camcats';cats.setAttribute('role','tablist');
-  ['All','★','Film','Video','Digital','Glitch','Time','Subject','Animal'].forEach(n=>{const b=el('button','',n);b.dataset.c=n;b.setAttribute('aria-pressed',n===camCat);b.addEventListener('click',()=>setCamCat(n));cats.appendChild(b);});
+  ['All','★','Pro','Cinema','Film','Video','Digital','Glitch','Time','Subject','Animal'].forEach(n=>{const b=el('button','',n);b.dataset.c=n;b.setAttribute('aria-pressed',n===camCat);b.addEventListener('click',()=>setCamCat(n));cats.appendChild(b);});
   let sT=0;strip.addEventListener('scroll',()=>{strip._dragging=true;clearTimeout(sT);sT=setTimeout(()=>{strip._dragging=false;const mid=strip.scrollLeft+strip.clientWidth/2;let best=0,bd=1e9;[...strip.children].forEach((t,i)=>{if(t.hidden)return;const d=Math.abs(t.offsetLeft+t.offsetWidth/2-mid);if(d<bd){bd=d;best=i;}});if(best!==camIx)applyCam(best);},110);},{passive:true});
   const row=el('div','camrow');
   const roll=el('button','camroll','Roll');roll.id='camroll';roll.setAttribute('aria-label','Open roll');roll.addEventListener('click',openRoll);
@@ -2887,11 +2887,11 @@ function buildCamUI(){
   const sw=el('button','cb camswap','Next');sw.setAttribute('aria-label','Next camera');sw.addEventListener('click',()=>u.classList.contains('shoot')?setShoot(false):camStep(1));
   row.append(roll,sh,sw);
   const modes=el('div','cammode');
-  const KINDS=[['video','Video'],['photo','Photo'],['square','Square'],['burst','Burst']];
+  const KINDS=[['video','Video'],['photo','Photo'],['square','Square'],['burst','Burst'],['bracket','Bracket']];
   const setKind=(m,quiet)=>{if(camRecorder.busy)return;const was=camKind;camKind=m;camMode=m==='video'?'video':'photo';lsSet('n0ise.cammode',camMode);lsSet('n0ise.camkind',m);u.dataset.kind=m;
     if(m==='square'&&was!=='square'){camAspBack=P.aspect;P.aspect='1:1';V.sizeKey='';}else if(was==='square'&&m!=='square'){P.aspect=camAspBack||'3:4';V.sizeKey='';}
     modes.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x.dataset.m===m));
-    sh.setAttribute('aria-label',m==='video'?'Shutter. Tap to start or stop recording':m==='burst'?'Shutter. Tap for a burst of photos':'Shutter. Tap for a photo, hold to record');if(!quiet){buzz(6);paintCamUI();}};
+    sh.setAttribute('aria-label',m==='video'?'Shutter. Tap to start or stop recording':m==='burst'?'Shutter. Tap for a burst of photos':m==='bracket'?'Shutter. Tap for three photos at different exposures':'Shutter. Tap for a photo, hold to record');if(!quiet){buzz(6);paintCamUI();}};
   KINDS.forEach(([m,l])=>{const b=el('button','',l);b.dataset.m=m;b.setAttribute('aria-pressed',camKind===m);b.addEventListener('click',()=>setKind(m));modes.appendChild(b);});
   bot.append(info,str,duo,cats,strip,modes,row);
   const rb=el('div','camrecbar');rb.id='camrec';rb.hidden=true;rb.innerHTML='<i></i><span class="rt">0:00</span>';
@@ -2906,6 +2906,7 @@ function buildCamUI(){
     try{
       if(IOSCAM)IOSCAM.sound();
       if(camKind==='burst'){for(let i=0;i<8;i++){await camShoot();buzz(6);await new Promise(r=>setTimeout(r,90));}toast('Burst of 8 saved to the roll');}
+      else if(camKind==='bracket'){const e0=PRO.ev;for(const d of[-1,0,1]){PRO.ev=Math.max(-2,Math.min(2,e0+d));applyPro();await frames2();await camShoot();buzz(6);}PRO.ev=e0;applyPro();toast('Bracket of 3 saved: darker, normal, brighter');}
       else await withFlash(camShoot);
     }finally{camBusy=false;}};
   sh.addEventListener('pointerdown',e=>{e.preventDefault();try{sh.setPointerCapture(e.pointerId);}catch(_){}
