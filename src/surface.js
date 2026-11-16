@@ -5,17 +5,18 @@
 export const SURF=[
   ['halftone','Halftone'],['crt','Phosphor scan'],['dither','Dither'],['thermal','Thermal'],['holo','Hologram'],['toon','Toon'],
   ['glitch','Glitch'],['hatch','Hatching'],['iris','Iridescent'],['grid','Grid'],['grain','Film grain'],['ink','Ink and paper'],
-  ['bands','Colour bands'],['dissolve','Dissolve'],['xray','X-ray'],['pop','Pop print'],['scan','Scanner sweep'],['gmap','Gradient map'],['voxel','Voxel tint']
+  ['bands','Colour bands'],['dissolve','Dissolve'],['xray','X-ray'],['pop','Pop print'],['scan','Scanner sweep'],['gmap','Gradient map'],['voxel','Voxel tint'],['custom','Your own code']
 ];
+export const CUSTOM_DEFAULT='// c lit colour, N normal, V view direction, P object position, fc screen pixel, t time, L brightness, fr rim, sc scale\nvec3 o = c;\no = mix(o, vec3(L), .5 + .5 * sin(P.y * 8. * sc + t));\no += vec3(1.,.5,.2) * fr * .6;\nreturn o;';
 const DEFAULTS={
   halftone:{c1:'#f2efe8',c2:'#0b0b0c',sc:1},crt:{c1:'#ffffff',c2:'#000000',sc:1},dither:{c1:'#f2efe8',c2:'#14161a',sc:1.2},thermal:{c1:'#ffffff',c2:'#000000',sc:1},
   holo:{c1:'#7fe8ff',c2:'#000000',sc:1},toon:{c1:'#ffffff',c2:'#101010',sc:1},glitch:{c1:'#ff4a3a',c2:'#000000',sc:1},hatch:{c1:'#16161a',c2:'#f2efe8',sc:1},
   iris:{c1:'#ffffff',c2:'#000000',sc:1},grid:{c1:'#f2efe8',c2:'#000000',sc:1},grain:{c1:'#ffffff',c2:'#000000',sc:1},ink:{c1:'#0e0e10',c2:'#efe9da',sc:1},
   bands:{c1:'#ffffff',c2:'#000000',sc:1},dissolve:{c1:'#ffb347',c2:'#000000',sc:1},xray:{c1:'#9fd8ff',c2:'#000000',sc:1},pop:{c1:'#ffffff',c2:'#000000',sc:1},
-  scan:{c1:'#ffffff',c2:'#000000',sc:1},gmap:{c1:'#f6e7c1',c2:'#1a1e3a',sc:1},voxel:{c1:'#ffffff',c2:'#000000',sc:1}
+  scan:{c1:'#ffffff',c2:'#000000',sc:1},gmap:{c1:'#f6e7c1',c2:'#1a1e3a',sc:1},voxel:{c1:'#ffffff',c2:'#000000',sc:1},custom:{c1:'#ffffff',c2:'#000000',sc:1}
 };
 const FRAG_FN=`
-uniform float uSM,uSA,uSS,uSV,uST;uniform vec3 uSC1,uSC2;
+uniform float uSM,uSA,uSS,uSV,uST,uSTa;uniform vec3 uSC1,uSC2,uSTc;
 varying vec3 vSP,vSW,vSN;
 float sH(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
 float sL(vec3 c){return dot(c,vec3(.299,.587,.114));}
@@ -24,7 +25,9 @@ float sB2(vec2 a){a=floor(a);return fract(a.x/2.+a.y*a.y*.75);}
 float sB4(vec2 a){return sB2(.5*a)*.25+sB2(a);}
 vec3 sHeat(float t){t=clamp(t,0.,1.);vec3 a=vec3(0.,0.,.1),b=vec3(.3,0.,.55),c=vec3(.85,.15,.25),d=vec3(1.,.6,0.),e=vec3(1.,.97,.6);
   if(t<.25)return mix(a,b,t*4.);if(t<.5)return mix(b,c,(t-.25)*4.);if(t<.75)return mix(c,d,(t-.5)*4.);return mix(d,e,(t-.75)*4.);}
+/*CUSTOM*/
 vec3 surfApply(vec3 c){
+  if(uSTa>0.){float l0=sL(c);c=mix(c,uSTc*(.2+l0*1.55),uSTa);}
   int m=int(uSM+.5);if(m==0)return c;
   vec3 N=normalize(vSN),V=normalize(cameraPosition-vSW);
   float fr=pow(1.-abs(dot(N,V)),2.4),L=sL(c),sc=max(.2,uSS),t=uST*uSV;vec2 fc=gl_FragCoord.xy;vec3 o=c;
@@ -46,15 +49,18 @@ vec3 surfApply(vec3 c){
   else if(m==16){vec3 q=floor(c*4.+.5)/4.;float cell=6.*sc;vec2 g=fc/cell;float r=length(fract(g)-.5)*2.;float dots=step(r,sqrt(clamp(1.-L,0.,1.))*.9)*step(L,.55);o=q*1.12*(1.-dots*.55);}
   else if(m==17){float y=sin(t*.8)*1.1;float b=exp(-pow((vSP.y-y)*5.,2.));o=c+uSC1*b*1.6;}
   else if(m==18){o=mix(uSC2,uSC1,smoothstep(0.,1.,L));}
+  else if(m==20){o=surfCustom(c,N,V,vSP,fc,t,L,fr,sc);}
   else if(m==19){vec3 cell=floor(vSP*6.*sc);float h=sH(cell.xy+cell.z*7.);o=c*(.7+.45*h);}
   return mix(c,o,uSA);
 }`;
+const customFn=body=>'vec3 surfCustom(vec3 c,vec3 N,vec3 V,vec3 P,vec2 fc,float t,float L,float fr,float sc){\n'+body+'\n}';
+const hashS=str=>{let h=5381;for(let i=0;i<str.length;i++)h=((h<<5)+h+str.charCodeAt(i))|0;return (h>>>0).toString(36);};
 export function createSurface(c){
   const {THREE,S,objById}=c;
   const meshes=o=>{const out=[];o.holder.traverse(n=>{if(n.isMesh&&!n.isSplatMesh&&n.material&&!(n.userData&&n.userData.noView))out.push(n);});return out;};
   function hook(o){
     if(o.surfU)return o.surfU;
-    const U={uSM:{value:0},uSA:{value:1},uSS:{value:1},uSV:{value:1},uST:{value:0},uSC1:{value:new THREE.Color('#ffffff')},uSC2:{value:new THREE.Color('#000000')}};
+    const U={uSM:{value:0},uSA:{value:1},uSS:{value:1},uSV:{value:1},uST:{value:0},uSC1:{value:new THREE.Color('#ffffff')},uSC2:{value:new THREE.Color('#000000')},uSTa:{value:0},uSTc:{value:new THREE.Color('#ffffff')}};
     o.surfU=U;
     meshes(o).forEach(n=>{
       const list=Array.isArray(n.material)?n.material:[n.material];
@@ -69,9 +75,9 @@ export function createSurface(c){
           Object.assign(sh.uniforms,U);
           if(!/#include <project_vertex>/.test(sh.vertexShader)||!/#include <dithering_fragment>/.test(sh.fragmentShader))return;
           sh.vertexShader='varying vec3 vSP,vSW,vSN;\n'+sh.vertexShader.replace('#include <project_vertex>','#include <project_vertex>\nvSP=transformed;vSW=(modelMatrix*vec4(transformed,1.)).xyz;vSN=normalize(mat3(modelMatrix)*normal);');
-          sh.fragmentShader=FRAG_FN+'\n'+sh.fragmentShader.replace('#include <dithering_fragment>','gl_FragColor.rgb=surfApply(gl_FragColor.rgb);\n#include <dithering_fragment>');
+          sh.fragmentShader=FRAG_FN.replace('/*CUSTOM*/',customFn((o.surf&&o.surf.code)||CUSTOM_DEFAULT))+'\n'+sh.fragmentShader.replace('#include <dithering_fragment>','gl_FragColor.rgb=surfApply(gl_FragColor.rgb);\n#include <dithering_fragment>');
         };
-        const key='surf'+mm.uuid;mm.customProgramCacheKey=()=>key;
+        mm.customProgramCacheKey=()=>'surf'+mm.uuid+hashS((o.surf&&o.surf.code)||'');(o.surfMats=o.surfMats||[]).push(mm);
         mm.needsUpdate=true;
         return mm;
       });
@@ -81,19 +87,42 @@ export function createSurface(c){
   }
   function set(o,patch){
     if(!o)return null;
-    const st=o.surf=Object.assign({m:'',amt:1,sc:1,sp:1,c1:'#ffffff',c2:'#000000'},o.surf||{},patch||{});
-    if(st.m&&!o.surfU)hook(o);
+    const st=o.surf=Object.assign({m:'',amt:1,sc:1,sp:1,c1:'#ffffff',c2:'#000000',tint:'#ffffff',ta:0},o.surf||{},patch||{});
+    if((st.m||st.ta>0)&&!o.surfU)hook(o);
+    if(patch&&patch.code!==undefined&&o.surfMats)o.surfMats.forEach(m=>{m.needsUpdate=true;});
     const U=o.surfU;if(!U)return st;
     const ix=st.m?SURF.findIndex(s=>s[0]===st.m)+1:0;
-    U.uSM.value=ix;U.uSA.value=st.amt;U.uSS.value=st.sc;U.uSV.value=st.sp;U.uSC1.value.set(st.c1);U.uSC2.value.set(st.c2);
+    U.uSM.value=ix;U.uSA.value=st.amt;U.uSS.value=st.sc;U.uSV.value=st.sp;U.uSC1.value.set(st.c1);U.uSC2.value.set(st.c2);U.uSTa.value=st.ta;U.uSTc.value.set(st.tint);
     return st;
   }
   function pick(o,id){
     const d=DEFAULTS[id]||{};
     return set(o,{m:id,c1:d.c1||'#ffffff',c2:d.c2||'#000000',sc:d.sc||1});
   }
-  return {SURF,set,pick,
+  return {SURF,set,pick,defaults:id=>({...(DEFAULTS[id]||{})}),
     clear(o){if(o&&o.surf)set(o,{m:''});},
+    recolour(o,hex,amt){return set(o,{tint:hex,ta:amt==null?.9:amt});},
+    textured(o){let t=false;o.holder.traverse(n=>{if(n.isMesh&&n.material){(Array.isArray(n.material)?n.material:[n.material]).forEach(m=>{if(m.map)t=true;});}});return t;},
     tick(t){for(const o of S.objs)if(o.surfU&&o.surf&&o.surf.m)o.surfU.uST.value=t;},
     any(){return S.objs.some(o=>o.surf&&o.surf.m);}};
+}
+
+/* a small material ball: the same surface shader on a sphere in its own little scene, to try a look before putting it on anything */
+export function createBall(THREE,RoomEnvironment,size=104){
+  const cv=document.createElement('canvas');cv.className='surfball';cv.style.cssText='width:'+size+'px;height:'+size+'px;border-radius:50%;display:block;background:#0b0b0c';
+  let rn=null,ok=true;
+  try{rn=new THREE.WebGLRenderer({canvas:cv,antialias:true,alpha:true});}catch(e){ok=false;}
+  if(!ok)return {el:cv,set(){},stop(){}};
+  const dpr=Math.min(2,devicePixelRatio||1);rn.setPixelRatio(dpr);rn.setSize(size,size,false);
+  const sc=new THREE.Scene(),cam=new THREE.PerspectiveCamera(32,1,.1,20);cam.position.set(0,0,3.2);
+  try{const pm=new THREE.PMREMGenerator(rn);sc.environment=pm.fromScene(new RoomEnvironment(),.04).texture;}catch(e){}
+  const k=new THREE.DirectionalLight(0xffffff,2.2);k.position.set(2,3,3);sc.add(k,new THREE.HemisphereLight(0xffffff,0x333338,.5));
+  const mesh=new THREE.Mesh(new THREE.SphereGeometry(1,48,32),new THREE.MeshStandardMaterial({color:0xcfc8bd,roughness:.45,metalness:.1}));
+  const g=new THREE.Group();g.add(mesh);sc.add(g);
+  const fake={objs:[]},bs=createSurface({THREE,S:fake,objById:()=>null}),obj={id:-999,holder:g,surf:null};fake.objs.push(obj);
+  let raf=0,last=0;
+  const draw=now=>{raf=requestAnimationFrame(draw);if(!cv.isConnected){return;}if(cv.offsetParent===null)return;if(now-last<33)return;last=now;
+    mesh.rotation.y=now/4000;bs.tick(now/1000);rn.render(sc,cam);};
+  raf=requestAnimationFrame(draw);
+  return {el:cv,set(st){bs.set(obj,st&&st.m?{...st}:{m:''});},stop(){cancelAnimationFrame(raf);}};
 }

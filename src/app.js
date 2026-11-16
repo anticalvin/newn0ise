@@ -1820,7 +1820,8 @@ window.__embedRender=function(cv,w,h,t,dt){
   if(!window.__embedReady())return null;
   EMB.w=w;EMB.h=h;
   if(SRC.el!==cv){setSource(cv,'Studio',true);}else uploadSrc();
-  idleApply(t);try{renderStack(t,dt);}finally{idleRestore();}V.frameNo++;return canvas;
+  const tonKeep=P.ton;if(window.__noHwText)P.ton=false;
+  idleApply(t);try{renderStack(t,dt);}finally{idleRestore();P.ton=tonKeep;}V.frameNo++;return canvas;
 };
 /* the 3D page gives every object its own effect stack: it can read the editor's stack, load one into the editor, or render a stored
    stack for one object without touching what the editor is showing */
@@ -1845,17 +1846,30 @@ function idleApply(t){
   STACK.layers.forEach((l,li)=>{
     if(l.module==='crtlab'&&l.visible){[['curv',.06],['beam',.08],['bloomb',.08],['spot',.08],['efoc',.08],['bloom',.06],['brad',.08],['hal',.06],['diff',.08],['mpitch',.07],['mstr',.05],['scan',.04],['glare',.08],['para',.08],['cper',.08]].forEach(([k,a],i)=>{const d=CTL[k];if(!d||typeof P[k]!=='number')return;const base=P[k],span=d.max-d.min,w=Math.sin(t*(.27+.09*(i%5))+i*1.9)*.75+Math.sin(t*(.08+.03*(i%3))+i)*.25;IDLE.saved.push([P,k,base]);P[k]=Math.max(d.min,Math.min(d.max,base+span*a*w));});return;}
     if(!l.visible||l.module==='crtlab')return;const m=MODULES[l.module];if(!m||!l.params)return;
-    /* every ranged control breathes, smoothly. Scale-like ones (size, zoom, cell, frequency, radius...) move the most.
-       Whole-number controls with a small range are left alone so nothing steps or pops; the seed is never touched. */
+    /* Alive: the look's own character drifts a little. It only touches controls that shape the look (scale, size, density, softness, threshold,
+       the module's hero controls) and never turns on something that is off, so no glitch, tear, flicker, jitter, noise or interference can
+       appear that the effect did not already have. Each effect gets its own speeds and phases from its name, so they do not all move alike. */
+    const hero=(m.schema&&m.schema.hero)||[],mh=hashStr(l.module);
     m.params.forEach((p,i)=>{
-      if(p.t!=='r'||/seed/i.test(p.k)||/^(orig|opacity|mix|ev|temp|flash|shoulder)$/.test(p.k)||typeof l.params[p.k]!=='number'||!(p.max>p.min))return;
+      if(p.t!=='r'||typeof l.params[p.k]!=='number'||!(p.max>p.min))return;
+      const k=p.k,name=k+' '+(p.l||p.label||''),base=l.params[k];
+      if(/seed/i.test(k)||/^(orig|opacity|mix|ev|temp|flash|shoulder)$/.test(k))return;
+      if(ALIVE_SKIP.test(name))return;
+      if(base<=p.min+1e-9||base===0)return;
       if(p.step>=1&&p.max-p.min<24)return;
-      const k=p.k,base=l.params[k],span=p.max-p.min,scaly=/size|scale|zoom|cell|freq|width|radius|spread|amount|strength|block|pixel|px|density|period|length|depth/i.test(k+' '+(p.l||p.label||''));
-      const w=Math.sin(t*(.31+.11*(i%5))+li*1.7+i*2.3)*.75+Math.sin(t*(.09+.04*(i%3))+i*.9+li)*.25;
-      let v=base+span*(scaly?.085:.04)*w;if(p.step>=1)v=Math.round(v);
+      const isHero=hero.includes(k),scaly=ALIVE_SCALE.test(name);
+      if(!isHero&&!scaly&&!ALIVE_SOFT.test(name))return;
+      const span=p.max-p.min,amp=Math.min(span*(isHero?.07:scaly?.06:.035),Math.abs(base)*.3+span*.01);
+      const f1=.045+((mh>>(i%7))&7)*.019,f2=.017+((mh>>((i+3)%9))&3)*.011,ph=((mh>>3)&255)/40+i*2.1+li*1.3;
+      const w=Math.sin(t*f1*6.28+ph)*.72+Math.sin(t*f2*6.28+ph*1.7)*.28;
+      let v=base+amp*w;if(p.step>=1)v=Math.round(v);
       IDLE.saved.push([l.params,k,base]);l.params[k]=Math.max(p.min,Math.min(p.max,v));});
   });
 }
+const ALIVE_SKIP=/glitch|tear|jit|flick|noise|snow|static|drop|vhold|ghost|rgb|split|interfer|sync|slip|burst|corrupt|chroma|fring|converg|\bca\b|aging|scratch|dust|shake|hot|band|head|comb|weave|skew|leak|lines? ?jitter|event|rate|freeze|snr|coh|trk|hsw/i;
+const ALIVE_SCALE=/size|scale|zoom|cell|freq|width|radius|spread|density|period|length|depth|pitch|spacing|px\b|pixel|block|count/i;
+const ALIVE_SOFT=/soft|blur|thresh|contrast|bias|strength|amount|intensity|warp|flow|bloom|glow|curv|swirl|twist|wobble|detail|octave|mix/i;
+function hashStr(s){let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619);}return h>>>0;}
 function idleRestore(){for(const [o,k,v] of IDLE.saved)o[k]=v;IDLE.saved.length=0;}
 const TLN=createTimeline({el:(...a)=>el(...a),layers:()=>STACK.layers,setCam:i=>{if(CAMMODE)applyCam(i,true);},getCam:()=>camIx,hasCam:()=>CAMMODE,params:l=>MODULES[l.module]?MODULES[l.module].params:[],toast:(...a)=>toast(...a),onToggle:on=>{V.sizeKey='';}});
 const ED=createEditor({el:(...a)=>el(...a),toast:(...a)=>toast(...a),setSource:(...a)=>setSource(...a),TLN});
@@ -1868,7 +1882,8 @@ function loop(now){
   const cap=+P.fcap;
   if(cap&&now-V.lastRenderMs<1000/cap-4)return;
   V.lastRenderMs=now;
-  const t=now/1000,dt=clamp(t-V.lastT,.001,.1);V.lastT=t;
+  let t=now/1000;if(ST.still){if(V.stillAt==null)V.stillAt=t;}else if(V.stillAt!=null){V.tOff=(V.tOff||0)+(t-V.stillAt);V.stillAt=null;}
+  t=(ST.still?V.stillAt:t)-(V.tOff||0);const dt=ST.still?.001:clamp(t-V.lastT,.001,.1);V.lastT=t;
   V.fpsAcc+=1/dt;V.fpsN++;if(V.fpsN>=20){V.fps=V.fpsAcc/V.fpsN;V.fpsAcc=0;V.fpsN=0;adaptQ();$('#info').textContent=V.infoStr;}
   try{
     if(audio.on)audioTick();
@@ -2715,6 +2730,7 @@ function paintCamUI(){
   const t=st.children[camIx];if(t&&!st._dragging)st.scrollTo({left:t.offsetLeft-(st.clientWidth-t.offsetWidth)/2,behavior:st._first?'smooth':'auto'});st._first=true;
   {const d=$('#camduo');if(d)d.hidden=!CAMS[camIx].duo;}
   const c=CAMS[camIx];{const f=$('#camfav');if(f){const on=camFavs.includes(c.id);f.textContent=on?'★':'☆';f.setAttribute('aria-pressed',on);}}
+  {const ls=$('#camlooks span');if(ls)ls.textContent='Looks · '+c.name;}
   $('#camname').textContent=c.name;$('#camsub').textContent=c.sub;const a=$('#camasp');if(a)a.textContent=P.aspect==='src'?'Full':P.aspect;
   {const bt=$('.cambot'),app=document.querySelector('.app');if(bt&&app){app.style.setProperty('--stagepad','0px');app.style.setProperty('--campad',bt.offsetHeight+'px');document.documentElement.style.setProperty('--campad',bt.offsetHeight+'px');V.sizeKey='';ST.freeze=0;}}
   drawCamOv();
@@ -2862,7 +2878,7 @@ function buildCamUI(){
   if($('#camui'))return;const stage=$('#stage'),u=el('div','camui');u.id='camui';
   const btn=(id,txt,label,fn)=>{const b=el('button','cb',txt);b.id=id;b.setAttribute('aria-label',label);b.addEventListener('click',fn);return b;};
   const top=el('div','camtop');
-  top.append(btn('camx','✕','Close camera',()=>closeCamera()),btn('camflip','Flip','Flip camera',async()=>{await startCam(true);setPM(camFacing==='user');readCaps();applyCam(camIx,true);applyPro();}),
+  top.append(btn('camx','✕','Close camera',()=>{closeCamera();location.assign('index.html');}),btn('camflip','Flip','Flip camera',async()=>{await startCam(true);setPM(camFacing==='user');readCaps();applyCam(camIx,true);applyPro();}),
     btn('camflashb','Flash','Flash',()=>{setFlash(PRO.flash==='off'?'on':PRO.flash==='on'?(proCaps.torch?'torch':'off'):'off');}),
     btn('camasp','3:4','Frame shape',e=>{const o=['3:4','4:5','1:1','3:2','4:3','16:9','21:9','9:16','src'],i=(o.indexOf(P.aspect)+1)%o.length;P.aspect=o[i];if(camAspLock)camAspLock=o[i],lsSet('n0ise.camasplock',o[i]);V.sizeKey='';paintCamUI();}),
     btn('campb','Pro','Pro controls',e=>{const on=u.classList.toggle('pro');u.classList.remove('more');e.currentTarget.setAttribute('aria-pressed',on);if(on)renderPro();}),
@@ -2886,6 +2902,7 @@ function buildCamUI(){
   const shootB=el('button','camshootb','Shoot view');shootB.id='camshootb';shootB.setAttribute('aria-label','Shoot view: hide the controls and show only the picture and the shutter');shootB.setAttribute('aria-pressed',false);
   const setShoot=v=>{u.classList.toggle('shoot',v);shootB.setAttribute('aria-pressed',v);u.classList.remove('pro','more');const pb=$('#campb');pb&&pb.setAttribute('aria-pressed',false);const mb=$('#cammore');mb&&mb.setAttribute('aria-pressed',false);const sw2=$('.camswap');if(sw2){sw2.textContent=v?'Looks':'Next';sw2.setAttribute('aria-label',v?'Back to the looks':'Next camera');}buzz(8);V.sizeKey='';setTimeout(()=>paintCamUI(),30);};
   shootB.addEventListener('click',()=>setShoot(true));
+  {const lb=el('button','camlooks');lb.id='camlooks';lb.setAttribute('aria-label','Show the looks and camera controls again');lb.innerHTML='<i>▴</i><span></span>';lb.addEventListener('click',()=>setShoot(false));u.appendChild(lb);}
   info.append(Object.assign(el('b','','Camera'),{id:'camname'}),shootB,fav,Object.assign(el('span','','' ),{id:'camsub'}));
   const str=document.createElement('input');str.type='range';str.min=0;str.max=100;str.value=camStr;str.id='camstr';str.setAttribute('aria-label','Look strength');str.addEventListener('input',()=>setCamStr(+str.value));
   const duo=el('div','camduo');duo.id='camduo';duo.hidden=true;
@@ -3353,7 +3370,7 @@ function rowRange(host,label,get,set,min,max,step,def){
   l.addEventListener('pointerdown',e=>{sx=e.clientX;s0=get();l.setPointerCapture(e.pointerId);});
   l.addEventListener('pointermove',e=>{if(!l.hasPointerCapture(e.pointerId))return;const d=(e.clientX-sx)/(e.shiftKey?900:300)*(max-min);let n=s0+d;if(step)n=Math.round(n/step)*step;set(Math.min(max,Math.max(min,n)));paint();});
   let lt=0;l.addEventListener('pointerup',e=>{if(Math.abs(e.clientX-sx)>6||def===undefined)return;const n=performance.now();if(n-lt<320){set(def);paint();buzz(10);toast(label+' reset');lt=0;}else lt=n;});
-  r.append(l,inp,v);host.appendChild(r);paint();return paint;
+  r.append(l,inp,v);host.appendChild(r);paint();PAINTS.add(paint);return paint;
 }
 const LAYER_ID=()=>layer().uid;
 function rowParam(host,p,V,onchange){
@@ -3580,7 +3597,7 @@ function fuseBar(host,l){
   host.appendChild(bar);
 }
 let FUSEPICK=0,FUSEFACE=false;
-function renderInspector(){
+function renderInspector(){PAINTS.clear();
   const h=$i('insp'),st=h?h.scrollTop:0,g0=INS.gallery,m0=layer().module;
   renderInspector0();if(NODES&&NODES.open)NODES.refresh();
   if(h&&g0===INS.gallery&&m0===layer().module)h.scrollTop=st;
@@ -3752,19 +3769,58 @@ function toggleLens(){window.__lensOff=!window.__lensOff;lsSet('n0ise.lensoff',w
 function cycleNoise(){const o=[0,.3,1],i=(o.indexOf(window.__noiseK)+1)%o.length;window.__noiseK=o[i];lsSet('n0ise.noisek',o[i]);toast(['Digital noise off','Digital noise low','Digital noise full'][i]);const b=$('#nzb');if(b)b.textContent='Noise: '+['off','low','full'][i];}
 function toggleLefty(){const on=document.body.dataset.lefty===undefined;if(on)document.body.dataset.lefty='1';else delete document.body.dataset.lefty;lsSet('n0ise.lefty',on);toast(on?'Left-handed layout':'Right-handed layout');}
 /* drag on canvas drives the selected module's hero params */
+/* Direct tuning. Dragging on the picture changes the look that is selected: sideways moves its scale-like control, up and down its
+   strength or softness control, from where you started (no jumps). The sliders follow. Place mode (explicit) moves the layer instead,
+   and scrolling resizes it. Reset tune puts the touched controls back. Which controls move is chosen per effect. */
+const PAINTS=new Set();
+const TUNE={on:false,base:new Map(),s:null,raf:0,hintT:0};
+function tuneAxes(l){
+  const m=MODULES[l.module];if(!m)return null;
+  const isCrt=l.module==='crtlab',V=isCrt?P:l.params,defs=isCrt?CTL:Object.fromEntries(m.params.map(p=>[p.k,p]));
+  const ok=k=>{const d=defs[k];return d&&(d.t===undefined||d.t==='r')&&d.max!==undefined&&typeof V[k]==='number';};
+  let cand=isCrt?['mpitch','bloom','curv','scan']:(m.schema.hero||[]).slice();
+  if(cand.filter(ok).length<2&&!isCrt)cand=cand.concat(m.params.filter(p=>(p.t===undefined||p.t==='r')&&p.max!==undefined&&!/seed|mix|opacity|^amt$/i.test(p.k)&&!ALIVE_SKIP.test(p.k+' '+(p.label||''))).map(p=>p.k));
+  cand=[...new Set(cand)].filter(ok);if(!cand.length)return null;
+  const label=k=>(defs[k].l||defs[k].label||k);
+  const kx=cand.find(k=>ALIVE_SCALE.test(k+' '+label(k)))||cand[0];
+  const ky=cand.find(k=>k!==kx&&!ALIVE_SCALE.test(k+' '+label(k)))||cand.find(k=>k!==kx)||null;
+  return {V,defs,kx,ky,label};
+}
+function tuneHint(t){const h=$('#tunehint');if(!h)return;h.textContent=t;h.hidden=!t;clearTimeout(TUNE.hintT);if(t)TUNE.hintT=setTimeout(()=>{h.hidden=true;},1800);}
+function tuneReset(){
+  let n=0;for(const [uid,rec] of TUNE.base){const l=STACK.layers.find(x=>x.uid===uid);if(!l)continue;const V=l.module==='crtlab'?P:l.params;for(const k in rec){V[k]=rec[k];n++;}}
+  TUNE.base.clear();PAINTS.forEach(f=>f());const b=$('#tunereset');if(b)b.hidden=true;if(n){snap();toast('Tuning reset');buzz(8);}
+}
+function setTool(t){ST.tool=t;const b=$('#toolplace');if(b)b.setAttribute('aria-pressed',t==='place');tuneHint(t==='place'?'Place: drag to move the layer, scroll to resize':'Tune: drag to change the look');}
 function wireHero(){
-  let on=false;
-  canvas.addEventListener('pointerdown',e=>{if(ST.paint||ST.mpaint)return;on=true;});
-  addEventListener('pointerup',()=>on=false);
-  canvas.addEventListener('pointermove',e=>{
-    if(!on||ST.paint||!(e.buttons||e.pointerType==='touch')||(window.__multi&&window.__multi()))return;
-    const l=layer(),m=MODULES[l.module];let hero=(m.schema.hero||[]).slice();
-    if(hero.length<2&&l.module!=='crtlab'){const more=m.params.filter(p=>(p.t===undefined||p.t==='r')&&p.max!==undefined&&!hero.includes(p.k)&&!/seed|mix|amt|opacity/i.test(p.k)).slice(0,2-hero.length).map(p=>p.k);hero=hero.concat(more);}
-    if(!hero.length)return;
-    const r=canvas.getBoundingClientRect(),ux=(e.clientX-r.left)/r.width,uy=1-(e.clientY-r.top)/r.height;
-    const V=l.module==='crtlab'?P:l.params,defs=l.module==='crtlab'?CTL:Object.fromEntries(m.params.map(p=>[p.k,p]));
-    [ux,uy].forEach((u,i)=>{const k=hero[i];if(!k||!defs[k])return;const p=defs[k];if(p.t&&p.t!=='r'&&p.t!==undefined&&p.t!=='r')return;V[k]=p.min+(p.max-p.min)*Math.min(1,Math.max(0,u));});
+  const stg=$('#stage');
+  canvas.addEventListener('pointerdown',e=>{
+    if(ST.paint||ST.mpaint||(window.__multi&&window.__multi())||e.button>0)return;
+    const l=layer();if(!l)return;TUNE.on=true;
+    if(ST.tool==='place'){TUNE.s={mode:'place',x:e.clientX,y:e.clientY,px:l.pos[0],py:l.pos[1]};return;}
+    const ax=tuneAxes(l);if(!ax){TUNE.s=null;return;}
+    TUNE.s={mode:'tune',ax,x:e.clientX,y:e.clientY,vx:ax.V[ax.kx],vy:ax.ky?ax.V[ax.ky]:0,uid:l.uid};
+    const rec=TUNE.base.get(l.uid)||{};if(!(ax.kx in rec))rec[ax.kx]=ax.V[ax.kx];if(ax.ky&&!(ax.ky in rec))rec[ax.ky]=ax.V[ax.ky];TUNE.base.set(l.uid,rec);
   });
+  addEventListener('pointerup',()=>{if(TUNE.on&&TUNE.s&&TUNE.s.mode==='tune'){const b=$('#tunereset');if(b)b.hidden=false;}TUNE.on=false;TUNE.s=null;});
+  addEventListener('pointercancel',()=>{TUNE.on=false;TUNE.s=null;});
+  canvas.addEventListener('pointermove',e=>{
+    const s=TUNE.s;if(!TUNE.on||!s||ST.paint||!(e.buttons||e.pointerType==='touch')||(window.__multi&&window.__multi()))return;
+    const r=canvas.getBoundingClientRect(),dx=(e.clientX-s.x)/r.width,dy=-(e.clientY-s.y)/r.height,l=layer();if(!l)return;
+    if(s.mode==='place'){l.pos[0]=Math.max(-50,Math.min(50,s.px+dx*100));l.pos[1]=Math.max(-50,Math.min(50,s.py-dy*100));}
+    else{
+      const {V,defs,kx,ky,label}=s.ax,put=(k,v0,d)=>{const p=defs[k],span=p.max-p.min;let v=Math.max(p.min,Math.min(p.max,v0+d*span*1.1));if(p.step&&p.step>=1)v=Math.round(v);V[k]=v;return v;};
+      const a=put(kx,s.vx,dx),b=ky?put(ky,s.vy,dy):null;
+      tuneHint(label(kx)+' '+(+a).toFixed(a%1?1:0)+(ky?'  ·  '+label(ky)+' '+(+b).toFixed(b%1?1:0):''));
+    }
+    if(!TUNE.raf)TUNE.raf=requestAnimationFrame(()=>{TUNE.raf=0;PAINTS.forEach(f=>f());});
+  });
+  canvas.addEventListener('wheel',e=>{if(ST.tool!=='place')return;e.preventDefault();const l=layer();l.size=Math.max(20,Math.min(200,l.size-e.deltaY*.1));PAINTS.forEach(f=>f());},{passive:false});
+  canvas.addEventListener('dblclick',()=>{if(ST.tool==='place'){const l=layer();l.pos=[0,0];l.size=100;PAINTS.forEach(f=>f());tuneHint('Layer centred');}});
+  const tb=$('#toolplace');if(tb)tb.addEventListener('click',()=>setTool(ST.tool==='place'?'tune':'place'));
+  const rb=$('#tunereset');if(rb)rb.addEventListener('click',tuneReset);
+  const sb=$('#stillbtn');if(sb)sb.addEventListener('click',()=>{ST.still=!ST.still;sb.setAttribute('aria-pressed',ST.still);sb.textContent=ST.still?'Resume':'Pause';toast(ST.still?'Motion paused':'Motion resumed');});
+  ST.tool='tune';
 }
 /* =====================================================================
    Stage 2: artwork-first mobile. Peek = hero scrubber + MODE + effect rail.
@@ -3965,7 +4021,7 @@ async function regress(){
   STACK.layers=keep.L;STACK.sel=keep.sel;ST.clean=keep.clean;V.sizeKey='';
   return res;
 }
-window.__n0={breedStacks,breedWith,wipe,loadLookRecipe,nodesView,PLUG,pluginsSheet,registerModule,fixWebmDuration,camRecStart,verifyFrames,AUD,syntheticPerson,compareMasks,QUAL,PERSON,setMaskQuality,idleApply,regress,idleRestore,ED,IDLE,TLN,camRecorder,fxRecorder,openCamera,applyCam,CAMS,CAMFX,fxIndex,SHEET,applyRecipe,currentRecipe,toRecipe,fromRecipe,modParams,updateSignals,SIG,runModuleGate,showSheet,STACK,mkLayer,MODULES,DRAWN,setSource,renderStack,renderFrame,P,V,ST,SRC,TEX,maskFor,startPerson,loadPerson,renderInspector,layout};
+window.__n0={idleApply,idleRestore,IDLE,ALIVE_SKIP,breedStacks,breedWith,wipe,loadLookRecipe,nodesView,PLUG,pluginsSheet,registerModule,fixWebmDuration,camRecStart,verifyFrames,AUD,syntheticPerson,compareMasks,QUAL,PERSON,setMaskQuality,idleApply,regress,idleRestore,ED,IDLE,TLN,camRecorder,fxRecorder,openCamera,applyCam,CAMS,CAMFX,fxIndex,SHEET,applyRecipe,currentRecipe,toRecipe,fromRecipe,modParams,updateSignals,SIG,runModuleGate,showSheet,STACK,mkLayer,MODULES,DRAWN,setSource,renderStack,renderFrame,P,V,ST,SRC,TEX,maskFor,startPerson,loadPerson,renderInspector,layout};
 /* Find anything (Cmd/Ctrl+K, "/", or the Find button): every effect, look and action in one list */
 const PALETTE=createPalette({recent:()=>lsGet('n0ise.recent',[]),items:()=>{
   const click=id=>()=>{const b=document.getElementById(id);if(b)b.click();},go=h=>()=>{location.href=h;};

@@ -42,10 +42,9 @@ export function createWorldEditor(c){
   const sn=v=>ed.snap?Math.round(v*2)/2:v;
   async function place(key){
     push();const p=groundPoint();p.x=sn(p.x);p.z=sn(p.z);
-    const boxes=S.objs.filter(o=>o.vis).map(o=>new THREE.Box3().setFromObject(o.holder));
-    for(let i=0;i<10&&boxes.some(b=>!b.isEmpty()&&p.x>b.min.x-.3&&p.x<b.max.x+.3&&p.z>b.min.z-.3&&p.z<b.max.z+.3);i++)p.x+=1.4;
     const drop=sim.playing||key==='crate'||key==='ball';
-    const r=await api.run({cmd:'add',type:key==='goal'?'pillar':key,pos:[p.x,drop?1.5:0,p.z]});
+    const r=await api.run({cmd:'add',type:key==='goal'?'pillar':key,near:[p.x,p.z]});
+    if(drop){const g=S.objs.find(x=>x.id===r.id);if(g){g.holder.position.y+=1.5;g.holder.updateMatrixWorld(true);}}
     if(key==='goal'){const g=S.objs.find(x=>x.id===r.id);if(g){g.meta.goal=true;g.name='Goal';api.run({cmd:'set',id:g.id,color:'#e6c15a',phys:{type:'none'}});}}
     const o=S.objs.find(x=>x.id===r.id);if(o){o.meta.uid=++ed.uid+1000;selectObj(o.id);setGizmo('translate');}
     renderObjList&&renderObjList();sim.invalidate();renderDetails();
@@ -75,7 +74,7 @@ export function createWorldEditor(c){
     const dims=()=>{const b=new THREE.Box3().setFromObject(h);return b.getSize(new THREE.Vector3());};
     const dm=['x','y','z'].map((k,i)=>num(()=>dims()[k],v=>{const d=dims().toArray();d[i]=Math.max(.05,v);api.run({cmd:'set',id:o.id,dims:d,pos:h.position.toArray(),rot:[h.rotation.x*57.2958,h.rotation.y*57.2958,h.rotation.z*57.2958]});sim.invalidate();},.1));
     const dr=el('div','chips');dr.style.display='grid';dr.style.gridTemplateColumns='repeat(3,1fr)';dm.forEach(i=>dr.appendChild(i));s.appendChild(field('Size m',dr));
-    const col=document.createElement('input');col.type='color';col.value=colorOf(o)||'#cccccc';col.style.cssText='width:100%;height:44px;background:none;border:1px solid var(--line,#333)';col.addEventListener('change',()=>{push();api.run({cmd:'set',id:o.id,color:col.value});});s.appendChild(field('Colour',col));
+    const col=document.createElement('input');col.type='color';col.value=colorOf(o)||'#cccccc';col.style.cssText='width:100%;height:44px;background:none;border:1px solid var(--line,#333)';col.addEventListener('change',()=>{push();if(!(c.recolour&&c.recolour(o,col.value)))api.run({cmd:'set',id:o.id,color:col.value});});s.appendChild(field('Colour',col));
     const ph=o.meta.phys||{type:'none'};const pc=el('div','chips');
     [['none','None'],['static','Solid'],['dynamic','Falls']].forEach(([v,l])=>{const b=el('button','chip',l);b.setAttribute('aria-pressed',(ph.type||'none')===v);b.addEventListener('click',()=>{push();api.run({cmd:'set',id:o.id,phys:{type:v}});pc.querySelectorAll('.chip').forEach(x=>x.setAttribute('aria-pressed',x===b));});pc.appendChild(b);});s.appendChild(field('Physics',pc));
     const bn=document.createElement('input');bn.type='range';bn.min=0;bn.max=1;bn.step=.05;bn.value=ph.bounce??.25;bn.addEventListener('input',()=>api.run({cmd:'set',id:o.id,phys:{bounce:+bn.value}}));s.appendChild(field('Bounce',bn));

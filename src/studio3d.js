@@ -16,7 +16,7 @@ import {createPhysUI} from './physui.js';
 import {createRecorder,fmtTime} from './recorder.js';
 import {P3D,build as buildPhoto,loadCanvas,sampleCanvas} from './photo3d.js';
 import {rigHuman} from './rig.js';
-import {createSurface} from './surface.js';
+import {createSurface,createBall,CUSTOM_DEFAULT} from './surface.js';
 import {put as handoffPut,take as handoffTake} from './handoff.js';
 import {createWorldEditor} from './world-editor.js';
 import {RoomEnvironment} from 'three/addons/environments/RoomEnvironment.js';
@@ -38,7 +38,7 @@ const noGL=msg=>{const e=$('#err');e.hidden=false;e.textContent=msg;};
 
 const stage=$('#stage'),canvas=$('#gl');
 const S={objs:[],sel:null,view:'shaded',fx:true,hold:false,grid:true,spin:false,gizmo:null,q:.8,
-  mask:{mode:2,focus:3,range:1.2,soft:.6,inv:false,amt:1},bg:'#0b0b0c',env:.5,liveUntil:0,ver:0};
+  mask:{mode:2,focus:3,range:1.2,soft:.6,inv:false,amt:1},bg:'#0b0b0c',env:.5,liveUntil:0,ver:0,hwText:localStorage.getItem('n0.hwtext')==='1'};
 const AI={ws:null,url:'ws://localhost:8787',state:'off',btn:null};
 let renderer=null,gl=null;
 try{
@@ -141,6 +141,26 @@ function applyView(){
   bump();
 }
 function holderBox(h){return new THREE.Box3().setFromObject(h);}
+/* Automatic placement: a new object lands in free ground space near the middle of the view, never on top of another one. It is measured
+   from real bounding boxes. Flat floors and huge slabs don't block (things stand on them), existing objects never move. near = [x,z] to prefer. */
+function autoPlace(o,near){
+  const h=o.holder;h.updateMatrixWorld(true);
+  const b=new THREE.Box3().setFromObject(h);if(b.isEmpty()||!isFinite(b.min.x))return;
+  const sz=b.getSize(new THREE.Vector3()),ctr=b.getCenter(new THREE.Vector3());
+  const others=S.objs.filter(x=>x.holder!==h&&x.vis!==false&&x.kind!=='viz').map(x=>holderBox(x.holder)).filter(bb=>!bb.isEmpty()&&isFinite(bb.min.x)&&(bb.max.y-bb.min.y)>.06&&(bb.max.x-bb.min.x)<40&&(bb.max.z-bb.min.z)<40);
+  const flat=sz.y<.06,hx=sz.x/2+.18,hz=sz.z/2+.18,top=b.min.y<-.001?0:0;
+  const px=near?near[0]:(S.objs.length?controls.target.x:0),pz=near?near[1]:(S.objs.length?controls.target.z:0);
+  const free=(x,z)=>!others.some(bb=>x+hx>bb.min.x&&x-hx<bb.max.x&&z+hz>bb.min.z&&z-hz<bb.max.z&&sz.y+.0>0&&bb.max.y>.02);
+  let best=[px,pz];
+  if(!flat&&!free(px,pz)){
+    const step=Math.max(.35,Math.min(sz.x,sz.z)*.6);let found=false;
+    for(let r=step;r<40&&!found;r+=step){const n=Math.max(8,Math.round(2*Math.PI*r/step));
+      for(let i=0;i<n;i++){const a=i/n*Math.PI*2+r*.7,x=px+Math.cos(a)*r,z=pz+Math.sin(a)*r;if(free(x,z)){best=[x,z];found=true;break;}}}
+  }
+  h.position.x+=best[0]-ctr.x;h.position.z+=best[1]-ctr.z;
+  if(o.kind!=='splat'&&o.kind!=='scan')h.position.y+=-b.min.y;
+  h.updateMatrixWorld(true);
+}
 function registerObject(name,root,kind,{fit=true,size=1.8,meta={},box=null}={}){
   const holder=new THREE.Group();holder.add(root);
   if(fit){
@@ -151,12 +171,8 @@ function registerObject(name,root,kind,{fit=true,size=1.8,meta={},box=null}={}){
     root.position.add(new THREE.Vector3(-c.x,-b.min.y,-c.z));
     holder.scale.setScalar(s);
   }
-  if(S.objs.length&&kind!=='relief'){
-    const bb=new THREE.Box3();S.objs.forEach(x=>bb.union(holderBox(x.holder)));
-    holder.updateMatrixWorld(true);const nb=new THREE.Box3().setFromObject(holder);
-    if(!bb.isEmpty()&&!nb.isEmpty())holder.position.x=bb.max.x+(nb.max.x-nb.min.x)/2+.3-((nb.max.x+nb.min.x)/2-holder.position.x);
-  }
   world.add(holder);if(S.shadows)setShadowFlags(holder);
+  if(kind!=='relief'&&!meta.noAuto){const tmp={holder,kind};autoPlace(tmp);}
   if(kind!=='relief'&&S.rest)leaveRest();
   const o={id:++idc,name,kind,holder,root,vis:true,meta};
   holder.userData.objId=o.id;
@@ -680,7 +696,7 @@ function fxClose(){document.getElementById('fxov').classList.add('bg');bump();}
 document.getElementById('fxdone').addEventListener('click',fxClose);
 function fxReady(){const w=FXE.iw;return !!(w&&w.__embedRender&&w.__embedReady&&w.__embedReady());}
 function fxRender(cTex,t,dt){
-  const w=FXE.iw;FXE.src.width=curW;FXE.src.height=curH;
+  const w=FXE.iw;w.__noHwText=!S.hwText;FXE.src.width=curW;FXE.src.height=curH;
   N0.blit(cTex);const g=FXE.src.getContext('2d');g.drawImage(canvas,0,0,curW,curH);
   const out=w.__embedRender(FXE.src,curW,curH,t,dt);if(!out)return null;
   if(!FXE.tex){FXE.tex=gl.createTexture();}
@@ -691,7 +707,7 @@ function fxRender(cTex,t,dt){
   return FXE.tex;
 }
 function fxRenderObj(cTex,id,json,live,t,dt){
-  const w=FXE.iw;if(!w||!w.__embedRenderObj)return null;FXE.src.width=curW;FXE.src.height=curH;
+  const w=FXE.iw;if(!w||!w.__embedRenderObj)return null;w.__noHwText=!S.hwText;FXE.src.width=curW;FXE.src.height=curH;
   N0.blit(cTex);const g=FXE.src.getContext('2d');g.drawImage(canvas,0,0,curW,curH);
   const out=w.__embedRenderObj(id,json,live,FXE.src,curW,curH,t,dt);if(!out)return null;
   if(!FXE.tex){FXE.tex=gl.createTexture();}
@@ -755,30 +771,41 @@ function renderSelMask(oo){
    editing writes it back, and every looked object is rendered and composited through its own mask. ---- */
 const cloneP=()=>JSON.parse(JSON.stringify(N0.P));
 let lookRT=[null,null],lookRTkey='';
+/* hardware profiles carry a text readout (REC, timestamps, terminal text). It is off by default; the look itself is untouched. */
+function renderFx(base,t,dt,live){const k=N0.P.ton;if(!S.hwText)N0.P.ton=false;try{return N0.render(base,t,dt,live);}finally{N0.P.ton=k;}}
 function lookObjs(){return S.objs.filter(o=>o.look&&o.vis!==false&&o.holder.visible);}
 function stackObjs(){return S.objs.filter(o=>o.stack&&o.vis!==false&&o.holder.visible);}
-function stackSwitch(prevId,id){
-  const w=FXE.iw;if(!w||!w.__embedGet||prevId===id)return;
-  const pv=objById(prevId),nx=objById(id);
-  if(pv&&pv.stack)pv.stack=w.__embedGet();
-  if(nx&&nx.stack)w.__embedLoad(nx.stack);
-  updateLookUI();
+/* Per-object appearance. Every object keeps its own hardware look (CRT engine) or effect stack. Picking an object saves the one you
+   were editing back to it and loads the new one's. An object with nothing yet keeps the current controls as a starting point, and the
+   first change you make to them gives it its own copy. Nothing is shared by reference. */
+const apprKey=()=>S.engine==='stack'?'stack':'look';
+const apprGet=()=>{if(S.engine==='stack'){const w=FXE.iw;return w&&w.__embedGet?w.__embedGet():null;}return JSON.stringify(N0.P);};
+function apprStore(o){const g=apprGet();if(g==null)return;o[apprKey()]=apprKey()==='look'?JSON.parse(g):g;}
+function apprLoad(o){
+  if(S.engine==='stack'){const w=FXE.iw;if(w&&w.__embedLoad&&o.stack)w.__embedLoad(o.stack);}
+  else if(o.look){Object.assign(N0.P,JSON.parse(JSON.stringify(o.look)));if(typeof rebuildLook==='function'&&paneEls&&paneEls.look)rebuildLook();}
 }
-function addStack(o){const w=FXE.iw;if(!o||!w||!w.__embedGet){toast('The effect engine is still loading.');return;}S.fx=true;S.mask.mode=2;o.stack=w.__embedGet();bump();updateLookUI();toast('Effects added to '+o.name);}
-function removeStack(o){if(!o)return;delete o.stack;if(FXE.iw&&FXE.iw.__embedDrop)FXE.iw.__embedDrop(o.id);bump();updateLookUI();toast('Effects removed from '+o.name);}
 function lookSwitch(prevId,id){
-  if(S.engine==='stack'){stackSwitch(prevId,id);return;}
   if(prevId===id||S.mask.mode!==2)return;
-  const pv=objById(prevId),nx=objById(id);
-  if(pv&&pv.look)pv.look=cloneP();
-  if(nx&&nx.look){Object.assign(N0.P,nx.look);if(typeof rebuildLook==='function'&&paneEls&&paneEls.look)rebuildLook();}
-  else if(nx&&S.fx&&S.engine!=='stack'&&!S.objs.some(x=>x.look)){nx.look=cloneP();} // the first picked object gets the look, as before
-  updateLookUI();
+  const key=apprKey(),pv=objById(prevId),nx=objById(id);
+  if(pv&&pv[key])apprStore(pv);
+  if(nx&&nx[key])apprLoad(nx);
+  else if(nx&&S.fx&&key==='look'&&!S.objs.some(x=>x.look)){nx.look=cloneP();} // the first object picked gets the look, as before
+  S.apprSnap=apprGet();updateLookUI();
 }
-function addLook(o){if(!o)return;S.lookOff=false;o.look=cloneP();S.fx=true;S.mask.mode=2;bump();updateLookUI();toast('Look added to '+o.name);}
+/* a change made by hand to the controls while an object with no look is picked gives that object its own look */
+function apprWatch(){
+  if(!S.fx||S.mask.mode!==2||performance.now()-(S.apprTouch||0)>2500)return;
+  const key=apprKey(),o=objById(S.fxTarget!=null?S.fxTarget:S.sel);if(!o||o[key])return;
+  const g=apprGet();if(g==null||g===S.apprSnap)return;
+  o[key]=key==='look'?JSON.parse(g):g;S.apprSnap=g;S.lookOff=false;updateLookUI();toast((key==='look'?'Hardware look':'Effects')+' set on '+o.name);
+}
+function addStack(o){const w=FXE.iw;if(!o||!w||!w.__embedGet){toast('The effect engine is still loading.');return;}S.fx=true;S.mask.mode=2;o.stack=w.__embedGet();S.apprSnap=o.stack;bump();updateLookUI();toast('Effects added to '+o.name);}
+function removeStack(o){if(!o)return;delete o.stack;if(FXE.iw&&FXE.iw.__embedDrop)FXE.iw.__embedDrop(o.id);bump();updateLookUI();toast('Effects removed from '+o.name);}
+function addLook(o){if(!o)return;S.lookOff=false;o.look=cloneP();S.apprSnap=apprGet();S.fx=true;S.mask.mode=2;bump();updateLookUI();toast('Look added to '+o.name);}
 function removeLook(o){if(!o)return;delete o.look;S.lookOff=true;bump();updateLookUI();toast('Look removed from '+o.name);}
 let lookUI=null;
-function updateLookUI(){if(!lookUI)return;const st=S.engine==='stack',key=st?'stack':'look',o=objById(S.fxTarget!=null?S.fxTarget:S.sel),n=S.objs.filter(x=>x[key]).length;
+function updateLookUI(){try{paintBadge();}catch(e){}if(!lookUI)return;const st=S.engine==='stack',key=st?'stack':'look',o=objById(S.fxTarget!=null?S.fxTarget:S.sel),n=S.objs.filter(x=>x[key]).length;
   lookUI.name.textContent=o?o.name:'Nothing picked';lookUI.add.textContent=o&&o[key]?(st?'Update effects':'Update look'):(st?'Add effects':'Add look');lookUI.add.disabled=!o;lookUI.rm.textContent=st?'Remove effects':'Remove look';lookUI.rm.hidden=!(o&&o[key]);
   lookUI.cnt.textContent=n?n+(n===1?' object has ':' objects have ')+(st?'effects':'a look'):'No object has '+(st?'effects':'a look')+' yet';}
 function drawLooks(cTex,t,dt,live,LO){
@@ -787,7 +814,7 @@ function drawLooks(cTex,t,dt,live,LO){
   const keep=cloneP();let base=cTex,wasT=S.fxTarget;
   LO.forEach((o,i)=>{
     Object.assign(N0.P,o.look);renderSelMask(o);
-    const fx=N0.render(base,t,dt,live),last=i===LO.length-1,dst=last?null:lookRT[i%2],p=compProg;
+    const fx=renderFx(base,t,dt,live),last=i===LO.length-1,dst=last?null:lookRT[i%2],p=compProg;
     renderer.setRenderTarget(null);
     gl.bindVertexArray(G.vao);G.bindRT(dst);if(!dst)gl.viewport(0,0,W,H);p.use();
     G.samp(p,'uO',0,base);G.samp(p,'uF',1,fx);G.samp(p,'uD',2,rtTex(rt.depthTexture));G.samp(p,'uM',3,rtTex(maskRT.texture));
@@ -866,7 +893,7 @@ function frame(ts){
       const live=performance.now()<S.liveUntil;
       let fxTex=null;
       if(S.engine==='stack'){if(fxReady()){fxTex=fxRender(cTex,t,dt);}}
-      if(!fxTex)fxTex=N0.render(cTex,t,dt,live);
+      if(!fxTex)fxTex=renderFx(cTex,t,dt,live);
       ensureComp();
       const G=N0.GLH,p=compProg;
       gl.bindVertexArray(G.vao);G.bindRT(null);gl.viewport(0,0,canvas.width,canvas.height);p.use();
@@ -879,7 +906,7 @@ function frame(ts){
     }
     renderer.resetState();
     if(stRec.state==='recording'||stRec.state==='arming')stRec.frame();
-    frames++;errN=0;if(frames%15===0)updateFxNote();
+    frames++;errN=0;if(frames%15===0)updateFxNote();if(frames%6===0)apprWatch();
   }catch(e){
     console.error(e);errN++;
     if(errN===3)noGL('Rendering stopped: '+String(e.message||e).slice(0,200)+' — reload to try again.');
@@ -891,7 +918,6 @@ function boot3d(){
   setupEnv();
   N0.attach(gl,canvas);
   canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();noGL('The graphics context was lost. Reload to continue.');});
-  addPrimitive('Knot');
   requestAnimationFrame(frame);
 }
 
@@ -1874,6 +1900,7 @@ let suppressTab=false;
 /* ---------- tabs ---------- */
 const TABN=[['world','World'],['scene','Scene'],['scan','Scan'],['look','Look'],['export','Export']];
 const paneEls={};
+addEventListener('pointerup',e=>{if(e.target.closest&&e.target.closest('#panes'))S.apprTouch=performance.now();},true);addEventListener('input',e=>{if(e.target.closest&&e.target.closest('#panes'))S.apprTouch=performance.now();},true);addEventListener('change',e=>{if(e.target.closest&&e.target.closest('#panes'))S.apprTouch=performance.now();},true);
 function setTab(id){
   TABN.forEach(([k])=>{$('#tab_'+k).setAttribute('aria-selected',k===id);paneEls[k].hidden=k!==id;});
   panes.scrollTop=0;S.tab=id;
@@ -2053,16 +2080,25 @@ function ctlRow(parent,c){
 
 /* Surface shader: effects in the object's own material. They follow the surface instead of masking the screen. */
 const SURF=createSurface({THREE,S,objById});
-let surfBox=null;
+if(renderer)renderer.debug.onShaderError=(g,prog,vs,fs)=>{try{const log=(g.getShaderInfoLog(fs)||'').split('\n').filter(l=>/ERROR/.test(l)).slice(0,2).join(' ').replace(/ERROR: \d+:(\d+)/g,'line $1');if(SURF.onError&&S.objs.some(o=>o.surf&&o.surf.m==='custom'))SURF.onError(log);}catch(e){}};
+let surfBox=null,editBadge=null,SURFBALL=null;
+const myLooks=()=>{try{return JSON.parse(localStorage.getItem('n0.mylooks')||'[]');}catch(e){return[];}};
+function paintBadge(){if(!editBadge)return;const o=objById(S.fxTarget!=null?S.fxTarget:S.sel),key=apprKey();editBadge.textContent=o?'Editing: '+o.name+(o[key]?' · has its own '+(key==='look'?'hardware look':'effects'):' · nothing yet, change any control to give it one'):'Pick an object to edit its look.';}
 function surfRefresh(){
   if(!surfBox)return;surfBox.innerHTML='';
   const o=objById(S.sel!=null?S.sel:S.fxTarget);
   if(!o){surfBox.appendChild(el('div','note','Pick an object to give it a surface look.'));return;}
   const st=o.surf||{m:'',amt:1,sc:1,sp:1,c1:'#ffffff',c2:'#000000'};
-  surfBox.appendChild(el('div','sub',o.name));
+  if(!SURFBALL)SURFBALL=createBall(THREE,RoomEnvironment);
+  {const bw=el('div','ballrow');bw.style.cssText='display:flex;gap:12px;align-items:center;margin:6px 0';bw.appendChild(SURFBALL.el);const bt=el('div','note','Preview ball. Hover or press a look to see it here before it goes on the object.');bt.style.flex='1';bw.appendChild(bt);surfBox.appendChild(bw);SURFBALL.set(o.surf);}
+  surfBox.appendChild(el('div','sub','Editing: '+o.name));
+  {const rc=el('div','chips'),lab=el('label','chip','Recolour ');const ci=document.createElement('input');ci.type='color';ci.value=st.tint||'#ffffff';ci.style.cssText='width:34px;height:26px;border:0;background:none;vertical-align:middle;padding:0';
+    ci.addEventListener('input',()=>{SURF.recolour(o,ci.value,Math.max(.6,(o.surf&&o.surf.ta)||.9));bump();});lab.appendChild(ci);rc.appendChild(lab);
+    rc.appendChild(btn('Reset colour','',()=>{SURF.set(o,{ta:0});bump();surfRefresh();}));surfBox.appendChild(rc);
+    if(o.surf&&o.surf.ta>0)sliderRow(surfBox,'Recolour amount',()=>o.surf.ta,v=>{SURF.set(o,{ta:v});bump();},0,1,.01);}
   const chips=el('div','chips');
   const none=el('button','chip','None');none.setAttribute('aria-pressed',!st.m);none.addEventListener('click',()=>{SURF.clear(o);bump();surfRefresh();});chips.appendChild(none);
-  SURF.SURF.forEach(([id,label])=>{const b=el('button','chip',label);b.setAttribute('aria-pressed',st.m===id);b.addEventListener('click',()=>{SURF.pick(o,id);bump();surfRefresh();});chips.appendChild(b);});
+  SURF.SURF.forEach(([id,label])=>{const b=el('button','chip',label);b.setAttribute('aria-pressed',st.m===id);b.addEventListener('click',()=>{SURF.pick(o,id);bump();surfRefresh();});b.addEventListener('pointerenter',()=>SURFBALL&&SURFBALL.set({m:id,amt:1,sp:1,...(()=>{const d=SURF.defaults(id);return d;})()}));b.addEventListener('pointerleave',()=>SURFBALL&&SURFBALL.set(o.surf));chips.appendChild(b);});
   surfBox.appendChild(chips);
   if(st.m){
     const ed=(k,v)=>{SURF.set(o,{[k]:v});bump();};
@@ -2076,13 +2112,26 @@ function surfRefresh(){
     all.append(btn('Copy to all objects','',()=>{S.objs.forEach(x=>{if(x!==o&&!(x.kind==='viz'||x.kind==='splat'))SURF.set(x,{...o.surf});});bump();toast('Surface look copied to every object');}),
       btn('Remove from all','',()=>{S.objs.forEach(x=>SURF.clear(x));bump();surfRefresh();}));
     surfBox.appendChild(all);
+    if(st.m==='custom'){
+      const ta=document.createElement('textarea');ta.spellcheck=false;ta.value=o.surf.code||CUSTOM_DEFAULT;ta.style.cssText='width:100%;min-height:150px;background:#0b0b0c;color:#d4edc4;border:1px solid var(--line);padding:8px;font:11px/1.5 ui-monospace,monospace;border-radius:6px;box-sizing:border-box';
+      const err=el('div','note','');err.style.color='#ff8a6a';
+      const run=btn('Run code','pri',()=>{SURF.lastGood=o.surf.code||CUSTOM_DEFAULT;SURF.errTarget=o;SURF.set(o,{code:ta.value});SURFBALL&&SURFBALL.set({...o.surf});bump();err.textContent='';});
+      surfBox.append(el('div','sub','Write the look'),el('div','note','GLSL. Write the body of a function that returns the new colour. Available: c, N, V, P, fc, t, L, fr, sc.'),ta,run,err);
+      SURF.onError=m=>{err.textContent='Shader error: '+m+' The last working code is back.';if(SURF.errTarget){SURF.set(SURF.errTarget,{code:SURF.lastGood||CUSTOM_DEFAULT});ta.value=SURF.lastGood||CUSTOM_DEFAULT;bump();}};
+    }
+    const ml=el('div','chips');ml.appendChild(btn('Save as my look','',()=>{const n=(prompt('Name this look')||'').trim().slice(0,24);if(!n)return;const a=myLooks();a.push({name:n,st:{...o.surf}});localStorage.setItem('n0.mylooks',JSON.stringify(a));surfRefresh();toast('Saved '+n);}));surfBox.appendChild(ml);
   }
+  {const a=myLooks();if(a.length){surfBox.appendChild(el('div','sub','My looks'));const row=el('div','chips');
+    a.forEach((it,ix)=>{const b=el('button','chip',it.name+' ');const x=el('b','','✕');x.style.cssText='margin-left:6px;opacity:.6';x.addEventListener('click',e=>{e.stopPropagation();const l2=myLooks();l2.splice(ix,1);localStorage.setItem('n0.mylooks',JSON.stringify(l2));surfRefresh();});b.appendChild(x);
+      b.addEventListener('click',()=>{SURF.set(o,{...it.st});bump();surfRefresh();});b.addEventListener('pointerenter',()=>SURFBALL&&SURFBALL.set(it.st));b.addEventListener('pointerleave',()=>SURFBALL&&SURFBALL.set(o.surf));row.appendChild(b);});surfBox.appendChild(row);}}
 }
 function buildLookPane(){
   const p=paneEls.look,P=N0.P;
   {const ss=sec(p,'Surface shader');ss.appendChild(el('div','note','Effects built into the object\u2019s own material. They turn and move with it, and work on the character while you play.'));surfBox=el('div');ss.appendChild(surfBox);surfRefresh();}
   const se=sec(p,'Effects');
+  editBadge=el('div','note');editBadge.style.cssText='font-weight:700;color:var(--ink)';se.appendChild(editBadge);paintBadge();
   chipRow(se,[['crt','CRT Lab look'],['stack','All n0ise effects']],v=>(S.engine||'crt')===v,v=>{S.engine=v;if(v==='stack'){fxLoad();if(S.mask.mode===0){S.mask.mode=2;}if(S.sel==null&&S.objs.length)selectObj(S.objs[S.objs.length-1].id);}rebuildLook();bump();});
+  {const w=el('div','chips'),b=el('button','chip','Hardware text');b.setAttribute('aria-pressed',S.hwText);b.title='Show the REC, timestamp and terminal text some hardware looks add';b.addEventListener('click',()=>{S.hwText=!S.hwText;localStorage.setItem('n0.hwtext',S.hwText?'1':'0');b.setAttribute('aria-pressed',S.hwText);bump();});w.appendChild(b);se.appendChild(w);}
   if(S.engine==='stack'){se.appendChild(btn('Edit effects','pri',fxOpen));se.appendChild(el('div','note',fxReady()?'Edit the effect stack, then press Add effects to put it on the selected object. Pick another object to give it its own. The background stays as it is.':'Loading the effect engine…'));}
   const s0=sec(p,'Look stack');
   const top=el('div','chips');
@@ -2366,9 +2415,11 @@ const walk=createWalk({THREE,camera,controls,canvas,S,holderBox,sheet,bump,leave
 const PLAYER={goalHit:false};
 function PLAYERFACE(){return 0;}
 function goalCheck(p){const g=S.objs.find(o=>o.meta&&o.meta.goal&&o.vis);if(!g)return;const q=g.holder.position,near=Math.hypot(q.x-p.x,q.z-p.z)<1.1&&Math.abs(q.y-p.y)<3;if(near&&!PLAYER.goalHit){PLAYER.goalHit=true;toast('Level complete',2500);}else if(!near)PLAYER.goalHit=false;}
-async function ensurePlayer(){
+let _plP=null;
+function ensurePlayer(){return _plP||(_plP=ensurePlayer1().finally(()=>{_plP=null;}));}
+async function ensurePlayer1(){
   let o=S.objs.find(x=>x.meta&&x.meta.player);
-  if(!o){const r=await api.run({cmd:'add',type:'human',pos:S.start?[S.start[0],0,S.start[2]]:[0,0,0]});o=objById(r.id);if(!o)throw new Error('The character didn’t load.');
+  if(!o){const r=await api.run(S.start?{cmd:'add',type:'human',pos:[S.start[0],0,S.start[2]]}:{cmd:'add',type:'human'});o=objById(r.id);if(!o)throw new Error('The character didn’t load.');
     o.meta.player=true;o.name='Player';o.meta.phys={type:'none'};renderObjList&&renderObjList();}
   if(!o.rig)o.rig=rigHuman(THREE,o.root);
   return o;
@@ -2386,9 +2437,9 @@ async function playWorld(){
 function setStart(){const o=S.objs.find(x=>x.meta&&x.meta.player);const t=o?o.holder.position:controls.target;S.start=[t.x,0,t.z];toast('Start set here');}
 const sim=createSim({THREE,S,bump,removeObj});
 const physUI=window.__physUI=createPhysUI({sim,S,THREE,camera,controls,addPrimitive,el,sec,btn,toast,chipRow,sliderRow,bump,renderObjList,selectObj});
-const api=createApi({sim,THREE,S,scene,camera,controls,renderer,canvas,world,hemi,key,grid,PRIMS,addPrimitive,removeObj,objById,importOne,applyView,bump,frameAll,tick,walk,projectFiles,zipStore,GLTFExporter,renderObjList,refreshInspector,setShadowFlags,selectObj,waitFrames,requestResize:()=>{needResize=true;}});
+const api=createApi({autoPlace,sim,THREE,S,scene,camera,controls,renderer,canvas,world,hemi,key,grid,PRIMS,addPrimitive,removeObj,objById,importOne,applyView,bump,frameAll,tick,walk,projectFiles,zipStore,GLTFExporter,renderObjList,refreshInspector,setShadowFlags,selectObj,waitFrames,requestResize:()=>{needResize=true;}});
 window.n0={run:api.run,describe:api.describe,walk,sim,playWorld};window.__playWorld=playWorld;
-const worldEd=createWorldEditor({playWorld:()=>playWorld(),setStart:()=>setStart(),openInEffects:()=>openInEffects(),THREE,S,api,sim,walk,camera,canvas,controls,tc,objById,selectObj,removeObj,bump,el,sec,btn,toast,renderObjList});
+const worldEd=createWorldEditor({recolour:(o,hex)=>{if(SURF.textured(o)){SURF.recolour(o,hex,.9);bump();try{surfRefresh();}catch(e){}return true;}return false;},playWorld:()=>playWorld(),setStart:()=>setStart(),openInEffects:()=>openInEffects(),THREE,S,api,sim,walk,camera,canvas,controls,tc,objById,selectObj,removeObj,bump,el,sec,btn,toast,renderObjList});
 if(physHost)physUI.section(physHost);
 worldEd.build(paneEls.world);
 if(/^#world/.test(location.hash)){setTab('world');worldEd.starter();}
@@ -2401,7 +2452,7 @@ if(/^#world/.test(location.hash)){setTab('world');worldEd.starter();}
       photo:()=>{close();const f=$('#file');f.accept='image/*';f.onchange=async()=>{await importFiles(f.files);f.value='';f.accept=FILE_ACCEPT;f.onchange=null;};f.click();},
       model:()=>{close();$('#file').click();},
       scan:()=>{close();setTab('scan');},
-      scene:()=>{close();setTab('scene');}
+      scene:()=>{close();setTab('scene');if(!S.objs.length)addPrimitive('Knot');}
     };
     L.querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=>go[b.dataset.go]()));
     addEventListener('keydown',e=>{if(!L.hidden&&e.key==='Escape')close();});
@@ -2444,4 +2495,4 @@ async function openInEffects(){
 setTimeout(async()=>{const m=location.hash.match(/^#from=(\w+)/);if(!m)return;const rec=await handoffTake();history.replaceState(null,'',location.pathname);
   if(!rec){toast('Nothing to open. Send a picture from the other page again.');return;}
   await photoToRelief(new File([rec.blob],'from-'+m[1]+'.png',{type:rec.blob.type||'image/png'}));toast('Opened from '+m[1]);},1400);
-window.__studio={addPhoto,sampleCanvas,S,N0,selectObj,addLook,removeLook,openInEffects,worldEd,api,walk,aiConnect,zipStore,zipRead,projectFiles,loadProject,saveProject,AUTO,autoStep,fxRandomise,fxEnsure,fxClear,FX3,SG,addViz,AU,buildViz,vizUpdate,enterRest,leaveRest,restTick,setFx,autoDepth,buildDepth,restD,MATTERS,CUT,autoCut,refineMask,applyAlpha,THREE,scene,camera,controls,renderer,importFiles,addPrimitive,sheet,SC,carve,surfaceNets,buildScan,makeRelief,pseudoDepth,photoToRelief,objById,removeObj,bump,setTab,rebuildRelief,applyView,frameAll,exportImage,get rt(){return rt;}};
+window.__studio={apprWatch,autoPlace,SURF,addPhoto,sampleCanvas,S,N0,selectObj,addLook,removeLook,openInEffects,worldEd,api,walk,aiConnect,zipStore,zipRead,projectFiles,loadProject,saveProject,AUTO,autoStep,fxRandomise,fxEnsure,fxClear,FX3,SG,addViz,AU,buildViz,vizUpdate,enterRest,leaveRest,restTick,setFx,autoDepth,buildDepth,restD,MATTERS,CUT,autoCut,refineMask,applyAlpha,THREE,scene,camera,controls,renderer,importFiles,addPrimitive,sheet,SC,carve,surfaceNets,buildScan,makeRelief,pseudoDepth,photoToRelief,objById,removeObj,bump,setTab,rebuildRelief,applyView,frameAll,exportImage,get rt(){return rt;}};

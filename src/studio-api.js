@@ -75,7 +75,7 @@ export function createApi(c){
     if(a.name)o.name=a.name;
     o.meta=o.meta||{};o.meta.uid=++uidc;o.meta.asset=a.asset||(prim||'file').toLowerCase();if(a.phys)setPhys(o,a.phys);
     if(prim&&a.size==null&&!a.dims&&!a.scale)a.size=1;
-    place(o,{...a,pos:a.pos||[0,0,0]});paint(o,a);
+    place(o,{...a,pos:a.pos});if(!a.pos&&c.autoPlace)c.autoPlace(o,a.near);paint(o,a);
     if(S.shadows)setShadowFlags(o.holder);
     renderObjList&&renderObjList();bump();return o;
   }

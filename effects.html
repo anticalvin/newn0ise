@@ -526,6 +526,11 @@ body[data-cam] .tl{bottom:var(--campad,0px);max-height:32dvh;border-bottom:1px s
 .camui.ios .camshootb{color:var(--y)}
 #camzebra{position:absolute;pointer-events:none;z-index:2;image-rendering:pixelated}
 .cammode{overflow-x:auto;scrollbar-width:none;justify-content:safe center}.cammode::-webkit-scrollbar{display:none}.cammode button{flex:none}
+.tunehint{position:absolute;left:50%;top:10px;transform:translateX(-50%);z-index:9;padding:7px 12px;border-radius:999px;background:rgba(10,10,10,.72);color:#f2efe8;font:700 11px var(--lab,monospace);letter-spacing:.06em;pointer-events:none;max-width:90%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#toolplace[aria-pressed=true]{background:#f2efe8;color:#0a0a0a}
+.camlooks{display:none;position:absolute;left:50%;transform:translateX(-50%);bottom:calc(var(--campad,170px) + 10px);z-index:12;pointer-events:auto;align-items:center;gap:8px;min-height:44px;padding:0 18px;border-radius:999px;border:1px solid rgba(255,255,255,.28);background:rgba(10,10,10,.6);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);color:#f2efe8;font:700 12px var(--lab,monospace);letter-spacing:.08em;text-transform:uppercase;max-width:86%}
+.camlooks i{font-style:normal}.camlooks span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.camui.shoot .camlooks{display:flex}
 </style>
 </head>
 <body>
@@ -549,9 +554,9 @@ body[data-cam] .tl{bottom:var(--campad,0px);max-height:32dvh;border-bottom:1px s
       <button class="pill chipb" id="srcchip">Source</button>
       <div class="srcmenu" id="srcmenu" hidden><button data-a="open">Open media</button><button data-a="cam">Use camera</button><button data-a="demo">Try sample</button><button data-a="open">Style an image</button><button data-a="rec">Record a look</button><button data-a="animate">Animate a scene</button><button data-a="audio">Audio file</button><button data-a="test">Test card</button></div>
       <canvas id="gl"></canvas>
-      <div class="info" id="info"></div>
-      <div class="float tr"><button class="pill" id="cmpbtn" aria-pressed="false">Compare</button><button class="pill" id="reset">Reset</button><button class="pill" id="textoff" hidden>Remove text</button><button class="pill" id="tlbtn">Animate</button><button class="pill" id="power" aria-pressed="true">Power</button></div>
-      <div class="float bl"><button class="pill" id="shuffle">Shuffle</button><button class="pill" id="paint" aria-pressed="false">Beam paint</button></div>
+      <div class="info" id="info"></div><div class="tunehint" id="tunehint" hidden></div>
+      <div class="float tr"><button class="pill" id="cmpbtn" aria-pressed="false">Compare</button><button class="pill" id="reset">Reset</button><button class="pill" id="textoff" hidden>Remove text</button><button class="pill" id="stillbtn" aria-pressed="false" title="Freeze the look exactly as it is">Pause</button><button class="pill" id="tlbtn" title="Deliberate motion: keyframes and modulation. The look also drifts on its own (Alive) unless you pause it.">Animate</button><button class="pill" id="power" aria-pressed="true">Power</button></div>
+      <div class="float bl"><button class="pill" id="shuffle">Shuffle</button><button class="pill" id="paint" aria-pressed="false">Beam paint</button><button class="pill" id="toolplace" aria-pressed="false" title="Place: drag moves the layer, scroll resizes it. Off, dragging tunes the look.">Place</button><button class="pill" id="tunereset" hidden>Reset tune</button></div>
       <div class="float br"><button class="pill" id="hold">Hold for original</button></div>
       <div class="err" id="err" hidden></div>
     </div>
@@ -565,6 +570,6 @@ body[data-cam] .tl{bottom:var(--campad,0px);max-height:32dvh;border-bottom:1px s
   </main>
 </div>
 <input type="file" id="file" accept="image/*,video/*,audio/*,.mp3,.wav,.m4a,.ogg,.flac,.aac" hidden>
-<script type="module" src="assets/index.js?v=4faf6e34"></script>
+<script type="module" src="assets/index.js?v=66d9a7d4"></script>
 </body>
 </html>
