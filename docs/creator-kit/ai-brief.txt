@@ -1,0 +1,44 @@
+You are writing a world file for n0ise (a 3D app). Output ONE JSON object and nothing else (no code fences, no commentary), so it can be saved as world.n0world or pasted straight into n0ise. The file is declarative: it never contains code.
+
+FORMAT
+{"format":"n0ise-world","version":1,
+ "scene":{"name":"...","environment":{"timeOfDay":0-24,"sky":"day|dusk|night|overcast|none","fog":{"color":"#rrggbb","near":8,"far":60}|false,"ground":{"color":"#rrggbb","size":80}|false,"shadows":true}},
+ "materials":{"name":{"color":"#rrggbb","roughness":0-1,"metalness":0-1,"emissive":"#rrggbb","opacity":0-1,"pattern":{"type":"checker|stripes|noise","color2":"#rrggbb","scale":4}}},
+ "instances":[{"id":"unique-id","name":"optional","type":"cube|sphere|torus|knot|plane|cylinder|cone|capsule|human|wall|floor|platform|pillar|crate|ball" OR "prefab":"door|platform|stairs|spawn|room|group|zone","params":{...},"pos":[x,y,z],"rot":[x,y,z],"dims":[w,h,d],"material":"name","color":"#rrggbb","phys":{"type":"static|dynamic|kinematic|none"},"parent":"group-id"}],
+ "lights":[{"id":"l1","type":"point|spot|dir","pos":[x,y,z],"color":"#rrggbb","intensity":number}],
+ "cameras":[{"id":"main","pos":[x,y,z],"target":[x,y,z],"fov":50}],
+ "rules":[{"id":"r1","when":{"trigger":"..."},"if":{"flag":"name","equals":true},"then":[{"action":"..."}]}],
+ "looks":[{"target":"scene|object:<id>|material:<name>","profile":"vhs"}]}
+
+UNITS AND COORDINATES
+Metres, degrees, colours "#rrggbb". +y is up and y=0 is the floor. pos is the BASE of an object (pos.y=0 sits it on the floor). +x is right, +z is toward the viewer, so "forward" is -z. A character with yaw 0 faces -z. rot is [x,y,z] degrees; to turn something around the vertical axis use rot:[0,deg,0]. A room is centred on its pos and its walls are inside width x depth. Wall letters: n is the -z side, s is +z, e is +x, w is -x. Use dims:[w,h,d] for exact sizes.
+
+PREFABS (each stays one editable object)
+- door: A frame and a leaf that swings. Use toggle-open to open and close it. The leaf blocks you while closed. Params: width(0.5-4, default 1), height(1-4, default 2.1), thickness(0.03-0.3, default 0.08), material(material name), frameMaterial(material name), open(true|false), hinge(left|right)
+- platform: A slab you can stand on. Params: width(0.2-60, default 2), depth(0.2-60, default 2), thickness(0.05-10, default 0.3), material(material name)
+- stairs: Steps that climb toward -z (rotate it to turn it). pos is the bottom of the first step. Params: steps(1-40, default 6), rise(0.05-0.5, default 0.18), run(0.1-1, default 0.28), width(0.4-10, default 1.2), material(material name)
+- spawn: Where the character starts. yaw turns it (0 faces -z, the way the camera first looks). Params: yaw(-360-360, default 0)
+- room: Four walls, a floor and an optional ceiling, with openings cut where you ask. Stays one editable room. Params: width(1-60, default 6), depth(1-60, default 6), height(1.5-12, default 2.8), wall(0.05-1, default 0.15), floor(true|false), ceiling(true|false), material(material name), floorMaterial(material name), openings(list)
+- group: An empty container. Give other instances "parent":"<this id>" and they move together. Params: none
+- zone: An invisible volume that rules can react to. Shown as a faint box only while editing. Params: size([x,y,z])
+A door is sized to fill a room opening: put the door at the opening's centre in the wall (for an 's' wall at depth D the door sits at z=D/2-0.1; for e/w walls add rot:[0,90,0]). Give the room an opening of the same width and height.
+
+RULES (closed set, no scripting)
+Triggers: player-enter (The character steps into a zone (target: a zone or any object id).); player-interact (The character is close to target and presses E (or the Use button).); timer (every: seconds between runs, or after: seconds once.); object-touch (The character touches target (any object id).)
+Actions: toggle-open Open or close a door. {target:id, state?:"open"|"closed"}; move-to Slide an object. {target:id, pos:[x,y,z], seconds:1}; teleport Put the character somewhere. {pos:[x,y,z], yaw?:deg}; collect Pick something up: it disappears and is counted. {target:id}; set-flag Remember something. {flag:"name", value:true|false|number}; show-message Show text for a few seconds. {text:"..."}; play-sound A built-in sound. {sound:"ding|click|whoosh|thud|chime"}
+Sounds: ding, click, whoosh, thud, chime. Targets are instance ids. Use "zone" prefab instances as invisible trigger areas.
+Limits: 500 instances, 64 rules, 8 actions per rule. Prefer prefabs (a room or stairs is ONE instance) over many loose boxes.
+
+ALWAYS
+- Include one spawn prefab where the player starts, inside the room, facing where you want them to look.
+- Give every instance a unique id and reference materials only if you defined them under "materials".
+- Keep things on the floor: platforms and furniture pos.y is their base.
+- Add a light or two (or set timeOfDay) so the room is lit.
+
+COMMON MISTAKES
+Wrong wall letter or an opening wider than the wall; a door that doesn't match an opening; positions in centimetres instead of metres; forgetting that "forward" is -z; rules whose target id doesn't exist; using toggle-open on something that isn't a door; inventing prefab, trigger, action or sound names (they will be shown as pink placeholders and listed in a report); comments or trailing commas in the JSON.
+
+IF I PASTE AN n0ise REPORT BACK
+It lists lines like "- FIXED instances[2] "door1": material "steel2" doesn't exist; using the default." or "- CHECK ...". Fix exactly what it names and send back the WHOLE corrected JSON again, nothing else.
+
+Now build this world: 
