@@ -4,7 +4,7 @@
    applying one gives the object its own copies back, so two objects never end up sharing a look or a material. */
 const J=x=>x==null?null:JSON.parse(JSON.stringify(x));
 export function createSceneDoc(c){
-  const {S,SURF,MAT,LGT}=c;
+  const {S,SURF,MAT,LGT}=c;let formHooks=null;
   function colorOf(o){let col=null;o.holder.traverse(n=>{if(!col&&n.isMesh&&n.material&&!n.userData.noView){const m=Array.isArray(n.material)?n.material[0]:n.material;if(m&&m.color)col='#'+m.color.getHexString();}});return col;}
   function setColor(o,hex){o.holder.traverse(n=>{if(!n.isMesh||n.userData.noView||!n.material)return;(Array.isArray(n.material)?n.material:[n.material]).forEach(m=>{if(m.color)m.color.set(hex);});});}
   const appearance=o=>({look:J(o.look),stack:o.stack||null,surf:o.surf?{...o.surf}:null,mat:J(o.mat)});
@@ -18,7 +18,7 @@ export function createSceneDoc(c){
   function snapObject(o){
     const h=o.holder;
     return {id:o.id,name:o.name,tr:{p:h.position.toArray(),q:h.quaternion.toArray(),s:h.scale.toArray()},vis:o.vis!==false,color:colorOf(o),
-      phys:o.meta&&o.meta.phys?{...o.meta.phys}:null,ap:appearance(o)};
+      phys:o.meta&&o.meta.phys?{...o.meta.phys}:null,ap:appearance(o),fm:formHooks?formHooks.snap(o):null};
   }
   function applyObject(o,d){
     const h=o.holder;
@@ -27,6 +27,7 @@ export function createSceneDoc(c){
     if(d.color&&colorOf(o)!==d.color)setColor(o,d.color);
     o.meta=o.meta||{};if(d.phys)o.meta.phys={...d.phys};else if(o.meta.phys&&!d.phys&&d.phys!==undefined)delete o.meta.phys;
     putAppearance(o,d.ap);
+    if(d.fm&&formHooks)formHooks.apply(o,d.fm); // a generated object regenerates from the parameters it had then
   }
   /* the whole editable scene: every object plus the stage settings that change how it looks */
   const stage=()=>({env:S.env,bg:S.bg,grid:S.grid,sun:LGT?{...LGT.L,auto:false}:null});
@@ -38,5 +39,5 @@ export function createSceneDoc(c){
   }
   /* an object copies another's look: independent copies, same values */
   function copyAppearance(from,to){putAppearance(to,appearance(from));const col=colorOf(from);if(col)setColor(to,col);}
-  return {colorOf,setColor,appearance,putAppearance,snapObject,applyObject,snapScene,applyStage,copyAppearance};
+  return {setFormHooks:h=>{formHooks=h;},colorOf,setColor,appearance,putAppearance,snapObject,applyObject,snapScene,applyStage,copyAppearance};
 }

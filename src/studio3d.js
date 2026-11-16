@@ -24,6 +24,9 @@ import {createWorldBuilder} from './world-build.js';
 import {validateWorld,LIMITS as WLIM,PREFABS,TRIGGERS,ACTIONS} from './world-schema.js';
 import {hashJson,readCapped} from './importkit.js';
 import {WORLD_BRIEF} from './world-brief.js';
+import {createForms} from './formobj.js';
+import {validateFormFile} from './form-schema.js';
+import {FORM_BRIEF} from './form-brief.js';
 import {createSceneDoc} from './scenedoc.js';
 import {put as handoffPut,take as handoffTake} from './handoff.js';
 import {createWorldEditor} from './world-editor.js';
@@ -137,7 +140,7 @@ let idc=0;
 /* the sky is a look target too: not a scene object, but it carries a look or effect stack like one and is masked by where nothing else is */
 const SKY={id:'sky',name:'Sky',kind:'sky',vis:true,holder:{visible:true},meta:{}};
 const objById=id=>id==='sky'?SKY:S.objs.find(o=>o.id===id);
-let NW=null; // the .n0world builder, created once the scene API exists
+let NW=null,FORM=null; // the .n0world builder, created once the scene API exists
 const SAFE_MODE=/[?&]safe=1/.test(location.search),WORLD_ON=!/[?&]n0world=0/.test(location.search);
 const anyLook=()=>!!SKY.look||S.objs.some(x=>x.look);
 const claymat=new THREE.MeshStandardMaterial({color:0xd8d4cc,roughness:.92,metalness:0});
@@ -206,7 +209,7 @@ function removeObj(id){
   if(tc.object===o.holder)tc.detach();
   world.remove(o.holder);
   o.holder.traverse(n=>{if(n.geometry)n.geometry.dispose();if(n.material&&n.material.dispose&&!n.userData._shared){const ms=Array.isArray(n.material)?n.material:[n.material];ms.forEach(m=>{if(m.map)m.map.dispose();m.dispose();});}if(n.dispose&&n.isSplatMesh)n.dispose();});
-  S.objs.splice(i,1);
+  S.objs.splice(i,1);FORM&&FORM.remove(o);
   if(S.rest&&S.rest.id===id)leaveRest();
   if(S.sel===id)S.sel=null;
   setSelBox();$('#empty').hidden=S.objs.length>0;
@@ -674,6 +677,7 @@ async function importOne(f){
 }
 async function importFiles(list){
   const files=[...list];if(!files.length)return;
+  if(files.length===1&&/\.n0form$/i.test(files[0].name)){await importFormFile(files[0]);return;}
   if(WORLD_ON&&files.length===1&&/\.(n0world|json)$/i.test(files[0].name)){
     try{
       const head=new Uint8Array(await files[0].slice(0,2).arrayBuffer());
@@ -927,6 +931,7 @@ function frame(ts){
     if(typeof sim!=='undefined')sim.tick(dt);
     if(S.walk)walk.tick(dt);else controls.update(dt);
     if(NW)NW.tick(dt);
+    if(FORM)FORM.tick(t);
     if(selBox)selBox.update();
     grid.visible=S.grid&&!S.exporting&&!S.walk;
     if(selBox)selBox.visible=!S.exporting&&S.sel!=null&&!S.walk;
@@ -2062,6 +2067,7 @@ function refreshInspector(soft){
   inspSyncs.push(sliderRow(s,'Turn',()=>THREE.MathUtils.radToDeg(h.rotation.y),v=>{h.rotation.y=THREE.MathUtils.degToRad(v);bump();},-180,180,1,v=>Math.round(v)+'°').sync);
   inspSyncs.push(sliderRow(s,'Size',()=>h.scale.x,v=>{h.scale.setScalar(v);bump();},.05,6,.01).sync);
   if(window.__physUI&&S.tab!=='world')window.__physUI.body(inspEl,o);
+  if(FORM&&o.meta&&o.meta.form)FORM.panel(inspEl,o);
   if(o.kind==='relief'){
     const m=o.meta,rb=()=>{clearTimeout(reliefT);reliefT=setTimeout(()=>rebuildRelief(o),60);};
     const r=sec(inspEl,'Relief',m.depthing?'working…':(m.depthBy||'flat'));
@@ -2413,6 +2419,7 @@ async function projectFiles(){
   {const so=objById(S.sel);if(so&&so[apprKey()]){try{apprStore(so);}catch(e){}}}
   let worldSeen=false;
   for(const o of S.objs){
+    if(o.meta&&o.meta.form&&FORM){items.push({...FORM.projectItem(o),ap:apprOf(o)});continue;} // the recipe is saved; geometry is rebuilt on open
     if(o.meta&&o.meta.n0w&&NW){worldSeen=true;continue;} // rebuilt from the world document on open
     const tr={p:o.holder.position.toArray(),r:[o.holder.rotation.x,o.holder.rotation.y,o.holder.rotation.z],s:o.holder.scale.toArray()};
     const m=o.meta;
@@ -2436,6 +2443,7 @@ async function loadProject(u8){
   S.objs.slice().forEach(o=>removeObj(o.id));if(S.rest)leaveRest();
   for(const it of pj.items){
     let o;
+    if(it.kind==='form'){try{if(FORM){o=await FORM.fromItem(it);if(o&&it.ap)apprPut(o,it.ap);}}catch(e){toast('A generated object in this project couldn’t be rebuilt: '+(e.message||e),6000);}continue;}
     if(it.kind==='relief'){
       const bmp=await createImageBitmap(new Blob([F[it.id+'.png']],{type:'image/png'}));
       const photo=document.createElement('canvas');photo.width=bmp.width;photo.height=bmp.height;const pg=photo.getContext('2d',{willReadFrequently:true});pg.drawImage(bmp,0,0);
@@ -2606,6 +2614,19 @@ async function exportWorldFile(){
   await deliver(new Blob([JSON.stringify(v.doc||doc,null,1)],{type:'application/json'}),(doc.scene.name||'world').toLowerCase().replace(/[^a-z0-9]+/g,'-')+'.n0world');
   if(skipped.length)toast('Saved. Not included (imported models): '+skipped.slice(0,3).join(', '),6000);
 }
+/* ---- FORM: generated objects that keep their recipe ---- */
+FORM=createForms({THREE,S,addGroup,toast,bump,renderObjList:()=>renderObjList&&renderObjList(),setShadowFlags,applyView,DOC,SURF,MAT,uPush:()=>uPush&&uPush(),sliderRow,chipRow,btn,el,sec,selectObj,frameAll,autoPlace,deliver,matPresets:MATPRESETS});
+DOC.setFormHooks({snap:o=>FORM.snap(o),apply:(o,fm)=>FORM.apply(o,fm)});
+async function importFormFile(file,json,origin='imported'){
+  try{
+    const text=json?JSON.stringify(json):await readCapped(file,2*65536);
+    const v=validateFormFile(text);
+    if(!v.ok){const sh=worldReportSheet(v.report.toText('Generator report'),{title:'That generator can’t be used',rows:1,text:''});return;}
+    const r=FORM.recipeFromDoc(v.doc);
+    const o=await FORM.make(r,{origin,reportText:v.report.items.length?v.report.toText('Generator report'):''});
+    if(o){toast('Added “'+r.name+'”. Select it to change its parameters.',3500);selectObj(o.id);}
+  }catch(e){toast(String(e.message||e),5000);}
+}
 /* the World pane: import, export, and edit the parameters of a selected prefab */
 if(NW&&paneEls.world){
   const wp=paneEls.world,s0=sec(wp,'AI worlds');
@@ -2673,5 +2694,6 @@ async function openInEffects(){
 }
 setTimeout(async()=>{const m=location.hash.match(/^#from=(\w+)/);if(!m)return;const rec=await handoffTake();history.replaceState(null,'',location.pathname);
   if(!rec){toast('Nothing to open. Send a picture from the other page again.');return;}
+  if(rec.meta&&rec.meta.form&&FORM){try{const j=JSON.parse(await rec.blob.text());await importFormFile(null,j,'local');}catch(e){toast('Couldn’t open the generator: '+(e.message||e),5000);}return;}
   await photoToRelief(new File([rec.blob],'from-'+m[1]+'.png',{type:rec.blob.type||'image/png'}));toast('Opened from '+m[1]);},1400);
-window.__studio={NW:()=>NW,worldImportSheet,exportWorldFile,validateWorld,addGroup,frame,get maskRT(){return maskRT;},renderSelMask,SKY,pickSky,followPlayer,DOC,LGT,MAT,openMatLab:c=>openMatLab({THREE,RoomEnvironment,el,btn,sliderRow,chipRow,toast,MAT,...c}),undo3,redo3,uPush,UH,apprOf,apprPut,apprWatch,autoPlace,SURF,addPhoto,sampleCanvas,S,N0,selectObj,addLook,removeLook,openInEffects,worldEd,api,walk,aiConnect,zipStore,zipRead,projectFiles,loadProject,saveProject,AUTO,autoStep,fxRandomise,fxEnsure,fxClear,FX3,SG,addViz,AU,buildViz,vizUpdate,enterRest,leaveRest,restTick,setFx,autoDepth,buildDepth,restD,MATTERS,CUT,autoCut,refineMask,applyAlpha,THREE,scene,camera,controls,renderer,importFiles,addPrimitive,sheet,SC,carve,surfaceNets,buildScan,makeRelief,pseudoDepth,photoToRelief,objById,removeObj,bump,setTab,rebuildRelief,applyView,frameAll,exportImage,get rt(){return rt;}};
+window.__studio={FORM:()=>FORM,importFormFile,NW:()=>NW,worldImportSheet,exportWorldFile,validateWorld,addGroup,frame,get maskRT(){return maskRT;},renderSelMask,SKY,pickSky,followPlayer,DOC,LGT,MAT,openMatLab:c=>openMatLab({THREE,RoomEnvironment,el,btn,sliderRow,chipRow,toast,MAT,...c}),undo3,redo3,uPush,UH,apprOf,apprPut,apprWatch,autoPlace,SURF,addPhoto,sampleCanvas,S,N0,selectObj,addLook,removeLook,openInEffects,worldEd,api,walk,aiConnect,zipStore,zipRead,projectFiles,loadProject,saveProject,AUTO,autoStep,fxRandomise,fxEnsure,fxClear,FX3,SG,addViz,AU,buildViz,vizUpdate,enterRest,leaveRest,restTick,setFx,autoDepth,buildDepth,restD,MATTERS,CUT,autoCut,refineMask,applyAlpha,THREE,scene,camera,controls,renderer,importFiles,addPrimitive,sheet,SC,carve,surfaceNets,buildScan,makeRelief,pseudoDepth,photoToRelief,objById,removeObj,bump,setTab,rebuildRelief,applyView,frameAll,exportImage,get rt(){return rt;}};
