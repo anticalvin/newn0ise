@@ -27,6 +27,9 @@ Actions: ${Object.entries(ACTIONS).map(([k,v])=>k+' '+v.note).join('; ')}
 Sounds: ${SOUNDS.join(', ')}. Targets are instance ids. Use "zone" prefab instances as invisible trigger areas.
 Limits: ${LIMITS.instances} instances, ${LIMITS.rules} rules, ${LIMITS.actionsPerRule} actions per rule. Prefer prefabs (a room or stairs is ONE instance) over many loose boxes.
 
+MECHANICS
+Any instance with "climb":true can be climbed (walk into it, press forward). The ladder prefab is a climbable ladder. A vehicle prefab can be driven (E near it). A spawn with params {"weapon":true} lets the player shoot (click, F or the Fire button); target prefabs take hp hits and the object-shot trigger reacts when you hit one.
+
 ALWAYS
 - Include one spawn prefab where the player starts, inside the room, facing where you want them to look.
 - Give every instance a unique id and reference materials only if you defined them under "materials".

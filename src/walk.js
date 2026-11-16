@@ -4,12 +4,13 @@
 export function createWalk(c){
   const {THREE,camera,controls,canvas,S,holderBox,sheet,onExit}=c;
   const TP={obj:null,rig:null,face:0,ph:0,amt:0,dist:4.2,done:false,cp:null,sy:0,dc:4.2,fov:0};
-  const st={on:false,yaw:0,pitch:0,pos:new THREE.Vector3(0,0,4),vy:0,ground:true,keys:new Set(),jx:0,jy:0,saved:null,boxes:[],boxT:0,cvx:0,cvz:0,coy:0,buf:0,cut:false};
+  let controller=null;
+  const st={climb:false,cdir:1,on:false,yaw:0,pitch:0,pos:new THREE.Vector3(0,0,4),vy:0,ground:true,keys:new Set(),jx:0,jy:0,saved:null,boxes:[],boxT:0,cvx:0,cvz:0,coy:0,buf:0,cut:false};
   const EYE=1.65,R=.3,H=1.75,STEP=.55,GUP=20,GDN=31,JUMP=6.3;
   let ui=null,lookId=null,joyId=null,joyO=null,lastLook=null;
   function refreshBoxes(){
     /* objects that describe their own solid parts (worlds: doors, rooms with openings, stairs) give a list of boxes; everything else is one box */
-    st.boxes=S.objs.filter(o=>o.vis&&o.kind!=='viz'&&!(o.meta&&o.meta.player)).flatMap(o=>o.meta&&o.meta.colliders?o.meta.colliders():[holderBox(o.holder)]).filter(b=>!b.isEmpty()&&isFinite(b.min.x)&&(b.max.y-b.min.y)<200);st.boxT=performance.now();
+    st.boxes=S.objs.filter(o=>o.vis&&o.kind!=='viz'&&!(o.meta&&o.meta.player)).flatMap(o=>{const bs=o.meta&&o.meta.colliders?o.meta.colliders():[holderBox(o.holder)];if(o.meta&&o.meta.climb)bs.forEach(b=>{b.climb=true;});return bs;}).filter(b=>!b.isEmpty()&&isFinite(b.min.x)&&(b.max.y-b.min.y)<200);st.boxT=performance.now();
   }
   function build(){
     ui=document.createElement('div');ui.id='walkui';
@@ -74,6 +75,7 @@ export function createWalk(c){
   }
   function tick(dt){
     if(!st.on)return;dt=Math.min(dt,.05);
+    if(controller&&controller.active()){if(performance.now()-st.boxT>1000)refreshBoxes();controller.tick(dt);c.bump();return;} // driving: the vehicle owns movement and the camera
     if(performance.now()-st.boxT>1000)refreshBoxes();
     const k=st.keys;let fx=(k.has('KeyD')||k.has('ArrowRight')?1:0)-(k.has('KeyA')||k.has('ArrowLeft')?1:0)+st.jx,fz=(k.has('KeyS')||k.has('ArrowDown')?1:0)-(k.has('KeyW')||k.has('ArrowUp')?1:0)+st.jy;
     const m=Math.hypot(fx,fz);if(m>1){fx/=m;fz/=m;}
@@ -85,19 +87,22 @@ export function createWalk(c){
     if(st.buf>0&&st.coy>0){st.vy=JUMP;st.ground=false;st.coy=0;st.buf=0;}
     if(st.cut){if(st.vy>0)st.vy*=.5;st.cut=false;}
     // gravity and floor: the ground is y=0, or the top of any box under the feet that is within step height
-    st.vy-=(st.vy>0?GUP:GDN)*dt;p.y+=st.vy*dt;
+    if(st.climb){st.vy=0;p.y+=2.6*st.cdir*dt;} // on a ladder or climbable wall: up and down with forward and back
+    else{st.vy-=(st.vy>0?GUP:GDN)*dt;p.y+=st.vy*dt;}
     let floor=0;
     for(const b of st.boxes){if(p.x>b.min.x-R*.5&&p.x<b.max.x+R*.5&&p.z>b.min.z-R*.5&&p.z<b.max.z+R*.5&&b.max.y<=p.y+STEP&&b.max.y>floor)floor=b.max.y;}
     if(p.y<=floor){p.y=floor;st.vy=Math.max(0,st.vy);st.ground=true;}else st.ground=false;
     // horizontal move, one axis at a time so you slide along walls
+    let hitClimb=false;
     for(const ax of ['x','z']){
       const nx=p[ax]+(ax==='x'?vx:vz)*dt;const old=p[ax];p[ax]=nx;
       for(const b of st.boxes){
         if(b.max.y-b.min.y<.05)continue;
         if(p.y+STEP>=b.max.y||p.y+H<=b.min.y)continue; // can step onto it, or it is above your head
-        if(p.x>b.min.x-R&&p.x<b.max.x+R&&p.z>b.min.z-R&&p.z<b.max.z+R){p[ax]=old;break;}
+        if(p.x>b.min.x-R&&p.x<b.max.x+R&&p.z>b.min.z-R&&p.z<b.max.z+R){p[ax]=old;if(b.climb&&Math.abs(fz)>.1)hitClimb=true;break;}
       }
     }
+    if(hitClimb){st.climb=true;st.cdir=fz<0?1:-1;st.ground=false;st.vy=0;}else st.climb=false;
     if(st.third&&TP.obj){
       const sp2=Math.hypot(vx,vz),mv=sp2>.05;
       if(mv){const tgt=Math.atan2(vx,vz)+(c.faceOffset||0);let d=tgt-TP.face;d=Math.atan2(Math.sin(d),Math.cos(d));TP.face+=d*Math.min(1,dt*12);}
@@ -119,5 +124,5 @@ export function createWalk(c){
     }else{camera.position.set(p.x,p.y+EYE,p.z);camera.rotation.set(st.pitch,st.yaw,0);if(c.onTick)c.onTick(p);}
     c.bump();
   }
-  return {enter,exit,tick,get on(){return st.on;},get third(){return st.third;},get pos(){return st.on?st.pos:null;},place(x,y,z){st.pos.set(x,y,z);},setYaw(y){st.yaw=y;},refreshBoxes};
+  return {enter,exit,tick,get on(){return st.on;},get third(){return st.third;},get pos(){return st.on?st.pos:null;},get yaw(){return st.yaw;},get keys(){return st.keys;},get boxes(){return st.boxes;},get climbing(){return st.climb;},get stick(){return [st.jx,st.jy];},get player(){return TP.obj;},setController(x){controller=x;},place(x,y,z){st.pos.set(x,y,z);},setYaw(y){st.yaw=y;},refreshBoxes};
 }

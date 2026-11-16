@@ -39,11 +39,12 @@ Steps that climb toward -z (rotate it to turn it). pos is the bottom of the firs
 | `material` | name of a material you defined (optional) |
 
 ## `spawn` · Spawn
-Where the character starts. yaw turns it (0 faces -z, the way the camera first looks).
+Where the character starts. yaw turns it (0 faces -z, the way the camera first looks). weapon: true lets the player shoot (click, F or the Fire button).
 
 | parameter | values |
 |---|---|
 | `yaw` | number -360 to 360, default 0 |
+| `weapon` | true or false, default false |
 
 ## `room` · Room
 Four walls, a floor and an optional ceiling, with openings cut where you ask. Stays one editable room.
@@ -64,6 +65,35 @@ Four walls, a floor and an optional ceiling, with openings cut where you ask. St
 An empty container. Give other instances "parent":"<this id>" and they move together.
 
 No parameters.
+
+## `ladder` · Ladder
+A ladder you climb: walk into it and press forward (up) or back (down). Place it against a wall or platform edge; it faces +z.
+
+| parameter | values |
+|---|---|
+| `height` | number 0.5 to 20, default 3 |
+| `width` | number 0.3 to 2, default 0.6 |
+| `material` | name of a material you defined (optional) |
+
+## `vehicle` · Vehicle
+A car you can drive. Walk up to it and press E (or Drive), steer with WASD or the stick, Space brakes, E gets out. It faces -z at rot 0.
+
+| parameter | values |
+|---|---|
+| `length` | number 2 to 8, default 3.6 |
+| `width` | number 1 to 3, default 1.8 |
+| `height` | number 0.8 to 2.5, default 1.3 |
+| `speed` | number 4 to 40, default 16 |
+| `material` | name of a material you defined (optional) |
+
+## `target` · Target
+Something to shoot. It takes hp hits and then disappears. Rules can react with the object-shot trigger.
+
+| parameter | values |
+|---|---|
+| `size` | number 0.3 to 4, default 1.2 |
+| `hp` | integer 1 to 20, default 3 |
+| `material` | name of a material you defined (optional) |
 
 ## `zone` · Zone
 An invisible volume that rules can react to. Shown as a faint box only while editing.

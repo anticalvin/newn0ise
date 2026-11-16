@@ -45,6 +45,29 @@ export function createWorldBuilder(c){
     zone(g,p){const m=new THREE.MeshBasicMaterial({color:0x66ccff,transparent:true,opacity:.14,depthWrite:false,wireframe:false});
       const z=new THREE.Mesh(new THREE.BoxGeometry(p.size[0],p.size[1],p.size[2]),m);z.position.y=p.size[1]/2;z.userData.noView=true;z.userData.zone=true;g.add(z);
       const e=new THREE.LineSegments(new THREE.EdgesGeometry(z.geometry),new THREE.LineBasicMaterial({color:0x66ccff}));e.position.copy(z.position);e.userData.noView=true;g.add(e);g.userData.marker=true;},
+    ladder(g,p,o){
+      const m=makeMat(p.material,'#8a6a45'),n=Math.max(2,Math.round(p.height/.3));
+      box(g,.05,p.height,.05,-p.width/2,p.height/2,0,m,false);box(g,.05,p.height,.05,p.width/2,p.height/2,0,m,false);
+      for(let i=0;i<n;i++)box(g,p.width,.04,.04,0,.2+i*(p.height-.3)/Math.max(1,n-1),0,m,false);
+      const inv=new THREE.Mesh(new THREE.BoxGeometry(p.width+.5,p.height,.5),new THREE.MeshBasicMaterial({visible:false}));inv.position.set(0,p.height/2,-.1);inv.userData.solid=true;inv.userData.noView=true;g.add(inv);
+      o.meta.climb=true;},
+    target(g,p,o){
+      const m=makeMat(p.material,'#d4552b'),s=p.size;
+      box(g,s*.1,s*1.1,s*.1,0,s*.55,0,makeMat(null,'#5a5a5a'),true);
+      const face=new THREE.Mesh(new THREE.CylinderGeometry(s*.5,s*.5,s*.08,28),m);face.rotation.x=Math.PI/2;face.position.set(0,s*1.1+s*.5,0);face.castShadow=true;face.userData.solid=true;g.add(face);
+      const ring=new THREE.Mesh(new THREE.CylinderGeometry(s*.28,s*.28,s*.1,28),makeMat(null,'#f2efe9'));ring.rotation.x=Math.PI/2;ring.position.set(0,s*1.1+s*.5,s*.01);g.add(ring);
+      o.meta.hp=p.hp;o.meta.hp0=p.hp;o.meta.target=true;},
+    vehicle(g,p,o){
+      const bm=makeMat(p.material,'#c0392b'),dark=makeMat(null,'#222426'),glass=makeMat(null,'#9fc4d8'),L=p.length,Wd=p.width,H=p.height;
+      const body=box(g,Wd,H*.38,L,0,H*.22,0,bm,true);
+      const cab=box(g,Wd*.86,H*.34,L*.46,0,H*.22+H*.38,L*.06,glass,true);
+      box(g,Wd*.9,.06,L*.4,0,H*.22+H*.72,L*.06,bm,false);
+      const wheels=[];
+      [[-1,-1],[1,-1],[-1,1],[1,1]].forEach(([sx,sz])=>{const w=new THREE.Mesh(new THREE.CylinderGeometry(.36,.36,.26,18),dark);w.rotation.z=Math.PI/2;
+        const pv=new THREE.Group();pv.position.set(sx*(Wd/2),.36,sz*(L*.32));pv.add(w);w.castShadow=true;g.add(pv);wheels.push({pv,w,front:sz<0});});
+      const hl=makeMat(null,'#fff3c0');hl.emissive.set('#ffe9a0');hl.emissiveIntensity=1.2;
+      [-1,1].forEach(sx=>{box(g,.22,.14,.06,sx*Wd*.32,H*.3,-L/2-.01,hl,false);});
+      const v=o.meta.vehicle||(o.meta.vehicle={});v.wheels=wheels;v.speed=p.speed;v.len=L;v.wid=Wd;v.h=H;if(v.v==null){v.v=0;v.occupied=false;}},
     door(g,p,o){
       const fm=makeMat(p.frameMaterial||p.material,'#8c8378'),lm=makeMat(p.material,'#a98c6b'),fw=.07,fd=Math.max(.14,p.thickness*2);
       box(g,fw,p.height,fd,-(p.width/2+fw/2),p.height/2,0,fm);box(g,fw,p.height,fd,p.width/2+fw/2,p.height/2,0,fm);box(g,p.width+fw*2,fw,fd,0,p.height+fw/2,0,fm);
@@ -73,7 +96,7 @@ export function createWorldBuilder(c){
   const prefabObject=(inst)=>{
     const g=new THREE.Group(),meta={noAuto:true,phys:{type:'none'},n0w:{id:inst.id,prefab:inst.prefab,params:inst.params}};
     const o=addGroup(inst.name,g,meta);
-    meta.colliders=()=>{if(!o.vis||!o.holder.visible)return[];const out=[];o.holder.updateMatrixWorld(true);
+    meta.colliders=()=>{if(!o.vis||!o.holder.visible||(o.meta.vehicle&&o.meta.vehicle.occupied))return[];const out=[];o.holder.updateMatrixWorld(true);
       o.holder.traverse(n=>{if(!n.isMesh||!n.userData.solid)return;
         if(n.userData.leaf&&o.meta.door&&o.meta.door.t>.5)return;
         const b=new THREE.Box3().setFromObject(n);if(!b.isEmpty())out.push(b);});return out;};
@@ -114,10 +137,10 @@ export function createWorldBuilder(c){
         if(inst.prefab||inst.placeholder){h.position.set(...inst.pos);h.rotation.set(...inst.rot.map(v=>v*D2R));if(inst.scale!=null){if(Array.isArray(inst.scale))h.scale.set(...inst.scale);else h.scale.setScalar(inst.scale);}}
         if(inst.prefab==='spawn'&&!W.spawn)W.spawn=inst;
         if(inst.material&&inst.prefab&&inst.prefab!=='door')recolour(o,inst.material);
-        o.meta.n0w.id=inst.id;o.meta.n0w.name0=inst.name;
+        o.meta.n0w.id=inst.id;o.meta.n0w.name0=inst.name;if(inst.climb)o.meta.climb=true;
         if(inst.visible===false){o.vis=false;h.visible=false;}
         if(inst.parent!=null&&W.map.has(inst.parent)){W.map.get(inst.parent).holder.add(h);}
-        W.map.set(inst.id,o);o.meta.n0w.init={pos:h.position.toArray(),vis:o.vis};
+        W.map.set(inst.id,o);o.meta.n0w.init={pos:h.position.toArray(),rot:[h.rotation.x,h.rotation.y,h.rotation.z],vis:o.vis};
         h.updateMatrixWorld(true);
       }catch(e){failed.push(inst.id+': '+String(e.message||e));}
     }
@@ -156,7 +179,7 @@ export function createWorldBuilder(c){
         if(m&&m.material)inst.material=m.material;
         else{let col=null;h.traverse(n=>{if(!col&&n.isMesh&&n.material&&n.material.color)col='#'+n.material.color.getHexString();});if(col)inst.color=col;}
         const ph=o.meta&&o.meta.phys;if(ph&&ph.type)inst.phys={...ph};
-        if(o.vis===false)inst.visible=false;if(par)inst.parent=par;
+        if(o.vis===false)inst.visible=false;if(par)inst.parent=par;if(o.meta&&o.meta.climb)inst.climb=true;
         out.instances.push(inst);
       }
     });
@@ -183,7 +206,9 @@ export function createWorldBuilder(c){
     load(rules){R.list=rules.map(x=>({...x}));R.reset();},
     reset(){R.t=0;R.inside.clear();R.fired.clear();R.anim.length=0;W.flags.clear();W.collected=0;R.log.length=0;R.warned=false;
       W.map.forEach(o=>{const m=o.meta&&o.meta.n0w;if(!m||!m.init)return;o.holder.position.fromArray(m.init.pos);if(m.init.vis!==false){o.vis=true;o.holder.visible=true;}
-        if(o.meta.door){const d=o.meta.door;d.t=d.target=d.init||0;if(d.pivot)d.pivot.rotation.y=d.dir*d.t*Math.PI/2*.96;}});
+        if(o.meta.door){const d=o.meta.door;d.t=d.target=d.init||0;if(d.pivot)d.pivot.rotation.y=d.dir*d.t*Math.PI/2*.96;}
+        if(o.meta.hp0!=null)o.meta.hp=o.meta.hp0;
+        if(o.meta.vehicle){o.meta.vehicle.v=0;o.meta.vehicle.occupied=false;o.holder.rotation.set(...(o.meta.n0w.init.rot||[0,0,0]));}});
       R.timerState=R.list.map(()=>({acc:0,done:false}));},
     allow(){const now=performance.now();R.log=R.log.filter(x=>now-x<1000);if(R.log.length>=LIMITS.actionsPerSecond){if(!R.warned){R.warned=true;toast('A rule is running too often, so some actions were skipped.');}return false;}R.log.push(now);return true;},
     objBox(id){const o=W.map.get(id);if(!o||!o.holder)return null;const b=new THREE.Box3().setFromObject(o.holder);return b.isEmpty()?null:b;},
@@ -199,6 +224,7 @@ export function createWorldBuilder(c){
         case 'move-to':{const o=W.map.get(a.target);if(!o)return;R.anim=R.anim.filter(x=>x.o!==o);R.anim.push({o,from:o.holder.position.clone(),to:new THREE.Vector3(...a.pos),t:0,dur:a.seconds});break;}
         case 'teleport':{walk.place(a.pos[0],a.pos[1],a.pos[2]);if(a.yaw!=null&&walk.setYaw)walk.setYaw(a.yaw*D2R);break;}
         case 'collect':{const o=W.map.get(a.target);if(!o||!o.vis)return;o.vis=false;o.holder.visible=false;W.collected++;W.flags.set('collected',W.collected);const tot=[...W.map.values()].length;R.sound('ding');walk.refreshBoxes&&walk.refreshBoxes();toast('Collected '+W.collected,1500);break;}
+        case 'destroy':{const o=W.map.get(a.target);if(!o||!o.vis)return;o.vis=false;o.holder.visible=false;R.sound('thud');walk.refreshBoxes&&walk.refreshBoxes();break;}
         case 'set-flag':W.flags.set(a.flag,a.value);break;
         case 'show-message':toast(a.text,Math.round(a.seconds*1000));break;
         case 'play-sound':R.sound(a.sound);break;
@@ -227,7 +253,8 @@ export function createWorldBuilder(c){
       R.near=near;
       if(R.btn){R.btn.hidden=near==null;if(near!=null){const t=R.list[near].when.target,o=W.map.get(t);R.btn.textContent='Use '+(o?o.name:'');}}
     },
-    interact(){if(R.near!=null&&walk.on){const rule=R.list[R.near];R.fire(rule,R.near);}},
+    shot(id){R.list.forEach((rule,i)=>{if(rule.when.trigger==='object-shot'&&rule.when.target===id)R.fire(rule,i);});},
+    interact(){if(W.mech&&W.mech.busy())return;if(R.near!=null&&walk.on){const rule=R.list[R.near];R.fire(rule,R.near);}},
     mountUi(){
       if(R.btn)return;const b=document.createElement('button');b.id='n0use';b.hidden=true;b.type='button';b.setAttribute('aria-label','Use');
       b.style.cssText='position:fixed;left:50%;bottom:calc(120px + env(safe-area-inset-bottom));transform:translateX(-50%);min-height:44px;min-width:96px;padding:10px 18px;border-radius:22px;border:1px solid rgba(255,255,255,.35);background:rgba(20,20,22,.6);color:#fff;backdrop-filter:blur(14px);z-index:60;font:inherit';

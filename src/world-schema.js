@@ -21,23 +21,28 @@ export const PREFABS={
     params:{width:N(.5,4,1),height:N(1,4,2.1),thickness:N(.03,.3,.08),material:{t:'material'},frameMaterial:{t:'material'},open:{t:'bool',def:false},hinge:{t:'enum',opts:['left','right'],def:'left'}}},
   platform:{label:'Platform',note:'A slab you can stand on.',params:{width:N(.2,60,2),depth:N(.2,60,2),thickness:N(.05,10,.3),material:{t:'material'}}},
   stairs:{label:'Stairs',note:'Steps that climb toward -z (rotate it to turn it). pos is the bottom of the first step.',params:{steps:I(1,40,6),rise:N(.05,.5,.18),run:N(.1,1,.28),width:N(.4,10,1.2),material:{t:'material'}}},
-  spawn:{label:'Spawn',note:'Where the character starts. yaw turns it (0 faces -z, the way the camera first looks).',params:{yaw:N(-360,360,0)}},
+  spawn:{label:'Spawn',note:'Where the character starts. yaw turns it (0 faces -z, the way the camera first looks). weapon: true lets the player shoot (click, F or the Fire button).',params:{yaw:N(-360,360,0),weapon:{t:'bool',def:false}}},
   room:{label:'Room',note:'Four walls, a floor and an optional ceiling, with openings cut where you ask. Stays one editable room.',
     params:{width:N(1,60,6),depth:N(1,60,6),height:N(1.5,12,2.8),wall:N(.05,1,.15),floor:{t:'bool',def:true},ceiling:{t:'bool',def:false},material:{t:'material'},floorMaterial:{t:'material'},
       openings:{t:'list',max:LIMITS.openings,of:{wall:{t:'enum',opts:['n','s','e','w'],def:'s'},offset:N(-30,30,0),width:N(.5,6,1),height:N(1,4,2.1)}}}},
   group:{label:'Group',note:'An empty container. Give other instances "parent":"<this id>" and they move together.',params:{}},
+  ladder:{label:'Ladder',note:'A ladder you climb: walk into it and press forward (up) or back (down). Place it against a wall or platform edge; it faces +z.',params:{height:N(.5,20,3),width:N(.3,2,.6),material:{t:'material'}}},
+  vehicle:{label:'Vehicle',note:'A car you can drive. Walk up to it and press E (or Drive), steer with WASD or the stick, Space brakes, E gets out. It faces -z at rot 0.',params:{length:N(2,8,3.6),width:N(1,3,1.8),height:N(.8,2.5,1.3),speed:N(4,40,16),material:{t:'material'}}},
+  target:{label:'Target',note:'Something to shoot. It takes hp hits and then disappears. Rules can react with the object-shot trigger.',params:{size:N(.3,4,1.2),hp:I(1,20,3),material:{t:'material'}}},
   zone:{label:'Zone',note:'An invisible volume that rules can react to. Shown as a faint box only while editing.',params:{size:{t:'vec3',def:[2,2,2]}}}
 };
 export const TRIGGERS={
   'player-enter':{note:'The character steps into a zone (target: a zone or any object id).',needs:['target']},
   'player-interact':{note:'The character is close to target and presses E (or the Use button).',needs:['target']},
   'timer':{note:'every: seconds between runs, or after: seconds once.',needs:[]},
-  'object-touch':{note:'The character touches target (any object id).',needs:['target']}
+  'object-touch':{note:'The character touches target (any object id).',needs:['target']},
+  'object-shot':{note:'The player shoots target (needs a spawn with weapon: true).',needs:['target']}
 };
 export const ACTIONS={
   'toggle-open':{note:'Open or close a door. {target:id, state?:"open"|"closed"}',needs:['target']},
   'move-to':{note:'Slide an object. {target:id, pos:[x,y,z], seconds:1}',needs:['target','pos']},
   'teleport':{note:'Put the character somewhere. {pos:[x,y,z], yaw?:deg}',needs:['pos']},
+  'destroy':{note:'Make an object disappear with a thud. {target:id}',needs:['target']},
   'collect':{note:'Pick something up: it disappears and is counted. {target:id}',needs:['target']},
   'set-flag':{note:'Remember something. {flag:"name", value:true|false|number}',needs:['flag']},
   'show-message':{note:'Show text for a few seconds. {text:"..."}',needs:['text']},
@@ -137,7 +142,7 @@ export function validateWorld(input,{builtinReady=READY_TYPES}={}){
     if(kind&&doc.prefabs[kind]){const pr=doc.prefabs[kind];it={...it,prefab:pr.prefab,params:{...pr.params,...(it.params||{})}};kind=pr.prefab;}
     if(kind){
       if(!PREFABS[kind]){R.add('warn',lab,'prefab "'+clip(kind,20)+'" isn’t supported (available: '+Object.keys(PREFABS).join(', ')+'). Shown as a pink placeholder box.');o.placeholder='prefab '+clip(kind,20);o.type='cube';o.dims=[1,1,1];}
-      else{o.prefab=kind;o.params=prefabParams(kind,it.params,lab+'.params');meshBudget+=kind==='stairs'?(o.params.steps):kind==='room'?(6+4*(o.params.openings||[]).length):kind==='door'?5:1;}
+      else{o.prefab=kind;o.params=prefabParams(kind,it.params,lab+'.params');meshBudget+=kind==='stairs'?(o.params.steps):kind==='room'?(6+4*(o.params.openings||[]).length):kind==='door'?5:kind==='vehicle'?10:kind==='ladder'?20:kind==='target'?3:1;}
     }else if(ptype){
       if(PRIM_TYPES.includes(ptype)||builtinReady.includes(ptype))o.type=ptype;
       else{R.add('warn',lab,'type "'+clip(ptype,20)+'" isn’t supported (shapes: '+PRIM_TYPES.join(', ')+'; ready-made: '+builtinReady.join(', ')+'; or use "prefab"). Shown as a pink placeholder box.');o.placeholder='type '+clip(ptype,20);o.type='cube';o.dims=[1,1,1];}
@@ -152,6 +157,7 @@ export function validateWorld(input,{builtinReady=READY_TYPES}={}){
     if(it.phys!=null){const p=it.phys;if(p&&typeof p==='object'&&PHYS_TYPES.includes(p.type)){o.phys={type:p.type};['mass','bounce','friction'].forEach(k=>{if(p[k]!=null&&isNum(p[k]))o.phys[k]=clampN(p[k],0,k==='mass'?10000:2,1);});if(['box','sphere','capsule','cylinder','hull'].includes(p.shape))o.phys.shape=p.shape;}
       else R.add('fix',lab+'.phys','phys.type must be one of '+PHYS_TYPES.join(', ')+'. Ignored.');}
     if(it.visible===false)o.visible=false;
+    if(it.climb===true)o.climb=true;
     if(it.parent!=null)o.parent=String(it.parent);
     doc.instances.push(o);
   });
@@ -195,7 +201,7 @@ export function validateWorld(input,{builtinReady=READY_TYPES}={}){
       if(a.action==='toggle-open'){const t=needTarget(a.target,ap+'.target','target');if(!t)return;const o=byId.get(t);if(!o.prefab||o.prefab!=='door'){R.add('fix',ap,'toggle-open works on doors; "'+t+'" isn’t one. Action skipped.');return;}x.target=t;if(a.state==='open'||a.state==='closed')x.state=a.state;}
       else if(a.action==='move-to'){const t=needTarget(a.target,ap+'.target','target');if(!t)return;const p=vec(a.pos,null);if(!p){R.add('fix',ap+'.pos','move-to needs pos [x,y,z]. Action skipped.');return;}x.target=t;x.pos=p;x.seconds=clampN(a.seconds,.1,60,1);}
       else if(a.action==='teleport'){const p=vec(a.pos,null);if(!p){R.add('fix',ap+'.pos','teleport needs pos [x,y,z]. Action skipped.');return;}x.pos=p;if(isNum(a.yaw))x.yaw=clampN(a.yaw,-360,360,0);}
-      else if(a.action==='collect'){const t=needTarget(a.target,ap+'.target','target');if(!t)return;x.target=t;}
+      else if(a.action==='collect'||a.action==='destroy'){const t=needTarget(a.target,ap+'.target','target');if(!t)return;x.target=t;}
       else if(a.action==='set-flag'){if(typeof a.flag!=='string'||!a.flag){R.add('fix',ap,'set-flag needs "flag". Action skipped.');return;}x.flag=clip(a.flag,30);x.value=(typeof a.value==='number'||typeof a.value==='boolean')?a.value:true;flagsSeen.add(x.flag);}
       else if(a.action==='show-message'){if(typeof a.text!=='string'||!a.text){R.add('fix',ap,'show-message needs "text". Action skipped.');return;}x.text=clip(a.text,LIMITS.text);x.seconds=clampN(a.seconds,1,30,3);if(a.text.length>LIMITS.text)R.add('fix',ap+'.text','Message cut to '+LIMITS.text+' characters.');}
       else if(a.action==='play-sound'){x.sound=SOUNDS.includes(a.sound)?a.sound:(R.add('fix',ap+'.sound','sound must be one of '+SOUNDS.join(', ')+'. Using ding.'),'ding');}

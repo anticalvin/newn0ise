@@ -11,6 +11,7 @@ Rules are data, never code. A rule is `{"id","when":{"trigger",…},"if"?:{"flag
 | `player-interact` | The character is close to target and presses E (or the Use button). |
 | `timer` | every: seconds between runs, or after: seconds once. |
 | `object-touch` | The character touches target (any object id). |
+| `object-shot` | The player shoots target (needs a spawn with weapon: true). |
 
 `when.once: true` runs the rule only the first time. `player-enter` and `object-touch` fire when the character steps in, not every frame.
 
@@ -20,6 +21,7 @@ Rules are data, never code. A rule is `{"id","when":{"trigger",…},"if"?:{"flag
 | `toggle-open` | Open or close a door. {target:id, state?:"open"\|"closed"} |
 | `move-to` | Slide an object. {target:id, pos:[x,y,z], seconds:1} |
 | `teleport` | Put the character somewhere. {pos:[x,y,z], yaw?:deg} |
+| `destroy` | Make an object disappear with a thud. {target:id} |
 | `collect` | Pick something up: it disappears and is counted. {target:id} |
 | `set-flag` | Remember something. {flag:"name", value:true\|false\|number} |
 | `show-message` | Show text for a few seconds. {text:"..."} |

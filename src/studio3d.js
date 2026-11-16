@@ -25,6 +25,7 @@ import {validateWorld,LIMITS as WLIM,PREFABS,TRIGGERS,ACTIONS} from './world-sch
 import {hashJson,readCapped} from './importkit.js';
 import {WORLD_BRIEF} from './world-brief.js';
 import {createForms} from './formobj.js';
+import {createMechanics} from './mechanics.js';
 import {validateFormFile} from './form-schema.js';
 import {FORM_BRIEF} from './form-brief.js';
 import {createSceneDoc} from './scenedoc.js';
@@ -140,7 +141,7 @@ let idc=0;
 /* the sky is a look target too: not a scene object, but it carries a look or effect stack like one and is masked by where nothing else is */
 const SKY={id:'sky',name:'Sky',kind:'sky',vis:true,holder:{visible:true},meta:{}};
 const objById=id=>id==='sky'?SKY:S.objs.find(o=>o.id===id);
-let NW=null,FORM=null; // the .n0world builder, created once the scene API exists
+let NW=null,FORM=null,MECH=null; // the .n0world builder, created once the scene API exists
 const SAFE_MODE=/[?&]safe=1/.test(location.search),WORLD_ON=!/[?&]n0world=0/.test(location.search);
 const anyLook=()=>!!SKY.look||S.objs.some(x=>x.look);
 const claymat=new THREE.MeshStandardMaterial({color:0xd8d4cc,roughness:.92,metalness:0});
@@ -931,6 +932,7 @@ function frame(ts){
     if(S.walk)walk.tick(dt);else controls.update(dt);
     if(NW)NW.tick(dt);
     if(FORM)FORM.tick(t);
+    if(MECH)MECH.tick(dt);
     if(selBox)selBox.update();
     grid.visible=S.grid&&!S.exporting&&!S.walk;
     if(selBox)selBox.visible=!S.exporting&&S.sel!=null&&!S.walk;
@@ -2614,6 +2616,7 @@ async function exportWorldFile(){
 }
 /* ---- FORM: generated objects that keep their recipe ---- */
 FORM=createForms({THREE,S,addGroup,toast,bump,renderObjList:()=>renderObjList&&renderObjList(),setShadowFlags,applyView,DOC,SURF,MAT,uPush:()=>uPush&&uPush(),sliderRow,chipRow,btn,el,sec,selectObj,frameAll,autoPlace,deliver,matPresets:MATPRESETS});
+if(NW){MECH=createMechanics({THREE,S,walk,camera,canvas,scene,W:NW,toast,bump,objById});NW.mech=MECH;}
 DOC.setFormHooks({snap:o=>FORM.snap(o),apply:(o,fm)=>FORM.apply(o,fm)});
 async function importFormFile(file,json,origin='imported'){
   try{
@@ -2748,4 +2751,4 @@ setTimeout(async()=>{const m=location.hash.match(/^#from=(\w+)/);if(!m)return;co
   if(!rec){toast('Nothing to open. Send a picture from the other page again.');return;}
   if(rec.meta&&rec.meta.form&&FORM){try{const j=JSON.parse(await rec.blob.text());await importFormFile(null,j,'local');}catch(e){toast('Couldn’t open the generator: '+(e.message||e),5000);}return;}
   await photoToRelief(new File([rec.blob],'from-'+m[1]+'.png',{type:rec.blob.type||'image/png'}));toast('Opened from '+m[1]);},1400);
-window.__studio={FORM:()=>FORM,importFormFile,NW:()=>NW,worldImportSheet,exportWorldFile,validateWorld,addGroup,frame,get maskRT(){return maskRT;},renderSelMask,SKY,pickSky,followPlayer,DOC,LGT,MAT,openMatLab:c=>openMatLab({THREE,RoomEnvironment,el,btn,sliderRow,chipRow,toast,MAT,...c}),undo3,redo3,uPush,UH,apprOf,apprPut,apprWatch,autoPlace,SURF,addPhoto,sampleCanvas,S,N0,selectObj,addLook,removeLook,openInEffects,worldEd,api,walk,aiConnect,zipStore,zipRead,projectFiles,loadProject,saveProject,AUTO,autoStep,fxRandomise,fxEnsure,fxClear,FX3,SG,addViz,AU,buildViz,vizUpdate,enterRest,leaveRest,restTick,setFx,autoDepth,buildDepth,restD,MATTERS,CUT,autoCut,refineMask,applyAlpha,THREE,scene,camera,controls,renderer,importFiles,addPrimitive,sheet,SC,carve,surfaceNets,buildScan,makeRelief,pseudoDepth,photoToRelief,objById,removeObj,bump,setTab,rebuildRelief,applyView,frameAll,exportImage,get rt(){return rt;}};
+window.__studio={MECH:()=>MECH,FORM:()=>FORM,importFormFile,NW:()=>NW,worldImportSheet,exportWorldFile,validateWorld,addGroup,frame,get maskRT(){return maskRT;},renderSelMask,SKY,pickSky,followPlayer,DOC,LGT,MAT,openMatLab:c=>openMatLab({THREE,RoomEnvironment,el,btn,sliderRow,chipRow,toast,MAT,...c}),undo3,redo3,uPush,UH,apprOf,apprPut,apprWatch,autoPlace,SURF,addPhoto,sampleCanvas,S,N0,selectObj,addLook,removeLook,openInEffects,worldEd,api,walk,aiConnect,zipStore,zipRead,projectFiles,loadProject,saveProject,AUTO,autoStep,fxRandomise,fxEnsure,fxClear,FX3,SG,addViz,AU,buildViz,vizUpdate,enterRest,leaveRest,restTick,setFx,autoDepth,buildDepth,restD,MATTERS,CUT,autoCut,refineMask,applyAlpha,THREE,scene,camera,controls,renderer,importFiles,addPrimitive,sheet,SC,carve,surfaceNets,buildScan,makeRelief,pseudoDepth,photoToRelief,objById,removeObj,bump,setTab,rebuildRelief,applyView,frameAll,exportImage,get rt(){return rt;}};

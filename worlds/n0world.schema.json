@@ -194,6 +194,9 @@
        "spawn",
        "room",
        "group",
+       "ladder",
+       "vehicle",
+       "target",
        "zone"
       ]
      },
@@ -279,7 +282,8 @@
          "player-enter",
          "player-interact",
          "timer",
-         "object-touch"
+         "object-touch",
+         "object-shot"
         ]
        }
       }
@@ -298,6 +302,7 @@
           "toggle-open",
           "move-to",
           "teleport",
+          "destroy",
           "collect",
           "set-flag",
           "show-message",
