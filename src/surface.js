@@ -5,7 +5,7 @@
 export const SURF=[
   ['halftone','Halftone'],['crt','Phosphor scan'],['dither','Dither'],['thermal','Thermal'],['holo','Hologram'],['toon','Toon'],
   ['glitch','Glitch'],['hatch','Hatching'],['iris','Iridescent'],['grid','Grid'],['grain','Film grain'],['ink','Ink and paper'],
-  ['bands','Colour bands'],['dissolve','Dissolve'],['xray','X-ray'],['pop','Pop print'],['scan','Scanner sweep'],['gmap','Gradient map'],['voxel','Voxel tint'],['custom','Your own code']
+  ['bands','Colour bands'],['dissolve','Dissolve'],['xray','X-ray'],['pop','Pop print'],['scan','Scanner sweep'],['gmap','Gradient map'],['voxel','Voxel tint'],['vhs','VHS tape'],['nvg','Night vision'],['lcd','LCD pixels'],['gameboy','Handheld'],['cctv','CCTV'],['amber','Amber monitor'],['crttube','CRT tube'],['custom','Your own code']
 ];
 export const CUSTOM_DEFAULT='// c lit colour, N normal, V view direction, P object position, fc screen pixel, t time, L brightness, fr rim, sc scale\nvec3 o = c;\no = mix(o, vec3(L), .5 + .5 * sin(P.y * 8. * sc + t));\no += vec3(1.,.5,.2) * fr * .6;\nreturn o;';
 const DEFAULTS={
@@ -13,7 +13,7 @@ const DEFAULTS={
   holo:{c1:'#7fe8ff',c2:'#000000',sc:1},toon:{c1:'#ffffff',c2:'#101010',sc:1},glitch:{c1:'#ff4a3a',c2:'#000000',sc:1},hatch:{c1:'#16161a',c2:'#f2efe8',sc:1},
   iris:{c1:'#ffffff',c2:'#000000',sc:1},grid:{c1:'#f2efe8',c2:'#000000',sc:1},grain:{c1:'#ffffff',c2:'#000000',sc:1},ink:{c1:'#0e0e10',c2:'#efe9da',sc:1},
   bands:{c1:'#ffffff',c2:'#000000',sc:1},dissolve:{c1:'#ffb347',c2:'#000000',sc:1},xray:{c1:'#9fd8ff',c2:'#000000',sc:1},pop:{c1:'#ffffff',c2:'#000000',sc:1},
-  scan:{c1:'#ffffff',c2:'#000000',sc:1},gmap:{c1:'#f6e7c1',c2:'#1a1e3a',sc:1},voxel:{c1:'#ffffff',c2:'#000000',sc:1},custom:{c1:'#ffffff',c2:'#000000',sc:1}
+  scan:{c1:'#ffffff',c2:'#000000',sc:1},gmap:{c1:'#f6e7c1',c2:'#1a1e3a',sc:1},voxel:{c1:'#ffffff',c2:'#000000',sc:1},vhs:{c1:'#ffffff',c2:'#000000',sc:1},nvg:{c1:'#41ff6a',c2:'#000000',sc:1},lcd:{c1:'#ffffff',c2:'#000000',sc:1},gameboy:{c1:'#9bbc0f',c2:'#0f380f',sc:1.4},cctv:{c1:'#ffffff',c2:'#000000',sc:1},amber:{c1:'#ffb000',c2:'#000000',sc:1},crttube:{c1:'#ffffff',c2:'#000000',sc:1},custom:{c1:'#ffffff',c2:'#000000',sc:1}
 };
 const FRAG_FN=`
 uniform float uSM,uSA,uSS,uSV,uST,uSTa;uniform vec3 uSC1,uSC2,uSTc;
@@ -49,12 +49,22 @@ vec3 surfApply(vec3 c){
   else if(m==16){vec3 q=floor(c*4.+.5)/4.;float cell=6.*sc;vec2 g=fc/cell;float r=length(fract(g)-.5)*2.;float dots=step(r,sqrt(clamp(1.-L,0.,1.))*.9)*step(L,.55);o=q*1.12*(1.-dots*.55);}
   else if(m==17){float y=sin(t*.8)*1.1;float b=exp(-pow((vSP.y-y)*5.,2.));o=c+uSC1*b*1.6;}
   else if(m==18){o=mix(uSC2,uSC1,smoothstep(0.,1.,L));}
-  else if(m==20){o=surfCustom(c,N,V,vSP,fc,t,L,fr,sc);}
+  else if(m==27){o=surfCustom(c,N,V,vSP,fc,t,L,fr,sc);}
+  else if(m==20){float rb=fract(fc.y/(400.*sc)-t*.15);float bar=smoothstep(0.,.04,rb)*(1.-smoothstep(.04,.1,rb));o=mix(vec3(L),c,1.25);o.r+=fr*.25;o.b+=fr*.3;o*=.88+.12*sin(fc.y*3.14159/(1.5*sc));o+=(sH(fc+floor(t*30.))-.5)*.14+bar*.35*sH(vec2(fc.y,floor(t*30.)));}
+  else if(m==21){float lv=clamp(L*1.5+.1,0.,1.);o=uSC1*lv*(.9+.1*sin(fc.y*3.14159/(1.5*sc)));o+=(sH(fc+floor(t*30.))-.5)*.25*(1.-lv*.5);o*=1.-fr*.5;}
+  else if(m==22){vec2 g=fract(fc/(6.*sc));float k=floor(g.x*3.);vec3 mk=vec3(k<.5?1.:.2,k>.5&&k<1.5?1.:.2,k>1.5?1.:.2);float gap=step(.12,g.y)*step(.08,fract(g.x*3.));o=c*mk*gap*1.9;}
+  else if(m==23){float th=sB4(floor(fc/(3.*sc)));float lv=floor(clamp(L+(th-.5)*.25,0.,.999)*4.)/3.;o=mix(uSC2,uSC1,lv);}
+  else if(m==24){o=vec3(L)*vec3(.9,1.,.92);o*=.9+.1*sin(fc.y*3.14159/sc);o*=1.-fr*.45;o+=(sH(fc+floor(t*25.))-.5)*.12;}
+  else if(m==25){o=uSC1*L*1.3*(.7+.3*sin(fc.y*3.14159/(1.4*sc)))+uSC1*.05;}
+  else if(m==26){float scn=.7+.3*sin(fc.y*3.14159/(1.6*sc));float k=mod(floor(fc.x/sc),3.);vec3 mk=vec3(k<.5?1.:.55,k>.5&&k<1.5?1.:.55,k>1.5?1.:.55);o=c*scn*mk*1.5+c*c*.35;o*=1.-fr*.35;o*=.97+.03*sin(t*50.);}
   else if(m==19){vec3 cell=floor(vSP*6.*sc);float h=sH(cell.xy+cell.z*7.);o=c*(.7+.45*h);}
   return mix(c,o,uSA);
 }`;
 const customFn=body=>'vec3 surfCustom(vec3 c,vec3 N,vec3 V,vec3 P,vec2 fc,float t,float L,float fr,float sc){\n'+body+'\n}';
 const hashS=str=>{let h=5381;for(let i=0;i<str.length;i++)h=((h<<5)+h+str.charCodeAt(i))|0;return (h>>>0).toString(36);};
+const KEYS=new WeakMap();
+/* several hooks can sit on one material; each adds its own part to the program key so a changed program is never mistaken for a cached one */
+export function chainKey(m,name,fn){let k=KEYS.get(m);if(!k){k={};KEYS.set(m,k);}k[name]=fn;m.customProgramCacheKey=()=>Object.keys(k).sort().map(n=>n+k[n]()).join('|');}
 export function createSurface(c){
   const {THREE,S,objById}=c;
   const meshes=o=>{const out=[];o.holder.traverse(n=>{if(n.isMesh&&!n.isSplatMesh&&n.material&&!(n.userData&&n.userData.noView))out.push(n);});return out;};
@@ -77,7 +87,7 @@ export function createSurface(c){
           sh.vertexShader='varying vec3 vSP,vSW,vSN;\n'+sh.vertexShader.replace('#include <project_vertex>','#include <project_vertex>\nvSP=transformed;vSW=(modelMatrix*vec4(transformed,1.)).xyz;vSN=normalize(mat3(modelMatrix)*normal);');
           sh.fragmentShader=FRAG_FN.replace('/*CUSTOM*/',customFn((o.surf&&o.surf.code)||CUSTOM_DEFAULT))+'\n'+sh.fragmentShader.replace('#include <dithering_fragment>','gl_FragColor.rgb=surfApply(gl_FragColor.rgb);\n#include <dithering_fragment>');
         };
-        mm.customProgramCacheKey=()=>'surf'+mm.uuid+hashS((o.surf&&o.surf.code)||'');(o.surfMats=o.surfMats||[]).push(mm);
+        chainKey(mm,'surf',()=>mm.uuid+hashS((o.surf&&o.surf.code)||''));(o.surfMats=o.surfMats||[]).push(mm);
         mm.needsUpdate=true;
         return mm;
       });

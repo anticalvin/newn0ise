@@ -17,6 +17,8 @@ import {createRecorder,fmtTime} from './recorder.js';
 import {P3D,build as buildPhoto,loadCanvas,sampleCanvas} from './photo3d.js';
 import {rigHuman} from './rig.js';
 import {createSurface,createBall,CUSTOM_DEFAULT} from './surface.js';
+import {createMaterials,PRESETS as MATPRESETS,normMat} from './matsys.js';
+import {openMatLab} from './matlab.js';
 import {put as handoffPut,take as handoffTake} from './handoff.js';
 import {createWorldEditor} from './world-editor.js';
 import {RoomEnvironment} from 'three/addons/environments/RoomEnvironment.js';
@@ -873,7 +875,7 @@ function frame(ts){
     tcHelper.visible=!S.exporting&&!S.walk&&!!(S.gizmo||S.pivot)&&S.sel!=null;
     /* anything that changes the picture without a bump() (visualizers, physics, spin, walking, recording, auto mode, breathing reliefs) must also
        invalidate the cached look frame, otherwise the effect keeps showing the first baked frame */
-    SURF.tick(t);
+    SURF.tick(t);MAT.tick(t);
     S.animating=!!(SURF.any()||S.walk||S.spin||(typeof sim!=='undefined'&&sim.playing)||(typeof stRec!=='undefined'&&stRec.state==='recording')||AUTO.on||S.objs.some(o=>(o.kind==='viz'&&o.vis)||(o.kind==='relief'&&o.meta&&(o.meta.breathe||o.meta.furMats))));
     if(S.animating){S.ver++;N0.SRC.ver=S.ver;S.liveUntil=performance.now()+120;}
     bgCol.set(S.bg);
@@ -2080,6 +2082,8 @@ function ctlRow(parent,c){
 
 /* Surface shader: effects in the object's own material. They follow the surface instead of masking the screen. */
 const SURF=createSurface({THREE,S,objById});
+const MAT=createMaterials({THREE,S});
+let matLab=null;
 if(renderer)renderer.debug.onShaderError=(g,prog,vs,fs)=>{try{const log=(g.getShaderInfoLog(fs)||'').split('\n').filter(l=>/ERROR/.test(l)).slice(0,2).join(' ').replace(/ERROR: \d+:(\d+)/g,'line $1');if(SURF.onError&&S.objs.some(o=>o.surf&&o.surf.m==='custom'))SURF.onError(log);}catch(e){}};
 let surfBox=null,editBadge=null,SURFBALL=null;
 const myLooks=()=>{try{return JSON.parse(localStorage.getItem('n0.mylooks')||'[]');}catch(e){return[];}};
@@ -2127,6 +2131,13 @@ function surfRefresh(){
 }
 function buildLookPane(){
   const p=paneEls.look,P=N0.P;
+  {const ms=sec(p,'Material');ms.appendChild(el('div','note','A real material for the selected object: colour, metal, roughness, glow, bump and opacity, each from a value or a procedural pattern. Opens a workshop with a 3D preview.'));
+    const mr=el('div','chips');
+    mr.appendChild(btn('Open material creator','pri',()=>{const o=objById(S.sel!=null?S.sel:S.fxTarget);if(!o){toast('Pick an object first, or add a shape.');return;}if(o.kind==='viz'||o.kind==='splat'){toast('This kind of object has no surface to shade.');return;}
+      if(matLab)matLab.close();matLab=openMatLab({THREE,RoomEnvironment,el,btn,sliderRow,chipRow,toast,o,MAT,applyAll:d=>{S.objs.forEach(x=>{if(!(x.kind==='viz'||x.kind==='splat'))MAT.set(x,d);});bump();},onChange:bump,onClose:()=>{matLab=null;bump();}});}));
+    ms.appendChild(mr);
+    const qr=el('div','chips');MATPRESETS.slice(0,8).forEach(([n,d])=>qr.appendChild(btn(n,'',()=>{const o=objById(S.sel!=null?S.sel:S.fxTarget);if(!o){toast('Pick an object first.');return;}MAT.set(o,JSON.parse(JSON.stringify(d)));bump();toast(n+' on '+o.name);})));
+    ms.appendChild(qr);}
   {const ss=sec(p,'Surface shader');ss.appendChild(el('div','note','Effects built into the object\u2019s own material. They turn and move with it, and work on the character while you play.'));surfBox=el('div');ss.appendChild(surfBox);surfRefresh();}
   const se=sec(p,'Effects');
   editBadge=el('div','note');editBadge.style.cssText='font-weight:700;color:var(--ink)';se.appendChild(editBadge);paintBadge();
@@ -2334,12 +2345,13 @@ function zipRead(u8){
 }
 const PSKIP=new Set(['_st','stats','tris','maxSlope','slopeLim','cutting','cutErr','bdDirty','splatErr','quick']);
 const toPNG=cv=>new Promise(r=>cv.toBlob(r,'image/png')).then(b=>b.arrayBuffer()).then(a=>new Uint8Array(a));
-const apprOf=o=>({look:o.look||null,stack:o.stack||null,surf:o.surf?{...o.surf}:null});
+const apprOf=o=>({look:o.look||null,stack:o.stack||null,surf:o.surf?{...o.surf}:null,mat:o.mat?JSON.parse(JSON.stringify(o.mat)):null});
 function apprPut(o,a){
   if(!a)return;
   if(a.look)o.look=JSON.parse(JSON.stringify(a.look));else delete o.look;
   if(a.stack)o.stack=a.stack;else delete o.stack;
   if(a.surf)SURF.set(o,{...a.surf});else if(o.surf)SURF.set(o,{m:'',ta:0});
+  if(a.mat)MAT.set(o,a.mat);else if(o.mat)MAT.clear(o);
 }
 async function projectFiles(){
   const files={},items=[],skipped=[];let i=0;
@@ -2523,4 +2535,4 @@ async function openInEffects(){
 setTimeout(async()=>{const m=location.hash.match(/^#from=(\w+)/);if(!m)return;const rec=await handoffTake();history.replaceState(null,'',location.pathname);
   if(!rec){toast('Nothing to open. Send a picture from the other page again.');return;}
   await photoToRelief(new File([rec.blob],'from-'+m[1]+'.png',{type:rec.blob.type||'image/png'}));toast('Opened from '+m[1]);},1400);
-window.__studio={undo3,redo3,uPush,UH,apprOf,apprPut,apprWatch,autoPlace,SURF,addPhoto,sampleCanvas,S,N0,selectObj,addLook,removeLook,openInEffects,worldEd,api,walk,aiConnect,zipStore,zipRead,projectFiles,loadProject,saveProject,AUTO,autoStep,fxRandomise,fxEnsure,fxClear,FX3,SG,addViz,AU,buildViz,vizUpdate,enterRest,leaveRest,restTick,setFx,autoDepth,buildDepth,restD,MATTERS,CUT,autoCut,refineMask,applyAlpha,THREE,scene,camera,controls,renderer,importFiles,addPrimitive,sheet,SC,carve,surfaceNets,buildScan,makeRelief,pseudoDepth,photoToRelief,objById,removeObj,bump,setTab,rebuildRelief,applyView,frameAll,exportImage,get rt(){return rt;}};
+window.__studio={MAT,openMatLab:c=>openMatLab({THREE,RoomEnvironment,el,btn,sliderRow,chipRow,toast,MAT,...c}),undo3,redo3,uPush,UH,apprOf,apprPut,apprWatch,autoPlace,SURF,addPhoto,sampleCanvas,S,N0,selectObj,addLook,removeLook,openInEffects,worldEd,api,walk,aiConnect,zipStore,zipRead,projectFiles,loadProject,saveProject,AUTO,autoStep,fxRandomise,fxEnsure,fxClear,FX3,SG,addViz,AU,buildViz,vizUpdate,enterRest,leaveRest,restTick,setFx,autoDepth,buildDepth,restD,MATTERS,CUT,autoCut,refineMask,applyAlpha,THREE,scene,camera,controls,renderer,importFiles,addPrimitive,sheet,SC,carve,surfaceNets,buildScan,makeRelief,pseudoDepth,photoToRelief,objById,removeObj,bump,setTab,rebuildRelief,applyView,frameAll,exportImage,get rt(){return rt;}};
