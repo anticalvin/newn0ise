@@ -10,6 +10,7 @@ import {installIosCam} from './camios.js';
 import {createWipe} from './wipe.js';
 import {createPalette} from './palette.js';
 import {createPluginHost,SAFE as PLUG_SAFE} from './pluginhost.js';
+import {gridFromCanvas,geoDoc} from './formgeo.js';
 import {MAX_EXPOSED,buildTool,toolParams,innerParams,exposable,describeChain,describeModule,describeRecipe,newToolId,bumpVersion,MINE_FAMILY} from './tools.js';
 import {put as handoffPut,take as handoffTake} from './handoff.js';
 import {CAMSIM_PARAMS,CAMSIM_FRAG,SIMS} from './camsim.js';
@@ -3806,6 +3807,7 @@ function renderInspector0(){
   mk(l.visible?'Hide':'Show',()=>{l.visible=!l.visible;renderInspector();});
   mk('Mutate',()=>mutateLayer());
   mk('Open in 3D',()=>openIn3D());
+  mk('Make geometry',()=>makeGeometry());
   {const ab=mk(IDLE.on?'Alive on':'Alive off',()=>{IDLE.on=!IDLE.on;IDLE.force=true;lsSet('n0ise.alive',IDLE.on?'on':'off');renderInspector();});ab.setAttribute('aria-pressed',IDLE.on);}
   {const sb=mk(l.solo?'Unsolo':'Solo',()=>{l.solo=!l.solo;renderInspector();});sb.setAttribute('aria-pressed',!!l.solo);}
   if(ix>0)mk('Up',()=>{const a=STACK.layers;[a[ix-1],a[ix]]=[a[ix],a[ix-1]];STACK.sel=ix-1;renderInspector();});
@@ -3889,6 +3891,13 @@ function pickEffect(id){const e=effectLookup(id);if(!e)return;if(e.cam)pickCam(e
   const rc=lsGet('n0ise.recent',[]).filter(x=>x!==id);rc.unshift(id);lsSet('n0ise.recent',rc.slice(0,8));}
 function stepEffect(d){const list=effectList(),cur=list.findIndex(e=>e.id===effectId(layer())),n=list[((cur<0?0:cur)+d+list.length)%list.length];pickEffect(n.id);toast(n.name);buzz(12);}
 const toggleFav=id=>{const f=lsGet('n0ise.fav',[]),i=f.indexOf(id);if(i<0)f.push(id);else f.splice(i,1);lsSet('n0ise.fav',f);toast(i<0?'Added to favorites':'Removed from favorites');buzz(15);renderInspector();};
+/* Make geometry: the picture as it looks now (effects applied) becomes raised dots or terrain in 3D, as an editable generated object */
+async function makeGeometry(){
+  try{ST.clean=true;await frames2();const g=gridFromCanvas(canvas);ST.clean=false;
+    const blob=new Blob([JSON.stringify(geoDoc(g,(SRC&&SRC.name&&SRC.name!=='Test card'?SRC.name+' pattern':'Pattern geometry').slice(0,40)))],{type:'application/json'});
+    await handoffPut(blob,{from:'effects',form:true});location.href='studio.html#from=effects';}
+  catch(e){ST.clean=false;toast('Couldn’t make geometry: '+(e.message||e));}
+}
 async function openIn3D(){
   try{ST.clean=true;await frames2();const blob=await new Promise(r=>canvas.toBlob(r,'image/png'));ST.clean=false;if(!blob)throw new Error('empty');
     await handoffPut(blob,{from:'effects',name:'From Effects'});location.href='studio.html#from=effects';}
@@ -4217,7 +4226,7 @@ const PALETTE=createPalette({recent:()=>lsGet('n0ise.recent',[]),items:()=>{
   const acts=[A('Open a photo or video',()=>$('#file').click(),'upload import'),A('Save or export',click('save'),'download png video gif'),A('Shuffle',()=>shuffle(),'random surprise'),
     A('Mutate this layer',()=>mutateLayer(),'variation remix'),A('Duplicate layer',()=>dupLayer(),'copy'),A('Undo',()=>undo()),A('Redo',()=>redo()),
     A('Compare before and after',click('cmpbtn'),'wipe original'),A('Animate',()=>TLN.show(),'timeline keyframes'),A('Reset everything',click('reset'),'clear start over'),
-    A('Power on or off',click('power'),'bypass'),A('Plugins',()=>pluginsSheet(),'n0fx'),A('Make a tool',()=>toolMaker(),'make tool save custom effect mine'),A('Keys and help',()=>helpSheet(),'shortcuts'),
+    A('Power on or off',click('power'),'bypass'),A('Plugins',()=>pluginsSheet(),'n0fx'),A('Make geometry from this picture',()=>makeGeometry(),'3d dots terrain heightfield instanced'),A('Make a tool',()=>toolMaker(),'make tool save custom effect mine'),A('Keys and help',()=>helpSheet(),'shortcuts'),
     A('Go to Camera',go('effects.html?cam=1')),A('Go to 3D',go('studio.html'),'model studio'),A('Go to World builder',go('studio.html#world'),'physics walk level'),A('Go to Lab',go('lab.html'),'p5 sketch code generative'),A('Go home',go('index.html'))];
   return[...acts,...looks,...fx];}});
 {const fb=document.getElementById('find');if(fb)fb.addEventListener('click',()=>PALETTE.open());}
