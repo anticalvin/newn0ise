@@ -51,6 +51,12 @@ export function rigHuman(THREE,root){
       };
       m.needsUpdate=true;mats.push(m);
     });
+    /* The look mask and the shadow are drawn with other materials, so they need the same pose or they show a standing statue where the character is running. */
+    const apply=sh=>{sh.uniforms.uPh=U.uPh;sh.uniforms.uAmt=U.uAmt;sh.uniforms.uPlay=U.uPlay;sh.vertexShader=sh.vertexShader.replace('#include <common>','#include <common>\n'+GLSL).replace('#include <begin_vertex>','vec3 transformed=rigPose(position);');};
+    const patch=m=>{m.onBeforeCompile=apply;m.customProgramCacheKey=()=>'rigpose';return m;};
+    const sel=patch(new THREE.MeshBasicMaterial({color:0xffffff,side:THREE.DoubleSide})),blk=patch(new THREE.MeshBasicMaterial({color:0x000000,side:THREE.DoubleSide}));
+    n.userData.maskMat={sel,blk};
+    n.customDepthMaterial=patch(new THREE.MeshDepthMaterial({depthPacking:THREE.RGBADepthPacking}));
   });
   return {set(ph,amt,play){U.uPh.value=ph;U.uAmt.value=amt;U.uPlay.value=play==null?(amt>0?1:U.uPlay.value):play;}};
 }

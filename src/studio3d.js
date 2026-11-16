@@ -785,7 +785,7 @@ function renderSkyMask(){
   const sm=LGT.skyMesh(),swaps=[];
   scene.traverseVisible(n=>{
     if(!n.isMesh||n.isSplatMesh)return;
-    swaps.push([n,n.material]);n.material=n===sm?skyMat:blkMat;
+    swaps.push([n,n.material]);n.material=n===sm?skyMat:(n.userData.maskMat?n.userData.maskMat.blk:blkMat);
   });
   renderer.setRenderTarget(maskRT);renderer.setClearColor(0xffffff,1);renderer.clear();renderer.render(scene,camera);
   swaps.forEach(([n,m])=>{n.material=m;});
@@ -806,7 +806,7 @@ function renderSelMask(oo){
   const swaps=[];
   if(!isSp)scene.traverseVisible(n=>{
     if(!n.isMesh||n.isSplatMesh)return;let p=n,mine=false;while(p){if(p===o.holder){mine=true;break;}p=p.parent;}
-    swaps.push([n,n.material]);n.material=mine?selMat:blkMat;
+    swaps.push([n,n.material]);const mm=n.userData.maskMat;n.material=mine?(mm?mm.sel:selMat):(mm?mm.blk:blkMat);
   });
   renderer.setRenderTarget(maskRT);renderer.setClearColor(0x000000,isSp?0:1);renderer.clear();renderer.render(scene,camera);
   swaps.forEach(([n,m])=>{n.material=m;});LGT.skyVis(true);
@@ -838,7 +838,6 @@ function lookSwitch(prevId,id){
   const key=apprKey(),pv=objById(prevId),nx=objById(id);
   if(pv&&pv[key])apprStore(pv);
   if(nx&&nx[key])apprLoad(nx);
-  else if(nx&&nx!==SKY&&S.fx&&key==='look'&&!anyLook()){nx.look=cloneP();} // the first object picked gets the look, as before
   S.apprSnap=apprGet();updateLookUI();
 }
 /* a change made by hand to the controls while an object with no look is picked gives that object its own look */
@@ -947,7 +946,6 @@ function frame(ts){
     if(wantMask)renderSelMask();
     renderer.setRenderTarget(null);
     const cTex=rtTex(rt.texture);
-    if(S.fx&&!S.hold&&S.mask.mode===2&&S.engine!=='stack'&&!S.lookOff&&!anyLook()){const t0=objById(S.fxTarget!=null?S.fxTarget:S.sel);if(t0&&t0!==SKY){t0.look=cloneP();updateLookUI();}}
     const LO=S.fx&&!S.hold&&S.mask.mode===2&&S.engine!=='stack'?lookObjs():[];
     const SO=S.fx&&!S.hold&&S.mask.mode===2&&S.engine==='stack'&&fxReady()?stackObjs():[];
     if(SO.length){if(frames%6===0)followPlayer(objById(S.fxTarget));drawStackLooks(cTex,t,dt,SO);}
@@ -2626,6 +2624,60 @@ async function importFormFile(file,json,origin='imported'){
     const o=await FORM.make(r,{origin,reportText:v.report.items.length?v.report.toText('Generator report'):''});
     if(o){toast('Added “'+r.name+'”. Select it to change its parameters.',3500);selectObj(o.id);}
   }catch(e){toast(String(e.message||e),5000);}
+}
+
+/* ---- Look: one obvious place to put a hardware profile on something. Pick what it goes on, pick the profile, see it at once. ---- */
+{
+  const QL={target:'selected',open:false};
+  const fxBtn=document.getElementById('bFx');
+  if(fxBtn&&fxBtn.parentNode){
+    const lb=document.createElement('button');lb.id='bLook';lb.type='button';lb.className=fxBtn.className;lb.textContent='LOOK';lb.setAttribute('aria-haspopup','true');lb.setAttribute('aria-expanded','false');lb.style.marginRight='6px';
+    fxBtn.parentNode.insertBefore(lb,fxBtn);
+    const pop=document.createElement('div');pop.id='lookpop';pop.hidden=true;
+    pop.style.cssText='position:fixed;z-index:70;width:min(320px,calc(100vw - 16px));max-height:min(68dvh,560px);overflow:auto;padding:12px;border-radius:16px;background:rgba(18,18,20,.86);backdrop-filter:blur(22px);-webkit-backdrop-filter:blur(22px);border:1px solid rgba(255,255,255,.18);box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 12px 40px rgba(0,0,0,.5);color:#f2efe9;font:13px/1.4 system-ui,sans-serif';
+    document.body.appendChild(pop);
+    const T=(tag,t,st)=>{const e=document.createElement(tag);e.textContent=t;if(st)e.style.cssText=st;return e;};
+    const chipSt=on=>'min-height:44px;padding:8px 12px;border-radius:12px;border:1px solid rgba(255,255,255,.25);background:'+(on?'#f2efe9':'rgba(255,255,255,.07)')+';color:'+(on?'#111':'#f2efe9')+';font:inherit;cursor:pointer';
+    const curObj=()=>objById(S.sel!=null?S.sel:S.fxTarget);
+    function apply(id){
+      S.fx=true;S.engine='crt';
+      if(id==='none'){
+        if(QL.target==='scene'){N0.applyProfile('none');S.fx=false;}else{const o=curObj();if(o&&o.look)removeLook(o);}
+        bump();paint();return;}
+      if(QL.target==='scene'){S.mask.mode=0;N0.applyProfile(id);toast('Look on the whole scene');}
+      else{
+        const o=curObj();if(!o){toast('Tap an object first, or choose Whole scene.');return;}
+        S.mask.mode=2;S.lookOff=false;const keep={pal:N0.P.pal};N0.applyProfile(id);
+        if(o.look){o.look=cloneP();S.apprSnap=apprGet();}else addLook(o);
+        S.fxTarget=o.id;
+        toast(N0.PROFILES.find(x=>x[0]===id)[1]+' on '+o.name+'. It stays on it as it moves.');}
+      try{rebuildLook&&paneEls.look&&rebuildLook();}catch(e){}
+      const f=document.getElementById('bFx');if(f)f.setAttribute('aria-pressed',true);
+      bump();paint();
+    }
+    function paint(){
+      pop.innerHTML='';
+      pop.appendChild(T('div','Look','font-weight:700;font-size:15px;margin-bottom:2px'));
+      pop.appendChild(T('div','Hardware looks from old screens and cameras. Pick what it goes on, then a profile.','opacity:.75;margin-bottom:8px'));
+      const row=document.createElement('div');row.style.cssText='display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px';
+      const o=curObj();
+      [['selected',o?'On '+o.name:'On selected object'],['scene','Whole scene']].forEach(([v,l])=>{const b=T('button',l,chipSt(QL.target===v));b.type='button';b.addEventListener('click',()=>{QL.target=v;if(v==='scene'){S.mask.mode=0;}else{S.mask.mode=2;}S.fx=true;bump();paint();});row.appendChild(b);});
+      pop.appendChild(row);
+      const cur=QL.target==='scene'?(S.mask.mode===0&&S.fx?N0.P.profile:'none'):(o&&o.look?o.look.profile:'none');
+      const grid=document.createElement('div');grid.style.cssText='display:flex;gap:6px;flex-wrap:wrap';
+      N0.PROFILES.forEach(([id,label])=>{const b=T('button',label,chipSt(cur===id));b.type='button';b.style.minHeight='40px';b.addEventListener('click',()=>apply(id));grid.appendChild(b);});
+      pop.appendChild(grid);
+      const am=document.createElement('label');am.style.cssText='display:flex;gap:10px;align-items:center;margin-top:10px;min-height:44px';am.appendChild(T('span','Amount','width:60px'));
+      const i=document.createElement('input');i.type='range';i.min=0;i.max=1;i.step=.01;i.value=S.mask.amt;i.style.flex='1';i.addEventListener('input',()=>{S.mask.amt=+i.value;bump();});am.appendChild(i);pop.appendChild(am);
+    }
+    const place=()=>{const r=lb.getBoundingClientRect();pop.style.top=Math.min(innerHeight-80,r.bottom+8)+'px';pop.style.left=Math.max(8,Math.min(innerWidth-pop.offsetWidth-8,r.right-pop.offsetWidth))+'px';};
+    const close=()=>{pop.hidden=true;lb.setAttribute('aria-expanded','false');};
+    lb.addEventListener('click',e=>{e.stopPropagation();if(!pop.hidden){close();return;}paint();pop.hidden=false;lb.setAttribute('aria-expanded','true');place();});
+    document.addEventListener('pointerdown',e=>{if(!pop.hidden&&!pop.contains(e.target)&&e.target!==lb)close();},true);
+    addEventListener('keydown',e=>{if(e.key==='Escape'&&!pop.hidden)close();});
+    addEventListener('resize',()=>{if(!pop.hidden)place();});
+    window.__lookPop={apply,paint,QL};
+  }
 }
 /* the World pane: import, export, and edit the parameters of a selected prefab */
 if(NW&&paneEls.world){
