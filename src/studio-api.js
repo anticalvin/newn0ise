@@ -182,7 +182,7 @@ export function createApi(c){
       case 'delete':{const o=ref(a);const i=info(o);removeObj(o.id);return{deleted:i.name};}
       case 'duplicate':{const o=ref(a);const prim=Object.keys(PRIMS).find(k=>k===o.name||o.name.startsWith(k));if(!prim)throw new Error('Only shapes can be duplicated. Add the file again instead.');
         const n=addPrimitive(prim);n.holder.scale.copy(o.holder.scale);n.holder.rotation.copy(o.holder.rotation);n.holder.position.copy(o.holder.position).x+=1;if(a.pos)n.holder.position.set(...v3(a.pos));if(a.name)n.name=a.name;
-        let col=null;o.holder.traverse(m=>{if(!col&&m.isMesh&&m.material&&m.material.color)col='#'+m.material.color.getHexString();});if(col)paint(n,{color:col});renderObjList&&renderObjList();bump();return info(n);}
+        let col=null;o.holder.traverse(m=>{if(!col&&m.isMesh&&m.material&&m.material.color)col='#'+m.material.color.getHexString();});if(col)paint(n,{color:col});if(c.doc)c.doc.copyAppearance(o,n);renderObjList&&renderObjList();bump();return info(n);}
       case 'select':{const o=ref(a);c.selectObj(o.id);return info(o);}
       case 'light':return lightCmd(a);
       case 'environment':return envCmd(a);

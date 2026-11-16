@@ -20,6 +20,7 @@ import {createSurface,createBall,CUSTOM_DEFAULT} from './surface.js';
 import {createMaterials,PRESETS as MATPRESETS,normMat} from './matsys.js';
 import {openMatLab} from './matlab.js';
 import {createLighting} from './lighting.js';
+import {createSceneDoc} from './scenedoc.js';
 import {put as handoffPut,take as handoffTake} from './handoff.js';
 import {createWorldEditor} from './world-editor.js';
 import {RoomEnvironment} from 'three/addons/environments/RoomEnvironment.js';
@@ -2086,6 +2087,7 @@ function ctlRow(parent,c){
 /* Surface shader: effects in the object's own material. They follow the surface instead of masking the screen. */
 const SURF=createSurface({THREE,S,objById});
 const MAT=createMaterials({THREE,S});
+const DOC=createSceneDoc({S,SURF,MAT,LGT});
 let matLab=null;
 if(renderer)renderer.debug.onShaderError=(g,prog,vs,fs)=>{try{const log=(g.getShaderInfoLog(fs)||'').split('\n').filter(l=>/ERROR/.test(l)).slice(0,2).join(' ').replace(/ERROR: \d+:(\d+)/g,'line $1');if(SURF.onError&&S.objs.some(o=>o.surf&&o.surf.m==='custom'))SURF.onError(log);}catch(e){}};
 let surfBox=null,editBadge=null,SURFBALL=null;
@@ -2348,14 +2350,7 @@ function zipRead(u8){
 }
 const PSKIP=new Set(['_st','stats','tris','maxSlope','slopeLim','cutting','cutErr','bdDirty','splatErr','quick']);
 const toPNG=cv=>new Promise(r=>cv.toBlob(r,'image/png')).then(b=>b.arrayBuffer()).then(a=>new Uint8Array(a));
-const apprOf=o=>({look:o.look||null,stack:o.stack||null,surf:o.surf?{...o.surf}:null,mat:o.mat?JSON.parse(JSON.stringify(o.mat)):null});
-function apprPut(o,a){
-  if(!a)return;
-  if(a.look)o.look=JSON.parse(JSON.stringify(a.look));else delete o.look;
-  if(a.stack)o.stack=a.stack;else delete o.stack;
-  if(a.surf)SURF.set(o,{...a.surf});else if(o.surf)SURF.set(o,{m:'',ta:0});
-  if(a.mat)MAT.set(o,a.mat);else if(o.mat)MAT.clear(o);
-}
+const apprOf=o=>DOC.appearance(o),apprPut=(o,a)=>DOC.putAppearance(o,a);
 async function projectFiles(){
   const files={},items=[],skipped=[];let i=0;
   {const so=objById(S.sel);if(so&&so[apprKey()]){try{apprStore(so);}catch(e){}}}
@@ -2367,8 +2362,8 @@ async function projectFiles(){
       files[id+'.depth']=new Uint8Array(m.depth.buffer.slice(m.depth.byteOffset,m.depth.byteOffset+m.depth.byteLength));
       if(m.alpha){const a=new Uint8Array(m.alpha.length);for(let k=0;k<a.length;k++)a[k]=Math.round(clamp(m.alpha[k],0,1)*255);files[id+'.alpha']=a;}
       const sc={};for(const [k,v] of Object.entries(m))if(['number','boolean','string'].includes(typeof v)&&!PSKIP.has(k))sc[k]=v;
-      items.push({kind:'relief',id,name:o.name,tr,vis:o.vis,dw:m.dw,dh:m.dh,meta:sc,ap:apprOf(o)});
-    }else if(o.kind==='mesh'&&PRIMS[o.name]&&o.root.material&&o.root.material.color)items.push({kind:'prim',name:o.name,tr,vis:o.vis,color:o.root.material.color.getHex(),ap:apprOf(o)});
+      items.push({kind:'relief',id,name:o.name,tr,vis:o.vis,dw:m.dw,dh:m.dh,meta:sc,ap:apprOf(o),phys:m.phys||null});
+    }else if(o.kind==='mesh'&&PRIMS[o.name]&&o.root.material&&o.root.material.color)items.push({kind:'prim',name:o.name,tr,vis:o.vis,color:o.root.material.color.getHex(),ap:apprOf(o),phys:(m&&m.phys)||null});
     else skipped.push(o.name);
   }
   const pj={n0ise:'studio',v:1,items,skipped,view:{view:S.view,bg:S.bg,env:S.env,grid:S.grid,fx:S.fx,mask:S.mask},engine:S.engine,light:LGT.state(),cam:{p:camera.position.toArray(),t:controls.target.toArray()}};
@@ -2394,6 +2389,7 @@ async function loadProject(u8){
     if(!o)continue;
     o.holder.position.fromArray(it.tr.p);o.holder.rotation.set(...it.tr.r);o.holder.scale.fromArray(it.tr.s);o.vis=it.vis!==false;o.holder.visible=o.vis;
     try{apprPut(o,it.ap);}catch(e){}
+    if(it.phys){o.meta=o.meta||{};o.meta.phys={...it.phys};}
   }
   if(S.rest)leaveRest();
   const v=pj.view||{};if(v.view)S.view=v.view;if(v.bg)S.bg=v.bg;if(typeof v.env==='number'){S.env=v.env;scene.environmentIntensity=v.env;}if(v.mask)Object.assign(S.mask,v.mask);if(typeof v.fx==='boolean')S.fx=v.fx;if(typeof v.grid==='boolean')S.grid=v.grid;
@@ -2418,18 +2414,17 @@ function markDirty(){if(restoring||!window.indexedDB)return;clearTimeout(autoT);
 addEventListener('pagehide',()=>{clearTimeout(autoT);});
 /* undo and redo for the scene: where things are, whether they show, their colour and their look. Taken after each finished gesture. */
 const UH={u:[],r:[],last:null,busy:false};
-const uSnap=()=>JSON.stringify(S.objs.map(o=>({id:o.id,p:o.holder.position.toArray(),r:[o.holder.rotation.x,o.holder.rotation.y,o.holder.rotation.z],s:o.holder.scale.toArray(),v:o.vis!==false,c:o.root&&o.root.material&&o.root.material.color?o.root.material.color.getHex():null,a:apprOf(o)})));
+const uSnap=()=>JSON.stringify(DOC.snapScene());
 function uApply(js){
   UH.busy=true;
-  try{for(const d of JSON.parse(js)){const o=objById(d.id);if(!o)continue;
-    o.holder.position.fromArray(d.p);o.holder.rotation.set(...d.r);o.holder.scale.fromArray(d.s);o.vis=d.v;o.holder.visible=d.v;
-    if(d.c!=null&&o.root.material&&o.root.material.color)o.root.material.color.setHex(d.c);
-    apprPut(o,d.a);}
+  try{const d=JSON.parse(js);
+    for(const od of d.objs){const o=objById(od.id);if(o)DOC.applyObject(o,od);}
+    DOC.applyStage(d.stage,{env:v=>{scene.environmentIntensity=v;hemi.intensity=.2+v*.7;}});
     const so=objById(S.sel);if(so)apprLoad(so);
     renderObjList&&renderObjList();refreshInspector&&refreshInspector();try{surfRefresh();}catch(e){}bump();}
   finally{UH.busy=false;UH.last=uSnap();}
 }
-function uPush(){if(UH.busy||S.tab==='world'||!S.objs.length)return;const n=uSnap();if(UH.last==null||JSON.parse(UH.last).map(d=>d.id).join()!==S.objs.map(o=>o.id).join()){UH.last=n;return;}if(n===UH.last)return;UH.u.push(UH.last);if(UH.u.length>50)UH.u.shift();UH.r.length=0;UH.last=n;}
+function uPush(){if(UH.busy||S.tab==='world'||!S.objs.length)return;const n=uSnap();if(UH.last==null||JSON.parse(UH.last).objs.map(d=>d.id).join()!==S.objs.map(o=>o.id).join()){UH.last=n;return;}if(n===UH.last)return;UH.u.push(UH.last);if(UH.u.length>50)UH.u.shift();UH.r.length=0;UH.last=n;}
 function undo3(){if(!UH.u.length){toast('Nothing to undo');return;}UH.r.push(uSnap());uApply(UH.u.pop());toast('Undo');}
 function redo3(){if(!UH.r.length){toast('Nothing to redo');return;}UH.u.push(uSnap());uApply(UH.r.pop());toast('Redo');}
 ['pointerup','keyup','change'].forEach(ev=>addEventListener(ev,()=>setTimeout(uPush,30),true));
@@ -2481,9 +2476,9 @@ async function playWorld(){
 function setStart(){const o=S.objs.find(x=>x.meta&&x.meta.player);const t=o?o.holder.position:controls.target;S.start=[t.x,0,t.z];toast('Start set here');}
 const sim=createSim({THREE,S,bump,removeObj});
 const physUI=window.__physUI=createPhysUI({sim,S,THREE,camera,controls,addPrimitive,el,sec,btn,toast,chipRow,sliderRow,bump,renderObjList,selectObj});
-const api=createApi({autoPlace,sim,THREE,S,scene,camera,controls,renderer,canvas,world,hemi,key,grid,PRIMS,addPrimitive,removeObj,objById,importOne,applyView,bump,frameAll,tick,walk,projectFiles,zipStore,GLTFExporter,renderObjList,refreshInspector,setShadowFlags,selectObj,waitFrames,requestResize:()=>{needResize=true;}});
+const api=createApi({doc:DOC,autoPlace,sim,THREE,S,scene,camera,controls,renderer,canvas,world,hemi,key,grid,PRIMS,addPrimitive,removeObj,objById,importOne,applyView,bump,frameAll,tick,walk,projectFiles,zipStore,GLTFExporter,renderObjList,refreshInspector,setShadowFlags,selectObj,waitFrames,requestResize:()=>{needResize=true;}});
 window.n0={run:api.run,describe:api.describe,walk,sim,playWorld};window.__playWorld=playWorld;
-const worldEd=createWorldEditor({lighting:LGT,recolour:(o,hex)=>{if(SURF.textured(o)){SURF.recolour(o,hex,.9);bump();try{surfRefresh();}catch(e){}return true;}return false;},playWorld:()=>playWorld(),setStart:()=>setStart(),openInEffects:()=>openInEffects(),THREE,S,api,sim,walk,camera,canvas,controls,tc,objById,selectObj,removeObj,bump,el,sec,btn,toast,renderObjList});
+const worldEd=createWorldEditor({lighting:LGT,doc:DOC,recolour:(o,hex)=>{if(SURF.textured(o)){SURF.recolour(o,hex,.9);bump();try{surfRefresh();}catch(e){}return true;}return false;},playWorld:()=>playWorld(),setStart:()=>setStart(),openInEffects:()=>openInEffects(),THREE,S,api,sim,walk,camera,canvas,controls,tc,objById,selectObj,removeObj,bump,el,sec,btn,toast,renderObjList});
 if(physHost)physUI.section(physHost);
 worldEd.build(paneEls.world);
 if(/^#world/.test(location.hash)){setTab('world');worldEd.starter();}
@@ -2539,4 +2534,4 @@ async function openInEffects(){
 setTimeout(async()=>{const m=location.hash.match(/^#from=(\w+)/);if(!m)return;const rec=await handoffTake();history.replaceState(null,'',location.pathname);
   if(!rec){toast('Nothing to open. Send a picture from the other page again.');return;}
   await photoToRelief(new File([rec.blob],'from-'+m[1]+'.png',{type:rec.blob.type||'image/png'}));toast('Opened from '+m[1]);},1400);
-window.__studio={LGT,MAT,openMatLab:c=>openMatLab({THREE,RoomEnvironment,el,btn,sliderRow,chipRow,toast,MAT,...c}),undo3,redo3,uPush,UH,apprOf,apprPut,apprWatch,autoPlace,SURF,addPhoto,sampleCanvas,S,N0,selectObj,addLook,removeLook,openInEffects,worldEd,api,walk,aiConnect,zipStore,zipRead,projectFiles,loadProject,saveProject,AUTO,autoStep,fxRandomise,fxEnsure,fxClear,FX3,SG,addViz,AU,buildViz,vizUpdate,enterRest,leaveRest,restTick,setFx,autoDepth,buildDepth,restD,MATTERS,CUT,autoCut,refineMask,applyAlpha,THREE,scene,camera,controls,renderer,importFiles,addPrimitive,sheet,SC,carve,surfaceNets,buildScan,makeRelief,pseudoDepth,photoToRelief,objById,removeObj,bump,setTab,rebuildRelief,applyView,frameAll,exportImage,get rt(){return rt;}};
+window.__studio={DOC,LGT,MAT,openMatLab:c=>openMatLab({THREE,RoomEnvironment,el,btn,sliderRow,chipRow,toast,MAT,...c}),undo3,redo3,uPush,UH,apprOf,apprPut,apprWatch,autoPlace,SURF,addPhoto,sampleCanvas,S,N0,selectObj,addLook,removeLook,openInEffects,worldEd,api,walk,aiConnect,zipStore,zipRead,projectFiles,loadProject,saveProject,AUTO,autoStep,fxRandomise,fxEnsure,fxClear,FX3,SG,addViz,AU,buildViz,vizUpdate,enterRest,leaveRest,restTick,setFx,autoDepth,buildDepth,restD,MATTERS,CUT,autoCut,refineMask,applyAlpha,THREE,scene,camera,controls,renderer,importFiles,addPrimitive,sheet,SC,carve,surfaceNets,buildScan,makeRelief,pseudoDepth,photoToRelief,objById,removeObj,bump,setTab,rebuildRelief,applyView,frameAll,exportImage,get rt(){return rt;}};

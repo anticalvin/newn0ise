@@ -18,15 +18,21 @@ export function createLighting(c){
     let x=-Math.sin(A)*ce,z=Math.cos(A)*ce;const n=L.north*rad,cx=x*Math.cos(n)-z*Math.sin(n),cz=x*Math.sin(n)+z*Math.cos(n);
     elDeg=el/rad;return dirV.set(cx,sinEl,cz).normalize();
   }
+  /* the hour at which the sun is at a given height, in the morning or the evening, at this place and season */
+  function hourFor(deg,evening){
+    let best=evening?18:6,bd=1e9;const keep=L.hour;
+    for(let h=evening?12:0;h<=(evening?24:12);h+=.05){L.hour=h;sunVec();const d=Math.abs(elDeg-deg);if(d<bd){bd=d;best=h;}}
+    L.hour=keep;return best;
+  }
   function ensureSky(){
     if(sky)return;
     sky=new Sky();sky.scale.setScalar(140);sky.frustumCulled=false;sky.renderOrder=-100;sky.userData.noView=true;
     const m=sky.material;m.depthTest=false;m.depthWrite=false;m.uniforms.uSkyK={value:.6};
     m.fragmentShader='uniform float uSkyK;\n'+m.fragmentShader.replace('gl_FragColor = vec4( texColor, 1.0 );','gl_FragColor = vec4( 1.0 - exp( -max(texColor,0.0) * uSkyK ), 1.0 );');
-    m.uniforms.cloudScale.value=.013;m.uniforms.cloudSpeed.value=.002;
-    const n=1400,pos=new Float32Array(n*3);for(let i=0;i<n;i++){const u=Math.random()*2-1,a=Math.random()*Math.PI*2,r=Math.sqrt(1-u*u);pos.set([r*Math.cos(a),u,r*Math.sin(a)],i*3);}
+    m.uniforms.cloudScale.value=.0003;m.uniforms.cloudSpeed.value=.00004;
+    const n=2600,pos=new Float32Array(n*3);for(let i=0;i<n;i++){const u=Math.random()*2-1,a=Math.random()*Math.PI*2,r=Math.sqrt(1-u*u);pos.set([r*Math.cos(a),u,r*Math.sin(a)],i*3);}
     const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(pos,3));
-    stars=new THREE.Points(g,new THREE.PointsMaterial({color:0xffffff,size:1.6,sizeAttenuation:false,transparent:true,opacity:0,depthWrite:false,depthTest:false,fog:false,toneMapped:false}));
+    stars=new THREE.Points(g,new THREE.PointsMaterial({color:0x000000,size:1.6,sizeAttenuation:false,blending:THREE.AdditiveBlending,transparent:false,depthWrite:false,depthTest:false,fog:false,toneMapped:false}));
     stars.scale.setScalar(130);stars.renderOrder=-99;stars.frustumCulled=false;stars.userData.noView=true;
     scene.add(sky,stars);
   }
@@ -47,20 +53,20 @@ export function createLighting(c){
     const R=22,tg=d.controls.target;
     key.target.position.copy(tg);if(!key.target.parent)scene.add(key.target);key.target.updateMatrixWorld();
     key.position.set(tg.x+dir.x*R,tg.y+Math.max(dir.y,.02)*R,tg.z+dir.z*R);
-    key.color.copy(mix('#ff7a38','#fff3df',high));key.intensity=L.sunK*L.exp*3.2*sm(-1.5,9,elDeg)*(.4+.6*high);
+    key.color.copy(mix('#ff7a38','#fff3df',sm(3,34,elDeg)));key.intensity=L.sunK*L.exp*2.1*sm(-1.5,9,elDeg)*(.4+.6*high);
     const sc=key.shadow.camera;sc.left=sc.bottom=-L.reach;sc.right=sc.top=L.reach;sc.near=.5;sc.far=90;sc.updateProjectionMatrix();
     if(key.castShadow&&key.shadow.mapSize.x!==L.shadowRes){key.shadow.mapSize.set(L.shadowRes,L.shadowRes);if(key.shadow.map){key.shadow.map.dispose();key.shadow.map=null;}}
     /* the second light is the moon at night and a cool fill from the other side by day */
     if(day>.25||!L.moon){rim.position.set(tg.x-dir.x*10,tg.y+4,tg.z-dir.z*10);rim.color.copy(C('#b4c4ff'));rim.intensity=.35*day*L.exp;}
-    else{rim.position.set(tg.x-dir.x*10,tg.y+Math.max(-dir.y,.1)*10,tg.z-dir.z*10);rim.color.copy(C('#8fa8ff'));rim.intensity=.5*night*L.exp;}
-    hemi.color.copy(mix(mix('#0a1024','#e8a07a',twi*1.2+day*.2),'#c4d8ff',day*day));hemi.groundColor.copy(mix('#07080c','#44444a',day));hemi.intensity=(.1+.5*day)*L.exp;
+    else{rim.position.set(tg.x-dir.x*10,tg.y+Math.max(-dir.y,.1)*10,tg.z-dir.z*10);rim.color.copy(C('#8fa8ff'));rim.intensity=.3*night*L.exp;}
+    hemi.color.copy(mix(mix('#0a1024','#e8a07a',twi*1.2+day*.2),'#c4d8ff',day*day));hemi.groundColor.copy(mix('#07080c','#44444a',day));hemi.intensity=(.03+.42*day)*L.exp;
     scene.environmentIntensity=d.S.env*(.05+.95*day)*L.exp*(.8+.2*high);
     const horizon=mix(mix('#05070d','#e0a074',twi*1.3+day*.15),'#b9cade',day*day);
     if(L.fog>0){scene.fog=new THREE.Fog(horizon,L.fog*.25,L.fog);fogMine=true;}else if(fogMine){scene.fog=saved.fog;fogMine=false;}
     sky.visible=L.sky;stars.visible=L.sky&&L.stars;
     const u=sky.material.uniforms;u.sunPosition.value.copy(dir);u.turbidity.value=1.5+L.haze*14;u.rayleigh.value=.7+(1-day)*1.6+twi*.6;u.mieCoefficient.value=.003+L.haze*.012;
     u.cloudCoverage.value=L.clouds;u.cloudDensity.value=.25+L.clouds*.45;
-    stars.material.opacity=clamp(night*1.1-.1,0,1);
+    const sk=clamp(night*1.1-.1,0,1);stars.material.color.setScalar(sk);if(sk<.02)stars.visible=false;
     d.bump();
   }
   function setOn(v){L.on=!!v;if(L.on)apply();else{if(sky){sky.visible=false;stars.visible=false;}restore();}deps().bump();}
@@ -107,7 +113,7 @@ export function createLighting(c){
         tgl('Play day',()=>L.auto,v=>{L.auto=v;if(!v)apply();});}
       s.appendChild(tg);
       if(!L.on)return;
-      const pr=el('div','chips');[['Sunrise',6.3],['Morning',9],['Noon',12],['Golden hour',17.6],['Dusk',19.4],['Night',23.5]].forEach(([l,h])=>pr.appendChild(btn(l,'',()=>{L.hour=h;apply();timeRow.sync&&timeRow.sync();})));s.appendChild(pr);
+      const pr=el('div','chips');[['Sunrise',3,0],['Morning',28,0],['Noon',null,0],['Golden hour',9,1],['Dusk',-4,1],['Night',null,2]].forEach(([l,e,k])=>pr.appendChild(btn(l,'',()=>{L.hour=k===2?0:e==null?12:hourFor(e,k===1);apply();timeRow.sync&&timeRow.sync();})));s.appendChild(pr);
       const timeRow=sliderRow(s,'Time',()=>L.hour,v=>{L.hour=v;apply();info.textContent=readout();},0,24,.05,hhmm);
       const info=el('div','note','');const readout=()=>'Sun '+(elDeg>=0?Math.round(elDeg)+'° above the horizon':Math.round(-elDeg)+'° below the horizon');info.textContent=readout();s.appendChild(info);syncTime=()=>{timeRow.sync&&timeRow.sync();info.textContent=readout();};
       sliderRow(s,'Day speed',()=>L.speed,v=>{L.speed=v;},.05,6,.05,v=>(+v).toFixed(2)+' h/s');

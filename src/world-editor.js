@@ -16,7 +16,7 @@ export function createWorldEditor(c){
   let pane=null,detailsEl=null,syncs=[],playBtn=null;
   const own=o=>o&&o.meta&&o.meta.asset&&o.meta.uid;
   /* ---- undo: snapshots of the placed objects ---- */
-  const snapshot=()=>S.objs.filter(own).map(o=>{return{uid:o.meta.uid,asset:o.meta.asset,name:o.name,pos:o.holder.position.toArray(),q:o.holder.quaternion.toArray(),scale:o.holder.scale.toArray(),color:colorOf(o),phys:o.meta.phys||null,vis:o.vis,url:o.meta.url||null};});
+  const snapshot=()=>S.objs.filter(own).map(o=>{return{uid:o.meta.uid,asset:o.meta.asset,name:o.name,pos:o.holder.position.toArray(),q:o.holder.quaternion.toArray(),scale:o.holder.scale.toArray(),color:colorOf(o),phys:o.meta.phys||null,vis:o.vis,url:o.meta.url||null,ap:c.doc?c.doc.appearance(o):null};});
   function colorOf(o){let col=null;o.holder.traverse(n=>{if(!col&&n.isMesh&&n.material&&n.material.color&&!n.userData.noView)col='#'+n.material.color.getHexString();});return col;}
   const push=()=>{ed.undo.push(snapshot());if(ed.undo.length>60)ed.undo.shift();ed.redo.length=0;};
   async function restore(state){
@@ -26,7 +26,7 @@ export function createWorldEditor(c){
       let o=cur.get(s.uid);
       if(!o){const r=await api.run({cmd:'add',type:s.asset,name:s.name,pos:s.pos});o=S.objs.find(x=>x.id===r.id);if(!o)continue;o.meta.uid=s.uid;}
       const h=o.holder;h.position.fromArray(s.pos);h.quaternion.fromArray(s.q);h.scale.fromArray(s.scale);o.vis=s.vis;h.visible=s.vis;
-      if(s.color)await api.run({cmd:'set',id:o.id,color:s.color});if(s.phys)o.meta.phys={...s.phys};
+      if(s.color)await api.run({cmd:'set',id:o.id,color:s.color});if(s.phys)o.meta.phys={...s.phys};if(s.ap&&c.doc)c.doc.putAppearance(o,s.ap);
     }
     sim.invalidate();renderObjList&&renderObjList();bump();renderDetails();
   }
