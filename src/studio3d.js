@@ -26,6 +26,7 @@ import {hashJson,readCapped} from './importkit.js';
 import {WORLD_BRIEF} from './world-brief.js';
 import {createForms} from './formobj.js';
 import {createMechanics} from './mechanics.js';
+import {createSigil} from './sigil.js';
 import {validateFormFile} from './form-schema.js';
 import {FORM_BRIEF} from './form-brief.js';
 import {createSceneDoc} from './scenedoc.js';
@@ -143,7 +144,7 @@ let idc=0;
 /* the sky is a look target too: not a scene object, but it carries a look or effect stack like one and is masked by where nothing else is */
 const SKY={id:'sky',name:'Sky',kind:'sky',vis:true,holder:{visible:true},meta:{}};
 const objById=id=>id==='sky'?SKY:S.objs.find(o=>o.id===id);
-let NW=null,FORM=null,MECH=null; // the .n0world builder, created once the scene API exists
+let NW=null,FORM=null,MECH=null,SIG=null; // the .n0world builder, created once the scene API exists
 const SAFE_MODE=/[?&]safe=1/.test(location.search),WORLD_ON=!/[?&]n0world=0/.test(location.search);
 const anyLook=()=>!!SKY.look||S.objs.some(x=>x.look);
 const claymat=new THREE.MeshStandardMaterial({color:0xd8d4cc,roughness:.92,metalness:0});
@@ -1967,18 +1968,18 @@ function wireSheet(){
 let suppressTab=false;
 
 /* ---------- tabs ---------- */
-const TABN=[['world','World'],['scene','Scene'],['scan','Scan'],['look','Look'],['export','Export']];
+const TABN=[['world','World'],['scene','Scene'],['draw','Draw'],['scan','Scan'],['look','Look'],['export','Export']];
 const paneEls={};
 addEventListener('pointerup',e=>{if(e.target.closest&&e.target.closest('#panes'))S.apprTouch=performance.now();},true);addEventListener('input',e=>{if(e.target.closest&&e.target.closest('#panes'))S.apprTouch=performance.now();},true);addEventListener('change',e=>{if(e.target.closest&&e.target.closest('#panes'))S.apprTouch=performance.now();},true);
 function setTab(id){
   TABN.forEach(([k])=>{$('#tab_'+k).setAttribute('aria-selected',k===id);paneEls[k].hidden=k!==id;});
-  panes.scrollTop=0;S.tab=id;
+  panes.scrollTop=0;S.tab=id;try{SIG&&SIG.onTab(id);}catch(e){console.error(e);}try{paintBar();}catch(e){}
   if(id==='world'&&!S._plSpawn&&typeof ensurePlayer==='function'){S._plSpawn=1;ensurePlayer().then(()=>{S.needFrame=true;}).catch(()=>{});}
 }
 function buildTabs(){
   TABN.forEach(([k,l])=>{
     const b=el('button','tab',l);b.id='tab_'+k;b.setAttribute('role','tab');
-    b.addEventListener('click',()=>{if(suppressTab)return;setTab(k);if(!mqDesk.matches&&sheet.idx<2)sheet.setIdx(2);});
+    b.addEventListener('click',()=>{if(suppressTab)return;setTab(k);if(!mqDesk.matches){if(k==='draw')sheet.setIdx(1);else if(sheet.idx<2)sheet.setIdx(2);}});
     tabsEl.appendChild(b);
     const p=el('div');p.id='pane_'+k;p.hidden=true;panes.appendChild(p);paneEls[k]=p;
   });
@@ -2017,7 +2018,7 @@ function buildScenePane(){
   const s1=sec(p,'Objects');
   objListEl=el('div','olist');s1.appendChild(objListEl);
   const grp=(title,open)=>{const d=el('details','acc');if(open)d.open=true;d.innerHTML=`<summary>${title}</summary>`;const inn=el('div','in');inn.classList.add('chips');d.appendChild(inn);s1.appendChild(d);return inn;};
-  const top=el('div','chips');top.style.margin='8px 0';top.append(btn('Import files','pri',()=>$('#file').click()),btn('Sample photo','',()=>addPhoto('fold',sampleCanvas())));s1.appendChild(top);
+  const top=el('div','chips');top.style.margin='8px 0';top.append(btn('Import files','pri',()=>$('#file').click()),btn('Draw in 3D','',()=>{setTab('draw');if(!mqDesk.matches)sheet.setIdx(1);}),btn('Sample photo','',()=>addPhoto('fold',sampleCanvas())));s1.appendChild(top);
   const gS=grp('Shapes',true);Object.keys(PRIMS).forEach(k=>gS.appendChild(btn('+ '+k,'',()=>addPrimitive(k))));
   const gC=grp('Characters and sound');
   gC.appendChild(btn('+ Human','',async()=>{try{await api.run({cmd:'add',type:'human'});api.run({cmd:'camera',frame:true});}catch(e){toast(e.message||String(e));}}));
@@ -2080,6 +2081,7 @@ function refreshInspector(soft){
   inspSyncs.push(sliderRow(s,'Size',()=>h.scale.x,v=>{h.scale.setScalar(v);bump();},.05,6,.01).sync);
   if(window.__physUI&&S.tab!=='world')window.__physUI.body(inspEl,o);
   if(FORM&&o.meta&&o.meta.form)FORM.panel(inspEl,o);
+  if(SIG&&o.meta&&o.meta.sigil){const d=sec(inspEl,'Drawing',o.meta.sigil.strokes.length+' strokes');d.appendChild(btn('Keep drawing','pri',()=>setTab('draw')));d.appendChild(el('div','note','This is a drawing of real 3D strokes. Looks, effects and physics work on it like any object.'));}
   if(o.kind==='relief'){
     const m=o.meta,rb=()=>{clearTimeout(reliefT);reliefT=setTimeout(()=>rebuildRelief(o),60);};
     const r=sec(inspEl,'Relief',m.depthing?'working…':(m.depthBy||'flat'));
@@ -2432,6 +2434,7 @@ async function projectFiles(){
   let worldSeen=false;
   for(const o of S.objs){
     if(o.meta&&o.meta.form&&FORM){items.push({...FORM.projectItem(o),ap:apprOf(o)});continue;} // the recipe is saved; geometry is rebuilt on open
+    if(o.meta&&o.meta.sigil&&SIG){const it=SIG.projectItem(o);if(it.hasPhoto){const id='d'+(i++);files[id+'.png']=await toPNG(SIG.photoOf(o));it.pid=id;}items.push({...it,ap:apprOf(o)});continue;}
     if(o.meta&&o.meta.n0w&&NW){worldSeen=true;continue;} // rebuilt from the world document on open
     const tr={p:o.holder.position.toArray(),r:[o.holder.rotation.x,o.holder.rotation.y,o.holder.rotation.z],s:o.holder.scale.toArray()};
     const m=o.meta;
@@ -2456,6 +2459,7 @@ async function loadProject(u8){
   for(const it of pj.items){
     let o;
     if(it.kind==='form'){try{if(FORM){o=await FORM.fromItem(it);if(o&&it.ap)apprPut(o,it.ap);}}catch(e){toast('A generated object in this project couldn’t be rebuilt: '+(e.message||e),6000);}continue;}
+    if(it.kind==='sigil'){try{let cv=null;if(it.pid&&F[it.pid+'.png']){const bm=await createImageBitmap(new Blob([F[it.pid+'.png']],{type:'image/png'}));cv=document.createElement('canvas');cv.width=bm.width;cv.height=bm.height;cv.getContext('2d').drawImage(bm,0,0);}o=SIG.fromItem(it,cv);if(o&&it.ap)apprPut(o,it.ap);}catch(e){toast('A drawing in this project couldn’t be rebuilt: '+(e.message||e),6000);}continue;}
     if(it.kind==='relief'){
       const bmp=await createImageBitmap(new Blob([F[it.id+'.png']],{type:'image/png'}));
       const photo=document.createElement('canvas');photo.width=bmp.width;photo.height=bmp.height;const pg=photo.getContext('2d',{willReadFrequently:true});pg.drawImage(bmp,0,0);
@@ -2629,7 +2633,8 @@ async function exportWorldFile(){
 /* ---- FORM: generated objects that keep their recipe ---- */
 FORM=createForms({THREE,S,addGroup,toast,bump,renderObjList:()=>renderObjList&&renderObjList(),setShadowFlags,applyView,DOC,SURF,MAT,uPush:()=>uPush&&uPush(),sliderRow,chipRow,btn,el,sec,selectObj,frameAll,autoPlace,deliver,matPresets:MATPRESETS});
 if(NW){MECH=createMechanics({THREE,S,walk,camera,canvas,scene,W:NW,toast,bump,objById});NW.mech=MECH;}
-DOC.setFormHooks({snap:o=>FORM.snap(o),apply:(o,fm)=>FORM.apply(o,fm)});
+SIG=createSigil({THREE,S,scene,camera,controls,canvas,registerObject,objById,selectObj,bump,uPush:()=>uPush&&uPush(),toast,el,btn,sec,sliderRow,chipRow,setShadowFlags,loadCanvas,tc,markDirty,applyView});SIG.build(paneEls.draw);window.__setTab=setTab;
+DOC.setFormHooks({snap:o=>FORM.snap(o)||SIG.snap(o),apply:(o,fm)=>fm&&fm.sg!=null?SIG.apply(o,fm):FORM.apply(o,fm)});
 async function importFormFile(file,json,origin='imported'){
   try{
     const text=json?JSON.stringify(json):await readCapped(file,2*65536);
@@ -2672,7 +2677,7 @@ const bar=document.createElement('div');bar.id='objbar';bar.hidden=true;bar.setA
 bar.style.cssText='position:fixed;left:50%;transform:translateX(-50%);bottom:calc(54px + env(safe-area-inset-bottom));z-index:48;display:flex;gap:4px;align-items:center;max-width:calc(100vw - 16px);overflow-x:auto;padding:5px;border-radius:16px;background:rgba(18,18,20,.74);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border:1px solid rgba(255,255,255,.16);box-shadow:inset 0 1px 0 rgba(255,255,255,.2),0 10px 30px rgba(0,0,0,.45);color:#f2efe9;font:12px/1 system-ui,sans-serif;white-space:nowrap';
 document.body.appendChild(bar);
 function paintBar(){
-  const o=objById(S.sel);bar.hidden=!o||S.walk||S.exporting;if(bar.hidden)return;
+  const o=objById(S.sel);bar.hidden=!o||S.walk||S.exporting||S.tab==='draw';if(bar.hidden)return;
   bar.innerHTML='';
   const B=(label,title,fn,on,key)=>{const b=document.createElement('button');b.type='button';b.textContent=label;b.title=title+(key?'  ('+key+')':'');b.setAttribute('aria-label',title);b.setAttribute('aria-pressed',!!on);
     b.style.cssText='min-height:44px;min-width:44px;padding:0 10px;border-radius:12px;border:0;background:'+(on?'#f2efe9':'transparent')+';color:'+(on?'#111':'#f2efe9')+';font:inherit;font-weight:600;cursor:pointer;letter-spacing:.02em';b.addEventListener('click',fn);bar.appendChild(b);return b;};
@@ -2754,7 +2759,7 @@ function shortcutSheet(){
       const am=document.createElement('label');am.style.cssText='display:flex;gap:10px;align-items:center;margin-top:10px;min-height:44px';am.appendChild(T('span','Amount','width:60px'));
       const i=document.createElement('input');i.type='range';i.min=0;i.max=1;i.step=.01;i.value=S.mask.amt;i.style.flex='1';i.addEventListener('input',()=>{S.mask.amt=+i.value;bump();});am.appendChild(i);pop.appendChild(am);
     }
-    const place=()=>{const r=(QL.anchor||lb).getBoundingClientRect();pop.style.top=(r.top>innerHeight*.55?Math.max(8,r.top-pop.offsetHeight-8):Math.min(innerHeight-80,r.bottom+8))+'px';pop.style.left=Math.max(8,Math.min(innerWidth-pop.offsetWidth-8,r.right-pop.offsetWidth))+'px';};
+    const place=()=>{const r=(QL.anchor||lb).getBoundingClientRect();pop.style.top=Math.max(8,Math.min(innerHeight-pop.offsetHeight-8,r.top>innerHeight*.55?r.top-pop.offsetHeight-8:r.bottom+8))+'px';pop.style.left=Math.max(8,Math.min(innerWidth-pop.offsetWidth-8,r.right-pop.offsetWidth))+'px';};
     const close=()=>{pop.hidden=true;lb.setAttribute('aria-expanded','false');};
     const openPop=(target,anchor)=>{QL.anchor=anchor||lb;if(target)QL.target=target;else QL.target=S.walk&&playerObj()?'player':(curObj()||S.objs.length===0?QL.target:'scene');if(QL.target==='player'&&!playerObj())QL.target='selected';if(QL.target==='selected'&&!curObj()&&S.objs.length)QL.target='scene';if(QL.target==='scene'){S.mask.mode=S.mask.mode===2&&anyLook()?2:S.mask.mode;}paint();pop.hidden=false;lb.setAttribute('aria-expanded','true');place();};
     lb.addEventListener('click',e=>{e.stopPropagation();if(!pop.hidden){close();return;}openPop();});
