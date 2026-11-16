@@ -1,6 +1,6 @@
 /* n0ise service worker: network first for the app (so updates arrive), cache fallback for offline use.
    Fonts and the version-pinned CDN libraries (three, Spark, p5) are cache first, so 3D and Lab also open offline after one visit. */
-const V='n0ise-v5',SHELL=['./','index.html','effects.html','studio.html','lab.html','assets/index.js','assets/studio.js','assets/labeditor.js','tokens.css','manifest.webmanifest','icon.svg'];
+const V='n0ise-v5',SHELL=['./','index.html','effects.html','studio.html','lab.html','assets/index.js','assets/studio.js','assets/labeditor.js','assets/labform.js','tokens.css','manifest.webmanifest','icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(V).then(c=>c.addAll(SHELL)).then(()=>self.skipWaiting()));});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==V).map(k=>caches.delete(k)))).then(()=>self.clients.claim()));});
 self.addEventListener('fetch',e=>{

@@ -1,5 +1,6 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#0a0a0a"><title>n0ise · lab</title>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#0a0a0a">
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.187.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.187.0/examples/jsm/"}}</script><title>n0ise · lab</title>
 <link rel="manifest" href="manifest.webmanifest"><link rel="icon" href="icon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Syne:wght@800&display=swap" rel="stylesheet">
@@ -21,7 +22,7 @@ header strong{font:800 24px/1 var(--n-display);letter-spacing:-.02em}header stro
 
 .editor[hidden]{display:none!important}@media(max-width:1000px){.cmhost{height:420px;max-height:70vh;flex:none}}.cmhost{padding:0!important;overflow:hidden;display:flex;border-top:1px solid #1d2020}.cmhost .cm-editor{flex:1;min-width:0;max-height:100%}
 </style></head><body>
-<header><div><strong><a href="index.html" aria-label="n0ise home">n<span>0</span>ise</a> / lab</strong><span class="tag">GENERATIVE WORKSPACE / 001</span></div><div><span class="pill">● P5 ENGINE</span> &nbsp; <button id="new">+ NEW SKETCH</button></div></header>
+<header><div><strong><a href="index.html" aria-label="n0ise home">n<span>0</span>ise</a> / lab</strong><span class="tag">GENERATIVE WORKSPACE / 001</span></div><div><span class="pill">● P5 ENGINE</span> &nbsp; <button id="new">+ NEW SKETCH</button> <button id="modeForm" title="Write code that makes a real 3D object">3D OBJECT</button></div></header>
 <nav class="ws" aria-label="Workspaces"><a href="effects.html?cam=1">Camera</a><a href="effects.html">Effects</a><a href="studio.html">3D</a><a href="lab.html" aria-current="page">Lab</a></nav>
 <main>
 <section class="panel"><div class="head"><div><div class="eyebrow">01 / SOURCE</div><h2>Sketch editor</h2></div><select id="preset" aria-label="Choose sketch"><option value="flow">Flow field</option><option value="orbit">Orbital study</option><option value="grid">Signal grid</option></select></div><textarea id="code" class="editor" spellcheck="false" aria-label="p5 sketch code"></textarea><div class="bar"><button class="primary" id="run">▶ RUN CODE</button><button id="copy">COPY</button><button id="dl">↓ .JS</button><button id="reset">RESET</button><button id="save">SAVE LOCAL</button><button id="saveas">SAVE AS…</button><select id="slots" aria-label="My sketches"><option value="">MY SKETCHES</option></select></div></section>
@@ -508,5 +509,6 @@ import('./assets/labeditor.js?v=1').then(m=>{
   ED=m.createEditor(host,{doc:ta.value,onRun:run});
   Object.defineProperty(ta,'value',{get:()=>ED.get(),set:v=>ED.set(v),configurable:true});ta.select=()=>ED.selectAll();ta.focus=()=>ED.focus();ta.hidden=true;window.__ED=ED;
 }).catch(()=>{$('status').textContent='Using the plain editor (the code editor could not load)'});
+$('modeForm').addEventListener('click',async()=>{const b=$('modeForm');b.disabled=true;try{const m=await import('./assets/labform.js?v=1');await m.openFormLab();}catch(e){$('status').textContent='3D object mode couldn’t load: '+(e.message||e);}b.disabled=false;});
 if('serviceWorker' in navigator&&location.protocol!=='file:')navigator.serviceWorker.register('sw.js').catch(()=>{});
 </script></body></html>
