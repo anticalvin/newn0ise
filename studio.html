@@ -134,9 +134,9 @@ details.acc>.in{padding:0 12px 10px}
 
 /* no sideways scrolling anywhere: rows wrap */
 .chips{flex-wrap:wrap;overflow:visible}
-.restore{position:fixed;left:8px;right:8px;top:calc(8px + env(safe-area-inset-top,0px));z-index:60;display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 12px;background:#0a0a0a;border:1px solid #3a3835;color:#f2efe8;font:500 12px/1.35 var(--lab,monospace);border-radius:3px}.restore span{flex:1 1 200px}
+.restore{position:fixed;left:8px;right:8px;top:calc(74px + env(safe-area-inset-top,0px));z-index:60;display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 12px;background:#0a0a0a;border:1px solid #3a3835;color:#f2efe8;font:500 12px/1.35 var(--lab,monospace);border-radius:3px}.restore span{flex:1 1 200px}
 
-body[data-walk] #sheet,body[data-walk] header.bar,body[data-walk] .hud,body[data-walk] #empty{display:none!important}
+body[data-walk] #sheet,body[data-walk] header.bar,body[data-walk] .hud,body[data-walk] #empty,body[data-walk] #objbar{display:none!important}
 #walkui{position:fixed;inset:0;z-index:40;pointer-events:none;display:none}
 body[data-walk] #walkui{display:block}
 #walkui button{pointer-events:auto;min-height:44px;min-width:44px;padding:0 14px;border:1px solid #3a3835;background:rgba(10,10,10,.8);color:#f2efe8;font:600 12px var(--lab,monospace);text-transform:uppercase;letter-spacing:.08em;border-radius:3px}
@@ -208,6 +208,6 @@ body[data-recording='1']::after{content:'';position:fixed;top:calc(10px + env(sa
 <button class="card" data-go="scan"><svg viewBox="0 0 40 40"><path d="M6 14V8h6M28 8h6v6M34 26v6h-6M12 32H6v-6"/><circle cx="20" cy="20" r="6"/></svg><b>Scan</b><span>Use the camera or a turntable video.</span></button>
 <button class="card" data-go="scene"><svg viewBox="0 0 40 40"><path d="M7 28l13-7 13 7-13 7z"/><rect x="15" y="9" width="10" height="12"/></svg><b>Empty scene</b><span>Add shapes and shape your own.</span></button>
 </div><button class="skip" data-go="scene">Skip, go to the editor</button></div></div>
-<script type="module" src="assets/studio.js?v=0506bfd7"></script>
+<script type="module" src="assets/studio.js?v=60723a16"></script>
 </body>
 </html>

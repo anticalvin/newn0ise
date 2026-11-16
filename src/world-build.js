@@ -263,6 +263,16 @@ export function createWorldBuilder(c){
     }
   };
   R.mountUi();
+  /* a copy of a prefab object: same parameters, its own id, editable like the original */
+  function duplicate(o){
+    const m=o.meta&&o.meta.n0w;if(!m||!m.prefab)return null;
+    let id=m.id+'_copy',n=2;while(W.map.has(id))id=m.id+'_copy'+(n++);
+    const inst={id,name:o.name+' copy',prefab:m.prefab,params:JSON.parse(JSON.stringify(m.params))};
+    const n2=prefabObject(inst);const h=n2.holder;h.position.copy(o.holder.position);h.quaternion.copy(o.holder.quaternion);h.scale.copy(o.holder.scale);
+    n2.meta.n0w.id=id;n2.meta.n0w.name0=inst.name;n2.meta.n0w.init={pos:h.position.toArray(),rot:[h.rotation.x,h.rotation.y,h.rotation.z],vis:true};W.map.set(id,n2);
+    if(o.meta.climb)n2.meta.climb=true;h.updateMatrixWorld(true);return n2;
+  }
+  W.duplicate=duplicate;
   W.build=build;W.clear=clear;W.exportDoc=exportDoc;W.setParams=setParams;W.recolour=recolour;W.tick=dt=>R.tick(dt);W.GEN=GEN;
   W.isWorldObject=o=>!!(o.meta&&o.meta.n0w);
   return W;
