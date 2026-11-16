@@ -19,6 +19,8 @@ No AI service, key or subscription is built into n0ise. The file is data only: n
 | [`prefabs.md`](prefabs.md) | every prefab and its parameters (generated) |
 | [`rules.md`](rules.md) | triggers, actions, conditions and limits (generated) |
 | [`examples.md`](examples.md) | three worked examples, each with the prompt that produced it |
+| [`form-guide.md`](form-guide.md) | FORM: generators that make real, editable 3D objects (API, limits, safety, examples) |
+| [`form-brief.txt`](form-brief.txt) | the copy-paste brief for an AI to write a generator |
 | [`../../worlds/n0world.schema.json`](../../worlds/n0world.schema.json) | JSON schema |
 | [`../../worlds/`](../../worlds) | the example worlds, plus a deliberately broken one |
 

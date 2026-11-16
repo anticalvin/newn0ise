@@ -1,0 +1,68 @@
+{
+ "n0form": 1,
+ "id": "n0ise.lattice-sphere",
+ "name": "Lattice sphere",
+ "version": "1.0.0",
+ "apiVersion": 1,
+ "author": "n0ise",
+ "licence": "CC0-1.0",
+ "description": "A sphere of struts and joints, built from instances.",
+ "seed": 7,
+ "params": [
+  {
+   "k": "rings",
+   "label": "Rings",
+   "min": 3,
+   "max": 24,
+   "def": 10,
+   "step": 1
+  },
+  {
+   "k": "segments",
+   "label": "Segments",
+   "min": 4,
+   "max": 40,
+   "def": 18,
+   "step": 1
+  },
+  {
+   "k": "radius",
+   "label": "Radius",
+   "min": 0.3,
+   "max": 2,
+   "def": 1,
+   "step": 0.05
+  },
+  {
+   "k": "strut",
+   "label": "Strut",
+   "min": 0.005,
+   "max": 0.08,
+   "def": 0.02,
+   "step": 0.001
+  },
+  {
+   "k": "wave",
+   "label": "Wave",
+   "min": 0,
+   "max": 0.6,
+   "def": 0.2,
+   "step": 0.01
+  }
+ ],
+ "code": "export default function create({ geometry, params, math }) {\n  const { rings, segments, radius, strut, wave } = params;\n  const g = geometry.group(\"Lattice\");\n  const pt = (i, j) => {\n    const a = (j / segments) * Math.PI * 2, b = (i / rings) * Math.PI;\n    const rr = radius * (1 + wave * math.noise(Math.cos(a) * 1.5, Math.cos(b) * 1.5, Math.sin(a) * 1.5));\n    return [Math.sin(b) * Math.cos(a) * rr, Math.cos(b) * rr + radius, Math.sin(b) * Math.sin(a) * rr];\n  };\n  const joints = [], bars = [];\n  for (let i = 1; i < rings; i++) for (let j = 0; j < segments; j++) {\n    const p = pt(i, j);\n    joints.push({ pos: p, scale: strut * 2.2 });\n    const q = pt(i, (j + 1) % segments), s = pt(i + 1 > rings ? i : i + 1, j);\n    for (const e of [q, s]) {\n      const mid = [(p[0] + e[0]) / 2, (p[1] + e[1]) / 2, (p[2] + e[2]) / 2], dx = e[0] - p[0], dy = e[1] - p[1], dz = e[2] - p[2], len = Math.hypot(dx, dy, dz);\n      const rotZ = Math.asin(dy / (len || 1)) * 57.3, rotY = Math.atan2(-dz, dx) * 57.3;\n      bars.push({ pos: [mid[0], mid[1] - len / 2 * 0, mid[2]], rot: [0, rotY, rotZ], scale: [len, strut, strut] });\n    }\n  }\n  g.instances({ shape: \"sphere\", dims: [1, 1, 1], segments: 8, items: joints, material: \"joint\" });\n  g.instances({ shape: \"box\", dims: [1, 1, 1], items: bars.map(b => ({ ...b, pos: [b.pos[0], b.pos[1] - strut / 2, b.pos[2]] })), material: \"bar\" });\n  return g;\n}",
+ "defaults": {
+  "materials": {
+   "joint": {
+    "color": "#ffcf6a",
+    "roughness": 0.3,
+    "metalness": 0.6
+   },
+   "bar": {
+    "color": "#9aa4ad",
+    "roughness": 0.4,
+    "metalness": 0.7
+   }
+  }
+ }
+}

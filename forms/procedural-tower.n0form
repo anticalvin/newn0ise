@@ -1,0 +1,80 @@
+{
+ "n0form": 1,
+ "id": "n0ise.procedural-tower",
+ "name": "Procedural Tower",
+ "version": "1.0.0",
+ "apiVersion": 1,
+ "author": "n0ise",
+ "licence": "CC0-1.0",
+ "description": "A tower of floors with a window pattern. Change the floors and it regenerates.",
+ "seed": 7,
+ "params": [
+  {
+   "k": "floors",
+   "label": "Floors",
+   "min": 1,
+   "max": 120,
+   "def": 12,
+   "step": 1,
+   "hint": "Try 60."
+  },
+  {
+   "k": "width",
+   "label": "Width",
+   "min": 2,
+   "max": 12,
+   "def": 5,
+   "step": 0.1
+  },
+  {
+   "k": "depth",
+   "label": "Depth",
+   "min": 2,
+   "max": 12,
+   "def": 4,
+   "step": 0.1
+  },
+  {
+   "k": "floorHeight",
+   "label": "Floor height",
+   "min": 2.4,
+   "max": 5,
+   "def": 3,
+   "step": 0.05
+  },
+  {
+   "k": "windowsPerSide",
+   "label": "Windows per side",
+   "min": 1,
+   "max": 8,
+   "def": 4,
+   "step": 1
+  },
+  {
+   "k": "taper",
+   "label": "Taper",
+   "min": 0,
+   "max": 0.6,
+   "def": 0.2,
+   "step": 0.01
+  }
+ ],
+ "code": "export default function create({ geometry, params, rand }) {\n  const { floors, width, depth, floorHeight, windowsPerSide, taper } = params;\n  const g = geometry.group(\"Tower\");\n  const r = rand.fork(\"windows\");\n  const items = [];\n  for (let f = 0; f < floors; f++) {\n    const k = 1 - (taper * f) / Math.max(1, floors);\n    const w = width * k, d = depth * k, y = f * floorHeight;\n    g.box({ dims: [w, floorHeight * 0.92, d], pos: [0, y, 0], material: \"concrete\", solid: true, id: \"floor-\" + f });\n    g.box({ dims: [w * 1.04, floorHeight * 0.08, d * 1.04], pos: [0, y + floorHeight * 0.92, 0], material: \"trim\" });\n    for (let s = 0; s < 4; s++) {\n      const ang = s * 90, dx = Math.sin(ang * Math.PI / 180), dz = Math.cos(ang * Math.PI / 180);\n      const span = s % 2 ? d : w;\n      for (let n = 0; n < windowsPerSide; n++) {\n        const u = ((n + 0.5) / windowsPerSide - 0.5) * span * 0.8;\n        const lit = r() < 0.55;\n        items.push({ pos: [dx * (s % 2 ? w : d) / 2 + (s % 2 ? 0 : u), y + floorHeight * 0.45, dz * (s % 2 ? w : d) / 2 + (s % 2 ? u : 0)], rot: [0, ang, 0], scale: [span * 0.5 / windowsPerSide, floorHeight * 0.5, 0.05], color: lit ? \"#ffd98a\" : \"#2c3a4a\" });\n      }\n    }\n  }\n  g.instances({ shape: \"box\", items, material: \"glass\" });\n  return g;\n}",
+ "defaults": {
+  "materials": {
+   "concrete": {
+    "color": "#b5b0a6",
+    "roughness": 0.9
+   },
+   "trim": {
+    "color": "#6f6a62",
+    "roughness": 0.7
+   },
+   "glass": {
+    "color": "#ffffff",
+    "roughness": 0.15,
+    "metalness": 0.1
+   }
+  }
+ }
+}
