@@ -10,6 +10,7 @@ import {installIosCam} from './camios.js';
 import {createWipe} from './wipe.js';
 import {createPalette} from './palette.js';
 import {createPluginHost,SAFE as PLUG_SAFE} from './pluginhost.js';
+import {MAX_EXPOSED,buildTool,toolParams,innerParams,exposable,describeChain,describeModule,describeRecipe,newToolId,bumpVersion,MINE_FAMILY} from './tools.js';
 import {put as handoffPut,take as handoffTake} from './handoff.js';
 import {CAMSIM_PARAMS,CAMSIM_FRAG,SIMS} from './camsim.js';
 import {QUAL,setMaskQuality,setAnimals,PERSON,startPerson,feedPerson,syntheticPerson,DRAWN,paintDrawn,clearDrawn,maskFor,resetMatteGL,MASK_DEFAULTS} from './matte.js';
@@ -1330,7 +1331,7 @@ vec4 fx(vec2 uv){
     const jump=ctx.t<q.last-1e-4||ctx.t-q.last>.5||(ST.clean&&!q.clean)||col!==q.ink;q.last=ctx.t;q.clean=!!ST.clean;q.ink=col;
     pr.f('u_reset',jump?1:0);pr.f('u_lite',ST.lite?1:0);histBind(pr,'reactprint',ctx);},after(pr,V,ctx){histSave('reactprint',ctx);}});
 const LOOKS=installLooks({defineModule,SS,histBind,histSave,histRT,PR,samp,bindRT,draw,ST});
-const PLUG=createPluginHost({defineModule,MODULES,SS,histBind,histSave,CAMS,RECIPES:LOOKS.RECIPES,ST,VS,HEAD,GLSL_LIB,toast:(...a)=>toast(...a),onChange:()=>{try{renderInspector();}catch(e){}}});PLUG.load();
+const PLUG=createPluginHost({defineTool,defineModule,MODULES,SS,histBind,histSave,CAMS,RECIPES:LOOKS.RECIPES,ST,VS,HEAD,GLSL_LIB,toast:(...a)=>toast(...a),onChange:()=>{try{renderInspector();}catch(e){}}});PLUG.load();
 /*WP6:END*/
 
 
@@ -1637,6 +1638,7 @@ const SPKEY='n0ise.stackpresets';
 const loadStackPresets=()=>{try{return JSON.parse(localStorage.getItem(SPKEY)||'[]');}catch(e){return[];}};
 const currentRecipe=name=>{const j=toRecipe({name,P,layers:STACK.layers,MODULES,size:[ST.DW||1280,ST.DH||720]});const t=TLN.serialize();if(t)j.timeline=t;return j;};
 function applyRecipe(j){
+  try{(j.stack||[]).forEach(b=>ensureModule(b.module));}catch(e){}
   const r=fromRecipe(j,{mkLayer,MODULES});
   if(r.P){Object.assign(P,r.P);}
   STACK.layers=r.layers.length?r.layers:[mkLayer('crtlab')];STACK.sel=0;V.sizeKey='';V.lastBKey='';TLN.load(j.timeline||null,STACK.layers);
@@ -1651,7 +1653,7 @@ Format (.n0fx, JSON): {"n0fx":1,"id":"author.name","name":"...","version":"1.0.0
 Rules: "glsl" defines only vec4 fx(vec2 uv). No #version, #extension, uniform declarations, main(), while or do loops. for loops need a constant limit (for(int i=0;i<8;i++)), at most 64. At most 64 texture reads. Each param k (lower-case letters/digits) becomes the uniform float u_k (colour params become vec3). t is r (slider, needs min, max, def), b (switch, def true/false), color (def "#rrggbb") or c (choice: opts list plus integer def). Mark up to three important params "hero":true.
 Available: uSrc (the picture, sampler2D), uAux (subject mask, .r = 1 inside the subject), uRes (vec2 pixels), uTime (seconds), uSeed (float), S (scale: uRes.y/600.), and helpers luma(vec3), h21(vec2), vnoise(vec2), fbm(vec2), curl(vec2). Set "feedback":true to get u_prev (the previous output frame) and u_reset (1 on the first frame).
 Make the default look good with no tweaking. What I want: `;
-function pluginsSheet(){
+function pluginsSheet(prefill){
   if($('.sheet'))return;
   const sh=el('div','sheet'),box=el('div','xp');sh.appendChild(box);box.style.maxWidth='560px';
   box.appendChild(el('h3','','Plugins'));
@@ -1667,7 +1669,7 @@ function pluginsSheet(){
   const draw=()=>{list.innerHTML='';
     if(!PLUG.items.length){list.appendChild(el('div','cl','Nothing installed yet.'));return;}
     PLUG.items.forEach(it=>{const j=it.j,row=el('div','ir');row.style.cssText='display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:6px 0';
-      const t=el('div','');t.style.flex='1 1 180px';const nm=el('b','',j.name||j.id);const meta=el('div','cl',`community · ${j.author} · ${j.licence} · v${j.version} · #${it.hash||'—'}${it.broken?' · off: '+it.broken:''}`);t.append(nm,meta);
+      const t=el('div','');t.style.flex='1 1 180px';const nm=tx('b','',j.name||j.id);const meta=tx('div','cl',`${it.mine?'mine':'community'} · ${j.kind} · ${j.author} · ${j.licence} · v${j.version} · #${it.hash||'—'}${it.broken?' · off: '+it.broken:''}`);t.append(nm,meta);
       const on=btn(it.on?'On':'Off','',()=>{PLUG.setOn(j.id,!it.on);draw();});on.setAttribute('aria-pressed',it.on);
       row.append(t,on,btn('Edit','',()=>{ta.value=JSON.stringify(j,null,2);out.textContent='';}),btn('Duplicate','',()=>{const d=PLUG.duplicate(j.id);if(d){ta.value=JSON.stringify(d,null,2);out.textContent='This is your own copy. Press Install to add it.';}}),
         btn('Export','',()=>deliver(new Blob([JSON.stringify(j,null,2)],{type:'application/json'}),(j.id||'plugin')+'.n0fx',false)),btn('Delete','',()=>{PLUG.remove(j.id);draw();}));
@@ -1679,8 +1681,132 @@ function pluginsSheet(){
   const act=el('div','chips');
   act.append(btn('Test','',()=>{const j=parse();if(j)show(PLUG.check(j));}),btn('Install','pri',async()=>{const j=parse();if(!j)return;const r=await PLUG.install(j);show(r);if(r.ok){draw();}}),
     btn('Copy errors','',async()=>{try{await navigator.clipboard.writeText('My n0ise plugin failed validation. Fix it and send back the whole corrected JSON:\n'+out.textContent);toast('Copied. Paste it back to your AI.');}catch(e){toast('Select the text and copy it.');}}));
+  if(TOOLS_ON)bar.appendChild(btn('Make tool','',()=>{sh.remove();toolMaker();}));
   box.append(bar,imp,ta,act,out,el('h3','','Installed'),list,btn('Close','',()=>sh.remove()));
-  document.body.appendChild(sh);draw();sh.addEventListener('pointerdown',e=>{if(e.target===sh)sh.remove();});
+  document.body.appendChild(sh);draw();
+  if(typeof prefill==='string'){ta.value=prefill;const j=parse();if(j)show(PLUG.check(j));}sh.addEventListener('pointerdown',e=>{if(e.target===sh)sh.remove();});
+}
+
+
+/* ---- Make tool: choose layers and up to six controls, name it, save. It becomes one effect in "Mine". ---- */
+const getAuthor=()=>{try{return localStorage.getItem('n0.author')||'me';}catch(e){return 'me';}};
+function toolLayerCandidates(){return STACK.layers.filter(l=>l.module!=='crtlab'&&MODULES[l.module]&&!MODULES[l.module].tool&&!MODULES[l.module].missing);}
+async function toolThumb(){
+  try{await Promise.race([frames2(),new Promise(r=>setTimeout(r,350))]);const c=document.createElement('canvas');c.width=96;c.height=Math.max(24,Math.round(96*canvas.height/Math.max(1,canvas.width)));c.getContext('2d').drawImage(canvas,0,0,c.width,c.height);const u=c.toDataURL('image/jpeg',.6);return u.length<30000?u:undefined;}catch(e){return undefined;}
+}
+/* opts.edit: a tool definition being edited (its layers were opened into the stack with .tuid set) */
+function toolMaker(opts={}){
+  if(!TOOLS_ON){toast('Tools are switched off (maketool=0).');return;}
+  if($('.sheet'))return;
+  const cands=toolLayerCandidates();
+  if(!cands.length){toast('Add an effect first, then make a tool from it.');return;}
+  const ed=opts.edit||null;
+  const sel=new Set(cands.filter(l=>l.visible!==false).map(l=>l.uid));
+  const wantTuid=new Map();cands.forEach((l,i)=>wantTuid.set(l.uid,l.tuid||('u'+(i+1))));
+  const exp=[];
+  const addExp=(uid,k,label,hint)=>{if(exp.length<MAX_EXPOSED&&!exp.some(e=>e.uid===uid&&e.param===k))exp.push({uid,param:k,label,hint:hint||''});};
+  if(ed){(ed.exposed||[]).forEach(e=>{const l=cands.find(x=>wantTuid.get(x.uid)===e.uid);if(l)addExp(l.uid,e.param,e.label,e.hint);});}
+  else cands.forEach(l=>{const m=MODULES[l.module];(m.schema.hero||[]).filter(k=>exposable(m).some(p=>p.k===k)).slice(0,2).forEach(k=>{const pl=m.params.find(p=>p.k===k).label;addExp(l.uid,k,cands.length>1?(m.name+': '+pl).slice(0,40):pl);});});
+  const sh=el('div','sheet'),box=el('div','xp');sh.appendChild(box);box.style.maxWidth='560px';
+  box.appendChild(tx('h3','','Make a tool'));
+  box.appendChild(tx('div','cl','Pick the layers that go in, then the few controls people can change. The tool shows up in Effects under Mine, and you can stack, mask and animate it like any effect.'));
+  const nm=document.createElement('input');nm.type='text';nm.maxLength=60;nm.placeholder='Name your tool';nm.value=ed?ed.name:'';nm.setAttribute('aria-label','Tool name');nm.style.cssText='width:100%;margin:8px 0;padding:10px;font:inherit;min-height:44px;box-sizing:border-box';
+  const info=tx('div','cl','');const out=tx('pre','');out.style.cssText='white-space:pre-wrap;font:12px/1.45 ui-monospace,monospace;margin:6px 0;max-height:120px;overflow:auto';
+  const list=el('div');
+  const draw=()=>{
+    list.innerHTML='';
+    cands.forEach(l=>{const m=MODULES[l.module],on=sel.has(l.uid);
+      const card=el('div','ir');card.style.cssText='margin:8px 0;padding:8px;border:1px solid rgba(255,255,255,.12);border-radius:8px';
+      const head=document.createElement('label');head.style.cssText='display:flex;gap:8px;align-items:center;min-height:44px';
+      const cb=document.createElement('input');cb.type='checkbox';cb.checked=on;cb.addEventListener('change',()=>{if(cb.checked)sel.add(l.uid);else{sel.delete(l.uid);for(let i=exp.length-1;i>=0;i--)if(exp[i].uid===l.uid)exp.splice(i,1);}draw();});
+      head.append(cb,tx('b','',m.name));card.appendChild(head);
+      if(on){const grid=el('div','chips');
+        exposable(m).forEach(p=>{const cur=exp.find(e=>e.uid===l.uid&&e.param===p.k);
+          const row=document.createElement('label');row.style.cssText='display:flex;gap:6px;align-items:center;min-height:44px;flex:1 1 220px';
+          const c2=document.createElement('input');c2.type='checkbox';c2.checked=!!cur;c2.addEventListener('change',()=>{if(c2.checked){if(exp.length>=MAX_EXPOSED){c2.checked=false;toast('A tool can show up to '+MAX_EXPOSED+' controls.');return;}addExp(l.uid,p.k,p.label);}else exp.splice(exp.indexOf(cur),1);draw();});
+          row.appendChild(c2);
+          if(cur){const li=document.createElement('input');li.type='text';li.value=cur.label;li.maxLength=40;li.setAttribute('aria-label','Label for '+p.label);li.style.cssText='flex:1;min-width:0;padding:6px;font:inherit;min-height:36px';li.addEventListener('input',()=>cur.label=li.value);row.appendChild(li);}
+          else row.appendChild(tx('span','',p.label));
+          grid.appendChild(row);});
+        card.appendChild(grid);}
+      list.appendChild(card);});
+    info.textContent=exp.length+' of '+MAX_EXPOSED+' controls shown · '+sel.size+' layer'+(sel.size===1?'':'s');
+  };
+  const author=document.createElement('input');author.type='text';author.value=getAuthor();author.maxLength=24;author.setAttribute('aria-label','Author');author.style.cssText='padding:8px;font:inherit;min-height:44px;width:140px';
+  const lic=document.createElement('select');lic.setAttribute('aria-label','Licence');['CC0-1.0','CC-BY-4.0','MIT','All rights reserved'].forEach(v=>{const o=document.createElement('option');o.textContent=v;lic.appendChild(o);});lic.value=ed&&ed.licence||'CC0-1.0';lic.style.cssText='padding:8px;font:inherit;min-height:44px';
+  const bar=el('div','chips');
+  const go=async(use)=>{
+    out.textContent='';out.className='';
+    const name=nm.value.trim();if(!name){out.textContent='Give the tool a name.';out.className='bad';nm.focus();return;}
+    const chosen=cands.filter(l=>sel.has(l.uid));if(!chosen.length){out.textContent='Pick at least one layer.';out.className='bad';return;}
+    const au=author.value.trim()||'me';try{localStorage.setItem('n0.author',au);}catch(e){}
+    const layers=chosen.map(l=>({...l,uid:wantTuid.get(l.uid)}));
+    const exposed=exp.filter(e=>sel.has(e.uid)).map(e=>({...e,uid:wantTuid.get(e.uid)}));
+    const taken=new Set(Object.keys(MODULES));
+    const mineEdit=ed&&PLUG.items.some(i=>i.j.id===ed.id&&i.mine);
+    const id=mineEdit?ed.id:newToolId(au,name,taken);
+    const def=buildTool({id,name,author:mineEdit?(ed.author||au):au,licence:lic.value,version:mineEdit?bumpVersion(ed.version):'1.0.0',layers,exposed,MODULES,thumbnail:await toolThumb()});
+    const r=await PLUG.install(def,{mine:true});
+    if(!r.ok){out.className='bad';out.textContent='Fix these first:\n'+r.errors.map(e=>'• '+e).join('\n');return;}
+    sh.remove();
+    if(use||ed){const at=Math.min(...chosen.map(l=>STACK.layers.indexOf(l)));STACK.layers=STACK.layers.filter(l=>!sel.has(l.uid));const nl=mkLayer(id);
+      if(ed&&opts.values)Object.assign(nl.params,opts.values);
+      STACK.layers.splice(Math.min(at,STACK.layers.length),0,nl);STACK.sel=STACK.layers.indexOf(nl);snap();renderInspector();}
+    toast('Saved “'+name+'”. It’s in Effects under Mine.',3500);
+  };
+  bar.append(Object.assign(el('button','btn pri','Save and use'),{onclick:()=>go(true)}),Object.assign(el('button','btn','Save only'),{onclick:()=>go(false)}),Object.assign(el('button','btn','Cancel'),{onclick:()=>sh.remove()}));
+  const meta=el('div','chips');meta.append(author,lic);
+  box.append(nm,meta,info,list,out,bar);
+  document.body.appendChild(sh);draw();sh.addEventListener('pointerdown',e=>{if(e.target===sh)sh.remove();});setTimeout(()=>nm.focus(),50);
+}
+/* open a tool back into the stack as its layers (with its exposed values applied), ready to change and save again */
+function toolOpenUp(l){
+  const m=MODULES[l.module],j=m&&m.tool;if(!j)return;
+  const at=STACK.layers.indexOf(l),ls=j.layers.filter(b=>MODULES[b.module]&&b.module!=='crtlab').map(b=>{
+    const x=mkLayer(b.module,innerParams(j,b.uid,b.params,l.params));
+    Object.assign(x,{opacity:b.opacity??100,blend:b.blend||'normal',pos:b.pos?b.pos.slice():[0,0],size:b.size??100,seed:b.seed||0,select:b.select||'all',thr:b.thr??50,visible:b.visible!==false,mods:JSON.parse(JSON.stringify(b.mods||[]))});
+    if(b.color)x.color=JSON.parse(JSON.stringify(b.color));x.tuid=b.uid;return x;});
+  if(!ls.length){toast('This tool has nothing to open.');return;}
+  STACK.layers.splice(at,1,...ls);STACK.sel=at;snap();renderInspector();
+  toast('Opened into layers. Change them, then press Make tool to save.',4000);
+  setTimeout(()=>toolMaker({edit:j,values:Object.fromEntries((j.exposed||[]).map(e=>[e.k,l.params[e.k]]))}),0);
+}
+function toolDuplicateMine(j){
+  const au=getAuthor(),c=JSON.parse(JSON.stringify(j));c.id=newToolId(au,j.name+' copy',new Set(Object.keys(MODULES)));c.name=(j.name+' copy').slice(0,60);c.author=au;c.version='1.0.0';c.family=MINE_FAMILY;
+  return PLUG.install(c,{mine:true}).then(r=>{if(r.ok){toast('Saved your own copy: '+c.name,3000);return c;}toast(r.errors[0]);return null;});
+}
+const ROLE_WORD={source:'Source',pattern:'Pattern',colour:'Colour',motion:'Motion',output:'Output'};
+/* the chain as readable steps, for a tool, a built-in effect or a recipe */
+function howCard(steps,host){
+  const wrap=el('ol','how');wrap.style.cssText='list-style:none;margin:6px 0;padding:0;display:flex;flex-direction:column;gap:6px';
+  steps.forEach((st,i)=>{const li=el('li','');li.style.cssText='display:flex;gap:10px;align-items:flex-start;padding:8px;border:1px solid rgba(255,255,255,.12);border-radius:8px';
+    const tag=tx('span','',(i+1)+' · '+(ROLE_WORD[st.role]||st.role));tag.style.cssText='font-size:11px;opacity:.7;min-width:78px';
+    const body=el('div','');body.append(tx('b','',st.title),tx('div','cl',st.detail));
+    if(st.controls&&st.controls.length)body.appendChild(tx('div','cl','Controls: '+st.controls.join(', ')));
+    if(st.motion)body.appendChild(tx('div','cl','Moves on its own'));
+    li.append(tag,body);wrap.appendChild(li);});
+  host.appendChild(wrap);return wrap;
+}
+function howSection(host,l,m){
+  if(!TOOLS_ON||l.module==='crtlab')return;
+  const a=accordion('How it works',false);
+  const steps=m.tool?describeChain(m.tool,MODULES):describeModule(m);
+  howCard(steps,a.b);
+  const row=el('div','chips');
+  if(m.tool){
+    row.append(Object.assign(el('button','btn','Edit'),{onclick:()=>{if(m.mine)toolOpenUp(l);else toolDuplicateMine(m.tool).then(c=>{if(c){const nl=mkLayer(c.id);STACK.layers.splice(STACK.layers.indexOf(l),1,nl);STACK.sel=STACK.layers.indexOf(nl);snap();renderInspector();}});}}),
+      Object.assign(el('button','btn','Duplicate as mine'),{onclick:()=>toolDuplicateMine(m.tool)}));
+    if(!m.mine)row.appendChild(tx('div','cl','Edit makes your own copy. The original stays as it is.'));
+  }else row.append(Object.assign(el('button','btn','Make a tool from this'),{onclick:()=>toolMaker()}));
+  a.b.appendChild(row);host.appendChild(a.d);
+}
+/* Play / Shape / Build: one object, three depths. Play shows only the main control (and the picture drags it), Shape shows every chosen control and the layer tabs, Build shows the chain. */
+const DEPTHS=[['play','Play'],['shape','Shape'],['build','Build']];
+const getDepth=()=>{try{return localStorage.getItem('n0.depth')||'play';}catch(e){return 'play';}};
+function depthBar(host){
+  const d=getDepth(),row=el('div','chips');row.setAttribute('role','group');row.setAttribute('aria-label','How deep to go');
+  DEPTHS.forEach(([id,n])=>{const b=Object.assign(el('button','chip',n),{onclick:()=>{try{localStorage.setItem('n0.depth',id);}catch(e){}if(id!=='play')INS.tab='look';renderInspector();}});b.setAttribute('aria-pressed',id===d);row.appendChild(b);});
+  host.appendChild(row);return d;
 }
 
 /* ---- compare, breed ---- */
@@ -1699,14 +1825,15 @@ function breedStacks(A,B){
   pick.sort((x,y)=>x.pos-y.pos);
   return pick.map(x=>{const m=MODULES[x.l.module],l=mkLayer(x.l.module);Object.assign(l.params,JSON.parse(JSON.stringify(x.l.params)));
     const other=(x.who==='a'?pb:pa).find(o=>o.module===x.l.module);
-    m.params.forEach(p=>{if(p.t!=='r'||typeof l.params[p.k]!=='number'||/seed/i.test(p.k))return;const span=p.max-p.min;
+    l.locks=(x.l.locks||[]).slice();
+    m.params.forEach(p=>{if(p.t!=='r'||typeof l.params[p.k]!=='number'||/seed/i.test(p.k)||l.locks.includes(p.k))return;const span=p.max-p.min;
       if(other&&typeof other.params[p.k]==='number'){const t=.25+Math.random()*.5;l.params[p.k]=l.params[p.k]*(1-t)+other.params[p.k]*t;}
       let v=l.params[p.k]+(Math.random()-.5)*span*.12;v=Math.max(p.min,Math.min(p.max,v));if(p.step>=1)v=Math.round(v);l.params[p.k]=v;});
     return l;});
 }
 function breedWith(partner){
   if(!SRC.el||SRC.name==='Test card')setSource(demoCanvas(),'Sample',false);
-  const B=partner==='random'?recipeLayers(LOOKS.RECIPES[Math.random()*LOOKS.RECIPES.length|0]):recipeLayers(LOOKS.RECIPES.find(r=>r.name===partner)||LOOKS.RECIPES[0]);
+  const B=/^tool:/.test(partner)&&MODULES[partner.slice(5)]?[mkLayer(partner.slice(5))]:partner==='random'?recipeLayers(LOOKS.RECIPES[Math.random()*LOOKS.RECIPES.length|0]):recipeLayers(LOOKS.RECIPES.find(r=>r.name===partner)||LOOKS.RECIPES[0]);
   const child=breedStacks(STACK.layers,B);if(!child.length){toast('Nothing to breed yet. Add an effect first.');return;}
   STACK.layers=child;STACK.sel=0;V.sizeKey='';V.lastBKey='';snap();refreshUI();renderInspector();toast('New look: '+child.map(l=>MODULES[l.module].name).join(' + ')+'. Undo to go back.',4000);
 }
@@ -1718,9 +1845,12 @@ function recipeSection(host){
     Object.assign(el('button','btn','Open file'),{onclick:()=>{const f=document.createElement('input');f.type='file';f.accept='.json,application/json';f.onchange=async()=>{try{applyRecipe(JSON.parse(await f.files[0].text()));toast('Recipe loaded');}catch(e){toast(String(e.message||e));}};f.click();}}));
   a.b.appendChild(row);
   {a.b.appendChild(el('div','sub','Breed looks'));const br=el('div','chips'),sel=document.createElement('select');sel.setAttribute('aria-label','Partner look');
-    [['random','A random recipe'],...LOOKS.RECIPES.map(r=>[r.name,r.name])].forEach(([v,n])=>{const o=document.createElement('option');o.value=v;o.textContent=n;sel.appendChild(o);});
+    [['random','A random recipe'],...LOOKS.RECIPES.map(r=>[r.name,r.name]),...Object.values(MODULES).filter(m=>m.tool&&!m.hidden).map(m=>['tool:'+m.id,'Tool: '+m.name])].forEach(([v,n])=>{const o=document.createElement('option');o.value=v;o.textContent=n;sel.appendChild(o);});
     br.append(sel,Object.assign(el('button','btn','Breed'),{onclick:()=>breedWith(sel.value)}));a.b.appendChild(br);
-    a.b.appendChild(el('div','cl','Crosses your stack with the partner, blends the shared controls and nudges them. Tap again for another child, undo to go back.'));}
+    a.b.appendChild(el('div','cl','Crosses your stack with the partner, blends the shared controls and nudges them. Tap again for another child, undo to go back.'));
+    const l=layer(),m=MODULES[l.module];
+    if(l.module!=='crtlab'&&m){const ks=m.params.filter(p=>p.t==='r'&&!/seed/i.test(p.k)).slice(0,8);if(ks.length){a.b.appendChild(el('div','sub','Keep these as they are'));const lr=el('div','chips');l.locks=l.locks||[];
+      ks.forEach(p=>{const b=tx('button','chip',p.label);b.setAttribute('aria-pressed',l.locks.includes(p.k));b.title='Locked controls don\u2019t change when you breed';b.addEventListener('click',()=>{const i=l.locks.indexOf(p.k);if(i<0)l.locks.push(p.k);else l.locks.splice(i,1);b.setAttribute('aria-pressed',i<0);});lr.appendChild(b);});a.b.appendChild(lr);}}}
   {const rh=el('div','sub','Recipes');a.b.appendChild(rh);
     LOOKS.RECIPES.forEach(r=>{const x=el('div','ir');const b=el('button','btn',r.name);b.title=r.note;b.addEventListener('click',()=>{
       if(!SRC.el||SRC.name==='Test card'){setSource(demoCanvas(),'Sample',false);}
@@ -1780,6 +1910,65 @@ canvas.addEventListener('pointerdown',e=>{if(!DRAWN.on)return;e.stopImmediatePro
 canvas.addEventListener('pointermove',e=>{if(canvas._paint&&DRAWN.on){e.stopImmediatePropagation();pnt(e);}},true);
 canvas.addEventListener('pointerup',()=>{canvas._paint=false;},true);
 function pnt(e){const r=canvas.getBoundingClientRect();paintDrawn((e.clientX-r.left)/r.width,(e.clientY-r.top)/r.height);}
+
+/* ---- Tools (user-made effects): a saved recipe plus a few chosen controls, registered as one effect in the "Mine" family ---- */
+const TOOLS_ON=!/[?&]maketool=0/.test(location.search)&&(()=>{try{return localStorage.getItem('n0.flag.maketool')!=='0';}catch(e){return true;}})();
+let TOOL_UID=1e6;
+const tx=(tag,cls,text)=>{const e=document.createElement(tag);if(cls)e.className=cls;e.textContent=text==null?'':String(text);return e;};
+const ID_LIKE=/^[a-z0-9][a-z0-9_-]{1,23}\.[a-z0-9][a-z0-9_-]{1,31}$/;
+/* A layer whose effect isn't installed (a tool or plugin that was removed, off, or never imported) stays in the stack as a placeholder
+   that passes the picture through. Nothing is dropped, so positions, animation tracks and the project all keep working, and installing
+   the tool later brings the layer back to life with its saved settings. */
+function ensureModule(id){
+  if(MODULES[id])return true;
+  if(!ID_LIKE.test(String(id||'')))return false;
+  defineModule({id,family:'Missing',name:'Needs '+id,hidden:true,params:[],frag:'vec4 fx(vec2 uv){return texture(uSrc,uv);}'});
+  const m=MODULES[id];m.missing=true;
+  m.render=(inTex,ctx)=>{bindRT(ctx.out);PR.copy.use();samp(PR.copy,'uT',0,inTex);draw();};
+  return true;
+}
+function defineTool(j,{mine}={}){
+  if(MODULES[j.id]&&MODULES[j.id].missing)delete MODULES[j.id];
+  defineModule({id:j.id,family:j.family||MINE_FAMILY,name:j.name,params:toolParams(j),frag:'vec4 fx(vec2 uv){return texture(uSrc,uv);}'});
+  const m=MODULES[j.id];m.hidden=false;m.tool=j;m.mine=!!mine;m.community=!mine;m.inner=null;
+  const build=()=>j.layers.map(b=>{
+    if(!ensureModule(b.module))return null;const bm=MODULES[b.module];if(bm.tool||b.module==='crtlab')return null;
+    const l=mkLayer(b.module,JSON.parse(JSON.stringify(b.params||{})));l.uid=TOOL_UID++;
+    Object.assign(l,{opacity:b.opacity??100,blend:b.blend||'normal',pos:b.pos?b.pos.slice():[0,0],size:b.size??100,seed:b.seed||0,select:b.select||'all',thr:b.thr??50,visible:b.visible!==false,mods:JSON.parse(JSON.stringify(b.mods||[]))});
+    if(b.color)l.color=JSON.parse(JSON.stringify(b.color));return {b,l};});
+  m.needs=()=>j.layers.filter(b=>!MODULES[b.module]||MODULES[b.module].missing).map(b=>b.module);
+  m.render=(inTex,ctx)=>{
+    const W=ctx.W,H=ctx.H,V=ctx.params||m.defaults();
+    if(!m.inner||m.inner.some(x=>!x))m.inner=build();
+    let acc=stackRT('ta',W,H),tmp=stackRT('tb',W,H),lay=stackRT('tl',W,H);
+    bindRT(acc);PR.copy.use();samp(PR.copy,'uT',0,inTex);draw();
+    const cp=PR.comp||(PR.comp=mkProg(VS,F_COMP));
+    for(const x of m.inner){
+      if(!x||!x.l.visible||MODULES[x.l.module].missing)continue;
+      x.l.params=innerParams(j,x.b.uid,x.b.params,V);
+      stepLayer(x.l,acc,tmp,lay,cp,ctx.t,ctx.dt,W,H);const q=acc;acc=tmp;tmp=q;
+    }
+    bindRT(ctx.out);PR.copy.use();samp(PR.copy,'uT',0,acc.tex);draw();
+  };
+}
+/* one layer of a stack: render the module, then composite it over acc into tmp (the caller swaps them). Used by the main stack and by tools. */
+function stepLayer(l,acc,tmp,lay,cp,t,dt,W,H){
+  const m=MODULES[l.module];
+  if(l.module==='crtlab'){ST.ovr={tex:acc.tex,w:W,h:H};try{m.render(acc.tex,{t,dt,out:lay,layer:l});}finally{ST.ovr=null;}}
+  else{
+    const mk=layerMask(l,m),mt=mk?maskFor(mk,W,H,acc.tex):null;LASTMASK[l.uid]=mt;
+    m.render(acc.tex,{t,dt,out:lay,layer:l,params:modParams(l,m,t),W,H,mask:mt});
+  }
+  bindRT(tmp);cp.use();samp(cp,'uBase',0,acc.tex);samp(cp,'uLay',1,lay.tex);
+  {const mk=MASKSEL.includes(l.select)&&l.module!=='crtlab'?LASTMASK[l.uid]:null;samp(cp,'uMaskT',2,mk||acc.tex);}
+  cp.v2('uTexel',1/W,1/H);cp.v2('uPos',l.pos[0]/100,l.pos[1]/100);
+  cp.f('uOpa',l.opacity/100);cp.f('uSize',l.size/100);cp.f('uThr',l.thr/100);cp.f('uShow',l.showSource?1:0);
+  const bi=BLENDS.indexOf(l.blend),si=MASKSEL.includes(l.select)?3:['all','edges','luma'].indexOf(l.select);
+  cp.i('uBlend',Math.max(0,bi));cp.i('uSel',Math.max(0,si));
+  const col=l.color||LAYER_DEFAULTS.color,cmi=Math.max(0,COLOR_MODES.indexOf(col.mode));cp.i('uCM',cmi);cp.f('uCA',col.amt/100);
+  {const a=(col.pal&&col.pal.length?col.pal:['#000000','#ffffff']).slice(0,16),buf=new Float32Array(48);a.forEach((h,i)=>{const c=hexRGB(h);buf[i*3]=c[0]/255;buf[i*3+1]=c[1]/255;buf[i*3+2]=c[2]/255;});cp.v3v('uPal',buf);cp.i('uPalN',a.length);}
+  draw();
+}
 function renderStack(t,dt){
   const anySolo=STACK.layers.some(l=>l.solo&&l.visible);
   const vis=STACK.layers.filter(l=>l.visible&&MODULES[l.module]&&(!anySolo||l.solo));
@@ -1794,21 +1983,7 @@ function renderStack(t,dt){
   bindRT(acc);sp.use();samp(sp,'uSrc',0,TEX.src);sp.f('uSrcAsp',SRC.w/SRC.h);sp.f('uScrAsp',W/H);draw();
   const cp=PR.comp||(PR.comp=mkProg(VS,F_COMP));
   for(const l of vis){
-    const m=MODULES[l.module];
-    if(l.module==='crtlab'){ST.ovr={tex:acc.tex,w:W,h:H};try{m.render(acc.tex,{t,dt,out:lay,layer:l});}finally{ST.ovr=null;}}
-    else{
-      const mk=layerMask(l,m),mt=mk?maskFor(mk,W,H,acc.tex):null;LASTMASK[l.uid]=mt;
-      m.render(acc.tex,{t,dt,out:lay,layer:l,params:modParams(l,m,t),W,H,mask:mt});
-    }
-    bindRT(tmp);cp.use();samp(cp,'uBase',0,acc.tex);samp(cp,'uLay',1,lay.tex);
-    {const mk=MASKSEL.includes(l.select)&&l.module!=='crtlab'?LASTMASK[l.uid]:null;samp(cp,'uMaskT',2,mk||acc.tex);}
-    cp.v2('uTexel',1/W,1/H);cp.v2('uPos',l.pos[0]/100,l.pos[1]/100);
-    cp.f('uOpa',l.opacity/100);cp.f('uSize',l.size/100);cp.f('uThr',l.thr/100);cp.f('uShow',l.showSource?1:0);
-    const bi=BLENDS.indexOf(l.blend),si=MASKSEL.includes(l.select)?3:['all','edges','luma'].indexOf(l.select);
-    cp.i('uBlend',Math.max(0,bi));cp.i('uSel',Math.max(0,si));
-    const col=l.color||LAYER_DEFAULTS.color,cmi=Math.max(0,COLOR_MODES.indexOf(col.mode));cp.i('uCM',cmi);cp.f('uCA',col.amt/100);
-    {const a=(col.pal&&col.pal.length?col.pal:['#000000','#ffffff']).slice(0,16),buf=new Float32Array(48);a.forEach((h,i)=>{const c=hexRGB(h);buf[i*3]=c[0]/255;buf[i*3+1]=c[1]/255;buf[i*3+2]=c[2]/255;});cp.v3v('uPal',buf);cp.i('uPalN',a.length);}
-    draw();
+    stepLayer(l,acc,tmp,lay,cp,t,dt,W,H);
     const q=acc;acc=tmp;tmp=q;STACK.rt.a=acc;STACK.rt.b=tmp;
   }
   let outTex=acc.tex;
@@ -1929,7 +2104,7 @@ function snap(){
   if(s!==lastSnap){if(lastSnap)HIST.push(lastSnap);if(HIST.length>60)HIST.shift();lastSnap=s;REDO.length=0;}
 }
 function layersFromSnap(o,keepUid){
-  return o.l.filter(x=>MODULES[x.m]).map(x=>{const l=mkLayer(x.m,x.p||undefined);if(keepUid&&x.u!=null){l.uid=x.u;layerUid=Math.max(layerUid,x.u+1);}Object.assign(l,{opacity:x.o,blend:x.b,showSource:x.s,select:x.sel,thr:x.t,pos:x.pos,size:x.z,seed:x.seed,visible:x.v});if(x.c)l.color=x.c;if(x.mk)l.mask=x.mk;l.solo=!!x.so;l.mods=x.md||[];return l;});
+  return o.l.filter(x=>MODULES[x.m]||ensureModule(x.m)).map(x=>{const l=mkLayer(x.m,x.p||undefined);if(keepUid&&x.u!=null){l.uid=x.u;layerUid=Math.max(layerUid,x.u+1);}Object.assign(l,{opacity:x.o,blend:x.b,showSource:x.s,select:x.sel,thr:x.t,pos:x.pos,size:x.z,seed:x.seed,visible:x.v});if(x.c)l.color=x.c;if(x.mk)l.mask=x.mk;l.solo=!!x.so;l.mods=x.md||[];return l;});
 }
 function applySnap(s){
   const o=JSON.parse(s);Object.assign(P,o.p);
@@ -3155,7 +3330,9 @@ function wire(){
   });
   stage.addEventListener('dragover',e=>{e.preventDefault();stage.classList.add('drag');});
   stage.addEventListener('dragleave',()=>stage.classList.remove('drag'));
-  stage.addEventListener('drop',e=>{e.preventDefault();stage.classList.remove('drag');loadFile(e.dataTransfer.files[0]);});
+  stage.addEventListener('drop',async e=>{e.preventDefault();stage.classList.remove('drag');const f=e.dataTransfer.files[0];
+    if(f&&/\.n0fx$/i.test(f.name)){if(f.size>200*1024){toast('That file is larger than 200 KB.');return;}pluginsSheet(await f.text());return;}
+    loadFile(f);});
   addEventListener('dragover',e=>e.preventDefault());addEventListener('drop',e=>e.preventDefault());
   addEventListener('paste',e=>{const f=[...(e.clipboardData?.files||[])].find(f=>f.type.startsWith('image/')||f.type.startsWith('video/'));if(f)loadFile(f);});
 }
@@ -3521,7 +3698,7 @@ function shareStack(){
 function loadStackHash(){
   const m=location.hash.match(/^#s=(.+)$/);if(!m)return;
   try{const a=JSON.parse(decodeURIComponent(escape(atob(m[1]))));
-    STACK.layers=a.filter(x=>MODULES[x.m]).map(x=>{const l=mkLayer(x.m,x.p||undefined);if(x.u!=null){l.uid=x.u;layerUid=Math.max(layerUid,x.u+1);}Object.assign(l,{opacity:x.o,blend:x.b,showSource:x.s,select:x.sel,thr:x.t,pos:x.pos,size:x.z,seed:x.seed,visible:x.v});if(x.c)l.color=x.c;if(x.mk)l.mask=x.mk;l.solo=!!x.so;l.mods=x.md||[];return l;});
+    STACK.layers=a.filter(x=>MODULES[x.m]||ensureModule(x.m)).map(x=>{const l=mkLayer(x.m,x.p||undefined);if(x.u!=null){l.uid=x.u;layerUid=Math.max(layerUid,x.u+1);}Object.assign(l,{opacity:x.o,blend:x.b,showSource:x.s,select:x.sel,thr:x.t,pos:x.pos,size:x.z,seed:x.seed,visible:x.v});if(x.c)l.color=x.c;if(x.mk)l.mask=x.mk;l.solo=!!x.so;l.mods=x.md||[];return l;});
     if(!STACK.layers.length)STACK.layers=[mkLayer('crtlab')];}catch(e){}
 }
 const presetsOf=id=>{try{return JSON.parse(localStorage.getItem('n0ise.p.'+id)||'[]');}catch(e){return[];}};
@@ -3613,13 +3790,17 @@ function renderInspector0(){
   ban.append(el('div','no',String(ix+1).padStart(2,'0')),el('div','nm',m.name));host.appendChild(ban);
   const TABS3=[['look','Look'],['place','Apply'],['motion','Move'],['layer','Layer']];
   if(!TABS3.some(t=>t[0]===INS.tab))INS.tab='look';
+  const isTool=TOOLS_ON&&!!m.tool,depth=isTool?depthBar(host):'shape';
+  if(isTool&&depth!=='shape')INS.tab='look';
+  if(m.missing)host.appendChild(tx('div','cl','This layer needs the tool “'+l.module+'”. It passes the picture through until you import or switch it on. Your settings are kept.'));
   const tabs=el('div','itabs');tabs.setAttribute('role','tablist');
   TABS3.forEach(([id,n])=>{const b=el('button','',n);b.setAttribute('role','tab');b.setAttribute('aria-selected',id===INS.tab);b.addEventListener('click',()=>{INS.tab=id;buzz(6);renderInspector();});tabs.appendChild(b);});
-  host.appendChild(tabs);
+  if(!isTool||depth==='shape')host.appendChild(tabs);
   const PG={look:el('div','ipage'),place:el('div','ipage'),motion:el('div','ipage'),layer:el('div','ipage')};
   const outer=host;host=PG.layer;
   const hd=el('div','hd');
   const mk=(t,f)=>{const b=el('button','btn',t);b.addEventListener('click',f);hd.appendChild(b);return b;};
+  if(TOOLS_ON&&l.module!=='crtlab')mk('Make tool',()=>toolMaker());
   mk('Remix',()=>{remix(l);renderInspector();});
   mk('Share',shareStack);
   mk(l.visible?'Hide':'Show',()=>{l.visible=!l.visible;renderInspector();});
@@ -3669,6 +3850,8 @@ function renderInspector0(){
   if(l.module==='crtlab'){
     TABS.forEach(([tid,tn],i)=>{const a=accordion(tn,i===0);const pane=UI.panes[tid];pane.hidden=false;a.b.classList.add('legacy-body');a.b.appendChild(pane);host.appendChild(a.d);});
   }else{
+    if(isTool&&depth==='play'){const p0=m.params[0];if(p0){const mb=el('div','mainctl');rowParam(mb,p0,l.params,null);host.appendChild(mb);}host.appendChild(tx('div','cl','Drag on the picture to change '+(m.params.slice(0,2).map(p=>p.label).join(' and '))+'. Open Shape for every control, Build to see how it works.'));outer.appendChild(PG[INS.tab]);return;}
+    if(isTool&&depth==='build'){howSection(host,l,m);outer.appendChild(PG[INS.tab]);return;}
     const heroKeys=(m.schema.hero||[]).filter(k=>m.params.some(p=>p.k===k&&p.t==='r')).slice(0,3);
     if(m.presets&&m.presets.length){const pr=el('div','chips');m.presets.forEach(ps=>{const b=el('button','chip',ps.name);b.addEventListener('click',()=>{Object.assign(l.params,ps.v);snap();renderInspector();buzz(8);});pr.appendChild(b);});host.appendChild(pr);}
     if(heroKeys.length>=2){const mb=el('div','mainctl');heroKeys.forEach(k=>rowParam(mb,m.params.find(x=>x.k===k),l.params,null));host.appendChild(mb);}
@@ -3678,6 +3861,7 @@ function renderInspector0(){
       rest.forEach(k=>{const p=m.params.find(x=>x.k===k);if(m.colorBound&&l.params.orig&&(p.t==='pal'||p.t==='color'||m.hideOnOrig.includes(k)))return;if(p.t==='pal')palEditor(a.b,p,l.params,null);else rowParam(a.b,p,l.params,null);});
       host.appendChild(a.d);});
   }
+  howSection(PG.layer,l,m);
   recipeSection(PG.layer);
   outer.appendChild(PG[INS.tab]);
 }
@@ -3690,7 +3874,7 @@ const CAM_FAMILY={clean:'Color',chrome:'Color',aqua:'Color',solar:'Color',therma
  noir:'Film',lomo:'Film',vintage:'Film',kodak:'Film',fuji:'Film',cinema:'Film',super8:'Film',night:'Film',vhs:'Signal / CRT',crt:'Signal / CRT',
  bubble:'Y2K',lchrome:'Y2K',holo:'Y2K',aero:'Y2K',digicam:'Y2K',webcam:'Y2K',lcd:'Y2K',vapor:'Y2K',vga:'Y2K',gboy:'Pixel',ps1:'Pixel',bayer:'Dither',ign:'Dither',linedith:'Lines',hatch:'Lines',contour:'Lines',wavel:'Lines',sketch:'Lines',stitch:'Pixel',mosaic:'Pixel',lego:'Pixel',ledm:'Pixel',emboss:'Light',tilt:'Light',streak:'Light',longexp:'Time',rgbtear:'Glitch',fish:'Warp',swirl:'Warp',ripple:'Warp',acid:'Color',pop:'Color',halftone:'Print',pixel:'Pixel',ascii:'Glyph',matrix:'Glyph',glitch:'Glitch',mosh:'Glitch',bloom:'Light',dream:'Light',
  prism:'Warp',kaleido:'Warp',mirror:'Warp',liquid:'Warp',paint:'Warp',grid:'Warp',ghost:'Time',tunnel:'Time',slit:'Time'};
-const UFAM_ORDER=['Source','Subject','Mix','Color','Y2K','Film','Signal / CRT','Dither','Print','Pixel','Glyph','Lines','Glitch','Light','Warp','Time','Studio','Face'];
+const UFAM_ORDER=['Mine','Source','Subject','Mix','Color','Y2K','Film','Signal / CRT','Dither','Print','Pixel','Glyph','Lines','Glitch','Light','Warp','Time','Studio','Face'];
 const camFam=f=>f.face?'Face':(f.custom||f.cat==='custom')?'Mine':CAM_FAMILY[f.id]||'Color';
 const modFam=m=>RAIL_FAMILY[m.id]||m.family;
 const famRank=f=>{const i=UFAM_ORDER.indexOf(f);return i<0?99:i;};
@@ -4021,7 +4205,7 @@ async function regress(){
   STACK.layers=keep.L;STACK.sel=keep.sel;ST.clean=keep.clean;V.sizeKey='';
   return res;
 }
-window.__n0={idleApply,idleRestore,IDLE,ALIVE_SKIP,breedStacks,breedWith,wipe,loadLookRecipe,nodesView,PLUG,pluginsSheet,registerModule,fixWebmDuration,camRecStart,verifyFrames,AUD,syntheticPerson,compareMasks,QUAL,PERSON,setMaskQuality,idleApply,regress,idleRestore,ED,IDLE,TLN,camRecorder,fxRecorder,openCamera,applyCam,CAMS,CAMFX,fxIndex,SHEET,applyRecipe,currentRecipe,toRecipe,fromRecipe,modParams,updateSignals,SIG,runModuleGate,showSheet,STACK,mkLayer,MODULES,DRAWN,setSource,renderStack,renderFrame,P,V,ST,SRC,TEX,maskFor,startPerson,loadPerson,renderInspector,layout};
+window.__n0={toolMaker,toolOpenUp,defineTool,ensureModule,toolDuplicateMine,howSection,idleApply,idleRestore,IDLE,ALIVE_SKIP,breedStacks,breedWith,wipe,loadLookRecipe,nodesView,PLUG,pluginsSheet,registerModule,fixWebmDuration,camRecStart,verifyFrames,AUD,syntheticPerson,compareMasks,QUAL,PERSON,setMaskQuality,idleApply,regress,idleRestore,ED,IDLE,TLN,camRecorder,fxRecorder,openCamera,applyCam,CAMS,CAMFX,fxIndex,SHEET,applyRecipe,currentRecipe,toRecipe,fromRecipe,modParams,updateSignals,SIG,runModuleGate,showSheet,STACK,mkLayer,MODULES,DRAWN,setSource,renderStack,renderFrame,P,V,ST,SRC,TEX,maskFor,startPerson,loadPerson,renderInspector,layout};
 /* Find anything (Cmd/Ctrl+K, "/", or the Find button): every effect, look and action in one list */
 const PALETTE=createPalette({recent:()=>lsGet('n0ise.recent',[]),items:()=>{
   const click=id=>()=>{const b=document.getElementById(id);if(b)b.click();},go=h=>()=>{location.href=h;};
@@ -4033,7 +4217,7 @@ const PALETTE=createPalette({recent:()=>lsGet('n0ise.recent',[]),items:()=>{
   const acts=[A('Open a photo or video',()=>$('#file').click(),'upload import'),A('Save or export',click('save'),'download png video gif'),A('Shuffle',()=>shuffle(),'random surprise'),
     A('Mutate this layer',()=>mutateLayer(),'variation remix'),A('Duplicate layer',()=>dupLayer(),'copy'),A('Undo',()=>undo()),A('Redo',()=>redo()),
     A('Compare before and after',click('cmpbtn'),'wipe original'),A('Animate',()=>TLN.show(),'timeline keyframes'),A('Reset everything',click('reset'),'clear start over'),
-    A('Power on or off',click('power'),'bypass'),A('Plugins',()=>pluginsSheet(),'n0fx'),A('Keys and help',()=>helpSheet(),'shortcuts'),
+    A('Power on or off',click('power'),'bypass'),A('Plugins',()=>pluginsSheet(),'n0fx'),A('Make a tool',()=>toolMaker(),'make tool save custom effect mine'),A('Keys and help',()=>helpSheet(),'shortcuts'),
     A('Go to Camera',go('effects.html?cam=1')),A('Go to 3D',go('studio.html'),'model studio'),A('Go to World builder',go('studio.html#world'),'physics walk level'),A('Go to Lab',go('lab.html'),'p5 sketch code generative'),A('Go home',go('index.html'))];
   return[...acts,...looks,...fx];}});
 {const fb=document.getElementById('find');if(fb)fb.addEventListener('click',()=>PALETTE.open());}

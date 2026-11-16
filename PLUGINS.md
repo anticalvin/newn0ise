@@ -1,6 +1,6 @@
 # n0ise plugins (.n0fx)
 
-A plugin is one JSON file. It adds an effect, a generator, a macro (a saved group of layers) or a pack (recipes and camera bodies). Plugins never run JavaScript: an effect is a GLSL function plus parameters, and everything is checked before it runs.
+A plugin is one JSON file. It adds an effect, a generator, a macro (a saved group of layers), a **tool** (a saved recipe with a few chosen controls, made with **Make tool**) or a pack (recipes and camera bodies). Plugins never run JavaScript: an effect is a GLSL function plus parameters, and everything is checked before it runs.
 
 Open **Plugins** in the Effects header to import, write, test and manage them. `?safe=1` on the page address loads with every plugin off.
 
@@ -18,12 +18,14 @@ Open **Plugins** in the Effects header to import, write, test and manage them. `
 | `id` | `author.name`, lower case, one dot |
 | `name`, `version`, `author`, `licence` | required; the licence is shown to users |
 | `apiVersion` | `1` |
-| `kind` | `effect`, `generator`, `macro`, `pack` |
+| `kind` | `effect`, `generator`, `macro`, `tool`, `pack` |
 | `family` | where it appears in the list (default `Community`) |
 | `params` | up to 16. `t`: `r` slider (min, max, def), `b` switch (def true/false), `color` (def `#rrggbb`), `c` choice (`opts`, integer `def`). Mark up to three `hero:true` so they show first |
 | `glsl` | defines `vec4 fx(vec2 uv)` only |
 | `feedback` | `true` gives `u_prev` (previous output) and `u_reset` (1 on the first frame or after a seek) |
-| `layers` | macro: `[{"module":"blindemboss","params":{}}]` |
+| `layers` | macro: `[{"module":"blindemboss","params":{}}]`. tool: `[{"uid":"u1","module":"dither","params":{},"opacity":100,"blend":"normal",...}]` (up to 12, each with a stable `uid`) |
+| `exposed` | tool: up to 6 chosen controls, `[{"k":"e1","uid":"u1","param":"cell","label":"Cell size","hint":"optional","t":"r","min":1,"max":24,"def":3}]`. `uid` points at a layer, never an array position |
+| `thumbnail` | tool: optional small image data URL (under 40 KB) |
 | `recipes`, `cameras` | pack data |
 
 ## Inside the shader
@@ -35,3 +37,6 @@ Open **Plugins** in the Effects header to import, write, test and manage them. `
 Examples: `plugins/examples/`. Check a file from the command line with `node tools/n0fx-validate.mjs file.n0fx`. Multi-pass effects and scripted plugins are not supported yet.
 
 See `docs/ai-plugin-guide.md` to have an AI write plugins for you.
+
+## Tools (Make tool)
+In Effects, **Make tool** (layer buttons, the Plugins sheet or Cmd/Ctrl+K) turns layers into one effect in the **Mine** family with up to six controls you choose. A tool can be stacked, masked, animated and bred like any effect. **How it works** shows the chain; **Edit** opens it back into layers (a community tool is copied first, the original is never overwritten). A tool whose effects aren’t installed stays in the project as a placeholder that passes the picture through and comes back to life when the missing tool is installed. Tools can’t contain other tools or the CRT lab yet. Example: `plugins/examples/demo.triple-stack.n0fx`.

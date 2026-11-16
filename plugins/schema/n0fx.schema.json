@@ -11,7 +11,7 @@
     "apiVersion": {"const": 1},
     "author": {"type": "string", "maxLength": 60},
     "licence": {"type": "string", "maxLength": 40},
-    "kind": {"enum": ["effect", "generator", "pack", "macro"]},
+    "kind": {"enum": ["effect", "generator", "pack", "macro", "tool"]},
     "family": {"type": "string", "maxLength": 24},
     "description": {"type": "string", "maxLength": 400},
     "feedback": {"type": "boolean"},
@@ -20,7 +20,9 @@
       "type": "object", "required": ["k", "label"],
       "properties": {"k": {"type": "string", "pattern": "^[a-z][a-z0-9]{0,11}$"}, "t": {"enum": ["r", "b", "color", "c"]}, "label": {"type": "string", "maxLength": 40},
         "min": {"type": "number"}, "max": {"type": "number"}, "def": {}, "step": {"type": "number"}, "hero": {"type": "boolean"}, "opts": {"type": "array", "items": {"type": "string"}}}}},
-    "layers": {"type": "array", "maxItems": 12, "description": "Macro: [{module, params}]"},
+    "layers": {"type": "array", "maxItems": 12, "description": "Macro: [{module, params}]. Tool: [{uid, module, params, opacity, blend, pos, size, seed, select, thr, visible, color, mods}]"},
+    "exposed": {"type": "array", "maxItems": 6, "description": "Tool: the chosen controls, [{k, uid, param, label, hint?, t?}]. uid points at a layer uid.", "items": {"type": "object", "required": ["k", "uid", "param", "label"]}},
+    "thumbnail": {"type": "string", "maxLength": 40000, "description": "Tool: small image data URL"},
     "recipes": {"type": "array", "description": "Pack: [{name, note, layers:[{module, params}]}]"},
     "cameras": {"type": "array", "description": "Pack: [{id, name, sub, sim, aspect, mods:[{module, params}]}]"}
   }

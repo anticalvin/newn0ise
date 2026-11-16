@@ -2,7 +2,7 @@
    Plugins are declarative: a GLSL fragment body plus parameters, or data (cameras, recipes). No plugin ever runs JavaScript. */
 export const API_VERSION=1;
 export const LIMITS={json:200*1024,glsl:64*1024,params:16,texLookups:64,uniforms:16,name:60,desc:400};
-const KINDS=['effect','generator','pack','macro'];
+const KINDS=['effect','generator','pack','macro','tool'];
 const PTYPES=['r','b','color','c'];
 const ID_RE=/^[a-z0-9][a-z0-9_-]{1,23}\.[a-z0-9][a-z0-9_-]{1,31}$/;
 const K_RE=/^[a-z][a-z0-9]{0,11}$/;
@@ -72,6 +72,33 @@ export function validatePlugin(j,{builtinIds=new Set(),installed=new Set()}={}){
   if(j.kind==='macro'){
     if(!Array.isArray(j.layers)||!j.layers.length||j.layers.length>12)E('A macro needs "layers": a list of 1 to 12 items like {"module":"blindemboss","params":{"depth":40}}.');
     else j.layers.forEach((l,i)=>{if(!l||!str(l.module,48))E('layers['+i+'].module is required.');else if(l.params&&typeof l.params!=='object')E('layers['+i+'].params must be an object.');});
+  }
+  if(j.kind==='tool'){
+    /* a tool is a saved recipe: layers by stable uid, plus up to six chosen controls that point at them */
+    const uids=new Set();
+    if(!Array.isArray(j.layers)||!j.layers.length||j.layers.length>12)E('A tool needs "layers": a list of 1 to 12 items like {"uid":"u1","module":"blindemboss","params":{}}.');
+    else j.layers.forEach((l,i)=>{const at='layers['+i+']';
+      if(!l||typeof l!=='object'){E(at+' must be an object.');return;}
+      if(!/^[a-z0-9_-]{1,16}$/i.test(l.uid||''))E(at+'.uid is required: a short unique name such as "u1".');else if(uids.has(l.uid))E(at+'.uid "'+l.uid+'" is used twice.');else uids.add(l.uid);
+      if(!str(l.module,48))E(at+'.module is required.');
+      if(l.params!=null&&(typeof l.params!=='object'||Array.isArray(l.params)))E(at+'.params must be an object.');
+      if(l.opacity!=null&&!(l.opacity>=0&&l.opacity<=100))E(at+'.opacity must be between 0 and 100.');
+    });
+    const ex=j.exposed==null?[]:j.exposed,ek=new Set();
+    if(!Array.isArray(ex))E('"exposed" must be a list.');
+    else{
+      if(ex.length>6)E('A tool can expose at most 6 controls (found '+ex.length+').');
+      ex.forEach((e,i)=>{const at='exposed['+i+']';
+        if(!e||typeof e!=='object'){E(at+' must be an object.');return;}
+        if(!K_RE.test(e.k||''))E(at+'.k must be 1 to 12 lower-case letters or digits, starting with a letter.');else if(ek.has(e.k))E(at+'.k "'+e.k+'" is used twice.');else ek.add(e.k);
+        if(!uids.has(e.uid))E(at+'.uid "'+e.uid+'" does not match any layer uid.');
+        if(!str(e.param,24))E(at+'.param is required: the name of the control on that layer.');
+        if(!str(e.label,40))E(at+'.label is required (under 40 characters).');
+        if(e.hint!=null&&!str(e.hint,120))E(at+'.hint must be short text (under 120 characters).');
+        if(e.t!=null&&!['r','b','color','c'].includes(e.t))E(at+'.t must be one of r, b, color, c.');
+      });
+    }
+    if(j.thumbnail!=null&&(typeof j.thumbnail!=='string'||j.thumbnail.length>40000||!/^data:image\/(png|jpeg|webp);base64,/.test(j.thumbnail)))E('"thumbnail" must be a small image data URL (under 40 KB).');
   }
   if(j.kind==='pack'){
     if(!j.recipes&&!j.cameras)E('A pack needs "recipes" and/or "cameras".');
