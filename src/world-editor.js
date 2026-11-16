@@ -54,7 +54,8 @@ export function createWorldEditor(c){
   /* ---- time of day ---- */
   const lerpC=(a,b,t)=>{const A=new THREE.Color(a),B=new THREE.Color(b);return '#'+A.lerp(B,Math.max(0,Math.min(1,t))).getHexString();};
   function applyTime(h){
-    ed.tod=h;const el0=Math.sin((h-6)/12*Math.PI),day=Math.max(0,el0),az=(h-12)/12*Math.PI*.9;
+    ed.tod=h;if(c.lighting&&c.lighting.on){c.lighting.setHour(h);return;}
+    const el0=Math.sin((h-6)/12*Math.PI),day=Math.max(0,el0),az=(h-12)/12*Math.PI*.9;
     const R=14,sunPos=[Math.sin(az)*R*Math.max(.25,Math.cos(Math.asin(Math.max(-1,Math.min(1,el0)))*.9)),Math.max(1.5,R*day),Math.cos(az)*R*.6+4];
     const bg=day<.12?lerpC('#0b1220','#e4986b',day/.12):lerpC('#e4986b','#9fb4c8',(day-.12)/.4);
     api.run({cmd:'environment',bg,envIntensity:.12+.55*Math.min(1,day*1.6),sun:{intensity:.15+2.3*Math.min(1,day*1.4),pos:sunPos,color:lerpC('#ff9a5a','#fff4e0',day*2.2)},fog:S.worldFog?{color:bg,near:12,far:S.worldFog}:null});

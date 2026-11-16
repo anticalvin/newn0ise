@@ -92,6 +92,7 @@ export function createApi(c){
     const L=lights.get(a.id);if(!L)throw new Error('No light "'+a.id+'".');
     if(op==='delete'){scene.remove(L);if(L.target)scene.remove(L.target);lights.delete(a.id);bump();return{deleted:a.id};}
     if(a.color)L.color.set(a.color);if(a.intensity!=null)L.intensity=a.intensity;if(a.pos)L.position.set(...v3(a.pos));if(a.target&&L.target)L.target.position.set(...v3(a.target));
+    if(a.angle!=null&&L.isSpotLight)L.angle=a.angle*Math.PI/180;if(a.shadow!=null&&L.shadow){L.castShadow=!!a.shadow;if(L.castShadow)L.shadow.mapSize.set(1024,1024);}
     bump();return{id:a.id};
   }
   function ensureGround(on,color,size){

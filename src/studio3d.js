@@ -19,6 +19,7 @@ import {rigHuman} from './rig.js';
 import {createSurface,createBall,CUSTOM_DEFAULT} from './surface.js';
 import {createMaterials,PRESETS as MATPRESETS,normMat} from './matsys.js';
 import {openMatLab} from './matlab.js';
+import {createLighting} from './lighting.js';
 import {put as handoffPut,take as handoffTake} from './handoff.js';
 import {createWorldEditor} from './world-editor.js';
 import {RoomEnvironment} from 'three/addons/environments/RoomEnvironment.js';
@@ -58,6 +59,7 @@ const world=new THREE.Group();scene.add(world);
 const hemi=new THREE.HemisphereLight(0xffffff,0x44444a,.35);scene.add(hemi);
 const key=new THREE.DirectionalLight(0xffffff,1.5);key.position.set(3,5,4);scene.add(key);
 const rim=new THREE.DirectionalLight(0xaab8ff,.5);rim.position.set(-4,2,-3);scene.add(rim);
+const LGT=createLighting({THREE,scene,camera,key,hemi,rim,deps:()=>({S,bump,api,controls})});
 let envTex=null;
 function setupEnv(){try{const pm=new THREE.PMREMGenerator(renderer);envTex=pm.fromScene(new RoomEnvironment(),.04).texture;scene.environment=envTex;scene.environmentIntensity=S.env;}catch(e){console.warn('env failed',e);}}
 const grid=new THREE.GridHelper(12,24,0x666670,0x2f2f36);grid.material.transparent=true;grid.material.opacity=.4;scene.add(grid);
@@ -756,14 +758,14 @@ function renderSelMask(oo){
   if(isSp)S.objs.forEach(x=>{x.holder.visible=x===o&&x.vis;});
   const gv=grid.visible,sbv=selBox?selBox.visible:false,tv=tcHelper.visible;
   grid.visible=false;if(selBox)selBox.visible=false;tcHelper.visible=false;
-  const bgOld=scene.background,envOld=scene.environment,fogOld=scene.fog;scene.environment=null;scene.fog=null;
+  const bgOld=scene.background,envOld=scene.environment,fogOld=scene.fog;scene.environment=null;scene.fog=null;LGT.skyVis(false);
   const swaps=[];
   if(!isSp)scene.traverseVisible(n=>{
     if(!n.isMesh||n.isSplatMesh)return;let p=n,mine=false;while(p){if(p===o.holder){mine=true;break;}p=p.parent;}
     swaps.push([n,n.material]);n.material=mine?selMat:blkMat;
   });
   renderer.setRenderTarget(maskRT);renderer.setClearColor(0x000000,isSp?0:1);renderer.clear();renderer.render(scene,camera);
-  swaps.forEach(([n,m])=>{n.material=m;});
+  swaps.forEach(([n,m])=>{n.material=m;});LGT.skyVis(true);
   scene.environment=envOld;scene.background=bgOld;scene.fog=fogOld;
   S.objs.forEach((x,i)=>{x.holder.visible=vis[i];});grid.visible=gv;if(selBox)selBox.visible=sbv;tcHelper.visible=tv;
   return true;
@@ -875,7 +877,7 @@ function frame(ts){
     tcHelper.visible=!S.exporting&&!S.walk&&!!(S.gizmo||S.pivot)&&S.sel!=null;
     /* anything that changes the picture without a bump() (visualizers, physics, spin, walking, recording, auto mode, breathing reliefs) must also
        invalidate the cached look frame, otherwise the effect keeps showing the first baked frame */
-    SURF.tick(t);MAT.tick(t);
+    SURF.tick(t);MAT.tick(t);LGT.tick(t,dt);
     S.animating=!!(SURF.any()||S.walk||S.spin||(typeof sim!=='undefined'&&sim.playing)||(typeof stRec!=='undefined'&&stRec.state==='recording')||AUTO.on||S.objs.some(o=>(o.kind==='viz'&&o.vis)||(o.kind==='relief'&&o.meta&&(o.meta.breathe||o.meta.furMats))));
     if(S.animating){S.ver++;N0.SRC.ver=S.ver;S.liveUntil=performance.now()+120;}
     bgCol.set(S.bg);
@@ -1969,6 +1971,7 @@ function buildScenePane(){
   sliderRow(s3,'Light angle',()=>S.lightAz??45,v=>{S.lightAz=v;const r=Math.hypot(key.position.x,key.position.z)||4,a=v*Math.PI/180;key.position.x=Math.cos(a)*r;key.position.z=Math.sin(a)*r;bump();},0,360,1,v=>Math.round(v)+'°');
   sliderRow(s3,'Light height',()=>S.lightEl??50,v=>{S.lightEl=v;key.position.y=2+v/100*8;bump();},0,100,1,v=>Math.round(v)+'%');
   chipRow(s3,[['.5','Draft'],['.8','Normal'],['1','High']],v=>String(S.q)===v,v=>{S.q=parseFloat(v);needResize=true;});
+  LGT.pane(p,{sliderRow,chipRow,btn,el,sec,toast});
 }
 function renderObjList(){
   if(!objListEl)return;objListEl.innerHTML='';
@@ -2368,7 +2371,7 @@ async function projectFiles(){
     }else if(o.kind==='mesh'&&PRIMS[o.name]&&o.root.material&&o.root.material.color)items.push({kind:'prim',name:o.name,tr,vis:o.vis,color:o.root.material.color.getHex(),ap:apprOf(o)});
     else skipped.push(o.name);
   }
-  const pj={n0ise:'studio',v:1,items,skipped,view:{view:S.view,bg:S.bg,env:S.env,grid:S.grid,fx:S.fx,mask:S.mask},engine:S.engine,cam:{p:camera.position.toArray(),t:controls.target.toArray()}};
+  const pj={n0ise:'studio',v:1,items,skipped,view:{view:S.view,bg:S.bg,env:S.env,grid:S.grid,fx:S.fx,mask:S.mask},engine:S.engine,light:LGT.state(),cam:{p:camera.position.toArray(),t:controls.target.toArray()}};
   files['project.json']=new TextEncoder().encode(JSON.stringify(pj));
   return {files,skipped,count:items.length};
 }
@@ -2395,6 +2398,7 @@ async function loadProject(u8){
   if(S.rest)leaveRest();
   const v=pj.view||{};if(v.view)S.view=v.view;if(v.bg)S.bg=v.bg;if(typeof v.env==='number'){S.env=v.env;scene.environmentIntensity=v.env;}if(v.mask)Object.assign(S.mask,v.mask);if(typeof v.fx==='boolean')S.fx=v.fx;if(typeof v.grid==='boolean')S.grid=v.grid;
   if(pj.cam){camera.position.fromArray(pj.cam.p);controls.target.fromArray(pj.cam.t);controls.update();S.needFrame=false;}
+  if(pj.light)await LGT.restoreState(pj.light);
   applyView();renderObjList&&renderObjList();refreshInspector&&refreshInspector();bump();
   return {count:pj.items.length,skipped:pj.skipped||[]};
 }
@@ -2479,7 +2483,7 @@ const sim=createSim({THREE,S,bump,removeObj});
 const physUI=window.__physUI=createPhysUI({sim,S,THREE,camera,controls,addPrimitive,el,sec,btn,toast,chipRow,sliderRow,bump,renderObjList,selectObj});
 const api=createApi({autoPlace,sim,THREE,S,scene,camera,controls,renderer,canvas,world,hemi,key,grid,PRIMS,addPrimitive,removeObj,objById,importOne,applyView,bump,frameAll,tick,walk,projectFiles,zipStore,GLTFExporter,renderObjList,refreshInspector,setShadowFlags,selectObj,waitFrames,requestResize:()=>{needResize=true;}});
 window.n0={run:api.run,describe:api.describe,walk,sim,playWorld};window.__playWorld=playWorld;
-const worldEd=createWorldEditor({recolour:(o,hex)=>{if(SURF.textured(o)){SURF.recolour(o,hex,.9);bump();try{surfRefresh();}catch(e){}return true;}return false;},playWorld:()=>playWorld(),setStart:()=>setStart(),openInEffects:()=>openInEffects(),THREE,S,api,sim,walk,camera,canvas,controls,tc,objById,selectObj,removeObj,bump,el,sec,btn,toast,renderObjList});
+const worldEd=createWorldEditor({lighting:LGT,recolour:(o,hex)=>{if(SURF.textured(o)){SURF.recolour(o,hex,.9);bump();try{surfRefresh();}catch(e){}return true;}return false;},playWorld:()=>playWorld(),setStart:()=>setStart(),openInEffects:()=>openInEffects(),THREE,S,api,sim,walk,camera,canvas,controls,tc,objById,selectObj,removeObj,bump,el,sec,btn,toast,renderObjList});
 if(physHost)physUI.section(physHost);
 worldEd.build(paneEls.world);
 if(/^#world/.test(location.hash)){setTab('world');worldEd.starter();}
@@ -2535,4 +2539,4 @@ async function openInEffects(){
 setTimeout(async()=>{const m=location.hash.match(/^#from=(\w+)/);if(!m)return;const rec=await handoffTake();history.replaceState(null,'',location.pathname);
   if(!rec){toast('Nothing to open. Send a picture from the other page again.');return;}
   await photoToRelief(new File([rec.blob],'from-'+m[1]+'.png',{type:rec.blob.type||'image/png'}));toast('Opened from '+m[1]);},1400);
-window.__studio={MAT,openMatLab:c=>openMatLab({THREE,RoomEnvironment,el,btn,sliderRow,chipRow,toast,MAT,...c}),undo3,redo3,uPush,UH,apprOf,apprPut,apprWatch,autoPlace,SURF,addPhoto,sampleCanvas,S,N0,selectObj,addLook,removeLook,openInEffects,worldEd,api,walk,aiConnect,zipStore,zipRead,projectFiles,loadProject,saveProject,AUTO,autoStep,fxRandomise,fxEnsure,fxClear,FX3,SG,addViz,AU,buildViz,vizUpdate,enterRest,leaveRest,restTick,setFx,autoDepth,buildDepth,restD,MATTERS,CUT,autoCut,refineMask,applyAlpha,THREE,scene,camera,controls,renderer,importFiles,addPrimitive,sheet,SC,carve,surfaceNets,buildScan,makeRelief,pseudoDepth,photoToRelief,objById,removeObj,bump,setTab,rebuildRelief,applyView,frameAll,exportImage,get rt(){return rt;}};
+window.__studio={LGT,MAT,openMatLab:c=>openMatLab({THREE,RoomEnvironment,el,btn,sliderRow,chipRow,toast,MAT,...c}),undo3,redo3,uPush,UH,apprOf,apprPut,apprWatch,autoPlace,SURF,addPhoto,sampleCanvas,S,N0,selectObj,addLook,removeLook,openInEffects,worldEd,api,walk,aiConnect,zipStore,zipRead,projectFiles,loadProject,saveProject,AUTO,autoStep,fxRandomise,fxEnsure,fxClear,FX3,SG,addViz,AU,buildViz,vizUpdate,enterRest,leaveRest,restTick,setFx,autoDepth,buildDepth,restD,MATTERS,CUT,autoCut,refineMask,applyAlpha,THREE,scene,camera,controls,renderer,importFiles,addPrimitive,sheet,SC,carve,surfaceNets,buildScan,makeRelief,pseudoDepth,photoToRelief,objById,removeObj,bump,setTab,rebuildRelief,applyView,frameAll,exportImage,get rt(){return rt;}};
