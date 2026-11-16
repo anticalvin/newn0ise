@@ -1,0 +1,209 @@
+{
+ "format": "n0ise-world",
+ "version": 1,
+ "scene": {
+  "name": "Two rooms",
+  "environment": {
+   "sky": "dusk",
+   "shadows": true
+  }
+ },
+ "materials": {
+  "wall": {
+   "color": "#c9c1b3",
+   "roughness": 0.9
+  },
+  "floorA": {
+   "color": "#7d6f60"
+  },
+  "floorB": {
+   "color": "#566070"
+  },
+  "steel": {
+   "color": "#8a949c",
+   "roughness": 0.35,
+   "metalness": 0.8
+  }
+ },
+ "instances": [
+  {
+   "id": "roomA",
+   "prefab": "room",
+   "pos": [
+    0,
+    0,
+    0
+   ],
+   "params": {
+    "width": 6,
+    "depth": 6,
+    "height": 2.8,
+    "material": "wall",
+    "floorMaterial": "floorA",
+    "openings": [
+     {
+      "wall": "e",
+      "offset": 0,
+      "width": 1.2,
+      "height": 2.2
+     }
+    ]
+   }
+  },
+  {
+   "id": "roomB",
+   "prefab": "room",
+   "pos": [
+    6,
+    0,
+    0
+   ],
+   "params": {
+    "width": 6,
+    "depth": 6,
+    "height": 2.8,
+    "material": "wall",
+    "floorMaterial": "floorB",
+    "openings": [
+     {
+      "wall": "w",
+      "offset": 0,
+      "width": 1.2,
+      "height": 2.2
+     }
+    ]
+   }
+  },
+  {
+   "id": "gate",
+   "prefab": "door",
+   "pos": [
+    3,
+    0,
+    0
+   ],
+   "rot": [
+    0,
+    90,
+    0
+   ],
+   "params": {
+    "width": 1.2,
+    "height": 2.2,
+    "material": "steel",
+    "frameMaterial": "steel"
+   }
+  },
+  {
+   "id": "start",
+   "prefab": "spawn",
+   "pos": [
+    -1.5,
+    0,
+    0
+   ],
+   "params": {
+    "yaw": -90
+   }
+  },
+  {
+   "id": "plate",
+   "prefab": "zone",
+   "pos": [
+    -1,
+    0,
+    2
+   ],
+   "params": {
+    "size": [
+     1.2,
+     0.4,
+     1.2
+    ]
+   }
+  },
+  {
+   "id": "pad",
+   "type": "cylinder",
+   "dims": [
+    1,
+    0.05,
+    1
+   ],
+   "pos": [
+    -1,
+    0,
+    2
+   ],
+   "color": "#d4552b"
+  }
+ ],
+ "lights": [
+  {
+   "id": "l1",
+   "type": "point",
+   "pos": [
+    0,
+    2.5,
+    0
+   ],
+   "intensity": 25,
+   "color": "#ffd9a0"
+  },
+  {
+   "id": "l2",
+   "type": "point",
+   "pos": [
+    6,
+    2.5,
+    0
+   ],
+   "intensity": 25,
+   "color": "#a0c8ff"
+  }
+ ],
+ "rules": [
+  {
+   "id": "plate-on",
+   "when": {
+    "trigger": "player-enter",
+    "target": "plate"
+   },
+   "then": [
+    {
+     "action": "toggle-open",
+     "target": "gate",
+     "state": "open"
+    },
+    {
+     "action": "set-flag",
+     "flag": "gate-open",
+     "value": true
+    },
+    {
+     "action": "show-message",
+     "text": "Something clicked in the next room.",
+     "seconds": 3
+    },
+    {
+     "action": "play-sound",
+     "sound": "thud"
+    }
+   ]
+  },
+  {
+   "id": "welcome",
+   "when": {
+    "trigger": "timer",
+    "after": 1
+   },
+   "then": [
+    {
+     "action": "show-message",
+     "text": "Step on the red pad.",
+     "seconds": 4
+    }
+   ]
+  }
+ ]
+}

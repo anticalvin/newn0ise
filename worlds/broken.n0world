@@ -1,0 +1,123 @@
+{
+ "format": "n0ise-world",
+ "version": 1,
+ "scene": {
+  "name": "Broken on purpose"
+ },
+ "materials": {
+  "wall": {
+   "color": "#c9c1b3"
+  }
+ },
+ "instances": [
+  {
+   "id": "room",
+   "prefab": "room",
+   "pos": [
+    0,
+    0,
+    0
+   ],
+   "params": {
+    "width": 6,
+    "depth": 6,
+    "material": "steel2",
+    "openings": [
+     {
+      "wall": "x",
+      "offset": 0,
+      "width": 1
+     }
+    ]
+   }
+  },
+  {
+   "id": "door",
+   "prefab": "drawbridge",
+   "pos": [
+    0,
+    0,
+    3
+   ]
+  },
+  {
+   "id": "d2",
+   "type": "dragon",
+   "pos": [
+    1,
+    0,
+    1
+   ]
+  },
+  {
+   "id": "d2",
+   "type": "cube",
+   "pos": [
+    "a",
+    0,
+    0
+   ]
+  },
+  {
+   "id": "start",
+   "prefab": "spawn",
+   "pos": [
+    0,
+    0,
+    0
+   ]
+  }
+ ],
+ "rules": [
+  {
+   "when": {
+    "trigger": "on-fire",
+    "target": "room"
+   },
+   "then": [
+    {
+     "action": "explode",
+     "target": "room"
+    }
+   ]
+  },
+  {
+   "when": {
+    "trigger": "player-enter",
+    "target": "ghost"
+   },
+   "then": [
+    {
+     "action": "show-message",
+     "text": "hi"
+    }
+   ]
+  },
+  {
+   "when": {
+    "trigger": "player-interact",
+    "target": "start"
+   },
+   "if": {
+    "flag": "never",
+    "equals": true
+   },
+   "then": [
+    {
+     "action": "toggle-open",
+     "target": "d2"
+    },
+    {
+     "action": "play-sound",
+     "sound": "dragon"
+    }
+   ]
+  }
+ ],
+ "assets": {
+  "tex": "data"
+ },
+ "scripts": [
+  "alert(1)"
+ ]
+}

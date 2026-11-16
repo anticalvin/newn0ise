@@ -8,7 +8,8 @@ export function createWalk(c){
   const EYE=1.65,R=.3,H=1.75,STEP=.55,GUP=20,GDN=31,JUMP=6.3;
   let ui=null,lookId=null,joyId=null,joyO=null,lastLook=null;
   function refreshBoxes(){
-    st.boxes=S.objs.filter(o=>o.vis&&o.kind!=='viz'&&!(o.meta&&o.meta.player)).map(o=>holderBox(o.holder)).filter(b=>!b.isEmpty()&&isFinite(b.min.x)&&(b.max.y-b.min.y)<200);st.boxT=performance.now();
+    /* objects that describe their own solid parts (worlds: doors, rooms with openings, stairs) give a list of boxes; everything else is one box */
+    st.boxes=S.objs.filter(o=>o.vis&&o.kind!=='viz'&&!(o.meta&&o.meta.player)).flatMap(o=>o.meta&&o.meta.colliders?o.meta.colliders():[holderBox(o.holder)]).filter(b=>!b.isEmpty()&&isFinite(b.min.x)&&(b.max.y-b.min.y)<200);st.boxT=performance.now();
   }
   function build(){
     ui=document.createElement('div');ui.id='walkui';
@@ -115,8 +116,8 @@ export function createWalk(c){
       camera.position.copy(TP.cp).addScaledVector(fwd,-TP.dc);camera.position.y=Math.max(.25,camera.position.y);camera.lookAt(TP.cp);
       const fv=(st.saved&&st.saved.fov||camera.fov)+(sp2>4?TP.amt*6:0),nf=camera.fov+(fv-camera.fov)*Math.min(1,dt*6);if(Math.abs(nf-camera.fov)>.005){camera.fov=nf;camera.updateProjectionMatrix();}
       if(c.onTick)c.onTick(p);
-    }else{camera.position.set(p.x,p.y+EYE,p.z);camera.rotation.set(st.pitch,st.yaw,0);}
+    }else{camera.position.set(p.x,p.y+EYE,p.z);camera.rotation.set(st.pitch,st.yaw,0);if(c.onTick)c.onTick(p);}
     c.bump();
   }
-  return {enter,exit,tick,get on(){return st.on;},get third(){return st.third;},place(x,y,z){st.pos.set(x,y,z);},refreshBoxes};
+  return {enter,exit,tick,get on(){return st.on;},get third(){return st.third;},get pos(){return st.on?st.pos:null;},place(x,y,z){st.pos.set(x,y,z);},setYaw(y){st.yaw=y;},refreshBoxes};
 }

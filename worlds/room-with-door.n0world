@@ -1,0 +1,150 @@
+{
+ "format": "n0ise-world",
+ "version": 1,
+ "scene": {
+  "name": "Room with a door",
+  "environment": {
+   "timeOfDay": 15,
+   "shadows": true,
+   "ground": {
+    "color": "#6b7a5a",
+    "size": 60
+   }
+  }
+ },
+ "materials": {
+  "wall": {
+   "color": "#d8d0c2",
+   "roughness": 0.9
+  },
+  "floor": {
+   "color": "#8a7f72",
+   "roughness": 0.8,
+   "pattern": {
+    "type": "checker",
+    "color2": "#9a8f82",
+    "scale": 3
+   }
+  },
+  "wood": {
+   "color": "#a98c6b",
+   "roughness": 0.6
+  }
+ },
+ "instances": [
+  {
+   "id": "room",
+   "prefab": "room",
+   "pos": [
+    0,
+    0,
+    0
+   ],
+   "params": {
+    "width": 6,
+    "depth": 5,
+    "height": 2.8,
+    "material": "wall",
+    "floorMaterial": "floor",
+    "ceiling": true,
+    "openings": [
+     {
+      "wall": "s",
+      "offset": 0,
+      "width": 1,
+      "height": 2.1
+     }
+    ]
+   }
+  },
+  {
+   "id": "door",
+   "prefab": "door",
+   "pos": [
+    0,
+    0,
+    2.4
+   ],
+   "params": {
+    "width": 1,
+    "height": 2.1,
+    "material": "wood"
+   }
+  },
+  {
+   "id": "start",
+   "prefab": "spawn",
+   "pos": [
+    0,
+    0,
+    -1
+   ],
+   "params": {
+    "yaw": 0
+   }
+  },
+  {
+   "id": "table",
+   "type": "cube",
+   "dims": [
+    1.4,
+    0.8,
+    0.7
+   ],
+   "pos": [
+    0,
+    0,
+    -1.8
+   ],
+   "material": "wood"
+  }
+ ],
+ "lights": [
+  {
+   "id": "lamp",
+   "type": "point",
+   "pos": [
+    0,
+    2.5,
+    0
+   ],
+   "color": "#ffe2b0",
+   "intensity": 30
+  }
+ ],
+ "cameras": [
+  {
+   "id": "main",
+   "pos": [
+    5,
+    4,
+    6
+   ],
+   "target": [
+    0,
+    1,
+    0
+   ],
+   "fov": 50
+  }
+ ],
+ "rules": [
+  {
+   "id": "open",
+   "when": {
+    "trigger": "player-interact",
+    "target": "door"
+   },
+   "then": [
+    {
+     "action": "toggle-open",
+     "target": "door"
+    },
+    {
+     "action": "play-sound",
+     "sound": "click"
+    }
+   ]
+  }
+ ]
+}

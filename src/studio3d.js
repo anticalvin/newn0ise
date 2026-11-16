@@ -20,6 +20,10 @@ import {createSurface,createBall,CUSTOM_DEFAULT} from './surface.js';
 import {createMaterials,PRESETS as MATPRESETS,normMat} from './matsys.js';
 import {openMatLab} from './matlab.js';
 import {createLighting} from './lighting.js';
+import {createWorldBuilder} from './world-build.js';
+import {validateWorld,LIMITS as WLIM,PREFABS,TRIGGERS,ACTIONS} from './world-schema.js';
+import {hashJson,readCapped} from './importkit.js';
+import {WORLD_BRIEF} from './world-brief.js';
 import {createSceneDoc} from './scenedoc.js';
 import {put as handoffPut,take as handoffTake} from './handoff.js';
 import {createWorldEditor} from './world-editor.js';
@@ -133,6 +137,8 @@ let idc=0;
 /* the sky is a look target too: not a scene object, but it carries a look or effect stack like one and is masked by where nothing else is */
 const SKY={id:'sky',name:'Sky',kind:'sky',vis:true,holder:{visible:true},meta:{}};
 const objById=id=>id==='sky'?SKY:S.objs.find(o=>o.id===id);
+let NW=null; // the .n0world builder, created once the scene API exists
+const SAFE_MODE=/[?&]safe=1/.test(location.search),WORLD_ON=!/[?&]n0world=0/.test(location.search);
 const anyLook=()=>!!SKY.look||S.objs.some(x=>x.look);
 const claymat=new THREE.MeshStandardMaterial({color:0xd8d4cc,roughness:.92,metalness:0});
 const normmat=new THREE.MeshNormalMaterial();
@@ -265,6 +271,8 @@ function photoInspector(o){
   r.appendChild(el('div','note','The shape follows how light or dark each part of the picture is. It is not recovered depth.'));
 }
 function pickPhoto(kind,replace){const i=document.createElement('input');i.type='file';i.accept='image/*';i.onchange=async()=>{const f=i.files[0];if(!f)return;try{const cv=await loadCanvas(f);if(replace){replace.meta.p3d.src=cv;rebuildPhoto(replace);}else addPhoto(kind,cv);}catch(e){toast(e.message);}};i.click();}
+/* an object made of several meshes (worlds: prefabs, groups). Stays one editable object. */
+function addGroup(name,group,meta){return registerObject(name,group,'group',{fit:false,meta});}
 function addPrimitive(k){
   const g=PRIMS[k]();if(k==='Plane')g.rotateX(-Math.PI/2);
   const m=new THREE.Mesh(g,new THREE.MeshStandardMaterial({color:0xb9b4ac,roughness:.55,metalness:.1}));
@@ -666,6 +674,16 @@ async function importOne(f){
 }
 async function importFiles(list){
   const files=[...list];if(!files.length)return;
+  if(WORLD_ON&&files.length===1&&/\.(n0world|json)$/i.test(files[0].name)){
+    try{
+      const head=new Uint8Array(await files[0].slice(0,2).arrayBuffer());
+      if(head[0]===0x50&&head[1]===0x4b){ // a package: world.json plus assets
+        if(files[0].size>WLIM.zip)throw new Error('That package is larger than '+(WLIM.zip/1048576)+' MB.');
+        const F=zipRead(new Uint8Array(await files[0].arrayBuffer()));if(!F['world.json'])throw new Error('That package has no world.json in it.');
+        worldImportSheet(new TextDecoder().decode(F['world.json']));return;}
+      const t=await readCapped(files[0],WLIM.json);if(/n0ise-world/.test(t)){worldImportSheet(t);return;}
+    }catch(e){toast(String(e.message||e),5000);return;}
+  }
   fileMap.clear();
   const hasContainer=files.some(f=>/\.(gltf|obj)$/i.test(f.name));
   const main=[];
@@ -908,6 +926,7 @@ function frame(ts){
     controls.autoRotate=S.spin;if(S.spin)bump();
     if(typeof sim!=='undefined')sim.tick(dt);
     if(S.walk)walk.tick(dt);else controls.update(dt);
+    if(NW)NW.tick(dt);
     if(selBox)selBox.update();
     grid.visible=S.grid&&!S.exporting&&!S.walk;
     if(selBox)selBox.visible=!S.exporting&&S.sel!=null&&!S.walk;
@@ -2026,6 +2045,7 @@ function renderObjList(){
 let reliefT=0;
 const triNote=m=>m.tris?`${m.stats} grid · ${Math.round(m.tris/1000)}k triangles`+(m.maxSlope?` · max slope ${m.maxSlope.toFixed(1)}/${m.slopeLim.toFixed(0)}`:''):'';
 function refreshInspector(soft){
+  window.__n0wRefresh&&window.__n0wRefresh();
   window.__worldRefresh&&window.__worldRefresh(soft);
   if(soft){inspSyncs.forEach(f=>f());return;}
   if(!inspEl)return;inspEl.innerHTML='';inspSyncs=[];
@@ -2391,7 +2411,9 @@ const apprOf=o=>DOC.appearance(o),apprPut=(o,a)=>DOC.putAppearance(o,a);
 async function projectFiles(){
   const files={},items=[],skipped=[];let i=0;
   {const so=objById(S.sel);if(so&&so[apprKey()]){try{apprStore(so);}catch(e){}}}
+  let worldSeen=false;
   for(const o of S.objs){
+    if(o.meta&&o.meta.n0w&&NW){worldSeen=true;continue;} // rebuilt from the world document on open
     const tr={p:o.holder.position.toArray(),r:[o.holder.rotation.x,o.holder.rotation.y,o.holder.rotation.z],s:o.holder.scale.toArray()};
     const m=o.meta;
     if(o.kind==='relief'&&m&&m.photo&&m.depth){
@@ -2404,8 +2426,9 @@ async function projectFiles(){
     else skipped.push(o.name);
   }
   const pj={n0ise:'studio',v:1,items,skipped,view:{view:S.view,bg:S.bg,env:S.env,grid:S.grid,fx:S.fx,mask:S.mask},engine:S.engine,light:LGT.state(),sky:{look:SKY.look||null,stack:SKY.stack||null},cam:{p:camera.position.toArray(),t:controls.target.toArray()}};
+  if(worldSeen&&NW){try{NW.lightsCache=(await api.run({cmd:'scene'})).lights;}catch(e){}pj.world=NW.exportDoc().doc;}
   files['project.json']=new TextEncoder().encode(JSON.stringify(pj));
-  return {files,skipped,count:items.length};
+  return {files,skipped,count:items.length+(worldSeen?1:0)};
 }
 async function loadProject(u8){
   const F=zipRead(u8);if(!F['project.json'])throw new Error('That zip has no n0ise project in it.');
@@ -2429,6 +2452,7 @@ async function loadProject(u8){
     if(it.phys){o.meta=o.meta||{};o.meta.phys={...it.phys};}
   }
   if(S.rest)leaveRest();
+  if(pj.world&&NW&&!SAFE_MODE){try{await api.run({cmd:'light',op:'clear'});const v=validateWorld(pj.world);if(v.ok)await NW.build(v.doc,{replace:false});else toast('The world inside this project couldn’t be read: '+(v.report.errors[0]||{}).msg,6000);}catch(e){toast('The world inside this project couldn’t be built: '+e.message,6000);}}
   const v=pj.view||{};if(v.view)S.view=v.view;if(v.bg)S.bg=v.bg;if(typeof v.env==='number'){S.env=v.env;scene.environmentIntensity=v.env;}if(v.mask)Object.assign(S.mask,v.mask);if(typeof v.fx==='boolean')S.fx=v.fx;if(typeof v.grid==='boolean')S.grid=v.grid;
   if(pj.cam){camera.position.fromArray(pj.cam.p);controls.target.fromArray(pj.cam.t);controls.update();S.needFrame=false;}
   if(pj.light)await LGT.restoreState(pj.light);
@@ -2508,7 +2532,7 @@ async function playWorld(){
     /* the character joins the look of the world: if effects are on other objects and none is on the character yet, it gets the same, once */
     if(!o.meta.fxAuto){const key=S.engine==='stack'?'stack':'look',srcO=S.objs.find(x=>x!==o&&x[key]);
       if(srcO&&!o[key]){o.meta.fxAuto=true;o[key]=key==='stack'?srcO.stack:JSON.parse(JSON.stringify(srcO.look));o.meta.fxSnap=JSON.stringify(o[key]);S.fx=true;S.mask.mode=2;updateLookUI();toast('The character has the same effect as '+srcO.name+'. Change it in Look.',3500);}}
-    PLAYER.goalHit=false;walk.enter({third:true,player:o,rig:o.rig,pos:[start[0],start[1],start[2]],camYaw:0});
+    PLAYER.goalHit=false;walk.enter({third:true,player:o,rig:o.rig,pos:[start[0],start[1],start[2]],camYaw:(S.startYaw||0)*Math.PI/180});
   }catch(e){toast(String(e.message||e),4000);}
 }
 function setStart(){const o=S.objs.find(x=>x.meta&&x.meta.player);const t=o?o.holder.position:controls.target;S.start=[t.x,0,t.z];toast('Start set here');}
@@ -2519,6 +2543,84 @@ window.n0={run:api.run,describe:api.describe,walk,sim,playWorld};window.__playWo
 const worldEd=createWorldEditor({lighting:LGT,doc:DOC,recolour:(o,hex)=>{if(SURF.textured(o)){SURF.recolour(o,hex,.9);bump();try{surfRefresh();}catch(e){}return true;}return false;},playWorld:()=>playWorld(),setStart:()=>setStart(),openInEffects:()=>openInEffects(),THREE,S,api,sim,walk,camera,canvas,controls,tc,objById,selectObj,removeObj,bump,el,sec,btn,toast,renderObjList});
 if(physHost)physUI.section(physHost);
 worldEd.build(paneEls.world);
+/* ---- .n0world: AI-writable worlds. Validate, repair, report, build; everything stays editable and exports back. ---- */
+if(WORLD_ON)NW=createWorldBuilder({THREE,S,world,api,addGroup,removeObj,objById,walk,toast,bump,renderObjList:()=>renderObjList&&renderObjList(),refreshInspector,selectObj,PRIMS,camera,controls,
+  frameAll,setShadowFlags,
+  applyEnv:E=>{
+    const o={cmd:'environment'};if(E.bg)o.bg=E.bg;if(E.ground!==undefined)o.ground=E.ground;if(E.fog!==undefined)o.fog=E.fog;if(E.shadows!==undefined)o.shadows=E.shadows;
+    if(E.sun)o.sun={intensity:E.sun.intensity,...(E.sun.color?{color:E.sun.color}:{})};api.run(o).catch(()=>{});
+    if(E.timeOfDay!=null||(E.sky&&E.sky!=='none')){
+      const hr=E.timeOfDay!=null?E.timeOfDay:({day:12,dusk:18.7,night:23,overcast:12})[E.sky];
+      LGT.L.on=false;LGT.setOn(true);LGT.L.auto=false;LGT.setHour(hr);if(E.sky==='overcast'){LGT.L.clouds=1;LGT.L.haze=.6;}LGT.apply&&LGT.apply();
+    }else if(E.sky==='none'){LGT.setOn(false);}
+  },
+  applyLook:(l,Wb)=>{
+    if(!N0.PROFILES.some(p=>p[0]===l.profile))throw new Error('unknown hardware profile "'+l.profile+'" (see the Hardware list in the Look tab)');
+    S.fx=true;S.engine='crt';
+    if(l.target==='scene'){S.mask.mode=0;N0.applyProfile(l.profile);bump();return;}
+    const m=/^object:(.+)$/.exec(l.target),mm=/^material:(.+)$/.exec(l.target);let targets=[];
+    if(m){const o=Wb.map.get(m[1]);if(o)targets=[o];}
+    else if(mm){Wb.map.forEach(o=>{let hit=false;o.holder.traverse(n=>{if(n.isMesh&&n.material&&n.material.userData&&n.material.userData.n0m===mm[1])hit=true;});if(hit)targets.push(o);});}
+    if(!targets.length)throw new Error('nothing uses that target');
+    S.mask.mode=2;targets.forEach(o=>{selectObj(o.id);N0.applyProfile(l.profile);addLook(o);});
+  }});
+function worldReportSheet(text,opts={}){
+  document.querySelectorAll('.n0wsheet').forEach(x=>x.remove());
+  const sh=document.createElement('div');sh.className='n0wsheet';sh.style.cssText='position:fixed;inset:0;z-index:90;display:flex;align-items:flex-end;justify-content:center;background:rgba(0,0,0,.45);padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)';
+  const box=document.createElement('div');box.className='glass';box.style.cssText='width:min(640px,100%);max-height:86dvh;overflow:auto;padding:16px;border-radius:18px 18px 0 0;background:rgba(18,18,20,.82);backdrop-filter:blur(22px);color:#f2efe9;font:14px/1.45 system-ui,sans-serif';
+  sh.appendChild(box);
+  const T=(tag,t,st)=>{const e=document.createElement(tag);e.textContent=t;if(st)e.style.cssText=st;return e;};
+  box.appendChild(T('h3',opts.title||'World','margin:0 0 6px;font-size:17px'));
+  const ta=document.createElement('textarea');ta.spellcheck=false;ta.rows=opts.rows||9;ta.placeholder='Paste a .n0world file here, or choose a file.';ta.value=opts.text||'';ta.style.cssText='width:100%;box-sizing:border-box;font:12px/1.4 ui-monospace,monospace;background:#0d0c0b;color:#f2efe9;border:1px solid rgba(255,255,255,.18);border-radius:8px;padding:8px';
+  const out=T('pre','', 'white-space:pre-wrap;font:12px/1.45 ui-monospace,monospace;margin:8px 0;max-height:34dvh;overflow:auto');
+  const row=document.createElement('div');row.style.cssText='display:flex;flex-wrap:wrap;gap:8px;margin:8px 0';
+  const mk=(t,fn,pri)=>{const b=T('button',t,'min-height:44px;padding:8px 16px;border-radius:12px;border:1px solid rgba(255,255,255,.28);background:'+(pri?'#f2efe9':'rgba(255,255,255,.08)')+';color:'+(pri?'#111':'#f2efe9')+';font:inherit');b.type='button';b.addEventListener('click',fn);return b;};
+  let cur=null,lastReport='';
+  const check=async()=>{
+    out.textContent='';const v=validateWorld(ta.value);cur=v;
+    const hash=v.doc?await hashJson(v.doc):'';
+    lastReport=v.report.toText('World report'+(hash?' #'+hash:''));
+    const st=v.stats||{};out.textContent=(v.ok?'Ready to build: '+st.instances+' objects, '+st.rules+' rules, '+st.lights+' lights, '+st.materials+' materials.\n\n':'')+lastReport;
+    build.disabled=!v.ok;build.style.opacity=v.ok?1:.4;return v;};
+  const build=mk(S.objs.length?'Replace scene and build':'Build world',async()=>{
+    const v=cur||await check();if(!v.ok)return;build.disabled=true;
+    try{const r=await NW.build(v.doc);NW.hash=await hashJson(v.doc);NW.report=v.report;
+      if(r.failed.length){lastReport+='\nBUILD NOTES:\n'+r.failed.map(f=>'- '+f).join('\n');out.textContent=lastReport;}
+      toast('Built “'+v.doc.scene.name+'”. Press Play in World to walk around.',3500);
+      if(!r.failed.length&&!v.report.items.length)sh.remove();else{build.textContent='Built';}}
+    catch(e){out.textContent='The build stopped: '+(e.message||e)+'\n\n'+lastReport;build.disabled=false;}
+  },true);
+  const file=document.createElement('input');file.type='file';file.accept='.n0world,.json,application/json';file.hidden=true;
+  file.addEventListener('change',async()=>{const f=file.files[0];file.value='';if(!f)return;try{ta.value=await readCapped(f,WLIM.json);check();}catch(e){out.textContent=String(e.message||e);}});
+  row.append(mk('Choose file',()=>file.click()),mk('Check',check),build,mk('Copy brief for my AI',async()=>{try{await navigator.clipboard.writeText(WORLD_BRIEF);toast('Copied. Paste it into your AI, then say what world you want.');}catch(e){ta.value=WORLD_BRIEF;toast('Select and copy the text.');}}),mk('Copy report',async()=>{try{await navigator.clipboard.writeText(lastReport||'No report yet.');toast('Copied. Paste it back to your AI.');}catch(e){toast('Select the report text and copy it.');}}),mk('Close',()=>sh.remove()));
+  box.append(ta,file,row,out);document.body.appendChild(sh);sh.addEventListener('pointerdown',e=>{if(e.target===sh)sh.remove();});
+  build.disabled=true;build.style.opacity=.4;
+  if(ta.value)check();return sh;
+}
+function worldImportSheet(text){if(!NW)return;if(SAFE_MODE){toast('Safe mode is on, so imported worlds are off.');return;}worldReportSheet('',{title:'Import a world',text:text||''});}
+async function exportWorldFile(){
+  if(!NW)return;
+  try{NW.lightsCache=(await api.run({cmd:'scene'})).lights;}catch(e){}
+  const {doc,skipped}=NW.exportDoc();
+  const v=validateWorld(doc);
+  await deliver(new Blob([JSON.stringify(v.doc||doc,null,1)],{type:'application/json'}),(doc.scene.name||'world').toLowerCase().replace(/[^a-z0-9]+/g,'-')+'.n0world');
+  if(skipped.length)toast('Saved. Not included (imported models): '+skipped.slice(0,3).join(', '),6000);
+}
+/* the World pane: import, export, and edit the parameters of a selected prefab */
+if(NW&&paneEls.world){
+  const wp=paneEls.world,s0=sec(wp,'AI worlds');
+  s0.appendChild(el('div','note','Import a world an AI wrote (.n0world), explore it, change anything, then export it again. Files are checked first and anything unsupported is listed.'));
+  const row=el('div','chips');row.append(btn('Import world','pri',()=>worldImportSheet('')),btn('Export .n0world','',exportWorldFile));s0.appendChild(row);
+  const live=el('div');s0.appendChild(live);
+  window.__n0wRefresh=()=>{
+    live.innerHTML='';const o=objById(S.sel),m=o&&o.meta&&o.meta.n0w;if(!m||!m.prefab)return;
+    const spec=PREFABS[m.prefab];{const h=el('div','sub');h.textContent=spec.label+' · '+m.id;live.appendChild(h);}
+    Object.keys(spec.params).forEach(k=>{const ps=spec.params[k];
+      if(ps.t==='num'||ps.t==='int')sliderRow(live,k,()=>m.params[k],v=>{NW.setParams(o,{[k]:v});},ps.min,ps.max,ps.t==='int'?1:(ps.max-ps.min)>20?.1:.01);
+      else if(ps.t==='bool'){const b=btn(k+': '+(m.params[k]?'on':'off'),'',()=>{NW.setParams(o,{[k]:!m.params[k]});window.__n0wRefresh();});live.appendChild(b);}
+      else if(ps.t==='enum'){chipRow(live,ps.opts.map(v=>[v,v]),v=>m.params[k]===v,v=>{NW.setParams(o,{[k]:v});window.__n0wRefresh();});}});
+  };
+}
 if(/^#world/.test(location.hash)){setTab('world');worldEd.starter();}
 /* launch screen: the front door of 3D. Skipped when a link brings a picture or asks for the world builder. */
 {const L=document.getElementById('launch');
@@ -2572,4 +2674,4 @@ async function openInEffects(){
 setTimeout(async()=>{const m=location.hash.match(/^#from=(\w+)/);if(!m)return;const rec=await handoffTake();history.replaceState(null,'',location.pathname);
   if(!rec){toast('Nothing to open. Send a picture from the other page again.');return;}
   await photoToRelief(new File([rec.blob],'from-'+m[1]+'.png',{type:rec.blob.type||'image/png'}));toast('Opened from '+m[1]);},1400);
-window.__studio={frame,get maskRT(){return maskRT;},renderSelMask,SKY,pickSky,followPlayer,DOC,LGT,MAT,openMatLab:c=>openMatLab({THREE,RoomEnvironment,el,btn,sliderRow,chipRow,toast,MAT,...c}),undo3,redo3,uPush,UH,apprOf,apprPut,apprWatch,autoPlace,SURF,addPhoto,sampleCanvas,S,N0,selectObj,addLook,removeLook,openInEffects,worldEd,api,walk,aiConnect,zipStore,zipRead,projectFiles,loadProject,saveProject,AUTO,autoStep,fxRandomise,fxEnsure,fxClear,FX3,SG,addViz,AU,buildViz,vizUpdate,enterRest,leaveRest,restTick,setFx,autoDepth,buildDepth,restD,MATTERS,CUT,autoCut,refineMask,applyAlpha,THREE,scene,camera,controls,renderer,importFiles,addPrimitive,sheet,SC,carve,surfaceNets,buildScan,makeRelief,pseudoDepth,photoToRelief,objById,removeObj,bump,setTab,rebuildRelief,applyView,frameAll,exportImage,get rt(){return rt;}};
+window.__studio={NW:()=>NW,worldImportSheet,exportWorldFile,validateWorld,addGroup,frame,get maskRT(){return maskRT;},renderSelMask,SKY,pickSky,followPlayer,DOC,LGT,MAT,openMatLab:c=>openMatLab({THREE,RoomEnvironment,el,btn,sliderRow,chipRow,toast,MAT,...c}),undo3,redo3,uPush,UH,apprOf,apprPut,apprWatch,autoPlace,SURF,addPhoto,sampleCanvas,S,N0,selectObj,addLook,removeLook,openInEffects,worldEd,api,walk,aiConnect,zipStore,zipRead,projectFiles,loadProject,saveProject,AUTO,autoStep,fxRandomise,fxEnsure,fxClear,FX3,SG,addViz,AU,buildViz,vizUpdate,enterRest,leaveRest,restTick,setFx,autoDepth,buildDepth,restD,MATTERS,CUT,autoCut,refineMask,applyAlpha,THREE,scene,camera,controls,renderer,importFiles,addPrimitive,sheet,SC,carve,surfaceNets,buildScan,makeRelief,pseudoDepth,photoToRelief,objById,removeObj,bump,setTab,rebuildRelief,applyView,frameAll,exportImage,get rt(){return rt;}};
