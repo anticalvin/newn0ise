@@ -160,6 +160,7 @@ export function createLighting(c){
   return {L,pane,state,restoreState,apply,setOn,addLight,removeLight,clearLights,rig,
     get on(){return L.on;},setHour(h){L.hour=((h%24)+24)%24;apply();},
     sunInfo:()=>({elevation:elDeg,dir:dirV.toArray()}),
+    skyMesh:()=>sky&&sky.visible?sky:null,
     skyVis(v){if(!sky)return;if(!v){sky._h=[sky.visible,stars.visible];sky.visible=false;stars.visible=false;}else if(sky._h){sky.visible=sky._h[0];stars.visible=sky._h[1];sky._h=null;}},
     tick(t,dt){
       if(!L.on)return;
