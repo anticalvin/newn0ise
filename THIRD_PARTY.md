@@ -1,7 +1,7 @@
 # Third-party components (studio.html)
 
 Everything loads in the visitor's browser from a CDN or model host and runs locally; no image is uploaded.
-Nothing here is vendored. Versions are pinned and each is more than two weeks old. Licences were checked on the model cards / package metadata on 2026-11-13.
+Nothing here is vendored except the Lab code editor, which is bundled into `assets/labeditor.js` so there is a single copy of its core. Versions are pinned and each is more than two weeks old. Licences were checked on the model cards / package metadata on 2026-11-13.
 
 ## Runtime libraries
 | Component | Version | Licence | Source |
@@ -9,6 +9,7 @@ Nothing here is vendored. Versions are pinned and each is more than two weeks ol
 | three.js | 0.187.0 | MIT | jsDelivr |
 | @sparkjsdev/spark | 2.4.0 | MIT | jsDelivr |
 | @huggingface/transformers | 4.3.2 | Apache-2.0 | jsDelivr (`dist/transformers.min.js`) |
+| CodeMirror 6 (`codemirror` 6.0.2, `@codemirror/view` 6.43.15, `@codemirror/state` 6.7.6, `lang-javascript` 6.2.5, `theme-one-dark` 6.1.3) | see left | MIT | bundled by esbuild into `assets/labeditor.js` (Lab code editor; the one vendored piece) |
 | onnxruntime-web | 1.22.0 (released 2025-05-09) | MIT | jsDelivr |
 
 ## Models (downloaded on first use, then cached by the browser)

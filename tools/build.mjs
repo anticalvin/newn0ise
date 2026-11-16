@@ -3,6 +3,7 @@ import {build} from 'esbuild';
 const common={minify:true,legalComments:'none',bundle:true,format:'esm',target:'es2022',logLevel:'info',external:['three','three/addons/*','@sparkjsdev/spark']};
 await build({...common,entryPoints:{index:'src/app.js'},outdir:'assets'});
 if((await import('node:fs')).existsSync('src/studio3d.js'))await build({...common,entryPoints:{studio:'src/studio3d.js'},outdir:'assets'});
+await build({...common,external:[],entryPoints:{labeditor:'src/labeditor.js'},outdir:'assets'});
 // cache-bust: the pages reference the bundles with ?v=<hash of the bundle>
 import fs from 'node:fs';import crypto from 'node:crypto';
 for(const [html,js] of [['effects.html','assets/index.js'],['studio.html','assets/studio.js']]){
