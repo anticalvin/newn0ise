@@ -2334,8 +2334,16 @@ function zipRead(u8){
 }
 const PSKIP=new Set(['_st','stats','tris','maxSlope','slopeLim','cutting','cutErr','bdDirty','splatErr','quick']);
 const toPNG=cv=>new Promise(r=>cv.toBlob(r,'image/png')).then(b=>b.arrayBuffer()).then(a=>new Uint8Array(a));
+const apprOf=o=>({look:o.look||null,stack:o.stack||null,surf:o.surf?{...o.surf}:null});
+function apprPut(o,a){
+  if(!a)return;
+  if(a.look)o.look=JSON.parse(JSON.stringify(a.look));else delete o.look;
+  if(a.stack)o.stack=a.stack;else delete o.stack;
+  if(a.surf)SURF.set(o,{...a.surf});else if(o.surf)SURF.set(o,{m:'',ta:0});
+}
 async function projectFiles(){
   const files={},items=[],skipped=[];let i=0;
+  {const so=objById(S.sel);if(so&&so[apprKey()]){try{apprStore(so);}catch(e){}}}
   for(const o of S.objs){
     const tr={p:o.holder.position.toArray(),r:[o.holder.rotation.x,o.holder.rotation.y,o.holder.rotation.z],s:o.holder.scale.toArray()};
     const m=o.meta;
@@ -2344,11 +2352,11 @@ async function projectFiles(){
       files[id+'.depth']=new Uint8Array(m.depth.buffer.slice(m.depth.byteOffset,m.depth.byteOffset+m.depth.byteLength));
       if(m.alpha){const a=new Uint8Array(m.alpha.length);for(let k=0;k<a.length;k++)a[k]=Math.round(clamp(m.alpha[k],0,1)*255);files[id+'.alpha']=a;}
       const sc={};for(const [k,v] of Object.entries(m))if(['number','boolean','string'].includes(typeof v)&&!PSKIP.has(k))sc[k]=v;
-      items.push({kind:'relief',id,name:o.name,tr,vis:o.vis,dw:m.dw,dh:m.dh,meta:sc});
-    }else if(o.kind==='mesh'&&PRIMS[o.name]&&o.root.material&&o.root.material.color)items.push({kind:'prim',name:o.name,tr,vis:o.vis,color:o.root.material.color.getHex()});
+      items.push({kind:'relief',id,name:o.name,tr,vis:o.vis,dw:m.dw,dh:m.dh,meta:sc,ap:apprOf(o)});
+    }else if(o.kind==='mesh'&&PRIMS[o.name]&&o.root.material&&o.root.material.color)items.push({kind:'prim',name:o.name,tr,vis:o.vis,color:o.root.material.color.getHex(),ap:apprOf(o)});
     else skipped.push(o.name);
   }
-  const pj={n0ise:'studio',v:1,items,skipped,view:{view:S.view,bg:S.bg,env:S.env,grid:S.grid,fx:S.fx,mask:S.mask},cam:{p:camera.position.toArray(),t:controls.target.toArray()}};
+  const pj={n0ise:'studio',v:1,items,skipped,view:{view:S.view,bg:S.bg,env:S.env,grid:S.grid,fx:S.fx,mask:S.mask},engine:S.engine,cam:{p:camera.position.toArray(),t:controls.target.toArray()}};
   files['project.json']=new TextEncoder().encode(JSON.stringify(pj));
   return {files,skipped,count:items.length};
 }
@@ -2370,6 +2378,7 @@ async function loadProject(u8){
     }else if(it.kind==='prim'){o=addPrimitive(it.name);if(o.root.material)o.root.material.color.setHex(it.color);}
     if(!o)continue;
     o.holder.position.fromArray(it.tr.p);o.holder.rotation.set(...it.tr.r);o.holder.scale.fromArray(it.tr.s);o.vis=it.vis!==false;o.holder.visible=o.vis;
+    try{apprPut(o,it.ap);}catch(e){}
   }
   if(S.rest)leaveRest();
   const v=pj.view||{};if(v.view)S.view=v.view;if(v.bg)S.bg=v.bg;if(typeof v.env==='number'){S.env=v.env;scene.environmentIntensity=v.env;}if(v.mask)Object.assign(S.mask,v.mask);if(typeof v.fx==='boolean')S.fx=v.fx;if(typeof v.grid==='boolean')S.grid=v.grid;
@@ -2391,6 +2400,25 @@ function markDirty(){if(restoring||!window.indexedDB)return;clearTimeout(autoT);
   try{if(!S.objs.length)return;const {files,count}=await projectFiles();if(!count)return;const b=zipStore(files);await idbPut('last',{t:Date.now(),count,bytes:await b.arrayBuffer()});}catch(e){}},4000);}
 ['pointerup','keyup','change'].forEach(ev=>addEventListener(ev,markDirty,true));
 addEventListener('pagehide',()=>{clearTimeout(autoT);});
+/* undo and redo for the scene: where things are, whether they show, their colour and their look. Taken after each finished gesture. */
+const UH={u:[],r:[],last:null,busy:false};
+const uSnap=()=>JSON.stringify(S.objs.map(o=>({id:o.id,p:o.holder.position.toArray(),r:[o.holder.rotation.x,o.holder.rotation.y,o.holder.rotation.z],s:o.holder.scale.toArray(),v:o.vis!==false,c:o.root&&o.root.material&&o.root.material.color?o.root.material.color.getHex():null,a:apprOf(o)})));
+function uApply(js){
+  UH.busy=true;
+  try{for(const d of JSON.parse(js)){const o=objById(d.id);if(!o)continue;
+    o.holder.position.fromArray(d.p);o.holder.rotation.set(...d.r);o.holder.scale.fromArray(d.s);o.vis=d.v;o.holder.visible=d.v;
+    if(d.c!=null&&o.root.material&&o.root.material.color)o.root.material.color.setHex(d.c);
+    apprPut(o,d.a);}
+    const so=objById(S.sel);if(so)apprLoad(so);
+    renderObjList&&renderObjList();refreshInspector&&refreshInspector();try{surfRefresh();}catch(e){}bump();}
+  finally{UH.busy=false;UH.last=uSnap();}
+}
+function uPush(){if(UH.busy||S.tab==='world'||!S.objs.length)return;const n=uSnap();if(UH.last==null||JSON.parse(UH.last).map(d=>d.id).join()!==S.objs.map(o=>o.id).join()){UH.last=n;return;}if(n===UH.last)return;UH.u.push(UH.last);if(UH.u.length>50)UH.u.shift();UH.r.length=0;UH.last=n;}
+function undo3(){if(!UH.u.length){toast('Nothing to undo');return;}UH.r.push(uSnap());uApply(UH.u.pop());toast('Undo');}
+function redo3(){if(!UH.r.length){toast('Nothing to redo');return;}UH.u.push(uSnap());uApply(UH.r.pop());toast('Redo');}
+['pointerup','keyup','change'].forEach(ev=>addEventListener(ev,()=>setTimeout(uPush,30),true));
+addEventListener('keydown',e=>{const k=e.key.toLowerCase();if(!(e.metaKey||e.ctrlKey)||k!=='z'||e.target.matches&&e.target.matches('input,textarea,select'))return;if(S.tab==='world')return;e.preventDefault();e.shiftKey?redo3():undo3();});
+setTimeout(()=>{try{UH.last=uSnap();}catch(e){}},1500);
 async function offerRestore(){
   try{const r=await idbGet('last');if(!r||!r.count)return;
     const b=document.createElement('div');b.className='restore';b.setAttribute('role','status');
@@ -2495,4 +2523,4 @@ async function openInEffects(){
 setTimeout(async()=>{const m=location.hash.match(/^#from=(\w+)/);if(!m)return;const rec=await handoffTake();history.replaceState(null,'',location.pathname);
   if(!rec){toast('Nothing to open. Send a picture from the other page again.');return;}
   await photoToRelief(new File([rec.blob],'from-'+m[1]+'.png',{type:rec.blob.type||'image/png'}));toast('Opened from '+m[1]);},1400);
-window.__studio={apprWatch,autoPlace,SURF,addPhoto,sampleCanvas,S,N0,selectObj,addLook,removeLook,openInEffects,worldEd,api,walk,aiConnect,zipStore,zipRead,projectFiles,loadProject,saveProject,AUTO,autoStep,fxRandomise,fxEnsure,fxClear,FX3,SG,addViz,AU,buildViz,vizUpdate,enterRest,leaveRest,restTick,setFx,autoDepth,buildDepth,restD,MATTERS,CUT,autoCut,refineMask,applyAlpha,THREE,scene,camera,controls,renderer,importFiles,addPrimitive,sheet,SC,carve,surfaceNets,buildScan,makeRelief,pseudoDepth,photoToRelief,objById,removeObj,bump,setTab,rebuildRelief,applyView,frameAll,exportImage,get rt(){return rt;}};
+window.__studio={undo3,redo3,uPush,UH,apprOf,apprPut,apprWatch,autoPlace,SURF,addPhoto,sampleCanvas,S,N0,selectObj,addLook,removeLook,openInEffects,worldEd,api,walk,aiConnect,zipStore,zipRead,projectFiles,loadProject,saveProject,AUTO,autoStep,fxRandomise,fxEnsure,fxClear,FX3,SG,addViz,AU,buildViz,vizUpdate,enterRest,leaveRest,restTick,setFx,autoDepth,buildDepth,restD,MATTERS,CUT,autoCut,refineMask,applyAlpha,THREE,scene,camera,controls,renderer,importFiles,addPrimitive,sheet,SC,carve,surfaceNets,buildScan,makeRelief,pseudoDepth,photoToRelief,objById,removeObj,bump,setTab,rebuildRelief,applyView,frameAll,exportImage,get rt(){return rt;}};
