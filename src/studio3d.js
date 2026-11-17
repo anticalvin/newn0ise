@@ -20,6 +20,7 @@ import {createSurface,createBall,CUSTOM_DEFAULT} from './surface.js';
 import {createMaterials,PRESETS as MATPRESETS,normMat} from './matsys.js';
 import {openMatLab} from './matlab.js';
 import {openNodeMat} from './nodemat-ui.js';
+import {createMatStudio} from './matstudio.js';
 import {applyToObject as ngApply,clearFromObject as ngClear} from './nodemat.js';
 import {createLighting} from './lighting.js';
 import {createWorldBuilder} from './world-build.js';
@@ -75,6 +76,8 @@ const key=new THREE.DirectionalLight(0xffffff,1.5);key.position.set(3,5,4);scene
 const rim=new THREE.DirectionalLight(0xaab8ff,.5);rim.position.set(-4,2,-3);scene.add(rim);
 const LGT=createLighting({THREE,scene,camera,key,hemi,rim,deps:()=>({S,bump,api,controls})});
 let envTex=null;
+let hdrEnv=null;
+function setEnvHdr(t){try{if(hdrEnv){hdrEnv.dispose();hdrEnv=null;}if(t){const pm=new THREE.PMREMGenerator(renderer);hdrEnv=pm.fromEquirectangular(t).texture;scene.environment=hdrEnv;}else scene.environment=envTex;scene.environmentIntensity=S.env;S.needFrame=true;}catch(e){console.warn('env',e);}}
 function setupEnv(){try{const pm=new THREE.PMREMGenerator(renderer);envTex=pm.fromScene(new RoomEnvironment(),.04).texture;scene.environment=envTex;scene.environmentIntensity=S.env;}catch(e){console.warn('env failed',e);}}
 const grid=new THREE.GridHelper(12,24,0x666670,0x2f2f36);grid.material.transparent=true;grid.material.opacity=.4;scene.add(grid);
 const tc=new TransformControls(camera,canvas);tc.setSize(.8);
@@ -1994,16 +1997,17 @@ function wireSheet(){
 let suppressTab=false;
 
 /* ---------- tabs ---------- */
-const TABN=[['world','World'],['scene','Scene'],['draw','Sigil'],['scan','Scan'],['look','Look'],['export','Export']];
+const TABN=[['world','World'],['scene','Scene'],['draw','Sigil'],['scan','Scan'],['look','Look'],['mat','Material'],['export','Export']];
 const paneEls={};
 addEventListener('pointerup',e=>{if(e.target.closest&&e.target.closest('#panes'))S.apprTouch=performance.now();},true);addEventListener('input',e=>{if(e.target.closest&&e.target.closest('#panes'))S.apprTouch=performance.now();},true);addEventListener('change',e=>{if(e.target.closest&&e.target.closest('#panes'))S.apprTouch=performance.now();},true);
 function setTab(id){
   TABN.forEach(([k])=>{$('#tab_'+k).setAttribute('aria-selected',k===id);paneEls[k].hidden=k!==id;});
   panes.scrollTop=0;S.tab=id;try{SIG&&SIG.onTab(id);}catch(e){console.error(e);}try{setSelBox();}catch(e){}try{paintBar();}catch(e){}
+  if(id==='mat'&&MS)MS.show();
   if(id==='world'&&!S._wsChosen&&!S._wsBoot&&window.__wsShow&&!S.objs.some(o=>!(o.meta&&o.meta.player)))window.__wsShow();
   if(id==='world'&&!S._plSpawn&&typeof ensurePlayer==='function'){S._plSpawn=1;ensurePlayer().then(()=>{S.needFrame=true;}).catch(()=>{});}
 }
-const TABIC={world:'<path d="M3 12a9 9 0 1 0 18 0 9 9 0 0 0-18 0M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/>',scene:'<path d="M12 3 3 8l9 5 9-5zM3 8v8l9 5 9-5V8M12 13v8"/>',draw:'<path d="M4 20c2-6 4-12 9-12 3 0 3 4 1 6-2 2-5 0-3-3M16 5l3 3"/>',scan:'<path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M4 12h16"/>',look:'<circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 0 0 16z" fill="currentColor"/>',export:'<path d="M12 15V4M7 9l5-5 5 5M5 15v4h14v-4"/>'};
+const TABIC={world:'<path d="M3 12a9 9 0 1 0 18 0 9 9 0 0 0-18 0M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/>',scene:'<path d="M12 3 3 8l9 5 9-5zM3 8v8l9 5 9-5V8M12 13v8"/>',draw:'<path d="M4 20c2-6 4-12 9-12 3 0 3 4 1 6-2 2-5 0-3-3M16 5l3 3"/>',scan:'<path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M4 12h16"/>',look:'<circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 0 0 16z" fill="currentColor"/>',mat:'<circle cx="12" cy="12" r="8"/><path d="M8 9.5a5 5 0 0 1 3.5-2.4M15.5 16.5a5 5 0 0 1-3 1.2"/>',export:'<path d="M12 15V4M7 9l5-5 5 5M5 15v4h14v-4"/>'};
 function placeTabs(){
   const app=document.querySelector('.app'),main=document.querySelector('.main');
   if(!mqDesk.matches){if(tabsEl.parentNode!==app){app.insertBefore(tabsEl,main.nextSibling);}tabsEl.classList.add('dock');}
@@ -2201,7 +2205,9 @@ function ctlRow(parent,c){
 const SURF=createSurface({THREE,S,objById});
 const MAT=createMaterials({THREE,S});
 const NG={apply:(o,g)=>{try{return ngApply(THREE,o,g,512);}catch(e){console.error(e);}},clear:o=>ngClear(o)};
-const DOC=createSceneDoc({S,SURF,MAT,LGT,NG});
+let MS=null;
+const PHX={setPbr:(o,a)=>MS&&MS.setPbr(o,a),clearPbr:o=>MS&&MS.clearPbr(o),applyTex:(o,a)=>MS&&MS.applyTex(o,a),clearTex:o=>MS&&MS.clearTex(o)};
+const DOC=createSceneDoc({S,SURF,MAT,LGT,NG,PH:PHX});
 let matLab=null,nodeMat=null;
 if(renderer)renderer.debug.onShaderError=(g,prog,vs,fs)=>{try{const log=(g.getShaderInfoLog(fs)||'').split('\n').filter(l=>/ERROR/.test(l)).slice(0,2).join(' ').replace(/ERROR: \d+:(\d+)/g,'line $1');if(SURF.onError&&S.objs.some(o=>o.surf&&o.surf.m==='custom'))SURF.onError(log);}catch(e){}};
 let surfBox=null,editBadge=null,SURFBALL=null;
@@ -2248,12 +2254,13 @@ function surfRefresh(){
     a.forEach((it,ix)=>{const b=el('button','chip',it.name+' ');const x=el('b','','✕');x.style.cssText='margin-left:6px;opacity:.6';x.addEventListener('click',e=>{e.stopPropagation();const l2=myLooks();l2.splice(ix,1);localStorage.setItem('n0.mylooks',JSON.stringify(l2));surfRefresh();});b.appendChild(x);
       b.addEventListener('click',()=>{SURF.set(o,{...it.st});bump();surfRefresh();});b.addEventListener('pointerenter',()=>SURFBALL&&SURFBALL.set(it.st));b.addEventListener('pointerleave',()=>SURFBALL&&SURFBALL.set(o.surf));row.appendChild(b);});surfBox.appendChild(row);}}
 }
+function openNodeGraph(){const o=objById(S.sel!=null?S.sel:S.fxTarget);if(!o){toast('Pick an object first, or add a shape.');return;}if(o.kind==='viz'||o.kind==='splat'){toast('This kind of object has no surface to shade.');return;}
+  if(nodeMat)nodeMat.close();nodeMat=openNodeMat({THREE,RoomEnvironment,el,sliderRow,chipRow,toast,o,onApply:g=>{if(MS)MS.clearTex(o);const r=ngApply(THREE,o,g,512);if(MS)MS.physProps(o);bump();toast(r.done?'Material applied to '+o.name+'.'+(r.skipped?' Some parts have no UV map and were skipped.':''):'This object has no UV map, so the graph can’t be wrapped on it. Try a built-in shape.',5000);},onClear:()=>{bump();},onClose:()=>{nodeMat=null;bump();}});}
 function buildLookPane(){
   const p=paneEls.look,P=N0.P;
   {const ms=sec(p,'Material');ms.appendChild(el('div','note','A real material for the selected object: colour, metal, roughness, glow, bump and opacity, each from a value or a procedural pattern. Opens a workshop with a 3D preview.'));
     const mr=el('div','chips');
-    mr.appendChild(btn('Material graph (nodes)','pri',()=>{const o=objById(S.sel!=null?S.sel:S.fxTarget);if(!o){toast('Pick an object first, or add a shape.');return;}if(o.kind==='viz'||o.kind==='splat'){toast('This kind of object has no surface to shade.');return;}
-      if(nodeMat)nodeMat.close();nodeMat=openNodeMat({THREE,RoomEnvironment,el,sliderRow,chipRow,toast,o,onApply:g=>{const r=ngApply(THREE,o,g,512);bump();toast(r.done?'Material applied to '+o.name+'.'+(r.skipped?' Some parts have no UV map and were skipped.':''):'This object has no UV map, so the graph can’t be wrapped on it. Try a built-in shape.',5000);},onClear:()=>{bump();},onClose:()=>{nodeMat=null;bump();}});}));
+    mr.appendChild(btn('Material graph (nodes)','pri',openNodeGraph));
     mr.appendChild(btn('Open material creator','pri',()=>{const o=objById(S.sel!=null?S.sel:S.fxTarget);if(!o){toast('Pick an object first, or add a shape.');return;}if(o.kind==='viz'||o.kind==='splat'){toast('This kind of object has no surface to shade.');return;}
       if(matLab)matLab.close();matLab=openMatLab({THREE,RoomEnvironment,el,btn,sliderRow,chipRow,toast,o,MAT,applyAll:d=>{S.objs.forEach(x=>{if(!(x.kind==='viz'||x.kind==='splat'))MAT.set(x,d);});bump();},onChange:bump,onClose:()=>{matLab=null;bump();}});}));
     ms.appendChild(mr);
@@ -2421,7 +2428,7 @@ function buildHud(){
 }
 
 /* ---------- boot ---------- */
-window.__sheet=sheet;studioDefaults();buildTabs();placeTabs();mqDesk.addEventListener('change',placeTabs);buildHud();buildScenePane();buildScanPane();
+window.__sheet=sheet;studioDefaults();buildTabs();MS=createMatStudio({THREE,RoomEnvironment,el,btn,sliderRow,chipRow,sec,toast,objById,S,bump,MAT,SURF,ngApply,ngClear,openGraph:openNodeGraph,setEnvHdr,setEnvStrength:v=>{scene.environmentIntensity=v;hemi.intensity=.2+v*.7;},pane:paneEls.mat});placeTabs();mqDesk.addEventListener('change',placeTabs);buildHud();buildScenePane();buildScanPane();
 if(renderer){buildLookPane();}
 buildExportPane();wireSheet();
 setTab('scene');

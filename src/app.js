@@ -3145,16 +3145,16 @@ function buildCamUI(){
   /* Viewfinder layout: header, rounded picture, a status bar under it (focus hint, frame shape, lens), modes, shutter row, and a drawer for Looks and Pro */
   {const brand=el('div','cambrand');brand.innerHTML='<b>n0ise</b><span>CAM</span>';const cx=$('#camx');cx&&cx.after(brand);
    const fbar=el('div','camfbar');const hint=el('div','camfhint');hint.innerHTML='<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 9V6a2 2 0 0 1 2-2h3M15 4h3a2 2 0 0 1 2 2v3M20 15v3a2 2 0 0 1-2 2h-3M9 20H6a2 2 0 0 1-2-2v-3"/><circle cx="12" cy="12" r="2.2"/></svg><span>Tap to focus</span>';
-   const fr=el('div','camfr');const lensEl=u.querySelector('.clens'),asp=$('#camasp');asp&&fr.appendChild(asp);lensEl&&fr.appendChild(lensEl);fbar.append(hint,fr);
-   const fl=$('#camflip'),sw3=bot.querySelector('.camswap'),rl=bot.querySelector('.camroll');
-   if(fl){fl.classList.add('camflipb');row.insertBefore(fl,sw3);}if(sw3)sw3.hidden=true;
+   const fr=el('div','camfr');const lensEl=u.querySelector('.clens');lensEl&&fr.appendChild(lensEl);fbar.append(hint,fr);
+   const sw3=bot.querySelector('.camswap');if(sw3)sw3.hidden=false;
    const drawer=el('div','camdrawer');const dh=el('div','camdh'),tabs=el('div','camdt');tabs.setAttribute('role','tablist');
    const tl=el('button','','Looks'),tp=el('button','','Pro');tl.type=tp.type='button';tl.setAttribute('role','tab');tp.setAttribute('role','tab');
    const syncT=()=>{const pro=u.classList.contains('pro');tl.setAttribute('aria-selected',!pro);tp.setAttribute('aria-selected',pro);drawer.dataset.tab=pro?'pro':'looks';};
-   tl.addEventListener('click',()=>{if(u.classList.contains('pro'))$('#campb').click();});tp.addEventListener('click',()=>{if(!u.classList.contains('pro'))$('#campb').click();});
+   const setD=open=>{u.classList.toggle('dclosed',!open);lsSet('n0ise.camdrawer',open);requestAnimationFrame(()=>{try{paintCamUI();}catch(e){}});};u.classList.toggle('dclosed',lsGet('n0ise.camdrawer',false)!==true);
+   tl.addEventListener('click',()=>{if(u.classList.contains('pro')){$('#campb').click();setD(true);}else setD(u.classList.contains('dclosed'));});tp.addEventListener('click',()=>{if(!u.classList.contains('pro'))$('#campb').click();});
    tabs.append(tl,tp);dh.append(tabs,fav,shootB);
    const dm=el('div','camdm');dm.append($('#camname'),str);
-   info.style.display='none';drawer.append(dh,dm,duo,cats,strip,info);
+   info.style.display='none';const dp=el('div','camdp');dp.append(duo,cats,strip,info);drawer.append(dh,dm,dp);
    bot.replaceChildren(fbar,modes,row,drawer);
    new MutationObserver(syncT).observe(u,{attributes:true,attributeFilter:['class']});syncT();}
   {const k=lsGet('n0ise.camkind',null);if(k&&k!==camKind)setKind(k,true);u.dataset.kind=camKind;}

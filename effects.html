@@ -661,6 +661,37 @@ body[data-cam] #gl{border-radius:4px}
 .camui.ios .camcats button[aria-pressed=true]{background:transparent;color:#ffcc00;border-color:transparent}
 .camdm #camname{color:#ffcc00;font:600 12px -apple-system,system-ui,sans-serif;letter-spacing:.02em;text-transform:none}
 .camui .campro{background:rgba(28,28,30,.96);border-radius:12px}
+
+/* Polish: the picture comes first. Slim controls, the old icon bar back, lens pills float on the picture, the Looks drawer opens over it. */
+body[data-cam] #stage{padding-left:0;padding-right:0}
+body[data-cam] main{padding:0}
+body[data-cam] #stage{margin:0}
+.camui.ios .camtop #camflip,.camui.ios .camtop #camasp{display:flex!important}
+.camui.ios .camtop #campb{display:none}
+.camui.ios .camtop #camasp{order:5;font:600 13px -apple-system,system-ui,sans-serif}
+.camui.ios .camtop #cammore{order:6}.camui.ios .camtop #camflip{order:7}
+.camui.ios .camtop #camflip svg{width:26px;height:26px}
+.camui.ios .cambot{gap:4px;padding:4px 8px calc(8px + env(safe-area-inset-bottom,0px))}
+.camui.ios .cammode button{min-height:38px}
+.camui.ios .camrow .camroll,.camui.ios .camrow .camswap{width:48px;height:48px;min-height:48px}
+.camui.ios .camrow .camswap{display:flex;align-items:center;justify-content:center;font-size:11px}
+.camui.ios .shutter{width:68px;height:68px}
+.camfbar{position:absolute;left:0;right:0;bottom:100%;margin-bottom:8px;min-height:0;padding:0;justify-content:center;pointer-events:none;transition:opacity .2s}
+.camfhint{display:none}
+.camfbar .camfr{pointer-events:auto;background:rgba(0,0,0,.45);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border-radius:999px;padding:3px}
+.camfbar .camfr .clens button{min-width:40px;height:36px;border-radius:999px}
+.camui:not(.dclosed):not(.pro) .camfbar{opacity:0;pointer-events:none}
+.camdrawer{padding:0;gap:2px}
+.camdh{min-height:46px}
+.camdt button{min-height:36px}
+.camdt button:first-child::after{content:" ▴";font-size:9px;opacity:.6}
+.camui:not(.dclosed) .camdt button:first-child::after{content:" ▾"}
+.camdm{min-height:30px}
+.camdp{position:absolute;left:0;right:0;bottom:100%;display:flex;flex-direction:column;gap:2px;padding:10px 0 6px;background:rgba(0,0,0,.74);-webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);border-radius:20px 20px 0 0;border-top:1px solid rgba(255,255,255,.1)}
+.camui.dclosed .camdp,.camdrawer[data-tab=pro] .camdp{display:none}
+.camdrawer .camcats{display:flex}
+.camui.ios .camdrawer .camt{min-height:84px}.camui.ios .camdrawer .camt svg{display:block}
+@media (prefers-reduced-motion:reduce){.camfbar{transition:none}}
 </style>
 </head>
 <body>
@@ -700,6 +731,6 @@ body[data-cam] #gl{border-radius:4px}
   </main>
 </div>
 <input type="file" id="file" accept="image/*,video/*,audio/*,.mp3,.wav,.m4a,.ogg,.flac,.aac" hidden>
-<script type="module" src="assets/index.js?v=17067c73"></script>
+<script type="module" src="assets/index.js?v=675af84e"></script>
 </body>
 </html>
