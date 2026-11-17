@@ -98,3 +98,4 @@ html:root:root body :is(.itabs,.dtabs,.railtabs,.cats) button{border-bottom:0;bo
 html:root:root body :is(.itabs,.dtabs,.railtabs,.cats) button[aria-selected=true],html:root:root body :is(.itabs,.dtabs,.railtabs,.cats) button[aria-pressed=true]{background:var(--n-acc);color:var(--n-on-acc)}
 html body .toast{bottom:calc(var(--dockh) + 28px + env(safe-area-inset-bottom,0px));background:var(--g-fill);color:var(--n-ink);border:1px solid var(--g-edge);-webkit-backdrop-filter:blur(var(--g-blur)) saturate(var(--g-sat));backdrop-filter:blur(var(--g-blur)) saturate(var(--g-sat));z-index:96}
 @media (min-width:900px) and (pointer:fine){html body .toast{bottom:24px}}
+@media (pointer:coarse),(max-width:899px){html body header .acts>.btn{min-height:44px}html:root:root body :is(.itabs,.dtabs,.railtabs,.cats) button{min-width:44px;padding-inline:12px}}
