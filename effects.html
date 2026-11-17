@@ -13,7 +13,7 @@
 <style>
 :root{
   --bg:#06060a; --panel:#0d0d13; --raise:#15151d; --line:#22222d; --ink:#ecedf4; --mute:#797c90;
-  --accent:var(--n-acc,#ff5a1f); --on-accent:var(--n-on-acc,#0a0a0a); --hot:#ff3d6e; --stage:#020204;
+  --accent:var(--n-acc,#e9ecf2); --on-accent:var(--n-on-acc,#0a0a0a); --hot:#ff3d6e; --stage:#020204;
   --display:"Syne",system-ui,sans-serif; --mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
   color-scheme:dark;
   box-sizing:border-box;
@@ -23,12 +23,12 @@
 @media (prefers-color-scheme: light){
   :root:not([data-theme="dark"]){
     --bg:#e9eaf0; --panel:#f6f6fa; --raise:#e6e7ee; --line:#d3d5df; --ink:#0c0d14; --mute:#6c6f84;
-    --accent:#d9480f; --on-accent:#fff; --hot:#e0194d; --stage:#0a0a0e; color-scheme:light;
+    --accent:#1b1d23; --on-accent:#fff; --hot:#e0194d; --stage:#0a0a0e; color-scheme:light;
   }
 }
 :root[data-theme="light"]{
   --bg:#e9eaf0; --panel:#f6f6fa; --raise:#e6e7ee; --line:#d3d5df; --ink:#0c0d14; --mute:#6c6f84;
-  --accent:#d9480f; --on-accent:#fff; --hot:#e0194d; --stage:#0a0a0e; color-scheme:light;
+  --accent:#1b1d23; --on-accent:#fff; --hot:#e0194d; --stage:#0a0a0e; color-scheme:light;
 }
 *{box-sizing:border-box}
 [hidden]{display:none!important}
@@ -161,7 +161,7 @@ select.field{width:auto;margin:0}
 
 /* ===== Inspector, skins (replaces the chip/tab look) ===== */
 :root{--rad:2px;--lab:'JetBrains Mono',ui-monospace,monospace}
-:root[data-skin=lab]{--bg:#0b0b0c;--panel:#111113;--raise:#1a1a1d;--line:#2b2b2f;--ink:#e8e6e1;--mute:#85838c;--accent:#ff5a1f;--on-accent:#150a04;--stage:#050506;--hot:#ff5a1f;color-scheme:dark}
+:root[data-skin=lab]{--bg:#0b0b0c;--panel:#111113;--raise:#1a1a1d;--line:#2b2b2f;--ink:#e8e6e1;--mute:#85838c;--accent:#e9ecf2;--on-accent:#150a04;--stage:#050506;--hot:#e9ecf2;color-scheme:dark}
 :root[data-skin=parchment]{--bg:#e6d9bb;--panel:#f0e6cb;--raise:#e0d1ac;--line:#b8a47a;--ink:#2b1d12;--mute:#7a6648;--accent:#9b2d20;--on-accent:#f7eed8;--stage:#2b1d12;--hot:#9b2d20;color-scheme:light}
 :root[data-skin=utility]{--bg:#b9b9b9;--panel:#d0d0d0;--raise:#e4e4e4;--line:#7d7d7d;--ink:#111;--mute:#454545;--accent:#1c2f6e;--on-accent:#fff;--stage:#222;--hot:#a31515;color-scheme:light}
 .btn,.pill,.chip,.tab,.field,.sw,.stage,.dock,.sheet>div,.xp,.toast{border-radius:var(--rad)!important}
@@ -510,7 +510,7 @@ body[data-cam] .tl{bottom:var(--campad,0px);max-height:32dvh;border-bottom:1px s
 .nvhead{display:flex;justify-content:space-between;align-items:baseline;font-size:15px}.nvhead span{color:#8d887f;font:11px ui-monospace,monospace}
 .nvrow{display:grid;grid-template-columns:76px 1fr;align-items:center;min-height:44px;color:#9a958c;font-size:12px}.nvrow input{width:100%}
 .nvbtns{display:flex;flex-wrap:wrap;gap:6px}.nvbtns .btn{min-height:44px;flex:1 1 30%}.nvhint{color:#9a958c;font-size:13px;padding:6px 2px}
-.nvtip{position:absolute;left:50%;transform:translateX(-50%);top:calc(70px + env(safe-area-inset-top,0px));background:#ff5a1f;color:#0a0a0a;padding:8px 14px;border-radius:18px;font:700 12px ui-monospace,monospace;pointer-events:none}
+.nvtip{position:absolute;left:50%;transform:translateX(-50%);top:calc(70px + env(safe-area-inset-top,0px));background:#e9ecf2;color:#0a0a0a;padding:8px 14px;border-radius:18px;font:700 12px ui-monospace,monospace;pointer-events:none}
 .nvopen{width:auto;padding:0 14px;font:700 11px var(--lab);letter-spacing:.08em;text-transform:uppercase}
 .ovlane{height:34px;margin-top:4px}.ovpanel{display:grid;gap:4px;margin-top:6px;padding:8px;border:1px solid #22201e;border-radius:6px}.ovhead{display:flex;justify-content:space-between;align-items:center;font-size:12px}.ovrow{display:grid;grid-template-columns:92px 1fr;align-items:center;font-size:11px;color:var(--mute,#9a958c);min-height:30px}.ovrow input{width:100%}
 .edbar .edexp{background:var(--accent);border-color:var(--accent);color:#0a0a0a}
@@ -704,13 +704,14 @@ body[data-cam] #stage{margin:0}
 #menu h5{margin:10px 2px 6px;font:600 11px var(--lab,monospace);letter-spacing:.16em;text-transform:uppercase;color:var(--mute)}
 #menu .mgrid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
 #menu button{position:static;min-height:var(--n-ctl,44px);width:100%;margin:0;padding:0 12px;border:1px solid var(--line);border-radius:var(--n-rad,3px);background:var(--raise,#1a1917);color:var(--ink,#f2efe8);font:600 11px var(--lab,monospace);letter-spacing:.06em;text-transform:uppercase;display:flex;align-items:center;justify-content:center}
-#menu button[aria-pressed=true]{background:var(--accent,#ff5a1f);color:#0a0a0a;border-color:var(--accent,#ff5a1f)}
+#menu button[aria-pressed=true]{background:var(--accent,#e9ecf2);color:#0a0a0a;border-color:var(--accent,#e9ecf2)}
 @media (max-width:899px){
   #menubtn{display:inline-flex}
   header .acts .hideph{display:none}
 }
 @media (prefers-reduced-motion:reduce){#menu{backdrop-filter:none}}
 </style>
+<link rel="stylesheet" href="glass.css">
 </head>
 <body>
 <div class="app">
@@ -749,6 +750,7 @@ body[data-cam] #stage{margin:0}
   </main>
 </div>
 <input type="file" id="file" accept="image/*,video/*,audio/*,.mp3,.wav,.m4a,.ogg,.flac,.aac" hidden>
-<script type="module" src="assets/index.js?v=e264863c"></script>
+<script type="module" src="assets/index.js?v=a91e82bb"></script>
+<script src="glass.js"></script>
 </body>
 </html>

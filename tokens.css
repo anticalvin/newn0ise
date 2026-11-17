@@ -2,16 +2,16 @@
    Interfaces stay quiet and precise; the pictures are what is loud. Pages read these tokens instead of defining their own colours. */
 :root{
   --n-bg:#0a0a0a; --n-panel:#111110; --n-raise:#1a1917; --n-line:#2a2927; --n-ink:#f2efe8; --n-mute:#8d8a82;
-  --n-acc:#ff5a1f; --n-on-acc:#0a0a0a; --n-rec:#ff3b2f;
+  --n-acc:#e9ecf2; --n-on-acc:#0a0a0a; --n-rec:#ff3b2f;
   --n-rad:3px; --n-tap:44px;
   --n-display:"Syne",system-ui,sans-serif; --n-mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
 }
-@media (prefers-color-scheme:light){:root:not([data-skin]){--n-bg:#f2efe8;--n-panel:#e9e5dc;--n-raise:#ded9ce;--n-line:#c9c3b6;--n-ink:#0a0a0a;--n-mute:#6b6860;--n-acc:#d9480f;--n-on-acc:#fff}}
+@media (prefers-color-scheme:light){:root:not([data-skin]){--n-bg:#f2efe8;--n-panel:#e9e5dc;--n-raise:#ded9ce;--n-line:#c9c3b6;--n-ink:#0a0a0a;--n-mute:#6b6860;--n-acc:#1b1d23;--n-on-acc:#fff}}
 /* workspace switcher: Camera, Effects, 3D, World */
 .ws{display:flex;gap:2px;padding:0 8px;border-bottom:1px solid var(--n-line,#2a2927);background:var(--n-bg,#0a0a0a);flex:none}
 .ws a{flex:1;min-height:36px;display:flex;align-items:center;justify-content:center;font:600 11px var(--n-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--n-mute,#8d8a82);text-decoration:none;border-bottom:2px solid transparent}
-.ws a[aria-current=page]{color:var(--n-ink,#f2efe8);border-bottom-color:var(--n-acc,#ff5a1f)}
-.ws a:focus-visible{outline:2px solid var(--n-acc,#ff5a1f);outline-offset:-2px}
+.ws a[aria-current=page]{color:var(--n-ink,#f2efe8);border-bottom-color:var(--n-acc,#e9ecf2)}
+.ws a:focus-visible{outline:2px solid var(--n-acc,#e9ecf2);outline-offset:-2px}
 body[data-cam] .ws,body[data-walk] .ws{display:none!important}
 /* No root zoom: it shifted fixed elements and pointer coordinates (the controller cursor drew away from where clicks landed).
    Big screens get a larger control size token instead; --uz stays 1 so older height calcs keep working. */
@@ -25,7 +25,7 @@ body[data-cam] .ws,body[data-walk] .ws{display:none!important}
 @media (pointer:coarse),(max-width:899px){.ws a{min-height:44px}}
 
 /* Controls: one size scale for dense tools. 36px on a mouse, 44px on touch; type never below 10.5px. Pages opt in with var(--n-ctl) and var(--n-ctl-fs). */
-:root{--n-ctl:36px;--n-ctl-sm:30px;--n-ctl-fs:11px;--n-ctl-gap:6px;--n-focus:2px solid var(--n-acc,#ff5a1f)}
+:root{--n-ctl:36px;--n-ctl-sm:30px;--n-ctl-fs:11px;--n-ctl-gap:6px;--n-focus:2px solid var(--n-acc,#e9ecf2)}
 @media (pointer:coarse),(max-width:899px){:root{--n-ctl:44px;--n-ctl-sm:44px;--n-ctl-fs:11px}}
 
 /* Tap areas for text links in headers (logos, workspace names) */
