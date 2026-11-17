@@ -20,3 +20,9 @@ body[data-cam] .ws,body[data-walk] .ws{display:none!important}
 @media (min-width:1600px) and (min-height:760px){:root{zoom:1.15;--uz:1.15}}
 @media (min-width:2200px) and (min-height:1000px){:root{zoom:1.35;--uz:1.35}}
 @media (min-width:3000px) and (min-height:1400px){:root{zoom:1.8;--uz:1.8}}
+
+/* Pocket Studio: neutral instrument tokens. Additive; pages opt in. */
+:root{--ps-canvas:#101114;--ps-surface:#202228;--ps-raised:#373a43;--ps-text:#e8e9ed;--ps-mute:#9a9ca6;--ps-line:rgba(255,255,255,.1);
+  --ps-r1:8px;--ps-r2:12px;--ps-r3:16px;--ps-s1:4px;--ps-s2:8px;--ps-s3:12px;--ps-s4:16px;--ps-s5:24px;--ps-hit:44px;
+  --ps-fast:120ms;--ps-med:200ms;--ps-ease:cubic-bezier(.2,.8,.2,1)}
+@media (prefers-reduced-motion:reduce){:root{--ps-fast:0ms;--ps-med:0ms}}

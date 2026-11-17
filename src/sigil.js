@@ -36,12 +36,40 @@ export const MATS={
   tube:['Light tube','#7ff2ff',{metalness:0,roughness:.3,emissive:'self',ei:3},'linear-gradient(115deg,#0d3a40,#a8faff,#3ec9d6,#fff)']
 };
 const LIM={strokes:400,pts:700};
-const MPK={metalness:[0,1],roughness:[0,1],clearcoat:[0,1],clearcoatRoughness:[0,1],iridescence:[0,1],iridescenceIOR:[1,2.5],sheen:[0,1],sheenRoughness:[0,1],transmission:[0,1],thickness:[0,4],ior:[1,2.5],opacity:[.05,1],ei:[0,6]};
+const MPK={metalness:[0,1],roughness:[0,1],clearcoat:[0,1],clearcoatRoughness:[0,1],iridescence:[0,1],iridescenceIOR:[1,2.5],sheen:[0,1],sheenRoughness:[0,1],transmission:[0,1],thickness:[0,4],ior:[1,2.5],opacity:[.05,1],ei:[0,6],aniso:[0,1],bump:[0,1],pa:[0,1],ps:[.25,8]};
+const PATS=['none','stripes','spiral','checker','dots','noise','marble'];
 /* a material made in the studio travels inside each stroke; files from elsewhere are clamped to sane numbers */
 export function cleanMP(p){if(!p||typeof p!=='object')return null;const o={};for(const k in MPK){if(p[k]!=null&&Number.isFinite(+p[k]))o[k]=Math.min(MPK[k][1],Math.max(MPK[k][0],+p[k]));}
-  const hx=v=>typeof v==='string'&&/^#[0-9a-f]{6}$/i.test(v);if(hx(p.emissive)||p.emissive==='self')o.emissive=p.emissive;if(hx(p.sheenColor))o.sheenColor=p.sheenColor;
+  const hx=v=>typeof v==='string'&&/^#[0-9a-f]{6}$/i.test(v);if(hx(p.emissive)||p.emissive==='self')o.emissive=p.emissive;if(hx(p.c2))o.c2=p.c2;if(PATS.includes(p.pat)&&p.pat!=='none')o.pat=p.pat;if(hx(p.sheenColor))o.sheenColor=p.sheenColor;
   if(Array.isArray(p.irisT)&&p.irisT.length===2&&p.irisT.every(Number.isFinite))o.irisT=[Math.max(0,Math.min(2000,p.irisT[0])),Math.max(0,Math.min(2000,p.irisT[1]))];
   if(o.opacity!=null&&o.opacity<1)o.transparent=true;return o;}
+
+/* procedural patterns: tile along a stroke (one tile per 10 cm) and wrap around it. Colours are baked into the map, a grey copy drives the relief. */
+const TEXC=new Map();
+const hexRGB=h=>{const n=parseInt(h.slice(1),16);return[(n>>16)&255,(n>>8)&255,n&255];};
+const _h=(x,y)=>{const v=Math.sin(x*127.1+y*311.7)*43758.5453;return v-Math.floor(v);};
+const _vn=(x,y,P)=>{const xi=Math.floor(x),yi=Math.floor(y),xf=x-xi,yf=y-yi,m=q=>((q%P)+P)%P,sm=t=>t*t*(3-2*t),a=_h(m(xi),m(yi)),b=_h(m(xi+1),m(yi)),c=_h(m(xi),m(yi+1)),d=_h(m(xi+1),m(yi+1)),u=sm(xf),v=sm(yf);return a+(b-a)*u+(c-a)*v+(a-b-c+d)*u*v;};
+const _fbm=(x,y,P)=>{let s=0,a=.5,f=1;for(let i=0;i<4;i++){s+=a*_vn(x*f,y*f,P*f);f*=2;a*=.5;}return s/.9375;};
+const _ss=(a,b,x)=>{const t=Math.max(0,Math.min(1,(x-a)/(b-a)));return t*t*(3-2*t);};
+function patMask(t,u,v){
+  switch(t){
+    case'stripes':return _ss(.42,.58,.5+.5*Math.sin(u*Math.PI*4));
+    case'spiral':return _ss(.42,.58,.5+.5*Math.sin((u*2+v)*Math.PI*2));
+    case'checker':return (Math.floor(u*4)+Math.floor(v*4))&1;
+    case'dots':{const x=(u*6)%1-.5,y=(v*6)%1-.5;return 1-_ss(.26,.34,Math.hypot(x,y));}
+    case'noise':return _ss(.3,.7,_fbm(u*8,v*8,8));
+    case'marble':return _ss(.35,.65,.5+.5*Math.sin(u*Math.PI*6+_fbm(u*6,v*6,6)*7));
+  }return 0;
+}
+function patTex(THREE,type,c1,c2,amt,scale){
+  const key=[type,c1,c2,amt,scale].join('|');if(TEXC.has(key)){const e=TEXC.get(key);return e;}
+  const N=128,mk=()=>{const c=document.createElement('canvas');c.width=c.height=N;return c;},cv=mk(),cb=mk(),g=cv.getContext('2d'),gb=cb.getContext('2d'),im=g.createImageData(N,N),ib=gb.createImageData(N,N),a=hexRGB(c1),b=hexRGB(c2);
+  for(let y=0;y<N;y++)for(let x=0;x<N;x++){const m=patMask(type,x/N,y/N),k=m*amt,i=(y*N+x)*4;for(let j=0;j<3;j++){im.data[i+j]=a[j]+(b[j]-a[j])*k;ib.data[i+j]=m*255;}im.data[i+3]=255;ib.data[i+3]=255;}
+  g.putImageData(im,0,0);gb.putImageData(ib,0,0);
+  const mp=new THREE.CanvasTexture(cv),bp=new THREE.CanvasTexture(cb);for(const t of[mp,bp]){t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(scale,1);t.anisotropy=4;}mp.colorSpace=THREE.SRGBColorSpace;
+  if(TEXC.size>40){const k0=TEXC.keys().next().value,e=TEXC.get(k0);e.map.dispose();e.bump.dispose();TEXC.delete(k0);}
+  const e={map:mp,bump:bp};TEXC.set(key,e);return e;
+}
 const q4=v=>Math.round(v*1e4)/1e4;
 export function createSigil(c){
   const {THREE,S,scene,camera,controls,canvas,registerObject,objById,selectObj,bump,uPush,toast,el,btn,sec,sliderRow,chipRow,setShadowFlags,loadCanvas,tc,setTool,markDirty,applyView}=c;
@@ -87,17 +115,17 @@ export function createSigil(c){
     for(let i=0;i<=seg;i++){const u=i/seg*(n-1),j=Math.min(n-2,Math.floor(u)),f=u-j;ws.push(W[j]*(1-f)+W[j+1]*f);const a0=pts[Math.max(0,i-1)],a1=pts[Math.min(seg,i+1)];T.push(_v.copy(a1).sub(a0).normalize().clone());}
     const flat=s.st==='flat',tx=flat?1.7:1,ty=flat?.26:1,R=flat?10:9,nrm=new THREE.Vector3().fromArray(s.nrm||[0,0,1]);
     let N=nrm.clone().addScaledVector(T[0],-nrm.dot(T[0]));if(N.lengthSq()<1e-6)N.set(T[0].y?1:0,T[0].y?0:1,0).cross(T[0]);N.normalize();
-    const pos=[],nor=[],idx=[],tp=s.tp||0;
+    const pos=[],nor=[],uvs=[],idx=[],tp=s.tp||0;let len=0;
     for(let i=0;i<=seg;i++){
-      if(i>0){const ax=_v.crossVectors(T[i-1],T[i]);const l=ax.length();if(l>1e-6){ax.divideScalar(l);N.applyAxisAngle(ax,Math.asin(Math.min(1,l)));}N.addScaledVector(T[i],-N.dot(T[i])).normalize();} // parallel transport: no twisting
+      if(i>0){len+=pts[i].distanceTo(pts[i-1]);const ax=_v.crossVectors(T[i-1],T[i]);const l=ax.length();if(l>1e-6){ax.divideScalar(l);N.applyAxisAngle(ax,Math.asin(Math.min(1,l)));}N.addScaledVector(T[i],-N.dot(T[i])).normalize();} // parallel transport: no twisting
       const Bn=new THREE.Vector3().crossVectors(T[i],N).normalize(),f=i/seg,e=Math.min(f,1-f)/.16,ease=Math.sqrt(Math.max(0,1-Math.pow(1-Math.min(1,e),2)));
       let r=s.r*ws[i]*(1-tp*(1-ease));if(i===0||i===seg)r*=tp>.2?.12:.4;r=Math.max(.0012,r);
       for(let k=0;k<=R;k++){const an=k/R*Math.PI*2,cs=Math.cos(an),sn=Math.sin(an);
         const nx=N.x*cs/ty+Bn.x*sn/tx,ny=N.y*cs/ty+Bn.y*sn/tx,nz=N.z*cs/ty+Bn.z*sn/tx,nl=Math.hypot(nx,ny,nz)||1;
-        pos.push(pts[i].x+(N.x*cs*ty+Bn.x*sn*tx)*r,pts[i].y+(N.y*cs*ty+Bn.y*sn*tx)*r,pts[i].z+(N.z*cs*ty+Bn.z*sn*tx)*r);nor.push(nx/nl,ny/nl,nz/nl);
+        pos.push(pts[i].x+(N.x*cs*ty+Bn.x*sn*tx)*r,pts[i].y+(N.y*cs*ty+Bn.y*sn*tx)*r,pts[i].z+(N.z*cs*ty+Bn.z*sn*tx)*r);nor.push(nx/nl,ny/nl,nz/nl);uvs.push(len*10,k/R);
         if(i<seg&&k<R){const q=i*(R+1)+k;idx.push(q,q+R+1,q+1,q+1,q+R+1,q+R+2);}}
     }
-    const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));g.setAttribute('normal',new THREE.Float32BufferAttribute(nor,3));g.setIndex(idx);g.computeBoundingSphere();return g;
+    const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));g.setAttribute('normal',new THREE.Float32BufferAttribute(nor,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(uvs,2));g.setIndex(idx);g.computeBoundingSphere();return g;
   }
   const matOf=()=>({m:B.mat,c:B.col,mp:B.mat==='custom'?{...B.mp}:undefined});
   function matProps(s){return s.m==='custom'&&s.mp?s.mp:(MATS[s.m]||MATS.chrome)[2];}
@@ -109,6 +137,9 @@ export function createSigil(c){
     if(p.transmission){m.transmission=p.transmission;m.thickness=p.thickness||.5;m.ior=p.ior||1.5;m.envMapIntensity=1.8;m.specularIntensity=1;m.emissive.set(s.c||d[1]);m.emissiveIntensity=.3*p.transmission;} // a faint tint of its own colour, so glass still reads against a dark scene
     if(p.transparent){m.transparent=true;m.opacity=p.opacity;m.depthWrite=false;}
     if(p.emissive){m.emissive.set(p.emissive==='self'||s.m==='light'?(s.c||d[1]):p.emissive);m.emissiveIntensity=p.ei||1;}
+    if(p.aniso){m.anisotropy=p.aniso;m.anisotropyRotation=Math.PI/2;}
+    if(p.pat&&p.pat!=='none'){const t=patTex(THREE,p.pat,s.c||d[1],p.c2||'#000000',p.pa!=null?Math.round(p.pa*10)/10:1,p.ps||1);m.color.set('#ffffff');m.map=t.map;if(p.bump){m.bumpMap=t.bump;m.bumpScale=p.bump*4;}}
+    else if(p.bump){const t=patTex(THREE,'noise','#ffffff','#000000',1,p.ps||1);m.bumpMap=t.bump;m.bumpScale=p.bump*4;}
     m.userData.sigilMat=s.m;return m;
   }
   function symMatrices(s){
@@ -455,6 +486,6 @@ export function createSigil(c){
     o.holder.position.fromArray(it.tr.p);o.holder.rotation.set(...it.tr.r);o.holder.scale.fromArray(it.tr.s);o.vis=it.vis!==false;o.holder.visible=o.vis;
     return o;
   };
-  SG.hooks=[];SG.matOf=matOf;SG.markAnchor=markAnchor;SG.setMode=setMode;SG.cancelDraw=cancelDraw;SG.MATS=MATS;SG.makeMat=makeMat;SG.matProps=matProps;SG.paintLayers=paintLayers;SG.mergeDown=mergeDown;SG.layerCommit=layerCommit;SG.create=create;SG.undo=undo;SG.redo=redo;SG.setPhoto=setPhoto;SG.addPhotoFile=addPhotoFile;SG.paint=paint;SG.target=target;SG.sync=sync;SG.commit=commit;
+  SG.hooks=[];SG.tubeGeometry=tubeGeometry;SG.matOf=matOf;SG.markAnchor=markAnchor;SG.setMode=setMode;SG.cancelDraw=cancelDraw;SG.MATS=MATS;SG.makeMat=makeMat;SG.matProps=matProps;SG.paintLayers=paintLayers;SG.mergeDown=mergeDown;SG.layerCommit=layerCommit;SG.create=create;SG.undo=undo;SG.redo=redo;SG.setPhoto=setPhoto;SG.addPhotoFile=addPhotoFile;SG.paint=paint;SG.target=target;SG.sync=sync;SG.commit=commit;
   return SG;
 }

@@ -2,6 +2,7 @@
    a tool dock along the bottom, one panel at a time above it, a size strip on the edge. One finger draws, two fingers move the view.
    Also holds the material creator and "my materials". */
 import {cleanMP} from './sigil.js';
+import {RoomEnvironment} from 'three/addons/environments/RoomEnvironment.js';
 
 const PALETTE=['#ffffff','#dfe6ee','#8a8f98','#1a1a1c','#000000','#ff5a1f','#ff3b58','#f0a030','#ffd84a','#4fe39a','#2fb6a7','#3fa7ff','#5a55ff','#b06bff','#ff7ac8','#e8dcc2'];
 const LSK='n0ise.sigil.umats',LSR='n0ise.sigil.recent',LSH='n0ise.sigil.hint';
@@ -24,7 +25,7 @@ export function previewCSS(col,p){
 }
 
 export function createSigilStudio(c){
-  const {SG,S,el,btn,sliderRow,chipRow,toast,canvas,controls,stage,setTab,exitStudio,savePic,lookOpen,bump}=c;
+  const {THREE,SG,S,el,btn,sliderRow,chipRow,toast,canvas,controls,stage,setTab,exitStudio,savePic,lookOpen,bump}=c;
   const B=SG.B,MATS=SG.MATS;
   let root=null,panel=null,openP='',dock=null,undoB=null,redoB=null,sizeEl=null,sizeFill=null,bubble=null,matDot=null,spin=false,isOn=false;
   const hap=n=>{try{navigator.vibrate&&navigator.vibrate(n||8);}catch(e){}};
@@ -88,8 +89,8 @@ export function createSigilStudio(c){
     const pv=previewCSS(B.col,props());Object.assign(matDot.style,pv);matDot.style.background=pv.background;
     paintSize();
   }
-  function closePanel(){openP='';panel.hidden=true;paintAll();}
-  function togglePanel(id){if(openP===id){closePanel();return;}openP=id;panel.hidden=false;panel.innerHTML='';fill(id);panel.scrollTop=0;paintAll();}
+  function closePanel(){openP='';panel.hidden=true;root.classList.remove('pan');killPreview();paintAll();}
+  function togglePanel(id){if(openP===id){closePanel();return;}killPreview();openP=id;panel.hidden=false;root.classList.add('pan');panel.innerHTML='';fill(id);panel.scrollTop=0;paintAll();}
   const head=(t)=>{const h=mk('div','sg-ph');h.appendChild(mk('b','',t));const x=mk('button','sg-x','×');x.type='button';x.setAttribute('aria-label','Close panel');x.addEventListener('click',()=>{hap();closePanel();});h.appendChild(x);panel.appendChild(h);};
   const note=(t)=>mk('div','sg-note',t);
   const group=(t)=>{const g=mk('div','sg-g');if(t)g.appendChild(mk('div','sg-gt',t));panel.appendChild(g);return g;};
@@ -127,30 +128,85 @@ export function createSigilStudio(c){
     a2.addEventListener('click',()=>{const o=SG.target();if(!o||!o.meta.sigil.strokes.length){toast('Nothing drawn yet.');return;}SG.commit(o,o.meta.sigil.strokes.map(x=>{const y={...x,...SG.matOf()};if(y.mp===undefined)delete y.mp;return y;}));hap();});
     ar.append(a1,a2);ga.appendChild(ar);
   }
-  function matPanelRefresh(){const y=panel.scrollTop;panel.innerHTML='';matPanel();panel.scrollTop=y;paintAll();}
+  function matPanelRefresh(){const y=panel.scrollTop;killPreview();panel.innerHTML='';matPanel();panel.scrollTop=y;paintAll();}
+
+  /* a real 3D preview: its own small renderer, lit by the same kind of room the scene uses, so what you tune is what you draw */
+  let PV=null;
+  function makePreview(host){
+    const cv=document.createElement('canvas');cv.className='sg-pvc';cv.setAttribute('role','img');cv.setAttribute('aria-label','Live material preview. Drag to turn it.');
+    const dpr=Math.min(2,devicePixelRatio||1),Wd=host.clientWidth||300,Hd=150;
+    let r;try{r=new THREE.WebGLRenderer({canvas:cv,alpha:true,antialias:true});}catch(e){cv.replaceWith(mk('div','sg-note','Preview needs WebGL. The sliders still work.'));return null;}
+    r.setPixelRatio(dpr);r.setSize(Wd,Hd,false);cv.style.width='100%';cv.style.height=Hd+'px';
+    const sc=new THREE.Scene(),cam=new THREE.PerspectiveCamera(32,Wd/Hd,.05,50);cam.position.set(0,.05,3.1);
+    const pm=new THREE.PMREMGenerator(r);const env=pm.fromScene(new RoomEnvironment(),.04).texture;sc.environment=env;pm.dispose();
+    const grp=new THREE.Group();sc.add(grp);
+    const P={shape:'tube',bg:'dark',mat:null,geo:null,rot:0.4,tilt:.35,drag:false,raf:0,alive:true,spin:true};
+    const strokeFor=()=>({m:'custom',mp:B.mp,c:B.col});
+    const build=()=>{
+      grp.clear();if(P.geo){P.geo.dispose();}if(P.mat){P.mat.dispose();}
+      P.mat=SG.makeMat(strokeFor());
+      if(P.shape==='sphere'){P.geo=new THREE.SphereGeometry(.95,64,40);}
+      else{ // a real Sigil stroke, so pattern scale and relief match what you will draw
+        const n=28,pts=[],w=[];for(let i=0;i<n;i++){const t=i/(n-1)*Math.PI*2*1.1;pts.push({x:Math.cos(t)*.42,y:(t/6.9-.5)*.8,z:Math.sin(t)*.42});w.push(1);}
+        const st={id:'p',m:'custom',mp:B.mp,c:B.col,st:'round',sm:0,tp:.3,mir:0,rad:1,ly:'L1',r:.07,nrm:[0,0,1],pts:pts.flatMap(q=>[q.x,q.y,q.z]),w};
+        P.geo=SG.tubeGeometry(st,1);
+      }
+      const m=new THREE.Mesh(P.geo,P.mat);if(P.shape==='tube'){m.scale.setScalar(1.7);m.position.y=0;}grp.add(m);
+      cv.style.background=P.bg==='dark'?'#101114':P.bg==='light'?'#e8e9ed':'repeating-conic-gradient(#2a2a2e 0 25%,#1b1b1e 0 50%) 0 0/14px 14px';
+    };
+    const frame=()=>{if(!P.alive)return;P.raf=requestAnimationFrame(frame);if(!cv.isConnected){return;}if(P.spin&&!P.drag)P.rot+=.008;grp.rotation.set(P.tilt,P.rot,0);r.render(sc,cam);};
+    let lx=0,ly=0;cv.style.touchAction='none';
+    cv.addEventListener('pointerdown',e=>{P.drag=true;lx=e.clientX;ly=e.clientY;cv.setPointerCapture(e.pointerId);});
+    cv.addEventListener('pointermove',e=>{if(!P.drag)return;P.rot+=(e.clientX-lx)*.012;P.tilt=Math.max(-1.2,Math.min(1.2,P.tilt+(e.clientY-ly)*.01));lx=e.clientX;ly=e.clientY;});
+    const up=()=>{P.drag=false;};cv.addEventListener('pointerup',up);cv.addEventListener('pointercancel',up);
+    host.appendChild(cv);build();frame();
+    P.dbg={sc,cam,r,grp};P.update=build;P.setShape=v=>{P.shape=v;build();};P.setBg=v=>{P.bg=v;build();};
+    P.dispose=()=>{P.alive=false;cancelAnimationFrame(P.raf);try{P.geo&&P.geo.dispose();P.mat&&P.mat.dispose();env.dispose();r.dispose();r.forceContextLoss();}catch(e){}};
+    return P;
+  }
+  function killPreview(){if(PV){PV.dispose();PV=null;}}
 
   function creator(host){
     const box=mk('div','sg-cr');host.appendChild(box);
-    const pvw=mk('div','sg-prev');const sph=mk('i');pvw.appendChild(sph);
-    const nameI=mk('input','sg-name');nameI.type='text';nameI.placeholder='Name';nameI.maxLength=24;nameI.value=B.mpName||'';nameI.setAttribute('aria-label','Material name');
-    const top=mk('div','sg-crtop');top.append(pvw,nameI);box.appendChild(top);
-    const repaint=()=>{const pv=previewCSS(B.col,B.mp);Object.assign(sph.style,pv);paintAll();};
+    const pvHost=mk('div','sg-pv');box.appendChild(pvHost);
+    const nameI=mk('input','sg-name');nameI.type='text';nameI.placeholder='Name this material';nameI.maxLength=24;nameI.value=B.mpName||'';nameI.setAttribute('aria-label','Material name');box.appendChild(nameI);
+    requestAnimationFrame(()=>{killPreview();try{PV=makePreview(pvHost);window.__sgpv=PV;}catch(e){console.warn('preview',e);window.__sgerr=String(e&&e.stack||e);pvHost.replaceChildren(note('Preview unavailable here. The sliders still work.'));}});
+    const repaint=()=>{PV&&PV.update();paintAll();};
     const sl=(label,key,min,max,step,def,fmt)=>sliderRow(box,label,()=>B.mp[key]!=null?B.mp[key]:def,v=>{B.mp[key]=v;if(key==='opacity'){if(v<1)B.mp.transparent=true;else delete B.mp.transparent;}repaint();},min,max,step,fmt||(v=>Math.round(v*100)+'%'));
+    const grp=(t)=>{const g=mk('div','sg-gt',t);g.style.marginTop='12px';box.appendChild(g);};
+    /* where to start */
+    grp('Start from');
+    const seeds=[['Metal',{metalness:1,roughness:.2}],['Plastic',{metalness:0,roughness:.35,clearcoat:.8}],['Glass',{metalness:0,roughness:.05,transmission:.9,thickness:.8}],['Rubber',{metalness:0,roughness:.9}],['Pearl',{metalness:.1,roughness:.2,clearcoat:1,iridescence:1}],['Glow',{metalness:0,roughness:.4,emissive:'self',ei:2}]];
+    const sr=mk('div','chips');seeds.forEach(([n,p])=>{const b=mk('button','chip',n);b.type='button';b.addEventListener('click',()=>{hap(6);B.mp={...p};matPanelRefresh();});sr.appendChild(b);});box.appendChild(sr);
+    grp('Surface');
     const colRow=mk('label','sg-colrow','Colour ');const ci=mk('input');ci.type='color';ci.value=B.col;ci.addEventListener('input',()=>{B.col=ci.value;repaint();});colRow.appendChild(ci);box.appendChild(colRow);
-    sl('Metal','metalness',0,1,.05,0);sl('Roughness','roughness',0,1,.05,.5);sl('Clear coat','clearcoat',0,1,.05,0);
-    sl('Glass','transmission',0,1,.05,0);sl('Thickness','thickness',0,3,.1,.5,v=>(+v).toFixed(1));
-    sl('Rainbow sheen','iridescence',0,1,.05,0);sl('Soft fuzz','sheen',0,1,.05,0);
-    sl('Glow','ei',0,5,.1,0,v=>(+v).toFixed(1));
+    sl('Metal','metalness',0,1,.05,0);sl('Roughness','roughness',0,1,.05,.5);sl('Clear coat','clearcoat',0,1,.05,0);sl('Brushed','aniso',0,1,.05,0);
+    grp('Light through it');
+    sl('Glass','transmission',0,1,.05,0);sl('Thickness','thickness',0,3,.1,.5,v=>(+v).toFixed(1));sl('Refraction','ior',1,2.4,.05,1.5,v=>(+v).toFixed(2));
+    grp('Sheen and glow');
+    sl('Rainbow sheen','iridescence',0,1,.05,0);sl('Soft fuzz','sheen',0,1,.05,0);sl('Glow','ei',0,5,.1,0,v=>(+v).toFixed(1));
     const gl=chipRow(box,[['off','No glow'],['self','Glow in stroke colour'],['own','Own glow colour']],v=>(B.mp.emissive?(B.mp.emissive==='self'?'self':'own'):'off')===v,v=>{if(v==='off'){delete B.mp.emissive;B.mp.ei=0;}else if(v==='self'){B.mp.emissive='self';if(!B.mp.ei)B.mp.ei=1.5;}else{B.mp.emissive=B.mp.emissive&&B.mp.emissive!=='self'?B.mp.emissive:'#ff7a3a';if(!B.mp.ei)B.mp.ei=1.5;}repaint();});
     const ge=mk('label','sg-colrow','Glow colour ');const gi=mk('input');gi.type='color';gi.value=B.mp.emissive&&B.mp.emissive!=='self'?B.mp.emissive:'#ff7a3a';gi.addEventListener('input',()=>{B.mp.emissive=gi.value;if(!B.mp.ei)B.mp.ei=1.5;gl.querySelectorAll('.chip').forEach(c=>c.setAttribute('aria-pressed',c.dataset.v==='own'));repaint();});ge.appendChild(gi);box.appendChild(ge);
+    grp('Pattern and relief');
+    chipRow(box,[['none','None'],['stripes','Stripes'],['spiral','Spiral'],['checker','Checker'],['dots','Dots'],['noise','Noise'],['marble','Marble']],v=>(B.mp.pat||'none')===v,v=>{if(v==='none')delete B.mp.pat;else{B.mp.pat=v;if(!B.mp.c2)B.mp.c2='#101114';if(B.mp.pa==null)B.mp.pa=1;}repaint();});
+    const c2=mk('label','sg-colrow','Pattern colour ');const c2i=mk('input');c2i.type='color';c2i.value=B.mp.c2||'#101114';c2i.addEventListener('input',()=>{B.mp.c2=c2i.value;repaint();});c2.appendChild(c2i);box.appendChild(c2);
+    sl('Pattern strength','pa',0,1,.1,1);sl('Pattern size','ps',.25,8,.25,1,v=>(+v).toFixed(2)+'×');sl('Relief','bump',0,1,.05,0);
+    /* preview controls */
+    grp('Preview');
+    const pc=mk('div','chips');
+    [['tube','Stroke'],['sphere','Sphere']].forEach(([v,l])=>{const b=mk('button','chip',l);b.type='button';b.setAttribute('aria-pressed',v==='tube');b.addEventListener('click',()=>{PV&&PV.setShape(v);pc.querySelectorAll('[data-s]').forEach(x=>x.setAttribute('aria-pressed',x.dataset.s===v));});b.dataset.s=v;pc.appendChild(b);});
+    [['dark','Dark'],['light','Light'],['grid','Checker']].forEach(([v,l])=>{const b=mk('button','chip',l);b.type='button';b.setAttribute('aria-pressed',v==='dark');b.addEventListener('click',()=>{PV&&PV.setBg(v);pc.querySelectorAll('[data-b]').forEach(x=>x.setAttribute('aria-pressed',x.dataset.b===v));});b.dataset.b=v;pc.appendChild(b);});
+    box.appendChild(pc);
     const r=mk('div','sg-row');
     const save=mk('button','sg-wide pri','Save to my materials');save.type='button';
     save.addEventListener('click',()=>{const nm=(nameI.value||'').trim()||('Mine '+(umats.length+1));if(umats.length>=24){toast('You have 24 saved materials. Delete one first.');return;}const ex=umats.findIndex(u=>u.name===nm);const rec={id:'u'+Date.now().toString(36),name:nm,c:B.col,p:cleanMP(B.mp)||{}};if(ex>=0)umats[ex]=rec;else umats.push(rec);B.mpName=nm;saveU();hap(12);toast('Saved “'+nm+'”');matPanelRefresh();});
     const rnd=mk('button','sg-wide','Surprise me');rnd.type='button';
-    rnd.addEventListener('click',()=>{const R=Math.random,p={metalness:R()<.55?R():0,roughness:R()*.8+.03};if(R()<.4)p.clearcoat=1;if(R()<.25)p.iridescence=1;if(R()<.2){p.transmission=.4+R()*.6;p.thickness=.4+R();}if(R()<.2){p.emissive='self';p.ei=1+R()*2.5;}B.mp=p;B.col=PALETTE[5+Math.floor(R()*9)];hap(10);matPanelRefresh();});
-    r.append(rnd,save);box.appendChild(r);
-    box.appendChild(note('Draw to try it. “Save” keeps it for next time; it is stored with each stroke, so shared files keep the look.'));
-    repaint();
+    rnd.addEventListener('click',()=>{const R=Math.random,p={metalness:R()<.55?R():0,roughness:R()*.8+.03};if(R()<.4)p.clearcoat=1;if(R()<.25)p.iridescence=1;if(R()<.2){p.transmission=.4+R()*.6;p.thickness=.4+R();}if(R()<.2){p.emissive='self';p.ei=1+R()*2.5;}if(R()<.3){p.pat=['stripes','spiral','checker','dots','noise','marble'][Math.floor(R()*6)];p.c2=PALETTE[Math.floor(R()*PALETTE.length)];p.pa=1;p.ps=.5+R()*3;if(R()<.5)p.bump=.3+R()*.5;}B.mp=p;B.col=PALETTE[5+Math.floor(R()*9)];hap(10);matPanelRefresh();});
+    const evo=mk('button','sg-wide','Nudge it');evo.type='button';evo.title='Small random changes to what you have';
+    evo.addEventListener('click',()=>{const j=(k,lo,hi,d)=>{const v=(B.mp[k]!=null?B.mp[k]:d)+(Math.random()-.5)*.3;B.mp[k]=Math.max(lo,Math.min(hi,v));};j('metalness',0,1,0);j('roughness',0,1,.5);if(B.mp.clearcoat!=null)j('clearcoat',0,1,0);if(B.mp.transmission)j('transmission',0,1,0);if(B.mp.iridescence!=null)j('iridescence',0,1,0);hap(8);matPanelRefresh();});
+    r.append(rnd,evo,save);box.appendChild(r);
+    box.appendChild(note('Drag the preview to turn it. Draw to try it on real strokes. It is saved inside each stroke, so shared files keep the look.'));
+    paintAll();
   }
 
   /* ---------- brush panel ---------- */
