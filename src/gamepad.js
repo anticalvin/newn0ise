@@ -8,7 +8,7 @@ export function createGamepad(c){
   let CFG={swap:false,invY:false,rumble:true};try{Object.assign(CFG,JSON.parse(localStorage.getItem('n0.gpcfg')||'{}'));}catch(e){}
   const saveCfg=()=>{try{localStorage.setItem('n0.gpcfg',JSON.stringify(CFG));}catch(e){}};
   const rep={};let sony=false;
-  const st={pad:null,x:innerWidth/2,y:innerHeight/2,show:false,idle:0,down:null,prev:[],slow:false,speed:+(localStorage.getItem('n0.gpspeed')||1),legend:false,lastHot:null,rumble:CFG.rumble};
+  const st={pad:null,x:innerWidth/2,y:innerHeight/2,show:false,idle:0,down:null,prev:[],slow:false,speed:+(localStorage.getItem('n0.gpspeed')||1),legend:false,lastHot:null,rumble:CFG.rumble}; window.__n0gp=st;
   /* the app's own pointer-capture calls would throw for a pointer the browser doesn't know; let them pass quietly for the controller's pointer */
   for(const fn of ['setPointerCapture','releasePointerCapture']){const o=Element.prototype[fn];Element.prototype[fn]=function(id){try{return o.call(this,id);}catch(e){if(id!==GP_ID)throw e;}};}
   const css=document.createElement('style');css.textContent=`#gpcur{position:fixed;left:0;top:0;width:28px;height:28px;margin:-14px 0 0 -14px;border-radius:50%;border:2.5px solid #fff;box-shadow:0 0 0 2px rgba(0,0,0,.65),0 2px 8px rgba(0,0,0,.5);z-index:100000;pointer-events:none;display:none;transition:transform .08s,background .1s}
@@ -75,8 +75,20 @@ export function createGamepad(c){
   const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
   function scrollable(t){let n=t;while(n&&n!==document.body){const o=getComputedStyle(n).overflowY;if((o==='auto'||o==='scroll')&&n.scrollHeight>n.clientHeight+4)return n;n=n.parentElement;}return null;}
 
+  function nearest(max){
+    let best=null,bd=max*max;
+    document.querySelectorAll('button,a[href],input:not([type=hidden]),select,summary,[role=button],[role=tab],label,.chip,.tab').forEach(n=>{
+      const r=n.getBoundingClientRect();if(r.width<4||r.height<4||r.width>420||r.height>200)return;
+      const dx=Math.max(r.left-st.x,0,st.x-r.right),dy=Math.max(r.top-st.y,0,st.y-r.bottom),d=dx*dx+dy*dy;if(d>=bd)return;
+      const cs=getComputedStyle(n);if(cs.visibility==='hidden'||cs.display==='none'||cs.pointerEvents==='none'||n.disabled)return;
+      const e=document.elementFromPoint(Math.min(Math.max(st.x,r.left+1),r.right-1),Math.min(Math.max(st.y,r.top+1),r.bottom-1));
+      if(e&&(n===e||n.contains(e)||e.contains(n))){bd=d;best=n;}});
+    return best;
+  }
   function press(){
     let t=hit();const hh=st.lastHot;if(hh&&hh.isConnected&&inRect(hh,st.x,st.y,10)&&(!t||!hh.contains(t)))t=hh; /* what is highlighted is what gets clicked */
+    /* click assist: a press that lands just beside a control (the cursor was still drifting into it) goes to the nearest control within 40px */
+    if(!interactive(t)||t.tagName==='CANVAS'){const n=nearest(40);if(n){t=n;const r=n.getBoundingClientRect();st.x=r.left+r.width/2;st.y=r.top+r.height/2;place();hot(n);}}
     if(!t)return;st.down={t,x:st.x,y:st.y,moved:false};cur.dataset.d='true';buzz(25,.1,.2);
     if(t.matches&&t.matches('input[type=range]')){slide(t);return;}
     pt(t,'pointerdown');mouse(t,'mousedown');

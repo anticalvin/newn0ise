@@ -13,13 +13,9 @@
 .ws a[aria-current=page]{color:var(--n-ink,#f2efe8);border-bottom-color:var(--n-acc,#ff5a1f)}
 .ws a:focus-visible{outline:2px solid var(--n-acc,#ff5a1f);outline-offset:-2px}
 body[data-cam] .ws,body[data-walk] .ws{display:none!important}
-/* Large monitors: the interface is sized for laptops, so on wide screens everything scales up a step instead of asking people to zoom the browser.
-   zoom is used (not font-size) because the controls are sized in px; the canvas keeps its own pixel mapping because browsers apply zoom consistently to layout and pointer coordinates. */
-/* --uz is the zoom factor: viewport-unit heights are divided by it so zoomed pages still fit the window exactly */
+/* No root zoom: it shifted fixed elements and pointer coordinates (the controller cursor drew away from where clicks landed).
+   Big screens get a larger control size token instead; --uz stays 1 so older height calcs keep working. */
 :root{--uz:1}
-@media (min-width:1600px) and (min-height:760px){:root{zoom:1.15;--uz:1.15}}
-@media (min-width:2200px) and (min-height:1000px){:root{zoom:1.35;--uz:1.35}}
-@media (min-width:3000px) and (min-height:1400px){:root{zoom:1.8;--uz:1.8}}
 
 /* Pocket Studio: neutral instrument tokens. Additive; pages opt in. */
 :root{--ps-canvas:#101114;--ps-surface:#202228;--ps-raised:#373a43;--ps-text:#e8e9ed;--ps-mute:#9a9ca6;--ps-line:rgba(255,255,255,.1);
@@ -58,3 +54,6 @@ body.n-wipe::after{content:"";position:fixed;left:0;right:0;top:0;height:2px;z-i
 .n-more>summary::-webkit-details-marker{display:none}.n-more>summary::after{content:"+";margin-left:auto}.n-more[open]>summary::after{content:"–"}
 /* the one-line hint toast and an empty state */
 .n-empty{display:grid;gap:10px;justify-items:center;text-align:center;padding:24px;color:var(--n-mute);font:600 12px var(--n-mono)}
+
+@media (min-width:1600px) and (min-height:760px) and (pointer:fine){:root{--n-ctl:40px;--n-ctl-fs:12px}}
+@media (min-width:2200px) and (min-height:1000px) and (pointer:fine){:root{--n-ctl:46px;--n-ctl-fs:14px}}
