@@ -35,7 +35,7 @@ export function physProps(THREE,m,P){
 }
 
 export function createMatStudio(c){
-  const {THREE,RoomEnvironment,el,btn,sliderRow,chipRow,sec,toast,objById,S,bump,MAT,SURF,ngApply,ngClear,openGraph,setEnvHdr,pane,dom,camera,controls,LGT,createBall,fxOpen,gotoTab,peek,openLook}=c;
+  const {THREE,RoomEnvironment,el,btn,sliderRow,chipRow,sec,toast,objById,S,bump,MAT,SURF,ngApply,ngClear,openGraph,setEnvHdr,pane,dom,camera,controls,LGT,renderScene,createBall,fxOpen,gotoTab,peek,openLook}=c;
   const meshes=o=>{const out=[];if(!o||!o.holder)return out;o.holder.traverse(n=>{if(n.isMesh&&!n.isSplatMesh&&n.geometry&&n.material&&!(n.userData&&n.userData.noView))out.push(n);});return out;};
   const cur=()=>objById(S.sel!=null?S.sel:S.fxTarget);
   const surfaceOk=o=>o&&o.kind!=='viz'&&o.kind!=='splat';
@@ -374,7 +374,7 @@ export function createMatStudio(c){
       s.appendChild(el('div','sub','Path trace (preview)'));
       sliderRow(s,'Blur (depth of field)',()=>0,v=>{pv.blur(v);},0,1,.01);
       sliderRow(s,'Quality (samples)',()=>160,v=>{pv.cap(Math.round(v));},20,600,10);
-      const r2=el('div','chips');r2.append(btn('Save render','',()=>pv.snap()),btn('Sun, sky and all lights','',()=>{gotoTab&&gotoTab('scene');}));s.appendChild(r2);
+      const r2=el('div','chips');r2.append(btn('Render scene','pri',()=>{renderScene&&renderScene();}),btn('Save preview','',()=>pv.snap()),btn('Sun, sky and all lights','',()=>{gotoTab&&gotoTab('scene');}));s.appendChild(r2);
       s.appendChild(el('div','ms-cr','Path tracing by three-gpu-pathtracer (MIT). It loads the first time you switch it on.'));}
 
     /* effects and engine */

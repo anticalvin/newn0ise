@@ -21,6 +21,7 @@ import {createMaterials,PRESETS as MATPRESETS,normMat} from './matsys.js';
 import {openMatLab} from './matlab.js';
 import {openNodeMat} from './nodemat-ui.js';
 import {createMatStudio} from './matstudio.js';
+import {openRender} from './render.js';
 import {applyToObject as ngApply,clearFromObject as ngClear} from './nodemat.js';
 import {createLighting} from './lighting.js';
 import {createWorldBuilder} from './world-build.js';
@@ -76,8 +77,10 @@ const key=new THREE.DirectionalLight(0xffffff,1.5);key.position.set(3,5,4);scene
 const rim=new THREE.DirectionalLight(0xaab8ff,.5);rim.position.set(-4,2,-3);scene.add(rim);
 const LGT=createLighting({THREE,scene,camera,key,hemi,rim,deps:()=>({S,bump,api,controls})});
 let envTex=null;
-let hdrEnv=null;
-function setEnvHdr(t){try{if(hdrEnv){hdrEnv.dispose();hdrEnv=null;}if(t){const pm=new THREE.PMREMGenerator(renderer);hdrEnv=pm.fromEquirectangular(t).texture;scene.environment=hdrEnv;}else scene.environment=envTex;scene.environmentIntensity=S.env;S.needFrame=true;}catch(e){console.warn('env',e);}}
+let hdrEnv=null,hdrRaw=null;
+let renderUI=null;
+function renderScene(){if(renderUI){renderUI.close();renderUI=null;}if(MS)MS.paintOff();toast('Setting up the render…',1800);openRender({THREE,scene,camera,S,toast,getHdr:()=>hdrRaw,aspect:()=>canvas.clientWidth/Math.max(1,canvas.clientHeight),target:controls.target}).then(r=>{renderUI=r;}).catch(e=>{console.error(e);toast('Couldn’t start the render.');});}
+function setEnvHdr(t){hdrRaw=t||null;try{if(hdrEnv){hdrEnv.dispose();hdrEnv=null;}if(t){const pm=new THREE.PMREMGenerator(renderer);hdrEnv=pm.fromEquirectangular(t).texture;scene.environment=hdrEnv;}else scene.environment=envTex;scene.environmentIntensity=S.env;S.needFrame=true;}catch(e){console.warn('env',e);}}
 function setupEnv(){try{const pm=new THREE.PMREMGenerator(renderer);envTex=pm.fromScene(new RoomEnvironment(),.04).texture;scene.environment=envTex;scene.environmentIntensity=S.env;}catch(e){console.warn('env failed',e);}}
 const grid=new THREE.GridHelper(12,24,0x666670,0x2f2f36);grid.material.transparent=true;grid.material.opacity=.4;scene.add(grid);
 const tc=new TransformControls(camera,canvas);tc.setSize(.8);
@@ -2380,6 +2383,7 @@ function exportPLY(o){
 }
 function buildExportPane(){
   const p=paneEls.export;
+  {const rs=sec(p,'Render scene','path traced');rs.appendChild(el('div','note','A picture of the whole scene with real light bounces, glass, reflections and soft shadows. It takes a few seconds to a minute and runs on your GPU.'));rs.appendChild(btn('Render scene','pri',renderScene));}
   const s=sec(p,'Image');
   let scale=1;
   chipRow(s,[['1','1×'],['2','2×']],v=>String(scale)===v,v=>{scale=+v;});
@@ -2430,7 +2434,7 @@ function buildHud(){
 }
 
 /* ---------- boot ---------- */
-window.__sheet=sheet;studioDefaults();buildTabs();MS=createMatStudio({THREE,RoomEnvironment,el,btn,sliderRow,chipRow,sec,toast,objById,S,bump,MAT,SURF,ngApply,ngClear,openGraph:openNodeGraph,setEnvHdr,dom:canvas,camera,controls,LGT,createBall,fxOpen,gotoTab:k=>{setTab(k);if(!mqDesk.matches&&sheet.idx<2)sheet.setIdx(2);},peek:()=>{if(!mqDesk.matches)sheet.setIdx(1);},openLook:()=>{const pp=document.getElementById('lookpop');window.__lookPop&&window.__lookPop.open('selected',document.getElementById('tab_mat'));},setEnvStrength:v=>{scene.environmentIntensity=v;hemi.intensity=.2+v*.7;},pane:paneEls.mat});placeTabs();mqDesk.addEventListener('change',placeTabs);buildHud();buildScenePane();buildScanPane();
+window.__sheet=sheet;studioDefaults();buildTabs();MS=createMatStudio({THREE,RoomEnvironment,el,btn,sliderRow,chipRow,sec,toast,objById,S,bump,MAT,SURF,ngApply,ngClear,openGraph:openNodeGraph,setEnvHdr,dom:canvas,camera,controls,LGT,renderScene,createBall,fxOpen,gotoTab:k=>{setTab(k);if(!mqDesk.matches&&sheet.idx<2)sheet.setIdx(2);},peek:()=>{if(!mqDesk.matches)sheet.setIdx(1);},openLook:()=>{const pp=document.getElementById('lookpop');window.__lookPop&&window.__lookPop.open('selected',document.getElementById('tab_mat'));},setEnvStrength:v=>{scene.environmentIntensity=v;hemi.intensity=.2+v*.7;},pane:paneEls.mat});placeTabs();mqDesk.addEventListener('change',placeTabs);buildHud();buildScenePane();buildScanPane();
 if(renderer){buildLookPane();}
 buildExportPane();wireSheet();
 setTab('scene');
