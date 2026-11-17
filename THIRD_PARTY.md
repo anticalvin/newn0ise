@@ -62,3 +62,9 @@ Model files are fetched once, kept with the Cache API (`n0ise-models-v1`) with v
 
 ## Character, Sculpt and pen (this batch)
 No new dependencies. The Character page and Sculpt are our own code on three.js (MIT) with GLTFExporter from the same pinned three examples. We looked at M3-org Character Studio (MIT, VRM and trait packs) and chose not to bundle it: it needs large downloaded asset packs.
+
+## MakeHuman core assets (Character creator 2.0)
+- Source: https://github.com/makehumancommunity/makehuman at commit a8bc2d54ff0ac92e78ff71431b1023eda42bf482 (`makehuman/data`).
+- Used: base mesh, skeleton, skin weights, modifier list, morph targets. Licence: **CC0 1.0** for assets (their LICENSE.md, section C).
+- Not used: any MakeHuman program code (AGPL-3.0). `jontechlabs/makehuman-web` (AGPL-3.0) and `kblood/CharacterCreator` (GPL-3.0) were studied only.
+- Packed by our own `tools/pack-human.mjs` into `assets/human/`.

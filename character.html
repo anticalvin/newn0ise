@@ -26,11 +26,16 @@ html[data-t=l] body{background:#f2f0ec}
 a{color:inherit}button,.btn{font:inherit;color:inherit;cursor:pointer}
 .b{min-height:44px;min-width:44px;padding:0 14px;border-radius:22px;display:inline-flex;align-items:center;justify-content:center;text-decoration:none;letter-spacing:.05em;text-transform:uppercase;font-size:11px}
 .b.go{background:var(--ac);color:#111;border-color:transparent}
-#panel{position:fixed;left:max(10px,env(safe-area-inset-left));right:max(10px,env(safe-area-inset-right));bottom:calc(env(safe-area-inset-bottom,0px) + 10px);z-index:5;border-radius:26px;padding:8px;display:flex;flex-direction:column;gap:6px;max-height:46dvh}
+#panel{position:fixed;left:max(8px,env(safe-area-inset-left));right:max(8px,env(safe-area-inset-right));bottom:calc(env(safe-area-inset-bottom,0px) + 8px);z-index:5;border-radius:26px;padding:4px 8px 8px;display:flex;flex-direction:column;gap:4px;max-height:44dvh;transition:max-height .28s cubic-bezier(.2,.9,.3,1.1)}
+#panel[data-lvl="0"]{max-height:112px}#panel[data-lvl="0"] #fp,#panel[data-lvl="0"] #facts{display:none}#panel[data-lvl="2"]{max-height:82dvh}
+#fhandle{border:0;background:none;min-height:44px;margin:-4px 0 -14px;display:grid;place-items:center;touch-action:none;color:inherit}#fhandle i{width:44px;height:5px;border-radius:3px;background:currentColor;opacity:.4}
+#facts{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding-top:2px}#facts .b{flex:none}#facts .go{flex:1;min-width:120px}
+h3{margin:10px 0 2px;font:800 12px var(--lab);letter-spacing:.1em;text-transform:uppercase;opacity:.6}output{width:64px;text-align:right;opacity:.7}
+#fload{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:9;padding:16px 22px;border-radius:20px;max-width:calc(100vw - 32px);text-align:center}#fload[hidden]{display:none}
 .tabs{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none}.tabs::-webkit-scrollbar{display:none}
 .tab{flex:1;min-height:44px;padding:0 12px;border:0;border-radius:14px;background:transparent;letter-spacing:.05em;text-transform:uppercase;font-size:11px;font-weight:700}
 .tab[aria-selected=true]{background:var(--fg);color:var(--bgc);color:#111}html[data-t=d] .tab[aria-selected=true]{background:#f2efe8;color:#111}html[data-t=l] .tab[aria-selected=true]{background:#111;color:#f2f0ec}
-#fp{overflow-y:auto;padding:2px 6px 6px;display:flex;flex-direction:column;gap:4px;min-height:0}
+#panel>.tabs,#panel>#facts,#panel>#fhandle{flex:none}#fp>*{flex:none}#fp{flex:1 1 auto;overflow-y:auto;padding:2px 6px 6px;display:flex;flex-direction:column;gap:4px;min-height:0}
 .row{display:flex;align-items:center;gap:12px;min-height:44px}.row>span{flex:none;width:92px;opacity:.75}
 .row input[type=range]{flex:1;min-width:0;min-height:36px;accent-color:var(--ac)}
 .row.sw{align-items:flex-start;flex-wrap:wrap;padding:4px 0}.swatches,.chips{display:flex;flex-wrap:wrap;gap:6px;flex:1}
@@ -38,7 +43,8 @@ a{color:inherit}button,.btn{font:inherit;color:inherit;cursor:pointer}
 .chip{min-height:44px;padding:0 14px;border-radius:14px;border:1px solid var(--ln);background:transparent}.chip[aria-pressed=true]{background:var(--fg);color:#111}html[data-t=d] .chip[aria-pressed=true]{background:#f2efe8}html[data-t=l] .chip[aria-pressed=true]{background:#111;color:#f2f0ec}
 #ft{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 66px);transform:translateX(-50%);z-index:9;padding:10px 16px;border-radius:16px;max-width:calc(100vw - 24px)}
 :focus-visible{outline:3px solid var(--ac);outline-offset:2px}
-@media (min-width:860px){#panel{left:auto;right:16px;top:70px;bottom:16px;width:380px;max-height:none}}
+@media (min-width:860px){#panel{left:auto;right:16px;top:70px;bottom:16px;width:400px;max-height:none!important}#fhandle{display:none}#panel[data-lvl="0"] #fp,#panel[data-lvl="0"] #facts{display:flex}}
+@media (max-width:520px){#top h1{display:none}#top{justify-content:space-between}}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
@@ -47,16 +53,22 @@ a{color:inherit}button,.btn{font:inherit;color:inherit;cursor:pointer}
 <div id="top">
   <a class="b glass" href="studio.html" aria-label="Back to 3D">‹ 3D</a>
   <h1>Character</h1>
-  <button class="b glass" id="frand" type="button">Random</button>
-  <button class="b glass" id="freset" type="button">Reset</button>
+  <button class="b glass" id="fundo" type="button" aria-label="Undo">↶</button>
+  <button class="b glass" id="fredo" type="button" aria-label="Redo">↷</button>
+  <button class="b glass" id="fface" type="button" aria-label="Zoom to face">Face</button>
   <button class="b glass" id="ftheme" type="button" aria-label="Light or dark">◐</button>
 </div>
-<div id="panel" class="glass">
+<div id="panel" class="glass" data-lvl="1">
+  <button id="fhandle" type="button" aria-label="Resize panel"><i></i></button>
   <div class="tabs" id="ftabs" role="tablist" aria-label="Character sections"></div>
   <div id="fp"></div>
-  <div style="display:flex;gap:6px"><button class="b glass" id="fdl" type="button" style="flex:1">Save .glb</button><button class="b go" id="f3d" type="button" style="flex:2">Open in 3D</button></div>
+  <div id="facts">
+    <button class="b glass" id="fpre" type="button">Preset</button><button class="b glass" id="frand" type="button">Random</button><button class="b glass" id="freset" type="button">Reset</button>
+    <button class="b glass" id="fjson" type="button">Save look</button><button class="b glass" id="fdl" type="button">.glb</button><button class="b go" id="f3d" type="button">Open in 3D</button>
+  </div>
 </div>
+<div id="fload" class="glass" role="status">Loading the character…</div>
 <div id="ft" class="glass" role="status" hidden></div>
-<script type="module" src="assets/figure.js?v=ca220c39"></script>
+<script type="module" src="assets/figure.js?v=06ab0e49"></script>
 </body>
 </html>
