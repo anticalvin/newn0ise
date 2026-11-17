@@ -27,6 +27,7 @@ export function createSculpt(c){
   function prep(mesh){
     let d=P.get(mesh.uuid);if(d)return d;
     let g=mesh.geometry;
+    if(g.boundsTree)g.boundsTree=undefined; // a stale hierarchy would give wrong hits once vertices move
     if(!g.attributes.position||mesh.isSkinnedMesh||g.attributes.position.count>160000){toast('This mesh is too heavy or animated to sculpt.');return null;}
     if(g.attributes.position.count<5000){g=subdivide(g);mesh.geometry.dispose();mesh.geometry=g;toast('Added surface detail so it can be shaped.',2200);}
     if(!g.index){const n=g.attributes.position.count,ix=new Uint32Array(n);for(let i=0;i<n;i++)ix[i]=i;g.setIndex(new THREE.BufferAttribute(ix,1));}

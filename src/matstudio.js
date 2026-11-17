@@ -188,7 +188,7 @@ export function createMatStudio(c){
       },
       pt:()=>ptOn,
       blur(v){blur=v;setDof();ptDirty=true;},
-      cap(v){cap=v;},
+      cap(v){if(v!=null)cap=v;return cap;},
       snap(){snapNow=true;},
       live(){return cv.offsetParent!==null;}};
     let last=0;
@@ -267,7 +267,11 @@ export function createMatStudio(c){
 .ms-col input{width:56px;height:36px;border:1px solid var(--line);background:none;border-radius:8px;padding:0}
 .ms-cr{font-size:10.5px;color:var(--mute);margin-top:6px}`;
   let curSec=(()=>{try{return localStorage.getItem('n0.matsec')||'quick';}catch(e){return 'quick';}})(),renderBody=null,SB=null,pv=null,shown=null,shape='Ball',lastKey='',pvLabel=null;
-  setInterval(()=>{if(pv&&pvLabel&&pv.pt()&&!pane.hidden)pvLabel.textContent=pv.state.samples+' samples';},400);
+  /* path trace progress: samples so far, a "done" mark, and an honest hint when the device is too slow for it */
+  let ptT0=0;
+  setInterval(()=>{if(!(pv&&pvLabel&&pv.pt()&&!pane.hidden)){ptT0=0;return;}
+    if(!ptT0)ptT0=performance.now();const n=pv.state.samples,cap=pv.cap?pv.cap():160;
+    pvLabel.textContent=n>=cap?'Done · '+n+' samples':n<1&&performance.now()-ptT0>6000?'Too slow here. Turn Path trace off':n+' samples (cleaner as it grows)';},400);
   const st=document.createElement('style');st.textContent=CSS;document.head.appendChild(st);
   const colorRow=(parent,label,get,set)=>{const r=el('label','ms-col');r.append(label);const i=document.createElement('input');i.type='color';i.value=get();i.addEventListener('input',()=>set(i.value));r.appendChild(i);parent.appendChild(r);};
   let polyTex=null,polyHdr=null;

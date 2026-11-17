@@ -74,3 +74,8 @@ No new dependencies. The Character page and Sculpt are our own code on three.js 
 - Not included: CC-BY packs (they would need attribution per author) such as suits03 and suits04.
 - Packed by our `tools/pack-assets.py` (textures resized, hair and brows greyscaled so a tint colours them) into `assets/human/a/`.
 - Balaclava, beanie, mask, headband, scarf and glasses are our own procedural shapes.
+
+## Manifold, glTF Transform, three-mesh-bvh (modelling and assets)
+- manifold-3d 3.5.5, Apache-2.0, https://github.com/elalish/manifold , loaded on demand from jsDelivr (Combine shapes).
+- @gltf-transform/core and /functions 4.5.1, MIT, https://github.com/donmccurdy/glTF-Transform , loaded on demand (smaller GLB export).
+- three-mesh-bvh 0.9.17, MIT, already used by the path tracer; now also accelerates picking on heavy meshes.

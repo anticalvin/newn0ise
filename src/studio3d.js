@@ -26,6 +26,9 @@ import {createBuild} from './build.js';
 import {createGamepad} from './gamepad.js';
 import {initPen} from './pen.js';
 import {createSculpt} from './sculpt.js';
+import {createBoolean,geoToBytes,geoFromBytes} from './boolean.js';
+import {accelerate,bench as bvhBench} from './bvh.js';
+import {optimizeGLB} from './optimize.js';
 import {loadModel as phLoad} from './phmodels.js';
 import {applyToObject as ngApply,clearFromObject as ngClear} from './nodemat.js';
 import {createLighting} from './lighting.js';
@@ -204,6 +207,7 @@ function autoPlace(o,near){
   h.updateMatrixWorld(true);
 }
 function registerObject(name,root,kind,{fit=true,size=1.8,meta={},box=null}={}){
+  try{accelerate(THREE,root).catch(()=>{});}catch(e){}
   const holder=new THREE.Group();holder.add(root);
   if(fit){
     root.updateMatrixWorld(true);
@@ -2088,7 +2092,16 @@ function buildScenePane(){
   objListEl=el('div','olist');s1.appendChild(objListEl);
   const grp=(title,open)=>{const d=el('details','acc');if(open)d.open=true;d.innerHTML=`<summary>${title}</summary>`;const inn=el('div','in');inn.classList.add('chips');d.appendChild(inn);s1.appendChild(d);return inn;};
   const top=el('div','chips');top.style.margin='8px 0';top.append(btn('Import files','pri',()=>$('#file').click()),btn('Sigil: draw in 3D','',()=>{setTab('draw');if(!mqDesk.matches)sheet.setIdx(1);}),btn('Sample photo','',()=>addPhoto('fold',sampleCanvas())));s1.appendChild(top);
-  const gS=grp('Shapes',true);Object.keys(PRIMS).forEach(k=>gS.appendChild(btn('+ '+k,'',()=>addPrimitive(k))));gS.appendChild(btn('+ My character','pri',()=>addMyCharacter()));gS.appendChild(btn('Edit character','',()=>{location.href='character.html';}));
+  const gS=grp('Shapes',true);Object.keys(PRIMS).forEach(k=>gS.appendChild(btn('+ '+k,'',()=>addPrimitive(k))));gS.appendChild(btn('+ My character','pri',()=>addMyCharacter()));
+  {const gB=grp('Combine shapes');const note=el('div','note','Union joins two solids. Cut removes the second from the first, like drilling a hole. Overlap keeps only what they share. Select the first shape (list or scene), pick the second here. Works on closed solids; the originals are hidden, and Undo brings them back.');note.style.flexBasis='100%';
+   const sel=el('select','field');sel.setAttribute('aria-label','Second shape');sel.style.flex='1 1 100%';
+   const fill=()=>{const cur=sel.value;sel.innerHTML='';BOOL.solids().filter(o=>o.id!==S.sel).forEach(o=>{const op=document.createElement('option');op.value=String(o.id);op.textContent=o.name;sel.appendChild(op);});if([...sel.options].some(x=>x.value===cur))sel.value=cur;};
+   sel.addEventListener('focus',fill);sel.addEventListener('pointerdown',fill);fill();
+   const keepL=el('label','chip');const keep=el('input');keep.type='checkbox';keepL.append(keep,document.createTextNode(' Keep originals'));keepL.style.gap='8px';
+   const go=async(op,b)=>{fill();const other=S.objs.find(o=>String(o.id)===sel.value);if(S.sel==null){toast('Select the first shape.');return;}if(!other){toast('Add a second shape to combine with.');return;}
+     b.setAttribute('aria-busy','true');try{await BOOL.run(op,S.sel,other.id,keep.checked);}finally{b.removeAttribute('aria-busy');fill();}};
+   const mkb=(t,op,pri)=>{const b=btn(t,pri?'pri':'',()=>go(op,b));return b;};
+   gB.append(note,sel,mkb('Union','union'),mkb('Cut','subtract','pri'),mkb('Overlap','intersect'),keepL,btn('+ Cutter box','',()=>BOOL.addCutter('Cube')),btn('+ Cutter cylinder','',()=>BOOL.addCutter('Cylinder')));}gS.appendChild(btn('Edit character','',()=>{location.href='character.html';}));
   const gC=grp('Characters and sound');
   gC.appendChild(btn('+ Human','',async()=>{try{await api.run({cmd:'add',type:'human'});api.run({cmd:'camera',frame:true});}catch(e){toast(e.message||String(e));}}));
   gC.appendChild(btn('+ Visualizer','',()=>addViz('waterfall')));
@@ -2384,13 +2397,15 @@ function recordCanvas(seconds,spin,mode){
     if(seconds&&seconds<170)setTimeout(()=>stRec.stop('limit'),seconds*1000);
   });
 }
-function exportGLB(){
+function exportGLB(small){
   const prevView=S.view;S.view='shaded';applyView();
   const g=new THREE.Group();
   S.objs.filter(o=>o.vis&&o.kind!=='splat').forEach(o=>{const c=o.holder.clone(true);g.add(c);});
   if(!g.children.length){toast('Nothing exportable. Splats can’t go into a GLB.');S.view=prevView;applyView();return;}
   new GLTFExporter().parse(g,async res=>{
-    await deliver(new Blob([res],{type:'model/gltf-binary'}),'n0ise-scene.glb');S.view=prevView;applyView();
+    let out=res;
+    if(small===true){toast('Making the file smaller…',1800);try{out=await optimizeGLB(res);const k=v=>(v.byteLength/1048576).toFixed(2)+' MB';toast('Smaller GLB: '+k(res)+' to '+k(out)+'.',4500);}catch(e){console.warn(e);out=res;toast('Couldn’t optimise (needs a connection the first time). Saved the normal GLB.',5000);}}
+    await deliver(new Blob([out],{type:'model/gltf-binary'}),small===true?'n0ise-scene-small.glb':'n0ise-scene.glb');S.view=prevView;applyView();
   },err=>{console.error(err);toast('GLB export failed.');S.view=prevView;applyView();},{binary:true,onlyVisible:true});
 }
 function exportPLY(o){
@@ -2423,7 +2438,7 @@ function buildExportPane(){
   b.append(t,l);v.appendChild(b);
   const m=sec(p,'Model');
   const mb=el('div','chips');
-  mb.append(btn('Open in Effects','pri',()=>openInEffects()),btn('Scene → GLB','',exportGLB),btn('Selected → PLY','',()=>{const o=objById(S.sel);if(!o)toast('Select an object first.');else exportPLY(o);}));m.appendChild(mb);
+  mb.append(btn('Open in Effects','pri',()=>openInEffects()),btn('Scene → GLB','',()=>exportGLB()),btn('Scene → smaller GLB','',()=>exportGLB(true)),btn('Selected → PLY','',()=>{const o=objById(S.sel);if(!o)toast('Select an object first.');else exportPLY(o);}));m.appendChild(mb);
   m.appendChild(el('div','note','GLB carries meshes and points with their materials. Splats stay in their own format. A turntable scan exports as a coloured mesh in either format.'));
   const k=sec(p,'Look');
   const kb=el('div','chips');
@@ -2465,7 +2480,7 @@ function buildHud(){
 }
 
 /* ---------- boot ---------- */
-window.__sheet=sheet;studioDefaults();buildTabs();initPen({canvas,toast});const SCU=window.__scu=createSculpt({THREE,camera,canvas,S,objById,bump,toast,onChange:()=>{try{markDirty();uPush();}catch(e){}}});window.__gp=createGamepad({THREE,camera,controls,S,toast,sheet,bump,canvas,getWalk:()=>walk,scene:{sel:()=>{let o=objById(S.sel);if(!o&&S.objs.length){selectObj(S.objs[S.objs.length-1].id);o=objById(S.sel);}return o;},shapes:Object.keys(PRIMS),add:k=>{const o=addPrimitive(k);selectObj(o.id);bump();},dup:()=>dupObj(objById(S.sel)),del:()=>{removeObj(S.sel);},sculpt:()=>{if(!SCU.on&&!S.objs.length){selectObj(addPrimitive('Clay').id);}SCU.toggle();},sculpting:()=>SCU.on,mat:()=>setTab('mat'),commit:()=>{try{markDirty();uPush();}catch(e){}}},undo:()=>{if(S.tab==='build'&&BLD)BLD.undo();else undo3();},cycle:d=>{if(SCU.on)SCU.cycleBrush(d);else if(S.tab==='build'&&BLD)BLD.cycleTool(d);else if(S.tab==='mat'){const n=[...document.querySelectorAll('#pane_mat .ms-nav button[data-k]')].filter(b=>b.dataset.k!=='_pv');const i=n.findIndex(b=>b.getAttribute('aria-selected')==='true');if(n.length)n[(i+d+n.length)%n.length].click();}else{const L=S.objs;if(L.length){let i=L.findIndex(o=>o.id===S.sel);i=(i+d+L.length)%L.length;selectObj(L[i].id);bump();toast(L[i].name,900);}}},vert:d=>{if(SCU.on){SCU.size(d);return true;}if(S.tab==='build'&&BLD){BLD.levelStep(d);return true;}return false;}});BLD=createBuild({THREE,addGroup,objById,S,dom:canvas,camera,controls,toast,bump,el,btn,sec,addModel:addPhModel,pane:paneEls.build,scene,stage:$('#stage'),LGT,walkIn:pos=>{try{if(S.walk)walk.exit();walk.enter({pos,yaw:0,noJump:true});}catch(e){toast('Couldn’t start walking.');}},peek:()=>{if(!mqDesk.matches)sheet.setIdx(1);}});MS=createMatStudio({undo:()=>undo3(),redo:()=>redo3(),commit:()=>{try{markDirty();uPush();}catch(e){}},THREE,sigilUse:d=>{try{SIG.B.mat='custom';SIG.B.mp=recipeMP(d);if(d.col)SIG.B.col=d.col;toast('The Sigil brush now uses this material. Open Sigil and draw.',4000);}catch(e){console.error(e);}},RoomEnvironment,el,btn,sliderRow,chipRow,sec,toast,objById,S,bump,MAT,SURF,ngApply,ngClear,openGraph:openNodeGraph,setEnvHdr,dom:canvas,camera,controls,LGT,renderScene,createBall,fxOpen,gotoTab:k=>{setTab(k);if(!mqDesk.matches&&sheet.idx<2)sheet.setIdx(2);},peek:()=>{if(!mqDesk.matches)sheet.setIdx(1);},openLook:()=>{const pp=document.getElementById('lookpop');window.__lookPop&&window.__lookPop.open('selected',document.getElementById('tab_mat'));},setEnvStrength:v=>{scene.environmentIntensity=v;hemi.intensity=.2+v*.7;},pane:paneEls.mat});placeTabs();mqDesk.addEventListener('change',placeTabs);buildHud();buildScenePane();buildScanPane();
+window.__sheet=sheet;studioDefaults();buildTabs();initPen({canvas,toast});const SCU=window.__scu=createSculpt({THREE,camera,canvas,S,objById,bump,toast,onChange:()=>{try{const so=objById(S.sel);if(so&&so.root&&so.root.isMesh){so.meta=so.meta||{};so.meta.customGeo=true;}markDirty();uPush();}catch(e){}}});const BOOL=window.__bool=createBoolean({THREE,S,objById,registerObject,selectObj,addPrimitive,toast,bump,uPush,renderObjList:()=>{try{renderObjList&&renderObjList();}catch(e){}},markDirty:()=>{try{markDirty();}catch(e){}}});window.__gp=createGamepad({THREE,camera,controls,S,toast,sheet,bump,canvas,getWalk:()=>walk,scene:{sel:()=>{let o=objById(S.sel);if(!o&&S.objs.length){selectObj(S.objs[S.objs.length-1].id);o=objById(S.sel);}return o;},shapes:Object.keys(PRIMS),add:k=>{const o=addPrimitive(k);selectObj(o.id);bump();},dup:()=>dupObj(objById(S.sel)),del:()=>{removeObj(S.sel);},sculpt:()=>{if(!SCU.on&&!S.objs.length){selectObj(addPrimitive('Clay').id);}SCU.toggle();},sculpting:()=>SCU.on,mat:()=>setTab('mat'),commit:()=>{try{markDirty();uPush();}catch(e){}}},undo:()=>{if(S.tab==='build'&&BLD)BLD.undo();else undo3();},cycle:d=>{if(SCU.on)SCU.cycleBrush(d);else if(S.tab==='build'&&BLD)BLD.cycleTool(d);else if(S.tab==='mat'){const n=[...document.querySelectorAll('#pane_mat .ms-nav button[data-k]')].filter(b=>b.dataset.k!=='_pv');const i=n.findIndex(b=>b.getAttribute('aria-selected')==='true');if(n.length)n[(i+d+n.length)%n.length].click();}else{const L=S.objs;if(L.length){let i=L.findIndex(o=>o.id===S.sel);i=(i+d+L.length)%L.length;selectObj(L[i].id);bump();toast(L[i].name,900);}}},vert:d=>{if(SCU.on){SCU.size(d);return true;}if(S.tab==='build'&&BLD){BLD.levelStep(d);return true;}return false;}});BLD=createBuild({THREE,addGroup,objById,S,dom:canvas,camera,controls,toast,bump,el,btn,sec,addModel:addPhModel,pane:paneEls.build,scene,stage:$('#stage'),LGT,walkIn:pos=>{try{if(S.walk)walk.exit();walk.enter({pos,yaw:0,noJump:true});}catch(e){toast('Couldn’t start walking.');}},peek:()=>{if(!mqDesk.matches)sheet.setIdx(1);}});MS=createMatStudio({undo:()=>undo3(),redo:()=>redo3(),commit:()=>{try{markDirty();uPush();}catch(e){}},THREE,sigilUse:d=>{try{SIG.B.mat='custom';SIG.B.mp=recipeMP(d);if(d.col)SIG.B.col=d.col;toast('The Sigil brush now uses this material. Open Sigil and draw.',4000);}catch(e){console.error(e);}},RoomEnvironment,el,btn,sliderRow,chipRow,sec,toast,objById,S,bump,MAT,SURF,ngApply,ngClear,openGraph:openNodeGraph,setEnvHdr,dom:canvas,camera,controls,LGT,renderScene,createBall,fxOpen,gotoTab:k=>{setTab(k);if(!mqDesk.matches&&sheet.idx<2)sheet.setIdx(2);},peek:()=>{if(!mqDesk.matches)sheet.setIdx(1);},openLook:()=>{const pp=document.getElementById('lookpop');window.__lookPop&&window.__lookPop.open('selected',document.getElementById('tab_mat'));},setEnvStrength:v=>{scene.environmentIntensity=v;hemi.intensity=.2+v*.7;},pane:paneEls.mat});placeTabs();mqDesk.addEventListener('change',placeTabs);buildHud();buildScenePane();buildScanPane();
 if(renderer){buildLookPane();}
 buildExportPane();wireSheet();
 setTab('scene');
@@ -2529,6 +2544,7 @@ async function projectFiles(){
       if(m.alpha){const a=new Uint8Array(m.alpha.length);for(let k=0;k<a.length;k++)a[k]=Math.round(clamp(m.alpha[k],0,1)*255);files[id+'.alpha']=a;}
       const sc={};for(const [k,v] of Object.entries(m))if(['number','boolean','string'].includes(typeof v)&&!PSKIP.has(k))sc[k]=v;
       items.push({kind:'relief',id,name:o.name,tr,vis:o.vis,dw:m.dw,dh:m.dh,meta:sc,ap:apprOf(o),phys:m.phys||null});
+    }else if(o.kind==='mesh'&&m&&m.customGeo&&o.root.isMesh&&o.root.geometry){const id='g'+(i++);files[id+'.geo']=geoToBytes(o.root.geometry);items.push({kind:'geo',id,name:o.name,tr,vis:o.vis,color:o.root.material&&o.root.material.color?o.root.material.color.getHex():0xb9b4ac,meta:{op:m.op,from:m.from},ap:apprOf(o),phys:m.phys||null});
     }else if(o.kind==='mesh'&&PRIMS[o.name]&&o.root.material&&o.root.material.color)items.push({kind:'prim',name:o.name,tr,vis:o.vis,color:o.root.material.color.getHex(),ap:apprOf(o),phys:(m&&m.phys)||null});
     else skipped.push(o.name);
   }
@@ -2555,6 +2571,7 @@ async function loadProject(u8){
       Object.assign(o.meta,it.meta);
       const al=F[it.id+'.alpha'];
       if(al){const a=new Float32Array(al.length);for(let k=0;k<a.length;k++)a[k]=al[k]/255;o.meta.alpha0=Float32Array.from(a);setAlpha(o,a,o.meta.cutBy||'project');}else rebuildRelief(o);
+    }else if(it.kind==='geo'){const g=geoFromBytes(THREE,F[it.id+'.geo']);const mesh=new THREE.Mesh(g,new THREE.MeshStandardMaterial({color:it.color,roughness:.55}));mesh.castShadow=true;mesh.receiveShadow=true;o=registerObject(it.name,mesh,'mesh',{fit:false,meta:{asset:'boolean',customGeo:true,...(it.meta||{})}});
     }else if(it.kind==='prim'){o=addPrimitive(it.name);if(o.root.material)o.root.material.color.setHex(it.color);}
     else if(it.kind==='build'){if(BLD)o=BLD.fromItem(it);}
     else if(it.kind==='phmodel'){o=await addPhModel(it.id,it.name,{res:it.res,noAuto:true});}
@@ -2574,7 +2591,7 @@ async function loadProject(u8){
   applyView();renderObjList&&renderObjList();refreshInspector&&refreshInspector();bump();
   return {count:pj.items.length,skipped:pj.skipped||[]};
 }
-window.__n0proj={projectFiles,loadProject,zipStore};
+window.__bvhBench=()=>bvhBench(THREE);window.__optimize=optimizeGLB;window.__n0proj={projectFiles,loadProject,zipStore};
 window.__cam={camera,controls};
 async function saveProject(){
   const {files,skipped,count}=await projectFiles();if(!count){toast('Nothing to save yet. Add a photo or a shape first.');return;}
@@ -2596,7 +2613,7 @@ const uSnap=()=>JSON.stringify(DOC.snapScene());
 function uApply(js){
   UH.busy=true;
   try{const d=JSON.parse(js);
-    {const keep=new Set(d.objs.map(o=>o.id));S.objs.filter(o=>!keep.has(o.id)).forEach(o=>removeObj(o.id));}
+    {const keep=new Set(d.objs.map(o=>o.id));S.objs.filter(o=>!keep.has(o.id)).forEach(o=>{removeObj(o.id);try{window.__bool&&window.__bool.restoreOriginals(o.id);}catch(e){}});}
     for(const od of d.objs){const o=objById(od.id);if(o)DOC.applyObject(o,od);}
     DOC.applyStage(d.stage,{env:v=>{scene.environmentIntensity=v;hemi.intensity=.2+v*.7;}});
     const so=objById(S.sel);if(so)apprLoad(so);
@@ -2662,7 +2679,7 @@ async function playWorld(){
 function setStart(){const o=S.objs.find(x=>x.meta&&x.meta.player);const t=o?o.holder.position:controls.target;S.start=[t.x,0,t.z];toast('Start set here');}
 const sim=createSim({THREE,S,bump,removeObj});
 const physUI=window.__physUI=createPhysUI({sim,S,THREE,camera,controls,addPrimitive,el,sec,btn,toast,chipRow,sliderRow,bump,renderObjList,selectObj});
-const api=createApi({doc:DOC,autoPlace,sim,THREE,S,scene,camera,controls,renderer,canvas,world,hemi,key,grid,PRIMS,addPrimitive,removeObj,objById,importOne,applyView,bump,frameAll,tick,walk,projectFiles,zipStore,GLTFExporter,renderObjList,refreshInspector,setShadowFlags,selectObj,waitFrames,requestResize:()=>{needResize=true;}});
+const api=createApi({bool:window.__bool,doc:DOC,autoPlace,sim,THREE,S,scene,camera,controls,renderer,canvas,world,hemi,key,grid,PRIMS,addPrimitive,removeObj,objById,importOne,applyView,bump,frameAll,tick,walk,projectFiles,zipStore,GLTFExporter,renderObjList,refreshInspector,setShadowFlags,selectObj,waitFrames,requestResize:()=>{needResize=true;}});
 window.n0={run:api.run,describe:api.describe,walk,sim,playWorld};window.__playWorld=playWorld;
 const worldEd=createWorldEditor({lighting:LGT,doc:DOC,recolour:(o,hex)=>{if(SURF.textured(o)){SURF.recolour(o,hex,.9);bump();try{surfRefresh();}catch(e){}return true;}return false;},playWorld:()=>playWorld(),setStart:()=>setStart(),openInEffects:()=>openInEffects(),THREE,S,api,sim,walk,camera,canvas,controls,tc,objById,selectObj,removeObj,bump,el,sec,btn,toast,renderObjList});
 if(physHost)physUI.section(physHost);
