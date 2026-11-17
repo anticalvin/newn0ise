@@ -1,4 +1,5 @@
 import {toRecipe,fromRecipe,checkRecipe} from './recipe.js';
+import {createGamepad as _gp} from './gamepad.js';
 import {CAMS,glyph,drawOverlay} from './cams.js';
 import {createRecorder,fmtTime,verifyFrames,fixWebmDuration,QUALITY,estimateMB} from './recorder.js';
 import {createTimeline} from './timeline.js';
@@ -4291,3 +4292,5 @@ ED.onExport=()=>{
     onDone:async r=>{deliver(r.blob,`${stamp()}.${r.ext}`,true);}});
   ED.onEnd=()=>{if(fxRecorder.state==='recording')fxRecorder.stop('user');};
 };{const b=document.getElementById('tlbtn');if(b)b.addEventListener('click',()=>TLN.show());}
+
+try{_gp({THREE:null,camera:null,controls:null,S:{},toast,sheet:null,bump:()=>{},canvas:null});}catch(e){console.warn('controller',e);}

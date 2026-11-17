@@ -59,3 +59,6 @@ Model files are fetched once, kept with the Cache API (`n0ise-models-v1`) with v
 | `RGBELoader`, `RoomEnvironment` (three.js examples) | 0.187.0 (jsDelivr, pinned) | MIT | Material tab environments |
 | `three-gpu-pathtracer` | 0.0.27 (jsDelivr, pinned) | MIT | Path-traced preview in the Material tab, loaded only when switched on |
 | `three-mesh-bvh` | 0.9.17 (jsDelivr, pinned) | MIT | Needed by the path tracer, same lazy loading |
+
+## Character, Sculpt and pen (this batch)
+No new dependencies. The Character page and Sculpt are our own code on three.js (MIT) with GLTFExporter from the same pinned three examples. We looked at M3-org Character Studio (MIT, VRM and trait packs) and chose not to bundle it: it needs large downloaded asset packs.

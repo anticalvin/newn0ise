@@ -25,6 +25,7 @@ import {openRender} from './render.js';
 import {createBuild} from './build.js';
 import {createGamepad} from './gamepad.js';
 import {initPen} from './pen.js';
+import {createSculpt} from './sculpt.js';
 import {loadModel as phLoad} from './phmodels.js';
 import {applyToObject as ngApply,clearFromObject as ngClear} from './nodemat.js';
 import {createLighting} from './lighting.js';
@@ -267,6 +268,7 @@ function frameAll(){
 /* ---------- primitives ---------- */
 const PRIMS={
   Knot:()=>new THREE.TorusKnotGeometry(.55,.19,200,32),
+  Clay:()=>new THREE.SphereGeometry(.8,96,64),
   Sphere:()=>new THREE.SphereGeometry(.8,48,32),
   Cube:()=>new THREE.BoxGeometry(1.2,1.2,1.2),
   Torus:()=>new THREE.TorusGeometry(.7,.28,32,64),
@@ -2016,6 +2018,7 @@ const TABN=[['world','World'],['build','Build'],['scene','Scene'],['draw','Sigil
 const paneEls={};
 addEventListener('pointerup',e=>{if(e.target.closest&&e.target.closest('#panes'))S.apprTouch=performance.now();},true);addEventListener('input',e=>{if(e.target.closest&&e.target.closest('#panes'))S.apprTouch=performance.now();},true);addEventListener('change',e=>{if(e.target.closest&&e.target.closest('#panes'))S.apprTouch=performance.now();},true);
 function setTab(id){
+  try{if(window.__scu&&window.__scu.on&&id!=='scene'&&id!=='mat')window.__scu.setOn(false);}catch(e){}
   TABN.forEach(([k])=>{$('#tab_'+k).setAttribute('aria-selected',k===id);paneEls[k].hidden=k!==id;});
   panes.scrollTop=0;S.tab=id;try{SIG&&SIG.onTab(id);}catch(e){console.error(e);}try{setSelBox();}catch(e){}try{paintBar();}catch(e){}
   if(id!=='mat'&&MS)MS.paintOff();
@@ -2448,7 +2451,7 @@ function buildHud(){
 }
 
 /* ---------- boot ---------- */
-window.__sheet=sheet;studioDefaults();buildTabs();initPen({canvas,toast});window.__gp=createGamepad({THREE,camera,controls,S,toast,sheet,bump,canvas,getWalk:()=>walk,undo:()=>{if(S.tab==='build'&&BLD)BLD.undo();else undo3();},cycle:d=>{if(S.tab==='build'&&BLD)BLD.cycleTool(d);else if(S.tab==='mat'){const n=[...document.querySelectorAll('#pane_mat .ms-nav button[data-k]')].filter(b=>b.dataset.k!=='_pv');const i=n.findIndex(b=>b.getAttribute('aria-selected')==='true');if(n.length)n[(i+d+n.length)%n.length].click();}},vert:d=>{if(S.tab==='build'&&BLD){BLD.levelStep(d);return true;}return false;}});BLD=createBuild({THREE,addGroup,objById,S,dom:canvas,camera,controls,toast,bump,el,btn,sec,addModel:addPhModel,pane:paneEls.build,scene,stage:$('#stage'),LGT,walkIn:pos=>{try{if(S.walk)walk.exit();walk.enter({pos,yaw:0,noJump:true});}catch(e){toast('Couldn’t start walking.');}},peek:()=>{if(!mqDesk.matches)sheet.setIdx(1);}});MS=createMatStudio({THREE,sigilUse:d=>{try{SIG.B.mat='custom';SIG.B.mp=recipeMP(d);if(d.col)SIG.B.col=d.col;toast('The Sigil brush now uses this material. Open Sigil and draw.',4000);}catch(e){console.error(e);}},RoomEnvironment,el,btn,sliderRow,chipRow,sec,toast,objById,S,bump,MAT,SURF,ngApply,ngClear,openGraph:openNodeGraph,setEnvHdr,dom:canvas,camera,controls,LGT,renderScene,createBall,fxOpen,gotoTab:k=>{setTab(k);if(!mqDesk.matches&&sheet.idx<2)sheet.setIdx(2);},peek:()=>{if(!mqDesk.matches)sheet.setIdx(1);},openLook:()=>{const pp=document.getElementById('lookpop');window.__lookPop&&window.__lookPop.open('selected',document.getElementById('tab_mat'));},setEnvStrength:v=>{scene.environmentIntensity=v;hemi.intensity=.2+v*.7;},pane:paneEls.mat});placeTabs();mqDesk.addEventListener('change',placeTabs);buildHud();buildScenePane();buildScanPane();
+window.__sheet=sheet;studioDefaults();buildTabs();initPen({canvas,toast});const SCU=window.__scu=createSculpt({THREE,camera,canvas,S,objById,bump,toast,onChange:()=>{try{markDirty();uPush();}catch(e){}}});window.__gp=createGamepad({THREE,camera,controls,S,toast,sheet,bump,canvas,getWalk:()=>walk,scene:{sel:()=>{let o=objById(S.sel);if(!o&&S.objs.length){selectObj(S.objs[S.objs.length-1].id);o=objById(S.sel);}return o;},shapes:Object.keys(PRIMS),add:k=>{const o=addPrimitive(k);selectObj(o.id);bump();},dup:()=>dupObj(objById(S.sel)),del:()=>{removeObj(S.sel);},sculpt:()=>{if(!SCU.on&&!S.objs.length){selectObj(addPrimitive('Clay').id);}SCU.toggle();},sculpting:()=>SCU.on,mat:()=>setTab('mat'),commit:()=>{try{markDirty();uPush();}catch(e){}}},undo:()=>{if(S.tab==='build'&&BLD)BLD.undo();else undo3();},cycle:d=>{if(SCU.on)SCU.cycleBrush(d);else if(S.tab==='build'&&BLD)BLD.cycleTool(d);else if(S.tab==='mat'){const n=[...document.querySelectorAll('#pane_mat .ms-nav button[data-k]')].filter(b=>b.dataset.k!=='_pv');const i=n.findIndex(b=>b.getAttribute('aria-selected')==='true');if(n.length)n[(i+d+n.length)%n.length].click();}else{const L=S.objs;if(L.length){let i=L.findIndex(o=>o.id===S.sel);i=(i+d+L.length)%L.length;selectObj(L[i].id);bump();toast(L[i].name,900);}}},vert:d=>{if(SCU.on){SCU.size(d);return true;}if(S.tab==='build'&&BLD){BLD.levelStep(d);return true;}return false;}});BLD=createBuild({THREE,addGroup,objById,S,dom:canvas,camera,controls,toast,bump,el,btn,sec,addModel:addPhModel,pane:paneEls.build,scene,stage:$('#stage'),LGT,walkIn:pos=>{try{if(S.walk)walk.exit();walk.enter({pos,yaw:0,noJump:true});}catch(e){toast('Couldn’t start walking.');}},peek:()=>{if(!mqDesk.matches)sheet.setIdx(1);}});MS=createMatStudio({THREE,sigilUse:d=>{try{SIG.B.mat='custom';SIG.B.mp=recipeMP(d);if(d.col)SIG.B.col=d.col;toast('The Sigil brush now uses this material. Open Sigil and draw.',4000);}catch(e){console.error(e);}},RoomEnvironment,el,btn,sliderRow,chipRow,sec,toast,objById,S,bump,MAT,SURF,ngApply,ngClear,openGraph:openNodeGraph,setEnvHdr,dom:canvas,camera,controls,LGT,renderScene,createBall,fxOpen,gotoTab:k=>{setTab(k);if(!mqDesk.matches&&sheet.idx<2)sheet.setIdx(2);},peek:()=>{if(!mqDesk.matches)sheet.setIdx(1);},openLook:()=>{const pp=document.getElementById('lookpop');window.__lookPop&&window.__lookPop.open('selected',document.getElementById('tab_mat'));},setEnvStrength:v=>{scene.environmentIntensity=v;hemi.intensity=.2+v*.7;},pane:paneEls.mat});placeTabs();mqDesk.addEventListener('change',placeTabs);buildHud();buildScenePane();buildScanPane();
 if(renderer){buildLookPane();}
 buildExportPane();wireSheet();
 setTab('scene');
@@ -3076,11 +3079,14 @@ if(/^#world/.test(location.hash)){S._wsChosen=true;setTab('world');worldEd.start
       sigil:()=>{close();SGS.open();},
       material:()=>{close();if(!S.objs.length){try{addPrimitive('Sphere');}catch(e){}}setTab('mat');if(!mqDesk.matches&&sheet.idx<2)sheet.setIdx(2);},
       build:()=>{close();setTab('build');if(!mqDesk.matches&&sheet.idx<2)sheet.setIdx(2);BLD&&BLD.show();},
+      sculpt:()=>{close();const o=addPrimitive('Clay');selectObj(o.id);setTab('scene');if(!mqDesk.matches&&sheet.idx>1)sheet.setIdx(1);SCU.setOn(true);},
+      character:()=>{location.href='character.html';},
       scene:()=>{close();setTab('scene');toast('Empty scene. Add a shape from the Scene tab, or draw in the Sigil tab.',4000);}
     };
     L.querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=>go[b.dataset.go]()));
     addEventListener('keydown',e=>{if(!L.hidden&&e.key==='Escape')close();});
-    if(/^#sigil/.test(q)){L.hidden=true;SGS.open();}
+    if(q==='#figure'){L.hidden=true;setTimeout(async()=>{try{const buf=await new Promise((ok,no)=>{const r=indexedDB.open('n0fig',1);r.onupgradeneeded=()=>r.result.createObjectStore('f');r.onsuccess=()=>{const g=r.result.transaction('f').objectStore('f').get('glb');g.onsuccess=()=>ok(g.result);g.onerror=()=>no(g.error);};r.onerror=()=>no(r.error);});if(!buf)throw new Error('No character was waiting. Open the Character page and press Open in 3D.');await importFiles([new File([buf],'Character.glb',{type:'model/gltf-binary'})]);history.replaceState(null,'',location.pathname);}catch(e){toast(String(e.message||e),5000);}},600);}
+    else if(/^#sigil/.test(q)){L.hidden=true;SGS.open();}
     else if(/^#(world|from=|look=)/.test(q))L.hidden=true;
     else{L.hidden=false;
       const cv=L.querySelector('canvas'),g=cv.getContext('2d'),reduce=matchMedia('(prefers-reduced-motion:reduce)').matches;
