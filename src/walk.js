@@ -20,7 +20,7 @@ export function createWalk(c){
     ui.querySelector('#walkJump').addEventListener('pointerdown',e=>{e.preventDefault();jump();});
     ui.querySelector('#walkJump').addEventListener('pointerup',()=>{st.cut=true;});
   }
-  const jump=()=>{st.buf=.14;};
+  const jump=()=>{if(st.noJump)return;st.buf=.14;};
   function onKey(e){
     if(!st.on)return;
     if(e.type==='keydown'){
@@ -57,11 +57,11 @@ export function createWalk(c){
     document.body.dataset.walk='1';sheet.ht=0;sheet.h=0;sheet.hv=0;
     if(S.rest&&c.leaveRest)c.leaveRest();
     if(c.tcDetach)c.tcDetach();
-    st.cvx=st.cvz=0;st.coy=0;st.buf=0;TP.cp=null;TP.sy=(opts.pos||[0,0,0])[1]||0;TP.dc=TP.dist;TP.fov=0;st.third=!!opts.third;TP.obj=opts.player||null;TP.rig=opts.rig||null;TP.done=false;TP.face=st.yaw;if(st.third){st.pitch=-.22;st.yaw=Math.PI*0+(opts.camYaw||0);}
+    st.cvx=st.cvz=0;st.coy=0;st.buf=0;TP.cp=null;TP.sy=(opts.pos||[0,0,0])[1]||0;TP.dc=TP.dist;TP.fov=0;st.third=!!opts.third;st.noJump=!!opts.noJump;TP.obj=opts.player||null;TP.rig=opts.rig||null;TP.done=false;TP.face=st.yaw;if(st.third){st.pitch=-.22;st.yaw=Math.PI*0+(opts.camYaw||0);}
     refreshBoxes();st.on=true;
     const coarse=matchMedia('(pointer:coarse)').matches;
     ui.querySelector('#walkHint').textContent=st.third?(coarse?'Left thumb runs, right thumb turns the camera':'WASD run · drag to turn the camera · Space jump · Shift sprint · Esc back to editing'):coarse?'Left thumb moves, right thumb looks':'WASD move · mouse look (click first) · Space jump · Shift run · Esc leave';
-    ui.querySelector('#walkJump').style.display=coarse?'block':'none';
+    ui.querySelector('#walkJump').style.display=coarse&&!st.noJump?'block':'none';
     addEventListener('keydown',onKey);addEventListener('keyup',onKey);document.addEventListener('mousemove',onMouse);
     canvas.addEventListener('pointerdown',down);addEventListener('pointermove',move);addEventListener('pointerup',up);addEventListener('pointercancel',up);
     c.bump();
@@ -128,5 +128,5 @@ export function createWalk(c){
     }else{camera.position.set(p.x,p.y+EYE,p.z);if(st.eyeO)camera.position.copy(st.eyeO);camera.rotation.set(st.pitch,st.yaw,0);if(c.onTick)c.onTick(p);}
     c.bump();
   }
-  return {enter,exit,tick,get on(){return st.on;},get third(){return st.third;},get pos(){return st.on?st.pos:null;},get yaw(){return st.yaw;},get keys(){return st.keys;},get boxes(){return st.boxes;},get climbing(){return st.climb;},get stick(){return [st.jx,st.jy];},get player(){return TP.obj;},setController(x){controller=x;},kick,setHook,vel(){return new THREE.Vector3(st.cvx,0,st.cvz);},place(x,y,z){st.pos.set(x,y,z);},setYaw(y){st.yaw=y;},refreshBoxes};
+  return {enter,exit,tick,get on(){return st.on;},get noJump(){return !!st.noJump;},get third(){return st.third;},get pos(){return st.on?st.pos:null;},get yaw(){return st.yaw;},get keys(){return st.keys;},get boxes(){return st.boxes;},get climbing(){return st.climb;},get stick(){return [st.jx,st.jy];},get player(){return TP.obj;},setController(x){controller=x;},kick,setHook,vel(){return new THREE.Vector3(st.cvx,0,st.cvz);},place(x,y,z){st.pos.set(x,y,z);},setYaw(y){st.yaw=y;},refreshBoxes};
 }

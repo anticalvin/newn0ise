@@ -63,7 +63,7 @@ export function createRagdoll(c){
   }
   /* ---- start / stop ---- */
   R.start=(opts={})=>{
-    if(R.active||!walk.on)return false;
+    if(R.active||!walk.on||walk.noJump)return false; // a photo walk is calm: no tumbling
     const p=walk.pos,yaw=walk.yaw,pl=walk.player;
     const v=walk.vel?walk.vel():new V();
     const push=opts.push==null?3.5:opts.push,fw=new V(-Math.sin(yaw),0,-Math.cos(yaw));

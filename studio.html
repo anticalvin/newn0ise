@@ -166,6 +166,90 @@ body[data-recording='1']::after{content:'';position:fixed;top:calc(10px + env(sa
 #launch .card b{font:800 20px/1.1 var(--disp);letter-spacing:-.01em}#launch .card span{font-size:12px;color:#b5b1a8;line-height:1.4}
 #launch .skip{margin-top:16px;background:none;border:0;color:#b5b1a8;text-decoration:underline;min-height:44px;font:inherit;cursor:pointer}
 @media (prefers-reduced-motion:reduce){#launch,#launch .card{transition:none}}
+
+/* world start page */
+#wstart{position:fixed;inset:0;z-index:79;background:#050506;color:#f2efe8;display:flex;flex-direction:column;overflow:auto;padding:env(safe-area-inset-top,0) env(safe-area-inset-right,0) env(safe-area-inset-bottom,0) env(safe-area-inset-left,0);transition:opacity .3s,transform .3s}
+#wstart[hidden]{display:none}#wstart.out{opacity:0;transform:scale(1.02);pointer-events:none}
+#wstart .lc{position:relative;max-width:980px;width:100%;margin:auto;padding:22px 18px 34px}
+#wstart h1{font:800 clamp(52px,13vw,120px)/.9 var(--disp);letter-spacing:-.04em;margin:8px 0 6px}
+#wstart p.sub{margin:0 0 20px;font-size:14px;color:#b5b1a8;max-width:520px;line-height:1.45}
+#wstart .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px}
+#wstart .card{position:relative;text-align:left;display:flex;flex-direction:column;gap:6px;min-height:118px;padding:16px;border:1px solid #34322f;border-radius:14px;background:linear-gradient(160deg,#171615,#0d0d0d);color:inherit;font:inherit;cursor:pointer;transition:transform .2s,border-color .2s}
+#wstart .card:hover,#wstart .card:focus-visible{transform:translateY(-3px);border-color:var(--accent)}
+#wstart .card.big{grid-column:span 2;min-height:150px;border-color:#5a3a2a}
+@media (max-width:520px){#wstart .card.big{grid-column:1/-1}}
+#wstart .card b{font:800 20px/1.1 var(--disp)}#wstart .card span{font-size:12px;color:#b5b1a8;line-height:1.45}
+#wstart .card em{margin-top:auto;font:700 10px var(--lab);letter-spacing:.14em;text-transform:uppercase;color:var(--accent);font-style:normal}
+.ws-back{min-height:44px;background:none;border:0;color:#b5b1a8;font:700 11px var(--lab);letter-spacing:.1em;text-transform:uppercase;cursor:pointer;padding:0 4px}
+@media (prefers-reduced-motion:reduce){#wstart,#wstart .card{transition:none}}
+/* Sigil studio: the drawing page */
+body[data-walk] .restore,body[data-sgs] .restore,body[data-sgs] .bar,body[data-sgs] .ws,body[data-sgs] #sheet,body[data-sgs] .hud,body[data-sgs] #empty{display:none!important}
+#sgs{position:absolute;inset:0;z-index:12;pointer-events:none;--g:rgba(18,18,20,.72);color:#f2efe8;font:600 12px var(--lab);-webkit-user-select:none;user-select:none}
+#sgs[hidden]{display:none}
+#sgs .glass{background:var(--g);-webkit-backdrop-filter:blur(18px) saturate(1.4);backdrop-filter:blur(18px) saturate(1.4);border:1px solid rgba(255,255,255,.14);box-shadow:inset 0 1px 0 rgba(255,255,255,.22),0 8px 30px rgba(0,0,0,.35)}
+#sgs button,#sgs label,#sgs .sg-size,#sgs .sg-panel,#sgs input{pointer-events:auto}
+#sgs .sg-top{position:absolute;left:max(8px,env(safe-area-inset-left));right:max(8px,env(safe-area-inset-right));top:calc(env(safe-area-inset-top,0px) + 8px);display:flex;align-items:center;gap:6px;padding:4px;border-radius:22px;pointer-events:auto}
+#sgs .sg-grow{flex:1}
+#sgs .sg-b,#sgs .sg-i{min-height:44px;min-width:44px;border:0;background:rgba(255,255,255,.07);color:#f2efe8;border-radius:18px;font:700 12px var(--lab);padding:0 14px;cursor:pointer}
+#sgs .sg-i{font-size:20px;padding:0}
+#sgs .sg-b:disabled,#sgs .sg-i:disabled{opacity:.3}
+#sgs .sg-brand{font:800 22px/1 var(--disp);letter-spacing:-.04em;padding:0 6px}#sgs .sg-brand i{color:var(--accent);font-style:normal}
+#sgs .sg-sizewrap{position:absolute;right:max(10px,env(safe-area-inset-right));top:calc(env(safe-area-inset-top,0px) + 86px);bottom:calc(150px + env(safe-area-inset-bottom,0px));width:52px;display:flex;align-items:center;justify-content:center;pointer-events:none}
+#sgs .sg-size{position:relative;width:34px;height:min(100%,300px);min-height:140px;border-radius:17px;background:rgba(18,18,20,.55);border:1px solid rgba(255,255,255,.18);overflow:hidden;touch-action:none;cursor:pointer;box-shadow:inset 0 1px 0 rgba(255,255,255,.2)}
+#sgs .sg-size i{position:absolute;left:0;right:0;bottom:0;background:linear-gradient(0deg,#f2efe8,#9a968e);opacity:.9;border-radius:17px}
+#sgs .sg-bub{position:absolute;right:46px;top:50%;transform:translateY(-50%);border-radius:50%;border:2px solid #fff;opacity:0;transition:opacity .15s;pointer-events:none;box-shadow:0 0 0 1px #000}
+#sgs .sg-sizewrap:has(.sg-size.on) .sg-bub{opacity:1}
+#sgs .sg-hint{position:absolute;left:50%;transform:translateX(-50%);top:calc(env(safe-area-inset-top,0px) + 74px);padding:10px 16px;border-radius:20px;white-space:nowrap;font:600 12px var(--lab);pointer-events:none}
+#sgs .sg-dock{position:absolute;left:max(8px,env(safe-area-inset-left));right:max(8px,env(safe-area-inset-right));bottom:calc(env(safe-area-inset-bottom,0px) + 8px);display:flex;justify-content:space-between;gap:2px;padding:6px;border-radius:26px;pointer-events:auto;max-width:560px;margin:0 auto}
+#sgs .sg-t{flex:1;min-width:44px;min-height:56px;border:0;background:none;color:#cfcbc2;border-radius:20px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;cursor:pointer;padding:2px}
+#sgs .sg-t .ic{width:26px;height:26px;display:grid;place-items:center}
+#sgs .sg-t svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+#sgs .sg-t .lb{font:700 9px var(--lab);letter-spacing:.04em;text-transform:uppercase;white-space:nowrap}
+#sgs .sg-t[aria-pressed=true]{background:#f2efe8;color:#0b0b0c}
+#sgs .sg-dot{display:block;width:24px;height:24px;border-radius:50%}
+#sgs .sg-panel{position:absolute;left:max(8px,env(safe-area-inset-left));right:max(8px,env(safe-area-inset-right));bottom:calc(env(safe-area-inset-bottom,0px) + 82px);max-height:min(58dvh,520px);overflow-y:auto;overscroll-behavior:contain;border-radius:22px;padding:6px 14px 16px;max-width:560px;margin:0 auto;pointer-events:auto;-webkit-overflow-scrolling:touch}
+#sgs .sg-panel[hidden]{display:none}
+#sgs .sg-ph{position:sticky;top:0;display:flex;align-items:center;justify-content:space-between;padding:8px 0 4px;background:#131315;z-index:2;margin:0 -14px;padding:8px 14px 4px}
+#sgs .sg-ph b{font:800 16px var(--disp)}
+#sgs .sg-x{min-width:44px;min-height:44px;border:0;background:rgba(255,255,255,.08);color:#fff;border-radius:50%;font-size:22px;cursor:pointer}
+#sgs .sg-g{margin:8px 0 10px}#sgs .sg-gt{font:700 9px var(--lab);letter-spacing:.16em;text-transform:uppercase;color:#8d8a82;margin:6px 0}
+#sgs .sg-note{font:500 11px/1.45 var(--lab);color:#9a968e;margin:6px 0}
+#sgs .sg-sw{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+#sgs .sg-swb{width:44px;height:44px;border-radius:50%;border:2px solid rgba(255,255,255,.18);cursor:pointer;padding:0;position:relative;display:grid;place-items:center}
+#sgs .sg-swb[aria-pressed=true]{border-color:#fff;box-shadow:0 0 0 2px #000,0 0 0 4px #fff}
+#sgs .sg-pick{background:conic-gradient(#ff3b58,#ffd84a,#4fe39a,#3fa7ff,#b06bff,#ff3b58);color:#000;font:800 20px var(--lab)}#sgs .sg-pick input{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer}
+#sgs .sg-rec{margin-top:8px}
+#sgs .sg-mats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+@media (max-width:420px){#sgs .sg-mats{grid-template-columns:repeat(3,1fr)}}
+#sgs .sg-mw{position:relative}
+#sgs .sg-m{width:100%;min-height:72px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.05);border-radius:14px;color:#e8e6e1;padding:6px;display:flex;flex-direction:column;gap:5px;align-items:stretch;cursor:pointer;font:600 10px var(--lab)}
+#sgs .sg-m i{display:block;height:34px;border-radius:50%;width:34px;margin:2px auto 0;border:1px solid rgba(255,255,255,.18)}
+#sgs .sg-m span{text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#sgs .sg-m[aria-pressed=true]{background:#f2efe8;color:#0b0b0c}
+#sgs .sg-md{position:absolute;top:-6px;right:-6px;width:28px;height:28px;border-radius:50%;border:0;background:#2a2a2e;color:#fff;font-size:16px;line-height:1;cursor:pointer}
+#sgs .sg-wide{flex:1;min-height:44px;padding:0 14px;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.07);color:#f2efe8;border-radius:14px;font:700 11px var(--lab);cursor:pointer;margin:2px 0}
+#sgs .sg-wide.pri{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+#sgs .sg-row{display:flex;gap:8px;flex-wrap:wrap}
+#sgs .sg-cr{display:flex;flex-direction:column;gap:6px;margin-top:6px}
+#sgs .sg-crtop{display:flex;gap:12px;align-items:center}
+#sgs .sg-prev{width:76px;height:76px;flex:none;display:grid;place-items:center;border-radius:50%;background:repeating-conic-gradient(#2a2a2e 0 25%,#1b1b1e 0 50%) 0 0/12px 12px}
+#sgs .sg-prev i{display:block;width:68px;height:68px;border-radius:50%}
+#sgs .sg-name{flex:1;min-height:44px;border-radius:12px;border:1px solid rgba(255,255,255,.16);background:rgba(0,0,0,.3);color:#fff;padding:0 12px;font:600 14px var(--lab)}
+#sgs .sg-colrow{display:flex;align-items:center;justify-content:space-between;min-height:44px;font:600 12px var(--lab)}
+#sgs .sg-colrow input{width:64px;height:36px;border:0;background:none;padding:0}
+#sgs .row{display:grid;grid-template-columns:104px 1fr 54px;align-items:center;gap:8px;min-height:44px}
+#sgs .row input[type=range]{width:100%;min-height:36px}
+#sgs .chips{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}
+#sgs .chip{min-height:44px;padding:0 14px;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.07);color:#f2efe8;border-radius:14px;font:700 11px var(--lab);cursor:pointer}
+#sgs .chip[aria-pressed=true]{background:#f2efe8;color:#0b0b0c;border-color:#f2efe8}
+#sgs .orow{display:flex;align-items:center;gap:6px;min-height:48px}#sgs .orow button{min-height:44px;min-width:44px;background:rgba(255,255,255,.06);border:0;color:inherit;border-radius:12px}
+#sgs .orow .nm{flex:1;text-align:left;padding:0 10px}#sgs .orow[aria-selected=true] .nm{background:#f2efe8;color:#0b0b0c}
+#sgs .badge{font:600 9px var(--lab);color:#8d8a82}
+#sgs .note{font:500 11px/1.45 var(--lab);color:#9a968e}
+#sgs .btn{min-height:44px;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.07);color:#f2efe8;border-radius:14px;padding:0 14px;font:700 11px var(--lab)}
+#sgs .btn.pri{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+@media (max-height:520px) and (orientation:landscape){#sgs .sg-panel{max-height:62dvh;left:auto;width:min(420px,60vw)}#sgs .sg-t .lb{display:none}#sgs .sg-t{min-height:44px}#sgs .sg-sizewrap{bottom:84px}}
+@media (prefers-reduced-motion:reduce){#sgs .sg-bub{transition:none}}
 </style>
 </head>
 <body>
@@ -202,12 +286,26 @@ body[data-recording='1']::after{content:'';position:fixed;top:calc(10px + env(sa
 <div id="launch" role="dialog" aria-label="Start in 3D" hidden><canvas></canvas><div class="lc">
 <h1>3<b>D</b></h1><p class="sub">Build a world you can walk through, turn a photo into a model, or start with an empty scene.</p>
 <div class="cards">
-<button class="card big" data-go="level"><svg viewBox="0 0 40 40"><path d="M4 30l16-8 16 8-16 8z"/><path d="M8 24l12-6 12 6M13 13l7-4 7 4M20 9v9"/></svg><b>Build a world</b><span>A playable level to start in: platforms, crates and a goal. Add physics, set the time of day, press Play and walk around in it.</span></button>
+<button class="card big" data-go="world"><svg viewBox="0 0 40 40"><path d="M4 30l16-8 16 8-16 8z"/><path d="M8 24l12-6 12 6M13 13l7-4 7 4M20 9v9"/></svg><b>World</b><span>Walk around in 3D. Start blank, play the Night Station demo, take a photo walk, or import a world file.</span></button>
+<button class="card big" data-go="sigil"><svg viewBox="0 0 40 40"><path d="M6 33c6-16 10 4 14-10s8-12 14-18"/><circle cx="34" cy="5" r="2.4"/></svg><b>Sigil</b><span>Draw in real 3D with chrome, glass, gold or a material you make. Built for a finger on a phone.</span></button>
 <button class="card" data-go="photo"><svg viewBox="0 0 40 40"><rect x="5" y="8" width="30" height="24" rx="3"/><circle cx="14" cy="17" r="3"/><path d="M5 28l9-7 7 6 6-5 8 7"/></svg><b>Photo to 3D</b><span>Pick a picture and it becomes a relief you can orbit and light.</span></button>
 <button class="card" data-go="model"><svg viewBox="0 0 40 40"><path d="M20 4l14 8v16l-14 8-14-8V12z"/><path d="M6 12l14 8 14-8M20 20v16"/></svg><b>Open a model</b><span>glb, obj, stl, ply, splats, or a saved project.</span></button>
 <button class="card" data-go="scan"><svg viewBox="0 0 40 40"><path d="M6 14V8h6M28 8h6v6M34 26v6h-6M12 32H6v-6"/><circle cx="20" cy="20" r="6"/></svg><b>Scan</b><span>Use the camera or a turntable video.</span></button>
 <button class="card" data-go="scene"><svg viewBox="0 0 40 40"><path d="M7 28l13-7 13 7-13 7z"/><rect x="15" y="9" width="10" height="12"/></svg><b>Empty scene</b><span>Add shapes and shape your own.</span></button>
 </div><button class="skip" data-go="scene">Skip, go to the editor</button></div></div>
-<script type="module" src="assets/studio.js?v=1017d266"></script>
+<div id="wstart" role="dialog" aria-label="Start a world" hidden><div class="lc">
+<button class="ws-back" id="wsback">‹ Back</button>
+<h1>World</h1><p class="sub">Pick how to begin. You can switch any time from the World tab.</p>
+<div class="cards">
+<button class="card big" data-w="night-station"><b>Night Station</b><span>The demo. A rainy petrol station at night with a shop, a TV, a pistol to find and lights that react. Press Play and walk in.</span><em>Play the demo</em></button>
+<button class="card big" data-w="photowalk"><b>Photo walk</b><span>Walk around in first person with a camera. Pick a lens and a frame shape, find the shots on your list, and build a roll.</span><em>Walk and shoot</em></button>
+<button class="card" data-w="blank"><b>Start blank</b><span>Flat ground, a sky and a character. Build everything yourself.</span></button>
+<button class="card" data-w="level"><b>Starter level</b><span>Platforms, crates and a goal to play with right away.</span></button>
+<button class="card" data-w="sandbox"><b>Physics sandbox</b><span>Blocks and a character that can knock them over.</span></button>
+<button class="card" data-w="proving-ground"><b>Proving ground</b><span>An open test yard for movement, looks and shooting.</span></button>
+<button class="card" data-w="import"><b>Import a world</b><span>Open a .n0world file an AI wrote, or one you exported.</span></button>
+</div></div></div>
+
+<script type="module" src="assets/studio.js?v=5b4f61e8"></script>
 </body>
 </html>

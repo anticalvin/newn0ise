@@ -27,6 +27,7 @@ import {WORLD_BRIEF} from './world-brief.js';
 import {createForms} from './formobj.js';
 import {createMechanics} from './mechanics.js';
 import {createSigil} from './sigil.js';
+import {createSigilStudio} from './sigil-studio.js';
 import {createRagdoll} from './ragdoll.js';
 import {validateFormFile} from './form-schema.js';
 import {FORM_BRIEF} from './form-brief.js';
@@ -1995,6 +1996,7 @@ addEventListener('pointerup',e=>{if(e.target.closest&&e.target.closest('#panes')
 function setTab(id){
   TABN.forEach(([k])=>{$('#tab_'+k).setAttribute('aria-selected',k===id);paneEls[k].hidden=k!==id;});
   panes.scrollTop=0;S.tab=id;try{SIG&&SIG.onTab(id);}catch(e){console.error(e);}try{setSelBox();}catch(e){}try{paintBar();}catch(e){}
+  if(id==='world'&&!S._wsChosen&&!S._wsBoot&&window.__wsShow&&!S.objs.some(o=>!(o.meta&&o.meta.player)))window.__wsShow();
   if(id==='world'&&!S._plSpawn&&typeof ensurePlayer==='function'){S._plSpawn=1;ensurePlayer().then(()=>{S.needFrame=true;}).catch(()=>{});}
 }
 function buildTabs(){
@@ -2581,7 +2583,7 @@ async function playWorld(){
       if(srcO&&!o[key]){o.meta.fxAuto=true;o[key]=key==='stack'?srcO.stack:JSON.parse(JSON.stringify(srcO.look));o.meta.fxSnap=JSON.stringify(o[key]);S.fx=true;S.mask.mode=2;updateLookUI();toast('The character has the same effect as '+srcO.name+'. Change it in Look.',3500);}}
     PLAYER.goalHit=false;
     const spp=NW&&NW.spawn&&NW.spawn.params;
-    if(spp&&spp.firstPerson){o.holder.visible=false;PLAYER.hidden=o;walk.enter({pos:[start[0],start[1],start[2]],yaw:S.startYaw||0});}
+    if(spp&&spp.firstPerson){o.holder.visible=false;PLAYER.hidden=o;walk.enter({pos:[start[0],start[1],start[2]],yaw:S.startYaw||0,noJump:!!S.photoWalk});if(S.photoWalk&&window.__photo&&window.__photo.set)window.__photo.set(true);}
     else walk.enter({third:true,player:o,rig:o.rig,pos:[start[0],start[1],start[2]],camYaw:(S.startYaw||0)*Math.PI/180});
   }catch(e){toast(String(e.message||e),4000);}
 }
@@ -2662,6 +2664,9 @@ RAG=createRagdoll({THREE,scene,walk,S,bump,toast});window.__rag=RAG;
 if(NW){NW.ragdoll=RAG;}
 if(NW){MECH=createMechanics({THREE,S,walk,camera,canvas,scene,W:NW,toast,bump,objById});NW.mech=MECH;}
 SIG=createSigil({THREE,S,scene,camera,controls,canvas,registerObject,objById,selectObj,bump,uPush:()=>uPush&&uPush(),toast,el,btn,sec,sliderRow,chipRow,setShadowFlags,loadCanvas,tc,markDirty,applyView});SIG.build(paneEls.draw);window.__setTab=setTab;
+const SGS=createSigilStudio({SG:SIG,S,el,btn,sliderRow,chipRow,toast,canvas,controls,stage:$('#stage'),bump,setTab,exitStudio:()=>{SGS.close();setTab('scene');if(!mqDesk.matches&&sheet.idx<2)sheet.setIdx(2);},savePic:()=>exportImage(1,true),lookOpen:b=>{const o=SIG.target();if(o&&S.sel!==o.id)selectObj(o.id);const pp=document.getElementById('lookpop');if(pp&&!pp.hidden){pp.hidden=true;return;}window.__lookPop&&window.__lookPop.open('selected',b);}});
+window.__sgs=SGS;window.__sig=SIG;
+{const w=el('div','chips');w.style.margin='0 0 10px';const ob=btn('Open Sigil studio','pri',()=>SGS.open());w.append(ob);const nt=el('div','note');nt.textContent='A full-screen drawing page made for phones, with the material creator. Everything you draw stays in your scene.';paneEls.draw.insertBefore(nt,paneEls.draw.children[1]);paneEls.draw.insertBefore(w,paneEls.draw.children[1]);}
 DOC.setFormHooks({snap:o=>FORM.snap(o)||SIG.snap(o),apply:(o,fm)=>fm&&fm.sg!=null?SIG.apply(o,fm):FORM.apply(o,fm)});
 async function importFormFile(file,json,origin='imported'){
   try{
@@ -2819,50 +2824,157 @@ function shortcutSheet(){
   document.body.append(toggle,shut,vf,flash,strip,rg);
   let fov0=null;
   const label=()=>{info.textContent=Math.round(36/Math.tan(THREE.MathUtils.degToRad(camera.fov)/2)*.364)+' mm · '+(PH.roll.length?PH.roll.length+' photo'+(PH.roll.length>1?'s':''):'P takes a photo');};
-  function show(){const w=document.body.dataset.walk;rg.style.display=w?'block':'none';toggle.style.display=w?'block':'none';shut.style.display=w&&PH.on?'block':'none';vf.style.display=w&&PH.on?'block':'none';strip.style.display=w&&PH.roll.length?'flex':'none';if(!w&&PH.on)set(false);}
+  function show(){const w=document.body.dataset.walk;rg.style.display=w&&!walk.noJump?'block':'none';toggle.style.display=w?'block':'none';shut.style.display=w&&PH.on?'block':'none';vf.style.display=w&&PH.on?'block':'none';strip.style.display=w&&PH.roll.length?'flex':'none';if(!w&&PH.on)set(false);}
   function set(on){PH.on=on;toggle.setAttribute('aria-pressed',on);toggle.style.background=on?'#f2efe9':'rgba(20,20,22,.6)';toggle.style.color=on?'#111':'#fff';
-    if(on){if(fov0==null)fov0=camera.fov;label();}else if(fov0!=null){camera.fov=fov0;camera.updateProjectionMatrix();fov0=null;}show();bump();}
+    if(on){if(fov0==null)fov0=camera.fov;label();}else if(fov0!=null){camera.fov=fov0;camera.updateProjectionMatrix();fov0=null;}show();PH.onChange&&PH.onChange(on);bump();}
   toggle.addEventListener('click',e=>{e.stopPropagation();set(!PH.on);});
   async function take(){
     if(!document.body.dataset.walk)return;
     flash.style.transition='none';flash.style.opacity='.85';requestAnimationFrame(()=>{flash.style.transition='opacity .35s';flash.style.opacity='0';});
     try{const a=new (window.AudioContext||window.webkitAudioContext)(),o=a.createOscillator(),g=a.createGain();o.type='square';o.frequency.value=1800;g.gain.value=.04;o.connect(g);g.connect(a.destination);o.start();g.gain.exponentialRampToValueAtTime(.0001,a.currentTime+.06);o.stop(a.currentTime+.07);setTimeout(()=>a.close(),300);}catch(e){}
     bump();await waitFrames(2);
-    const blob=await new Promise(r=>canvas.toBlob(r,'image/png'));if(!blob){toast('The photo failed. Try again.');return;}
+    let blob=await new Promise(r=>canvas.toBlob(r,'image/png'));if(blob&&PH.crop)blob=await PH.crop(blob);if(!blob){toast('The photo failed. Try again.');return;}
     const url=URL.createObjectURL(blob),im=mk('img','height:56px;min-width:44px;border-radius:8px;border:2px solid #fff;cursor:pointer;flex:none;object-fit:cover');im.src=url;im.title='Save this photo';im.alt='Photo';
     const name='n0ise-photo-'+Date.now().toString(36)+'.png';
     im.addEventListener('click',e=>{e.stopPropagation();deliver(blob,name);});
     PH.roll.push({blob,url,name});strip.appendChild(im);if(PH.roll.length>12){const x=PH.roll.shift();URL.revokeObjectURL(x.url);strip.firstChild.remove();}
-    label();show();toast('Photo taken. Tap it at the bottom left to save.',2200);
+    label();show();toast('Photo taken. Tap it at the bottom left to save.',2200);try{PH.onTake&&PH.onTake(blob);}catch(e){console.error(e);}
   }
-  PH.take=take;shut.addEventListener('click',e=>{e.stopPropagation();take();});
+  PH.take=take;PH.set=set;PH.label=label;PH.shut=shut;PH.vf=vf;shut.addEventListener('click',e=>{e.stopPropagation();take();});
   addEventListener('keydown',e=>{if(!document.body.dataset.walk||e.repeat||(e.target&&e.target.matches&&e.target.matches('input,textarea')))return;if(e.key==='p'||e.key==='P'){if(!PH.on)set(true);take();}},true);
   canvas.addEventListener('wheel',e=>{if(!PH.on||!document.body.dataset.walk||walk.third)return;e.preventDefault();camera.fov=Math.max(14,Math.min(85,camera.fov*(e.deltaY>0?1.08:.926)));camera.updateProjectionMatrix();label();bump();},{passive:false});
   new MutationObserver(show).observe(document.body,{attributes:true,attributeFilter:['data-walk']});show();
 }
 
+
+/* ---- Photo pro tools: lenses, frame shapes, thirds grid, self-timer, and a shot list that scores your framing ---- */
+if(window.__photo){
+  const PH=window.__photo,T={mm:0,asp:0,grid:false,timer:false,goals:[],best:+(localStorage.getItem('n0ise.photowalk.best')||0)};
+  const mk=(tag,css,txt)=>{const e=document.createElement(tag);e.style.cssText=css;if(txt!=null)e.textContent=txt;return e;};
+  const glass='background:rgba(20,20,22,.62);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.28);color:#fff;';
+  const bar=mk('div','position:fixed;z-index:62;left:50%;transform:translateX(-50%);bottom:calc(108px + env(safe-area-inset-bottom));width:min(94vw,640px);display:none;gap:6px;overflow-x:auto;padding:4px;scrollbar-width:none;border-radius:26px;'+glass);bar.setAttribute('role','toolbar');bar.setAttribute('aria-label','Camera settings');
+  const pill=(label,aria,fn)=>{const b=mk('button','flex:none;min-height:44px;min-width:44px;padding:0 12px;border-radius:22px;border:0;background:transparent;color:#fff;font:700 12px system-ui,sans-serif;letter-spacing:.04em;cursor:pointer','');b.type='button';b.textContent=label;b.setAttribute('aria-label',aria);b.addEventListener('click',e=>{e.stopPropagation();fn(b);});return b;};
+  const mark=(b,on)=>{b.setAttribute('aria-pressed',on);b.style.background=on?'#f2efe9':'transparent';b.style.color=on?'#111':'#fff';};
+  const sep=()=>mk('i','flex:none;width:1px;background:rgba(255,255,255,.25);margin:8px 2px');
+  const LENS=[[0,'Std'],[18,'18'],[24,'24'],[35,'35'],[50,'50'],[85,'85'],[135,'135']],lb=[];
+  const setLens=mm=>{T.mm=mm;if(mm){camera.fov=2*Math.atan(13.104/mm)*180/Math.PI;camera.updateProjectionMatrix();}PH.label&&PH.label();lb.forEach(([m,b])=>mark(b,m===mm));bump();};
+  LENS.forEach(([m,l])=>{const b=pill(l+(m?'mm':''),m?m+' millimetre lens':'Standard lens',()=>{if(m&&!camera._std)camera._std=camera.fov;if(!m&&camera._std){camera.fov=camera._std;camera._std=null;camera.updateProjectionMatrix();}setLens(m);});lb.push([m,b]);bar.appendChild(b);});
+  bar.appendChild(sep());
+  const ASP=[[0,'Full'],[3/2,'3:2'],[4/5,'4:5'],[1,'1:1'],[16/9,'16:9'],[9/16,'9:16'],[2.39,'2.39']],ab=[];
+  const win=mk('div','position:absolute;pointer-events:none;box-shadow:0 0 0 100vmax rgba(0,0,0,.6);border:1px solid rgba(255,255,255,.55);display:none');
+  const gridEl=mk('div','position:absolute;inset:0;background:linear-gradient(90deg,transparent calc(33.3% - .5px),rgba(255,255,255,.4) 0 calc(33.3% + .5px),transparent 0 calc(66.6% - .5px),rgba(255,255,255,.4) 0 calc(66.6% + .5px),transparent 0),linear-gradient(0deg,transparent calc(33.3% - .5px),rgba(255,255,255,.4) 0 calc(33.3% + .5px),transparent 0 calc(66.6% - .5px),rgba(255,255,255,.4) 0 calc(66.6% + .5px),transparent 0);display:none');win.appendChild(gridEl);PH.vf.appendChild(win);
+  function frame(){const W=innerWidth,H=innerHeight;if(!T.asp)return {x:0,y:0,w:W,h:H};const m=.94,a=T.asp;let w=W*m,h=w/a;if(h>H*.74){h=H*.74;w=h*a;}return {x:(W-w)/2,y:(H-h)/2,w,h};}
+  function paintFrame(){const r=frame(),on=!!T.asp;win.style.display=on||T.grid?'block':'none';win.style.boxShadow=on?'0 0 0 100vmax rgba(0,0,0,.6)':'none';win.style.border=on?'1px solid rgba(255,255,255,.55)':'0';
+    win.style.left=r.x+'px';win.style.top=r.y+'px';win.style.width=r.w+'px';win.style.height=r.h+'px';gridEl.style.display=T.grid?'block':'none';ab.forEach(([a,b])=>mark(b,a===T.asp));}
+  ASP.forEach(([a,l])=>{const b=pill(l,a?'Frame shape '+l:'Full screen frame',()=>{T.asp=a;paintFrame();});ab.push([a,b]);bar.appendChild(b);});
+  bar.appendChild(sep());
+  const gb=pill('Grid','Thirds grid',b=>{T.grid=!T.grid;mark(b,T.grid);paintFrame();});bar.appendChild(gb);
+  const tb=pill('3s','Three second timer',b=>{T.timer=!T.timer;mark(b,T.timer);});bar.appendChild(tb);
+  addEventListener('resize',paintFrame);
+  document.body.appendChild(bar);
+  /* crop the saved photo to the frame shape */
+  PH.crop=async blob=>{if(!T.asp)return blob;try{const bm=await createImageBitmap(blob),r=frame(),sx=bm.width/innerWidth,sy=bm.height/innerHeight;
+    const cv=document.createElement('canvas');cv.width=Math.max(1,Math.round(r.w*sx));cv.height=Math.max(1,Math.round(r.h*sy));cv.getContext('2d').drawImage(bm,Math.round(r.x*sx),Math.round(r.y*sy),cv.width,cv.height,0,0,cv.width,cv.height);bm.close&&bm.close();
+    return await new Promise(res=>cv.toBlob(b=>res(b||blob),'image/png'));}catch(e){return blob;}};
+  /* self-timer: the first click starts a count, the photo is taken at zero */
+  const cd=mk('div','position:fixed;inset:0;z-index:71;display:none;place-items:center;font:800 120px system-ui,sans-serif;color:#fff;text-shadow:0 4px 30px rgba(0,0,0,.6);pointer-events:none');document.body.appendChild(cd);
+  PH.shut.addEventListener('click',e=>{if(!T.timer||T.busy)return;e.stopImmediatePropagation();T.busy=true;let n=3;cd.style.display='grid';cd.textContent=n;const iv=setInterval(()=>{n--;if(n<=0){clearInterval(iv);cd.style.display='none';T.busy=false;PH.take();}else cd.textContent=n;},1000);},true);
+  /* shot list */
+  const panel=mk('div','position:fixed;z-index:61;left:calc(12px + env(safe-area-inset-left));top:calc(68px + env(safe-area-inset-top));max-width:min(210px,52vw);padding:10px 12px;border-radius:16px;display:none;font:600 11px/1.5 system-ui,sans-serif;'+glass);panel.setAttribute('aria-live','polite');document.body.appendChild(panel);
+  const objFor=id=>S.objs.find(o=>o.meta&&o.meta.n0w&&o.meta.n0w.id===id);
+  const stars=n=>'★'.repeat(n)+'☆'.repeat(3-n);
+  function paintGoals(){
+    if(!T.goals.length){panel.style.display='none';return;}
+    const done=T.goals.filter(g=>g.stars>0).length,tot=T.goals.reduce((a,g)=>a+g.stars,0);
+    panel.innerHTML='';panel.appendChild(mk('div','font:800 10px system-ui;letter-spacing:.16em;text-transform:uppercase;color:#ff9b6b;margin-bottom:4px','Shot list '+done+'/'+T.goals.length));
+    T.goals.forEach(g=>{const r=mk('div','display:flex;justify-content:space-between;gap:8px;opacity:'+(g.stars?'.95':'.8'));r.append(mk('span','',g.label),mk('span','color:'+(g.stars?'#ffd84a':'#aaa'),g.stars?stars(g.stars):'·'));panel.appendChild(r);});
+    panel.appendChild(mk('div','margin-top:6px;color:#bbb','Stars '+tot+'/'+(T.goals.length*3)+(T.best?' · best '+T.best:'')));
+    show();
+  }
+  function show(){const on=!!document.body.dataset.walk;bar.style.display=on&&PH.on?'flex':'none';panel.style.display=on&&T.goals.length?'block':'none';PH.vf.firstChild&&paintFrame();}
+  const _V=new THREE.Vector3(),_B=new THREE.Box3(),_R=new THREE.Raycaster();
+  function score(g){
+    const o=objFor(g.id);if(!o)return {s:0,why:'That subject is not in this world.'};
+    _B.setFromObject(o.holder);if(_B.isEmpty())return {s:0,why:'Nothing to see.'};
+    const r=frame(),c=_B.getCenter(new THREE.Vector3());
+    camera.updateMatrixWorld();const px=v=>{const p=v.clone().project(camera);return {x:(p.x+1)/2*innerWidth,y:(1-p.y)/2*innerHeight,z:p.z};};
+    const pc=px(c);if(pc.z>1)return {s:0,why:'Turn around: '+g.label.toLowerCase()+' is behind you.'};
+    if(pc.x<r.x||pc.x>r.x+r.w||pc.y<r.y||pc.y>r.y+r.h)return {s:0,why:'Get '+g.label.toLowerCase()+' inside the frame.'};
+    /* is something in the way? */
+    _R.set(camera.position,c.clone().sub(camera.position).normalize());const hits=_R.intersectObjects(scene.children,true).filter(h=>h.object.visible&&!h.object.userData.noView&&!(h.object.isLine||h.object.isPoints));
+    const dist=camera.position.distanceTo(c);let blocked=false;for(const h of hits){let n=h.object,mine=false;while(n){if(n===o.holder){mine=true;break;}n=n.parent;}if(mine)break;if(h.distance<dist-.8){blocked=true;break;}}
+    if(blocked)return {s:0,why:'Something is in the way of '+g.label.toLowerCase()+'.'};
+    let x0=1e9,x1=-1e9,y0=1e9,y1=-1e9;for(const xx of[_B.min.x,_B.max.x])for(const yy of[_B.min.y,_B.max.y])for(const zz of[_B.min.z,_B.max.z]){const q=px(_V.set(xx,yy,zz));x0=Math.min(x0,q.x);x1=Math.max(x1,q.x);y0=Math.min(y0,q.y);y1=Math.max(y1,q.y);}
+    const frac=Math.max((x1-x0)/r.w,(y1-y0)/r.h),size=30*Math.max(0,1-Math.abs(Math.min(frac,1.2)-.45)/.45);
+    const pts=[[.5,.5],[1/3,1/3],[2/3,1/3],[1/3,2/3],[2/3,2/3]];let d=9;for(const [a,b] of pts){d=Math.min(d,Math.hypot((pc.x-r.x)/r.w-a,(pc.y-r.y)/r.h-b));}
+    const place=30*Math.max(0,1-d/.28);
+    const s=Math.round(40+size+place);
+    return {s,why:frac<.15?'Move closer or use a longer lens.':frac>.9?'Too tight. Step back or use a wider lens.':d>.28?'Try placing it on a thirds point.':'Nice framing.'};
+  }
+  PH.onTake=()=>{
+    if(!T.goals.length)return;
+    const open=T.goals.map(g=>({g,r:score(g)})).sort((a,b)=>b.r.s-a.r.s)[0];
+    if(!open||!open.r.s){const hint=T.goals.filter(g=>!g.stars).map(g=>score(g)).find(x=>x.why);toast('No shot-list subject in that photo. '+(hint&&hint.why||''),3600);return;}
+    const n=open.r.s>=85?3:open.r.s>=65?2:1;
+    if(n>open.g.stars){open.g.stars=n;}
+    toast(open.g.label+' '+stars(n)+' · '+open.r.s+' points. '+open.r.why,3600);
+    const tot=T.goals.reduce((a,g)=>a+g.stars,0);
+    if(T.goals.every(g=>g.stars>0)){if(tot>T.best){T.best=tot;try{localStorage.setItem('n0ise.photowalk.best',String(tot));}catch(e){}}setTimeout(()=>toast('Roll complete. '+tot+' of '+T.goals.length*3+' stars. Retake any shot to improve it.',6000),3700);}
+    paintGoals();
+  };
+  PH.startGoals=list=>{T.goals=list.filter(g=>objFor(g.id)).map(g=>({id:g.id,label:g.label,stars:0}));paintGoals();};
+  PH.clearGoals=()=>{T.goals=[];paintGoals();};
+  const prevChange=PH.onChange;PH.onChange=on=>{prevChange&&prevChange(on);if(!on){setLens(0);}show();};
+  new MutationObserver(()=>{show();if(!document.body.dataset.walk){T.goals.length&&0;}}).observe(document.body,{attributes:true,attributeFilter:['data-walk']});
+  setLens(0);paintFrame();mark(gb,false);mark(tb,false);show();
+}
+
 /* the World pane: import, export, and edit the parameters of a selected prefab */
 
 /* ---- Places: the existing block-based Physics Sandbox, and the Night Station world. Same character, same mechanics, same look controls. ---- */
+const SHOTS=[{id:'sign',label:'The shop sign'},{id:'pump1',label:'A fuel pump'},{id:'car',label:'The parked car'},{id:'lamphead',label:'The street lamp'},{id:'tvscreen',label:'The TV'}];
 async function loadPlace(kind){
   if(walk.on)walk.exit();
+  S.photoWalk=kind==='photowalk';
+  const file=kind==='photowalk'?'night-station':kind;
   try{
     S.objs.filter(o=>!(o.meta&&o.meta.player)).map(o=>o.id).forEach(removeObj);
     try{await api.run({cmd:'light',op:'clear'});}catch(e){}
     S.start=null;S.startYaw=0;
     if(kind==='sandbox'){await worldEd.level();}
+    else if(kind==='blank'){worldEd.starter();}
+    else if(kind==='level'){worldEd.starter();await worldEd.level();}
     else{
-      const r=await fetch('worlds/'+kind+'.n0world');if(!r.ok)throw new Error('The world file could not be loaded ('+r.status+').');
+      const r=await fetch('worlds/'+file+'.n0world');if(!r.ok)throw new Error('The world file could not be loaded ('+r.status+').');
       const v=validateWorld(await r.json());if(!v.ok)throw new Error((v.report.errors[0]||{}).msg||'invalid world');
       await NW.build(v.doc);NW.hash=await hashJson(v.doc);NW.report=v.report;
+      if(kind==='photowalk'){ // a calm walk: no pistol, no targets
+        S.objs.filter(o=>o.meta&&o.meta.n0w&&(o.meta.n0w.id==='pistol_pickup'||o.meta.n0w.prefab==='target')).map(o=>o.id).forEach(removeObj);
+        if(NW.flags&&NW.flags.clear)try{NW.flags.clear();}catch(e){}
+      }
     }
-    S.needFrame=true;frameAll();bump();toast(kind==='sandbox'?'Physics Sandbox. Press Play as character to try it.':'Night Station. Press Play as character, then walk to the shop.',4500);
+    S.needFrame=true;frameAll();bump();
+    if(kind==='photowalk'){await playWorld();if(window.__photo&&window.__photo.startGoals)window.__photo.startGoals(SHOTS);toast('Photo walk. Find each subject on your shot list, frame it, and press the shutter.',5200);}
+    else toast(kind==='sandbox'?'Physics Sandbox. Press Play as character to try it.':kind==='night-station'?'Night Station. Press Play as character, then walk to the shop.':kind==='blank'?'Blank world. Add things from the Scene tab.':'Ready. Press Play as character to try it.',4500);
   }catch(e){toast(String(e.message||e),6000);console.error(e);}
 }
+/* the World start page: the front door of World mode. Demo, photo walk, blank, starters, import. */
+const WS=document.getElementById('wstart');
+function wsHide(){if(!WS||WS.hidden)return;WS.classList.add('out');setTimeout(()=>{WS.hidden=true;WS.classList.remove('out');},300);}
+function wsShow(){if(!WS)return;WS.hidden=false;WS.classList.remove('out');const f=WS.querySelector('.card');f&&f.focus();}
+if(WS){
+  WS.querySelectorAll('[data-w]').forEach(b=>b.addEventListener('click',async()=>{
+    const k=b.dataset.w;S._wsChosen=true;wsHide();
+    if(k==='import'){worldImportSheet('');return;}
+    await loadPlace(k);
+  }));
+  $('#wsback').addEventListener('click',()=>{S._wsChosen=true;wsHide();const L=document.getElementById('launch');if(L&&!L.hidden)return;});
+  addEventListener('keydown',e=>{if(!WS.hidden&&e.key==='Escape'){S._wsChosen=true;wsHide();}});
+}
+window.__wsShow=wsShow;
 if(NW&&paneEls.world){
-  const ps=sec(paneEls.world,'Places','pick where to play');
-  ps.appendChild(el('div','note','Both use the same character, shooting and look controls.'));
-  const pr=el('div','chips');pr.append(btn('Night Station','pri',()=>loadPlace('night-station')),btn('Physics Sandbox','',()=>loadPlace('sandbox')),btn('Proving ground','',()=>loadPlace('proving-ground')));ps.appendChild(pr);
+  const ps=sec(paneEls.world,'Start','new world, demo or photo walk');
+  const pr=el('div','chips');pr.append(btn('World start page','pri',()=>wsShow()));ps.appendChild(pr);
   paneEls.world.insertBefore(ps,paneEls.world.firstChild);
 }
 if(NW&&paneEls.world){
@@ -2879,21 +2991,23 @@ if(NW&&paneEls.world){
       else if(ps.t==='enum'){chipRow(live,ps.opts.map(v=>[v,v]),v=>m.params[k]===v,v=>{NW.setParams(o,{[k]:v});window.__n0wRefresh();});}});
   };
 }
-if(/^#world/.test(location.hash)){setTab('world');worldEd.starter();}
+if(/^#world/.test(location.hash)){S._wsChosen=true;setTab('world');worldEd.starter();}
 /* launch screen: the front door of 3D. Skipped when a link brings a picture or asks for the world builder. */
 {const L=document.getElementById('launch');
   if(L){const q=location.hash;
     const close=()=>{L.classList.add('out');setTimeout(()=>{L.hidden=true;L.classList.remove('out');cancelAnimationFrame(L._raf);},350);};
     const go={
-      level:async()=>{close();setTab('world');worldEd.starter();await worldEd.level();},
+      world:()=>{close();setTab('world');worldEd.starter();wsShow();},
       photo:()=>{close();const f=$('#file');f.accept='image/*';f.onchange=async()=>{await importFiles(f.files);f.value='';f.accept=FILE_ACCEPT;f.onchange=null;};f.click();},
       model:()=>{close();$('#file').click();},
       scan:()=>{close();setTab('scan');},
+      sigil:()=>{close();SGS.open();},
       scene:()=>{close();setTab('scene');toast('Empty scene. Add a shape from the Scene tab, or draw in the Sigil tab.',4000);}
     };
     L.querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=>go[b.dataset.go]()));
     addEventListener('keydown',e=>{if(!L.hidden&&e.key==='Escape')close();});
-    if(/^#(world|from=|look=)/.test(q))L.hidden=true;
+    if(/^#sigil/.test(q)){L.hidden=true;SGS.open();}
+    else if(/^#(world|from=|look=)/.test(q))L.hidden=true;
     else{L.hidden=false;
       const cv=L.querySelector('canvas'),g=cv.getContext('2d'),reduce=matchMedia('(prefers-reduced-motion:reduce)').matches;
       const acc=getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()||'#ff5a1f';
@@ -2908,7 +3022,7 @@ if(/^#world/.test(location.hash)){setTab('world');worldEd.starter();}
       draw(0);}
   }}
 
-$('#bWalk')&&$('#bWalk').addEventListener('click',()=>walk.on?walk.exit():walk.enter({pos:[camera.position.x*.6,0,Math.max(2.5,camera.position.z*.8)],yaw:0}));
+$('#bWalk')&&$('#bWalk').addEventListener('click',()=>walk.on?walk.exit():walk.enter({pos:[camera.position.x*.6,0,Math.max(2.5,camera.position.z*.8)],yaw:0,noJump:true}));
 function aiStatus(t){AI.state=t;if(AI.btn){AI.btn.textContent=t==='on'?'AI connected':t==='wait'?'Connecting…':'Connect AI';AI.btn.setAttribute('aria-pressed',t==='on');}}
 function aiConnect(url,auto){
   if(AI.ws&&!auto){AI.want=false;try{AI.ws.close();}catch(e){}AI.ws=null;aiStatus('off');return;}

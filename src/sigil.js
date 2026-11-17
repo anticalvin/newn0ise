@@ -15,13 +15,37 @@ export const MATS={
   paper:['Paper','#f4f1ea',{metalness:0,roughness:.95},'linear-gradient(115deg,#ddd8cc,#fff,#e8e3d6)'],
   holo:['Hologram','#8ad8ff',{metalness:.5,roughness:.2,emissive:'#194b78',ei:.5},'linear-gradient(115deg,#072b32,#78f2ff,#8c75ff,#ff87c5)'],
   ember:['Ember','#ff6a2a',{metalness:.6,roughness:.25,emissive:'#a92209',ei:.6},'linear-gradient(115deg,#3a0702,#ff481b,#ffd15a,#8e1005)'],
-  light:['Light','#fff2d8',{metalness:0,roughness:1,emissive:'#fff2d8',ei:1.6},'linear-gradient(115deg,#fff6e6,#fff,#ffe9c2)']
+  light:['Light','#fff2d8',{metalness:0,roughness:1,emissive:'#fff2d8',ei:1.6},'linear-gradient(115deg,#fff6e6,#fff,#ffe9c2)'],
+  silver:['Silver','#e9ebee',{metalness:1,roughness:.18},'linear-gradient(115deg,#2a2c2f,#fff,#8a8f96,#f4f6f8)'],
+  bronze:['Bronze','#b8794a',{metalness:1,roughness:.3},'linear-gradient(115deg,#2d1a0e,#c98c58,#6a4020,#e6b88e)'],
+  rosegold:['Rose gold','#e8a995',{metalness:1,roughness:.16},'linear-gradient(115deg,#3b1f1a,#f3bfae,#8a5547,#ffe3d8)'],
+  titanium:['Titanium','#8d9199',{metalness:1,roughness:.38},'linear-gradient(115deg,#25272b,#a4a8af,#5b5f66,#c9ccd2)'],
+  carbon:['Carbon','#0e0f10',{metalness:.6,roughness:.35,clearcoat:1,clearcoatRoughness:.05},'linear-gradient(115deg,#000,#2b2e31,#050506,#3b3f44)'],
+  rubber:['Rubber','#1b1b1d',{metalness:0,roughness:.88},'linear-gradient(115deg,#0a0a0b,#2a2a2d,#0f0f10)'],
+  velvet:['Velvet','#6b1736',{metalness:0,roughness:.95,sheen:1,sheenRoughness:.4,sheenColor:'#ff8fb4'},'linear-gradient(115deg,#2a0716,#8a2149,#ff8fb4,#3b0b1f)'],
+  porcelain:['Porcelain','#f6f4f0',{metalness:0,roughness:.22,clearcoat:1,clearcoatRoughness:.04},'linear-gradient(115deg,#d9d6cf,#fff,#ece8e0)'],
+  chalk:['Chalk','#e8dcc2',{metalness:0,roughness:1},'linear-gradient(115deg,#bfb49b,#f4ead2,#d9cdb2)'],
+  wax:['Wax','#f1e2b0',{metalness:0,roughness:.5,transmission:.35,thickness:.8,ior:1.4},'linear-gradient(115deg,#d6c58a,#fff3c8,#e8d599)'],
+  jade:['Jade','#4fb286',{metalness:0,roughness:.28,transmission:.55,thickness:1,ior:1.55,clearcoat:.6},'linear-gradient(115deg,#0f3a2a,#6fd5a5,#2a7a58,#c7f5de)'],
+  amber:['Amber','#f0a030',{metalness:0,roughness:.12,transmission:.8,thickness:1.2,ior:1.55},'linear-gradient(115deg,#5a2c05,#ffb642,#b86a10,#ffe0a0)'],
+  ruby:['Ruby','#c2132f',{metalness:0,roughness:.06,transmission:.7,thickness:1,ior:1.76,clearcoat:1},'linear-gradient(115deg,#3a0610,#ff3b58,#7a0a1c,#ffb3c0)'],
+  ice:['Ice','#dff4ff',{metalness:0,roughness:.15,transmission:1,thickness:.7,ior:1.31},'linear-gradient(115deg,#a9d4ea,#fff,#cfeaf7,#8fc0d8)'],
+  opal:['Opal','#e9f1f4',{metalness:0,roughness:.3,clearcoat:1,iridescence:1,iridescenceIOR:1.8,irisT:[200,700]},'linear-gradient(115deg,#f2e0ef,#c9f2ee,#f7f0c8,#e0cdf7)'],
+  oilslick:['Oil slick','#20222a',{metalness:.9,roughness:.12,iridescence:1,iridescenceIOR:2.2,irisT:[300,1000]},'linear-gradient(115deg,#0a0b10,#4a38a8,#1fa27a,#c24a8a,#0a0b10)'],
+  plasma:['Plasma','#b06bff',{metalness:0,roughness:.4,emissive:'self',ei:2.2},'linear-gradient(115deg,#3b0d6e,#d19bff,#7c3be0,#fff)'],
+  tube:['Light tube','#7ff2ff',{metalness:0,roughness:.3,emissive:'self',ei:3},'linear-gradient(115deg,#0d3a40,#a8faff,#3ec9d6,#fff)']
 };
 const LIM={strokes:400,pts:700};
+const MPK={metalness:[0,1],roughness:[0,1],clearcoat:[0,1],clearcoatRoughness:[0,1],iridescence:[0,1],iridescenceIOR:[1,2.5],sheen:[0,1],sheenRoughness:[0,1],transmission:[0,1],thickness:[0,4],ior:[1,2.5],opacity:[.05,1],ei:[0,6]};
+/* a material made in the studio travels inside each stroke; files from elsewhere are clamped to sane numbers */
+export function cleanMP(p){if(!p||typeof p!=='object')return null;const o={};for(const k in MPK){if(p[k]!=null&&Number.isFinite(+p[k]))o[k]=Math.min(MPK[k][1],Math.max(MPK[k][0],+p[k]));}
+  const hx=v=>typeof v==='string'&&/^#[0-9a-f]{6}$/i.test(v);if(hx(p.emissive)||p.emissive==='self')o.emissive=p.emissive;if(hx(p.sheenColor))o.sheenColor=p.sheenColor;
+  if(Array.isArray(p.irisT)&&p.irisT.length===2&&p.irisT.every(Number.isFinite))o.irisT=[Math.max(0,Math.min(2000,p.irisT[0])),Math.max(0,Math.min(2000,p.irisT[1]))];
+  if(o.opacity!=null&&o.opacity<1)o.transparent=true;return o;}
 const q4=v=>Math.round(v*1e4)/1e4;
 export function createSigil(c){
   const {THREE,S,scene,camera,controls,canvas,registerObject,objById,selectObj,bump,uPush,toast,el,btn,sec,sliderRow,chipRow,setShadowFlags,loadCanvas,tc,setTool,markDirty,applyView}=c;
-  const SG={cur:null,B:{snap:'ends',snapPx:16,grid:.1,anchor:null,pick:false,size:22,smooth:.4,taper:.6,press:'auto',depth:.3,style:'round',mat:'chrome',col:'#dfe6ee',plane:'view',off:0,mirror:false,rad:1,mode:'draw'}};
+  const SG={cur:null,B:{snap:'ends',snapPx:16,grid:.1,anchor:null,pick:false,size:22,smooth:.4,taper:.6,press:'auto',depth:.3,style:'round',mat:'chrome',mp:null,col:'#dfe6ee',plane:'view',off:0,mirror:false,rad:1,mode:'draw'}};
   const B=SG.B;let uid=1,drawing=null,space=false,paneHost=null,sync_ui=null;
   const ray=new THREE.Raycaster(),ring=document.createElement('div');
   ring.style.cssText='position:fixed;z-index:30;pointer-events:none;border:1.5px solid #fff;mix-blend-mode:difference;border-radius:50%;transform:translate(-50%,-50%);display:none';document.body.appendChild(ring);
@@ -75,12 +99,16 @@ export function createSigil(c){
     }
     const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));g.setAttribute('normal',new THREE.Float32BufferAttribute(nor,3));g.setIndex(idx);g.computeBoundingSphere();return g;
   }
+  const matOf=()=>({m:B.mat,c:B.col,mp:B.mat==='custom'?{...B.mp}:undefined});
+  function matProps(s){return s.m==='custom'&&s.mp?s.mp:(MATS[s.m]||MATS.chrome)[2];}
   function makeMat(s){
-    const d=MATS[s.m]||MATS.chrome,p=d[2],m=new THREE.MeshPhysicalMaterial({color:s.c||d[1],metalness:p.metalness,roughness:p.roughness,side:THREE.DoubleSide});
+    const d=MATS[s.m]||MATS.chrome,p=matProps(s),m=new THREE.MeshPhysicalMaterial({color:s.c||d[1],metalness:p.metalness||0,roughness:p.roughness!=null?p.roughness:.5,side:THREE.DoubleSide});
     if(p.clearcoat){m.clearcoat=p.clearcoat;m.clearcoatRoughness=p.clearcoatRoughness!=null?p.clearcoatRoughness:.1;}
-    if(p.iridescence){m.iridescence=p.iridescence;m.iridescenceIOR=p.iridescenceIOR||1.4;}
+    if(p.iridescence){m.iridescence=p.iridescence;m.iridescenceIOR=p.iridescenceIOR||1.4;if(p.irisT)m.iridescenceThicknessRange=[p.irisT[0],p.irisT[1]];}
+    if(p.sheen){m.sheen=p.sheen;m.sheenRoughness=p.sheenRoughness!=null?p.sheenRoughness:.5;m.sheenColor.set(p.sheenColor||'#ffffff');}
+    if(p.transmission){m.transmission=p.transmission;m.thickness=p.thickness||.5;m.ior=p.ior||1.5;m.envMapIntensity=1.8;m.specularIntensity=1;m.emissive.set(s.c||d[1]);m.emissiveIntensity=.3*p.transmission;} // a faint tint of its own colour, so glass still reads against a dark scene
     if(p.transparent){m.transparent=true;m.opacity=p.opacity;m.depthWrite=false;}
-    if(p.emissive){m.emissive.set(s.m==='light'||s.m==='ember'||s.m==='holo'?(s.m==='light'?(s.c||d[1]):p.emissive):p.emissive);m.emissiveIntensity=p.ei||1;}
+    if(p.emissive){m.emissive.set(p.emissive==='self'||s.m==='light'?(s.c||d[1]):p.emissive);m.emissiveIntensity=p.ei||1;}
     m.userData.sigilMat=s.m;return m;
   }
   function symMatrices(s){
@@ -215,7 +243,7 @@ export function createSigil(c){
     const ls=o.holder.scale.x||1,r0=B.size/2*px2w(h0.d)/ls;
     const D=drawing={o,plane,startSnap:!!h0.snapped,r0,d0:h0.d,lastD:h0.d,w:.3,raw:[],lp:h0.p.clone(),lastEv:{x:e.clientX,y:e.clientY,t:e.timeStamp},n0:h0.n.clone(),pid:e.pointerId,
       id:'s'+Date.now().toString(36)+(uid++),
-      stroke(){const s=B,loc=this.raw;return {id:this.id,m:s.mat,c:s.col,st:s.style,sm:s.smooth,tp:s.taper,mir:s.mirror?1:0,rad:s.rad,ly:this.ly,r:this.rr,nrm:this.nl,pts:loc.flatMap(p=>p.p),w:loc.map(p=>p.w)};}};
+      stroke(){const s=B,loc=this.raw;return {id:this.id,m:s.mat,...(s.mat==='custom'?{mp:{...s.mp}}:{}),c:s.col,st:s.style,sm:s.smooth,tp:s.taper,mir:s.mirror?1:0,rad:s.rad,ly:this.ly,r:this.rr,nrm:this.nl,pts:loc.flatMap(p=>p.p),w:loc.map(p=>p.w)};}};
     D.ly=stL.curL;D.rr=r0;D.nl=h0.n.clone().transformDirection(new THREE.Matrix4().copy(o.holder.matrixWorld).invert()).toArray().map(q4);
     addPoint(e,h0,0,0);canvas.setPointerCapture(e.pointerId);canvas.style.cursor='crosshair';
   }
@@ -291,7 +319,7 @@ export function createSigil(c){
     const o=target();
     if(infoEl)infoEl.textContent=o?(o.name+' · '+o.meta.sigil.strokes.length+' stroke'+(o.meta.sigil.strokes.length===1?'':'s')+(o.meta.sigil.photo?' · photo':'')):'Nothing yet. Draw to start.';
     if(undoB)undoB.disabled=!o||!o.meta.sigil.undo.length;if(redoB)redoB.disabled=!o||!o.meta.sigil.redo.length;
-    paintLayers();
+    paintLayers();SG.hooks.forEach(f=>{try{f();}catch(e){}});
     if(planeRow)planeRow.querySelectorAll('.chip').forEach(c=>c.setAttribute('aria-pressed',B.plane===c.dataset.v));
     if(photoRow)photoRow.querySelectorAll('[data-needs-photo]').forEach(b=>b.hidden=!(o&&o.meta.sigil.photo));
   }
@@ -312,8 +340,8 @@ export function createSigil(c){
     anchorBox.appendChild(T(B.anchor?'Screen, Wall and Floor drawing now go through this point. Type exact numbers by clicking a value.':'Pick a point, then Screen, Wall and Floor drawing go through it. Without one they use the view centre.'));
   }
   function layerCommit(o,mut){const st=o.meta.sigil,ls=cloneL(st.layers);mut(ls);commit(o,st.strokes.slice(),ls);}
-  function paintLayers(){
-    if(!layerBox)return;layerBox.innerHTML='';const o=target();if(!o){layerBox.appendChild(el('div','note','Draw something first.'));return;}
+  function paintLayersInto(layerBox){
+    layerBox.innerHTML='';const o=target();if(!o){layerBox.appendChild(el('div','note','Draw something first.'));return;}
     const st=o.meta.sigil;
     st.layers.forEach((l,i)=>{
       const n=st.strokes.filter(s=>(s.ly||'L1')===l.id).length,row=el('div','orow');row.setAttribute('aria-selected',st.curL===l.id);
@@ -330,6 +358,7 @@ export function createSigil(c){
     const fl=document.createElement('label');fl.className='chip';fl.textContent='Flatten onto the lower layer’s depth ';const cb=document.createElement('input');cb.type='checkbox';cb.checked=!!B.flatten;cb.addEventListener('change',()=>{B.flatten=cb.checked;});fl.appendChild(cb);layerBox.appendChild(fl);
     layerBox.appendChild(el('div','note','Each layer remembers the depth of its first stroke. Choose “Layer depth” under Draw on to keep adding to that same depth. Merge down joins this layer into the one below so they move and look as one.'));
   }
+  function paintLayers(){[layerBox,SG.sLayers].forEach(b=>b&&paintLayersInto(b));}
   function mergeDown(o){
     const st=o.meta.sigil,i=st.layers.findIndex(l=>l.id===st.curL);if(i<=0){toast('This is the bottom layer. There is nothing below to merge into.');return;}
     const src=st.layers[i],dst=st.layers[i-1];
@@ -395,7 +424,7 @@ export function createSigil(c){
       b.setAttribute('aria-pressed',B.mat===k);b.addEventListener('click',()=>{B.mat=k;B.col=MATS[k][1];col.value=B.col;for(const x in sw)sw[x].setAttribute('aria-pressed',x===k);});sw[k]=b;grid.appendChild(b);}
     s3.appendChild(grid);
     const lab=document.createElement('label');lab.className='chip';lab.textContent='Colour ';const col=document.createElement('input');col.type='color';col.value=B.col;col.addEventListener('input',()=>{B.col=col.value;});lab.appendChild(col);
-    const cr=el('div','chips');cr.append(lab,btn('Recolour last stroke','',()=>{const o=target();if(!o)return;const st=o.meta.sigil;if(!st.strokes.length)return;const a=st.strokes.slice(),l=a[a.length-1];a[a.length-1]={...l,m:B.mat,c:B.col};commit(o,a);}),btn('Recolour all','',()=>{const o=target();if(!o||!o.meta.sigil.strokes.length)return;commit(o,o.meta.sigil.strokes.map(x=>({...x,m:B.mat,c:B.col})));}));s3.appendChild(cr);
+    const cr=el('div','chips');cr.append(lab,btn('Recolour last stroke','',()=>{const o=target();if(!o)return;const st=o.meta.sigil;if(!st.strokes.length)return;const a=st.strokes.slice(),l=a[a.length-1];a[a.length-1]={...l,...matOf()};commit(o,a);}),btn('Recolour all','',()=>{const o=target();if(!o||!o.meta.sigil.strokes.length)return;commit(o,o.meta.sigil.strokes.map(x=>({...x,...matOf()})));}));s3.appendChild(cr);
     const s4=sec(parent,'Symmetry');
     chipRow(s4,[['0','Off'],['1','Mirror']],v=>String(+B.mirror)===v,v=>{B.mirror=v==='1';});
     chipRow(s4,[['1','No spin'],['3','3'],['4','4'],['6','6'],['8','8']],v=>String(B.rad)===v,v=>{B.rad=+v;});
@@ -420,12 +449,12 @@ export function createSigil(c){
   SG.photoOf=o=>o.meta.sigil.photo;
   SG.fromItem=(it,photoCv)=>{
     const o=create({name:it.name||'Drawing'});const st=o.meta.sigil;
-    st.strokes=(it.strokes||[]).filter(s=>s&&Array.isArray(s.pts)&&Array.isArray(s.w)&&s.pts.length===s.w.length*3&&s.w.length<=LIM.pts&&s.pts.every(Number.isFinite)).slice(0,LIM.strokes).map(s=>({...s,m:MATS[s.m]?s.m:'chrome'}));
+    st.strokes=(it.strokes||[]).filter(s=>s&&Array.isArray(s.pts)&&Array.isArray(s.w)&&s.pts.length===s.w.length*3&&s.w.length<=LIM.pts&&s.pts.every(Number.isFinite)).slice(0,LIM.strokes).map(s=>{const mp=s.m==='custom'?cleanMP(s.mp):null;return {...s,m:mp?'custom':(MATS[s.m]?s.m:'chrome'),mp:mp||undefined};});
     if(Array.isArray(it.layers)&&it.layers.length)st.layers=it.layers.slice(0,32).map((l,i)=>({id:String(l.id||'L'+(i+1)).slice(0,12),name:String(l.name||'Layer '+(i+1)).slice(0,30),vis:l.vis!==false,lock:!!l.lock,plane:l.plane&&Array.isArray(l.plane.p)&&Array.isArray(l.plane.n)&&l.plane.p.every(Number.isFinite)&&l.plane.n.every(Number.isFinite)?{p:l.plane.p.slice(0,3),n:l.plane.n.slice(0,3)}:null}));
     st.curL=st.layers[0].id;st.revs.set(0,{s:st.strokes.slice(),l:cloneL(st.layers)});sync(o);if(photoCv)setPhoto(o,photoCv);
     o.holder.position.fromArray(it.tr.p);o.holder.rotation.set(...it.tr.r);o.holder.scale.fromArray(it.tr.s);o.vis=it.vis!==false;o.holder.visible=o.vis;
     return o;
   };
-  SG.create=create;SG.undo=undo;SG.redo=redo;SG.setPhoto=setPhoto;SG.addPhotoFile=addPhotoFile;SG.paint=paint;SG.target=target;SG.sync=sync;SG.commit=commit;
+  SG.hooks=[];SG.matOf=matOf;SG.markAnchor=markAnchor;SG.setMode=setMode;SG.cancelDraw=cancelDraw;SG.MATS=MATS;SG.makeMat=makeMat;SG.matProps=matProps;SG.paintLayers=paintLayers;SG.mergeDown=mergeDown;SG.layerCommit=layerCommit;SG.create=create;SG.undo=undo;SG.redo=redo;SG.setPhoto=setPhoto;SG.addPhotoFile=addPhotoFile;SG.paint=paint;SG.target=target;SG.sync=sync;SG.commit=commit;
   return SG;
 }

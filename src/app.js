@@ -2846,10 +2846,11 @@ function openSheet(blob,name,isVideo,meta){
   const file=new File([blob],name,{type:blob.type});
   const canShare=!!(navigator.canShare&&navigator.canShare({files:[file]}));
   const media=isVideo?`<video src="${url}" controls playsinline loop autoplay muted style="max-width:100%;max-height:56dvh;border-radius:6px"></video>`:`<img alt="Your finished export" src="${url}">`;
-  sh.innerHTML=`<div>${media}<p>${(blob.size/1048576).toFixed(1)} MB · ${name.split('.').pop().toUpperCase()}${meta&&meta.dur?' · '+fmtTime(meta.dur):''}</p><div class="xrow">${canShare?'<button class="btn primary" id="shr">Save to Photos</button><a class="btn" download="${name}" href="${url}">Download file</a>':`<a class="btn primary" download="${name}" href="${url}">${/iPhone|iPad|Android/.test(navigator.userAgent)?'Save image':'Download'}</a>`}<button class="btn" id="cls">Close</button>${!isVideo?'<button class="btn" id="to3">Open in 3D</button>':''}${meta&&meta.id?'<button class="btn" id="dis">Discard</button>':''}</div></div>`;
+  sh.innerHTML=`<div>${media}<p>${(blob.size/1048576).toFixed(1)} MB · ${name.split('.').pop().toUpperCase()}${meta&&meta.dur?' · '+fmtTime(meta.dur):''}</p><div class="xrow">${canShare?'<button class="btn primary" id="shr">Save to Photos</button><a class="btn" download="${name}" href="${url}">Download file</a>':`<a class="btn primary" download="${name}" href="${url}">${/iPhone|iPad|Android/.test(navigator.userAgent)?'Save image':'Download'}</a>`}<button class="btn" id="cls">${meta&&meta.back?'Back to roll':'Close'}</button>${meta&&meta.back?'<button class="btn" id="cls2">Back to camera</button>':''}${!isVideo?'<button class="btn" id="to3">Open in 3D</button>':''}${meta&&meta.id?'<button class="btn" id="dis">Discard</button>':''}</div></div>`;
   document.body.appendChild(sh);
   const close=()=>{sh.remove();URL.revokeObjectURL(url);if(meta&&meta.back)meta.back();};
   $('#cls',sh).addEventListener('click',close);
+  {const c2=$('#cls2',sh);if(c2)c2.addEventListener('click',()=>{sh.remove();URL.revokeObjectURL(url);});}
   {const b=$('#to3',sh);if(b)b.addEventListener('click',async()=>{await handoffPut(blob,{from:'camera'});location.href='studio.html#from=camera';});}
   {const d=$('#dis',sh);if(d)d.addEventListener('click',async()=>{await rollDelete(meta.id);close();camThumbUpdate();toast('Discarded');});}
   sh.addEventListener('pointerdown',e=>{if(e.target===sh)close();});
@@ -2875,7 +2876,7 @@ const deliver2=(b,n,v)=>openSheet(b,n,v);
 async function camThumbUpdate(){const b=$('#camroll');if(!b)return;const l=await rollList();b.innerHTML='';const t=l[0],tb=t&&(t.isVideo?t.poster:t.blob);if(tb){const im=new Image();im.alt='';im.src=URL.createObjectURL(tb);im.onload=()=>URL.revokeObjectURL(im.src);b.appendChild(im);if(t.isVideo)b.appendChild(el('i','playbadge','▶'));}else b.textContent=l.length?String(l.length):'Roll';}
 async function openRoll(){
   const sh=el('div','sheet'),l=await rollList(),urls=[];
-  const box=el('div','rollbox',`<h3>Roll</h3>`);const grid=el('div','rollgrid');
+  const box=el('div','rollbox',`<div class="rollhd"><h3>Roll</h3><button class="btn rollx" id="rollx" aria-label="Back to camera">Back to camera</button></div>`);const grid=el('div','rollgrid');
   if(!l.length)box.appendChild(el('p','','Nothing here yet. Tap the shutter for a photo, hold it to record.'));
   l.forEach(c=>{const u=URL.createObjectURL(c.blob);urls.push(u);const b=el('button','rollitem');b.setAttribute('aria-label','Open '+c.name);
     b.innerHTML=c.isVideo?`<video src="${u}" muted playsinline></video>`:`<img alt="" src="${u}">`;
@@ -2883,7 +2884,7 @@ async function openRoll(){
     const d=el('button','rolldel','×');d.setAttribute('aria-label','Delete');d.addEventListener('click',async e=>{e.stopPropagation();await rollDelete(c.id);b.remove();d.remove();camThumbUpdate();});
     const w=el('div','rollcell');w.append(b,d);grid.appendChild(w);});
   box.appendChild(grid);const cl=el('button','btn','Close');box.appendChild(cl);sh.appendChild(box);document.body.appendChild(sh);
-  const close=()=>{sh.remove();urls.forEach(URL.revokeObjectURL);};cl.addEventListener('click',close);
+  const close=()=>{sh.remove();urls.forEach(URL.revokeObjectURL);};cl.addEventListener('click',close);box.querySelector('#rollx').addEventListener('click',close);sh.addEventListener('pointerdown',e=>{if(e.target===sh)close();});
 }
 /* camera bodies (see cams.js): a Fuse recipe + frame shape + overlay, applied to the shared engine */
 let camIx=0,camStr=50,camText=false,camSaved=null,camOvT=0,camRec0=0,camRecOn=false;
@@ -3085,7 +3086,7 @@ function buildCamUI(){
   if($('#camui'))return;const stage=$('#stage'),u=el('div','camui');u.id='camui';
   const btn=(id,txt,label,fn)=>{const b=el('button','cb',txt);b.id=id;b.setAttribute('aria-label',label);b.addEventListener('click',fn);return b;};
   const top=el('div','camtop');
-  top.append(btn('camx','✕','Close camera',()=>{closeCamera();location.assign('index.html');}),btn('camflip','Flip','Flip camera',async()=>{await startCam(true);setPM(camFacing==='user');readCaps();applyCam(camIx,true);applyPro();}),
+  top.append(btn('camx','✕','Close camera',()=>{if(camRecorder.busy)camRecorder.stop('closed');{const v=document.createElement('div');v.style.cssText='position:fixed;inset:0;background:#0a0a0a;z-index:99999';document.body.appendChild(v);}location.assign('index.html');}),btn('camflip','Flip','Flip camera',async()=>{await startCam(true);setPM(camFacing==='user');readCaps();applyCam(camIx,true);applyPro();}),
     btn('camflashb','Flash','Flash',()=>{setFlash(PRO.flash==='off'?'on':PRO.flash==='on'?(proCaps.torch?'torch':'off'):'off');}),
     btn('camasp','3:4','Frame shape',e=>{const o=['3:4','4:5','1:1','3:2','4:3','16:9','21:9','9:16','src'],i=(o.indexOf(P.aspect)+1)%o.length;P.aspect=o[i];if(camAspLock)camAspLock=o[i],lsSet('n0ise.camasplock',o[i]);V.sizeKey='';paintCamUI();}),
     btn('campb','Pro','Pro controls',e=>{const on=u.classList.toggle('pro');u.classList.remove('more');e.currentTarget.setAttribute('aria-pressed',on);if(on)renderPro();}),
