@@ -282,7 +282,7 @@ body[data-walk] .restore,body[data-sgs] .restore,body[data-sgs] .bar,body[data-s
 
 /* Pocket Studio, phones: the 3D sheet, tabs, objects and controls (same state and commands as desktop) */
 @media (max-width:899px){
-  :root:not([data-skin]){--panel:var(--ps-surface);--raise:var(--ps-raised);--bg:var(--ps-canvas);--line:var(--ps-line);--ink:var(--ps-text);--mute:var(--ps-mute);--stage:#0b0c0e}
+  :root:not([data-skin=parchment]):not([data-skin=utility]){--panel:var(--ps-surface);--raise:var(--ps-raised);--bg:var(--ps-canvas);--line:var(--ps-line);--ink:var(--ps-text);--mute:var(--ps-mute);--stage:#0b0c0e}
   #sheet{border-radius:var(--ps-r3) var(--ps-r3) 0 0;box-shadow:0 -10px 30px rgba(0,0,0,.35)}
   .grab{height:26px}.grab::after{width:42px;height:5px;border-radius:999px;background:#60636c}
   .tabs{gap:4px;padding:2px 8px 8px;border-bottom:1px solid var(--line)}
