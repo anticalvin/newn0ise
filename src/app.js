@@ -2096,6 +2096,37 @@ function toast(msg){
   t.textContent=msg;t.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>{t.hidden=true;},2600);
 }
 const el=(tag,cls,html)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(html!=null)e.innerHTML=html;return e;};
+/* Shared modal behaviour for every .sheet dialog (export, start, projects, finished media, help): a name, focus moves in and stays in, the page behind is inert,
+   Escape closes (unless an export is running), and focus goes back to what opened it. */
+(function(){
+  const FOC='a[href],button:not([disabled]),input:not([disabled]):not([type=hidden]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
+  const stack=[];
+  function open(sh){
+    if(sh._m)return;const opener=document.activeElement;sh._m=1;
+    const h=sh.querySelector('h3,h2'),box=sh.firstElementChild||sh;
+    sh.setAttribute('role','dialog');sh.setAttribute('aria-modal','true');
+    if(h){if(!h.id)h.id='shh'+Math.random().toString(36).slice(2,7);sh.setAttribute('aria-labelledby',h.id);}else sh.setAttribute('aria-label','Dialog');
+    const inerted=[];[...document.body.children].forEach(c=>{if(c===sh||c.tagName==='SCRIPT'||c.hasAttribute('inert')||c.classList.contains('sheet')||c.id==='toast'||c.classList.contains('toast'))return;c.setAttribute('inert','');inerted.push(c);});
+    sh._m={opener,inerted};stack.push(sh);
+    const items=()=>[...sh.querySelectorAll(FOC)].filter(e=>e.offsetParent!==null||e===document.activeElement);
+    requestAnimationFrame(()=>{if(sh.contains(document.activeElement))return;const f=sh.querySelector('[autofocus]')||sh.querySelector('.btn.primary')||items()[0];if(f)f.focus();else{box.tabIndex=-1;box.focus();}});
+  }
+  function closed(sh){
+    const m=sh._m;if(!m||m===1)return;const i=stack.indexOf(sh);if(i>=0)stack.splice(i,1);
+    if(!stack.length)m.inerted.forEach(c=>c.removeAttribute('inert'));
+    sh._m=null;const o=m.opener;if(o&&o.isConnected&&o.focus)try{o.focus();}catch(e){}
+  }
+  new MutationObserver(ms=>{for(const m of ms){m.addedNodes.forEach(n=>{if(n.nodeType===1&&n.classList.contains('sheet'))open(n);});m.removedNodes.forEach(n=>{if(n.nodeType===1&&n._m)closed(n);});}}).observe(document.body,{childList:true});
+  document.querySelectorAll('.sheet').forEach(open);
+  addEventListener('keydown',e=>{
+    const sh=stack[stack.length-1];if(!sh)return;
+    if(e.key==='Escape'){if(sh.classList.contains('busy')){toast&&toast('An export is running. Wait for it to finish.');return;}e.preventDefault();e.stopPropagation();
+      const c=sh.querySelector('#xc,#xc2,[data-close],#xclose')||[...sh.querySelectorAll('button')].find(b=>/^(close|done|cancel|skip|not now)/i.test(b.textContent.trim()));if(c)c.click();else sh.remove();return;}
+    if(e.key==='Tab'){const it=[...sh.querySelectorAll(FOC)].filter(x=>x.offsetParent!==null);if(!it.length){e.preventDefault();return;}const a=it[0],z=it[it.length-1];
+      if(!sh.contains(document.activeElement)){e.preventDefault();a.focus();}else if(e.shiftKey&&document.activeElement===a){e.preventDefault();z.focus();}else if(!e.shiftKey&&document.activeElement===z){e.preventDefault();a.focus();}}
+  },true);
+})();
+
 
 /* ---------- history ---------- */
 const HIST=[],REDO=[];let lastSnap='';
@@ -3223,7 +3254,7 @@ let busy=false;
 function openExport(){
   if(!GLOK||$('.sheet'))return;
   const sh=el('div','sheet'),o={len:4,w:480,mul:1,fmt:0,boom:0,q:VQ(),fps:30};
-  sh.innerHTML=`<div class="xp"><h3>Export</h3>
+  sh.innerHTML=`<div class="xp"><div class="xh"><h3>Export</h3><button class="btn" id="xc2" type="button">Close</button></div>
   <div class="cl">Length</div><div class="chips" data-k="len"><button class="chip" data-v="2">2s</button><button class="chip" data-v="4">4s</button><button class="chip" data-v="8">8s</button></div>
   <div class="cl">Video quality</div><div class="chips" data-k="q"><button class="chip" data-v="0">Standard</button><button class="chip" data-v="1">High</button><button class="chip" data-v="2">Max</button></div>
   <div class="cl">Video frame rate</div><div class="chips" data-k="fps"><button class="chip" data-v="30">30</button><button class="chip" data-v="60">60</button></div><p class="cl" id="xe"></p>
@@ -3241,7 +3272,7 @@ function openExport(){
   const msg=t=>{$('#xm',sh).textContent=t;};
   const run=async f=>{if(busy)return;busy=true;sh.classList.add('busy');try{await f();}catch(e){console.error(e);toast('Export failed, try a smaller size');}busy=false;sh.classList.remove('busy');msg('');};
   const close=()=>{if(!busy)sh.remove();};
-  $('#xc',sh).addEventListener('click',close);sh.addEventListener('pointerdown',e=>{if(e.target===sh)close();});
+  $('#xc',sh).addEventListener('click',close);$('#xc2',sh).addEventListener('click',close);sh.addEventListener('pointerdown',e=>{if(e.target===sh)close();});
   $('#xp',sh).addEventListener('click',()=>run(async()=>{await exportImage(o,msg);sh.remove();}));
   $('#xb',sh).addEventListener('click',()=>$('#xbf',sh).click());
   $('#xbf',sh).addEventListener('change',e=>run(async()=>{await exportBatch([...e.target.files],o,msg);sh.remove();}));
@@ -3300,7 +3331,9 @@ function wire(){
   ['pointerup','pointercancel','pointerleave'].forEach(t=>hold.addEventListener(t,()=>setH(false)));
   hold.addEventListener('contextmenu',e=>e.preventDefault());
   addEventListener('keydown',e=>{
-    if(e.target!==document.body)return;
+    const tg=e.target,ed=tg&&tg!==document.body&&(tg.isContentEditable||/^(INPUT|TEXTAREA|SELECT)$/.test(tg.tagName)&&!/^(button|checkbox|radio|range|color|file)$/.test(tg.type||''));
+    if(ed||document.querySelector('.sheet'))return;
+    if(e.target!==document.body&&!(e.metaKey||e.ctrlKey))return; // plain letter shortcuts stay off while a button has focus, so Space and Enter still press it
     const mod=e.metaKey||e.ctrlKey,k=e.key.toLowerCase();
     if(mod&&k==='z'){e.preventDefault();e.shiftKey?redo():undo();return;}
     if(mod&&k==='y'){e.preventDefault();redo();return;}
@@ -4182,7 +4215,7 @@ function wireSheet(){
       const mk=(t,cls,fn)=>{const b=el('button','btn big'+(cls?' '+cls:''),t);b.addEventListener('click',()=>{sh.remove();fn();});bx.appendChild(b);};
       mk('Upload photo or video','primary',()=>$('#file').click());
       mk('Blank canvas','',()=>{const c=document.createElement('canvas');c.width=1080;c.height=1350;const g=c.getContext('2d');const gr=g.createLinearGradient(0,0,0,1350);gr.addColorStop(0,'#2b2b2b');gr.addColorStop(1,'#050505');g.fillStyle=gr;g.fillRect(0,0,1080,1350);setSource(c,'Blank',false);});
-      mk('Explore demos','',()=>{setSource(demoCanvas(),'Sample',false);});
+      mk('Try sample','',()=>{setSource(demoCanvas(),'Sample',false);});
       const rc=(()=>{try{return JSON.parse(localStorage.getItem('n0ise.projects')||'[]');}catch(e){return[];}})();
       mk('Skip','',()=>{});
       document.body.appendChild(sh);sh.addEventListener('pointerdown',e=>{if(e.target===sh)sh.remove();});},700);

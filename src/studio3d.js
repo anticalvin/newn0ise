@@ -1987,8 +1987,9 @@ function buildTabs(){
 }
 
 /* ---------- control helpers ---------- */
+let SLID=0;
 function sliderRow(parent,label,get,set,min,max,step,fmt){
-  const r=el('div','row');r.innerHTML=`<label>${label}</label><input type="range" min="${min}" max="${max}" step="${step}"><output></output>`;
+  const r=el('div','row'),sid='sl'+(++SLID);r.innerHTML=`<label for="${sid}">${label}</label><input id="${sid}" type="range" min="${min}" max="${max}" step="${step}"><output for="${sid}"></output>`;
   const i=r.querySelector('input'),o=r.querySelector('output');
   const f=fmt||(v=>step<1?(+v).toFixed(step<.1?2:1):String(Math.round(v)));
   let lo=min,hi=max;
@@ -2838,7 +2839,7 @@ if(/^#world/.test(location.hash)){setTab('world');worldEd.starter();}
       photo:()=>{close();const f=$('#file');f.accept='image/*';f.onchange=async()=>{await importFiles(f.files);f.value='';f.accept=FILE_ACCEPT;f.onchange=null;};f.click();},
       model:()=>{close();$('#file').click();},
       scan:()=>{close();setTab('scan');},
-      scene:()=>{close();setTab('scene');if(!S.objs.length)addPrimitive('Knot');}
+      scene:()=>{close();setTab('scene');toast('Empty scene. Add a shape from the Scene tab, or draw in the Draw tab.',4000);}
     };
     L.querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=>go[b.dataset.go]()));
     addEventListener('keydown',e=>{if(!L.hidden&&e.key==='Escape')close();});
