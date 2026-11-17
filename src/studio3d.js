@@ -2003,6 +2003,7 @@ addEventListener('pointerup',e=>{if(e.target.closest&&e.target.closest('#panes')
 function setTab(id){
   TABN.forEach(([k])=>{$('#tab_'+k).setAttribute('aria-selected',k===id);paneEls[k].hidden=k!==id;});
   panes.scrollTop=0;S.tab=id;try{SIG&&SIG.onTab(id);}catch(e){console.error(e);}try{setSelBox();}catch(e){}try{paintBar();}catch(e){}
+  if(id!=='mat'&&MS)MS.paintOff();
   if(id==='mat'&&MS)MS.show();
   if(id==='world'&&!S._wsChosen&&!S._wsBoot&&window.__wsShow&&!S.objs.some(o=>!(o.meta&&o.meta.player)))window.__wsShow();
   if(id==='world'&&!S._plSpawn&&typeof ensurePlayer==='function'){S._plSpawn=1;ensurePlayer().then(()=>{S.needFrame=true;}).catch(()=>{});}
@@ -2411,6 +2412,7 @@ function buildHud(){
   const h=$('#bHold');const on=v=>{S.hold=v;h.setAttribute('aria-pressed',v);};
   h.addEventListener('pointerdown',e=>{e.preventDefault();on(true);});['pointerup','pointercancel','pointerleave'].forEach(t=>h.addEventListener(t,()=>on(false)));h.addEventListener('contextmenu',e=>e.preventDefault());
   $('#bFrame').addEventListener('click',frameAll);
+  $('#bMat').addEventListener('click',()=>{setTab('mat');if(!mqDesk.matches&&sheet.idx<2)sheet.setIdx(2);});
   $('#bGrid').addEventListener('click',()=>{S.grid=!S.grid;$('#bGrid').setAttribute('aria-pressed',S.grid);});
   $('#bSpin').addEventListener('click',()=>{S.spin=!S.spin;$('#bSpin').setAttribute('aria-pressed',S.spin);});
   $('#bImport').addEventListener('click',()=>{$('#file').accept=FILE_ACCEPT;$('#file').click();});
@@ -2428,7 +2430,7 @@ function buildHud(){
 }
 
 /* ---------- boot ---------- */
-window.__sheet=sheet;studioDefaults();buildTabs();MS=createMatStudio({THREE,RoomEnvironment,el,btn,sliderRow,chipRow,sec,toast,objById,S,bump,MAT,SURF,ngApply,ngClear,openGraph:openNodeGraph,setEnvHdr,setEnvStrength:v=>{scene.environmentIntensity=v;hemi.intensity=.2+v*.7;},pane:paneEls.mat});placeTabs();mqDesk.addEventListener('change',placeTabs);buildHud();buildScenePane();buildScanPane();
+window.__sheet=sheet;studioDefaults();buildTabs();MS=createMatStudio({THREE,RoomEnvironment,el,btn,sliderRow,chipRow,sec,toast,objById,S,bump,MAT,SURF,ngApply,ngClear,openGraph:openNodeGraph,setEnvHdr,dom:canvas,camera,controls,LGT,createBall,fxOpen,gotoTab:k=>{setTab(k);if(!mqDesk.matches&&sheet.idx<2)sheet.setIdx(2);},peek:()=>{if(!mqDesk.matches)sheet.setIdx(1);},openLook:()=>{const pp=document.getElementById('lookpop');window.__lookPop&&window.__lookPop.open('selected',document.getElementById('tab_mat'));},setEnvStrength:v=>{scene.environmentIntensity=v;hemi.intensity=.2+v*.7;},pane:paneEls.mat});placeTabs();mqDesk.addEventListener('change',placeTabs);buildHud();buildScenePane();buildScanPane();
 if(renderer){buildLookPane();}
 buildExportPane();wireSheet();
 setTab('scene');
@@ -2741,6 +2743,7 @@ function paintBar(){
   nm.addEventListener('click',()=>{const inp=document.createElement('input');inp.value=o.name;inp.maxLength=60;inp.setAttribute('aria-label','Object name');inp.style.cssText='width:130px;min-height:36px;font:inherit;background:#0d0c0b;color:inherit;border:1px solid rgba(255,255,255,.3);border-radius:8px;padding:0 8px';let d=false;const fin=ok=>{if(d)return;d=true;if(ok&&inp.value.trim()){o.name=inp.value.trim();renderObjList&&renderObjList();}paintBar();};inp.addEventListener('keydown',e=>{e.stopPropagation();if(e.key==='Enter')fin(true);if(e.key==='Escape')fin(false);});inp.addEventListener('blur',()=>fin(true));nm.replaceWith(inp);inp.focus();inp.select();});
   bar.appendChild(nm);sep();
   B('Move','Move',()=>setTool('translate'),S.gizmo==='translate','W');B('Rotate','Rotate',()=>setTool('rotate'),S.gizmo==='rotate','E');B('Scale','Scale',()=>setTool('scale'),S.gizmo==='scale','R');B('Orbit','Orbit only, no handles',()=>setTool(null),!S.gizmo,'Q');sep();
+  B('Material','Material, paint and lights',()=>{setTab('mat');if(!mqDesk.matches&&sheet.idx<2)sheet.setIdx(2);},S.tab==='mat');
   B('Look','Put a hardware look on this',e=>{const pp=document.getElementById('lookpop');if(pp&&!pp.hidden){pp.hidden=true;return;}window.__lookPop&&window.__lookPop.open('selected',e.currentTarget);},false);
   B('Copy','Duplicate',()=>dupObj(o),false,'Ctrl/Cmd+D');B('Floor','Drop to the floor',()=>dropObj(o),false);B('Frame','Frame it',()=>frameObj(o),false,'F');B('Delete','Delete',()=>removeObj(o.id),false,'Del');
 }

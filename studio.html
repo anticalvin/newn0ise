@@ -12,6 +12,9 @@
 {"imports":{
   "three":"https://cdn.jsdelivr.net/npm/three@0.187.0/build/three.module.js",
   "three/addons/":"https://cdn.jsdelivr.net/npm/three@0.187.0/examples/jsm/",
+  "three/examples/jsm/":"https://cdn.jsdelivr.net/npm/three@0.187.0/examples/jsm/",
+  "three-mesh-bvh":"https://cdn.jsdelivr.net/npm/three-mesh-bvh@0.9.17/src/index.js",
+  "three-gpu-pathtracer":"https://cdn.jsdelivr.net/npm/three-gpu-pathtracer@0.0.27/src/index.js",
   "@sparkjsdev/spark":"https://cdn.jsdelivr.net/npm/@sparkjsdev/spark@2.4.0/dist/spark.module.min.js"
 }}
 </script>
@@ -341,7 +344,7 @@ body[data-walk] .restore,body[data-sgs] .restore,body[data-sgs] .bar,body[data-s
     <div id="stage">
       <canvas id="gl" tabindex="0"></canvas>
       <div class="hud tl"><div class="seg" id="viewSeg"></div></div>
-      <div class="hud tr"><span id="fxnote" class="fxnote" aria-live="polite"></span><button class="chipb" id="bFx" aria-pressed="true">FX</button></div>
+      <div class="hud tr"><span id="fxnote" class="fxnote" aria-live="polite"></span><button class="chipb" id="bMat">Material</button><button class="chipb" id="bFx" aria-pressed="true">FX</button></div>
       <div class="hud bl" id="hudBL"><button class="chipb" id="bFrame">Frame</button><button class="chipb" id="bGrid" aria-pressed="true">Grid</button><button class="chipb" id="bWalk">Walk</button><button class="chipb" id="bSpin" aria-pressed="false">Spin</button></div>
       <div class="hud br" id="hudBR"><button class="chipb" id="bHold">Hold: original</button></div>
       <div class="empty" id="empty"><b>Bring a model, a photo or a scan.</b>glb · gltf · obj · stl · ply · splat · spz · audio — or use the Scan tab</div>
@@ -381,6 +384,6 @@ body[data-walk] .restore,body[data-sgs] .restore,body[data-sgs] .bar,body[data-s
 <button class="card" data-w="import"><b>Import a world</b><span>Open a .n0world file an AI wrote, or one you exported.</span></button>
 </div></div></div>
 
-<script type="module" src="assets/studio.js?v=243c5a15"></script>
+<script type="module" src="assets/studio.js?v=b9afd19d"></script>
 </body>
 </html>

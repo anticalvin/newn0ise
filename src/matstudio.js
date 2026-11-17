@@ -2,6 +2,7 @@
    and physical-material layers (clear coat, sheen, glass, iridescence, anisotropy). Everything is three.js MeshPhysicalMaterial.
    Poly Haven assets are CC0 (https://polyhaven.com/license). Nothing is bundled: they load from their CDN on demand. */
 import {buildMaps,texturesFor,fillMaterial} from './nodemat.js';
+import {createPainter} from './matpaint.js';
 
 const API='https://api.polyhaven.com';
 const J=new Map();
@@ -34,11 +35,12 @@ export function physProps(THREE,m,P){
 }
 
 export function createMatStudio(c){
-  const {THREE,RoomEnvironment,el,btn,sliderRow,chipRow,sec,toast,objById,S,bump,MAT,SURF,ngApply,ngClear,openGraph,setEnvHdr,pane}=c;
+  const {THREE,RoomEnvironment,el,btn,sliderRow,chipRow,sec,toast,objById,S,bump,MAT,SURF,ngApply,ngClear,openGraph,setEnvHdr,pane,dom,camera,controls,LGT,createBall,fxOpen,gotoTab,peek,openLook}=c;
   const meshes=o=>{const out=[];if(!o||!o.holder)return out;o.holder.traverse(n=>{if(n.isMesh&&!n.isSplatMesh&&n.geometry&&n.material&&!(n.userData&&n.userData.noView))out.push(n);});return out;};
   const cur=()=>objById(S.sel!=null?S.sel:S.fxTarget);
   const surfaceOk=o=>o&&o.kind!=='viz'&&o.kind!=='splat';
 
+  const PNT=createPainter({THREE,dom,camera,controls,meshesOf:meshes,prepare:o=>{if(!surfaceOk(o)){toast('This kind of object has no surface to paint.');return false;}upgrade(o);return true;},toast,S,bump,getObj:cur,onChange:()=>{}});
   /* ---- turn the object's standard materials into physical ones (same look, more features) ---- */
   function upgrade(o){
     let changed=false;
@@ -144,14 +146,18 @@ export function createMatStudio(c){
     const mat=new THREE.MeshPhysicalMaterial({color:0xcccccc,roughness:.4});
     const mesh=new THREE.Mesh(G.Ball,mat);sc.add(mesh);
     let ry=.5,rx=.15,drag=false,lx=0,ly=0,auto=true,dirty=true,ng=null,ngKey='',tex=null;
+    let PT=null,ptOn=false,pcam=null,ptLib=null,ptDirty=false,hdr=null,ptEnv=null,blur=0,cap=160,snapNow=false;const state={samples:0};
+    const orbit=()=>{const d=4.6,cx=Math.cos(rx);pcam.position.set(Math.sin(ry)*cx*d,Math.sin(rx)*d,Math.cos(ry)*cx*d);pcam.lookAt(0,0,0);pcam.updateMatrixWorld();};
+    const setDof=()=>{if(!pcam)return;pcam.focusDistance=4.6;pcam.fStop=16-blur*14.6;pcam.apertureBlades=0;};
     cv.addEventListener('pointerdown',e=>{drag=true;lx=e.clientX;ly=e.clientY;auto=false;try{cv.setPointerCapture(e.pointerId);}catch(_){}});
-    cv.addEventListener('pointermove',e=>{if(!drag)return;ry+=(e.clientX-lx)*.012;rx=clamp(rx+(e.clientY-ly)*.012,-1.2,1.2);lx=e.clientX;ly=e.clientY;dirty=true;});
+    cv.addEventListener('pointermove',e=>{if(!drag)return;ry+=(e.clientX-lx)*.012;rx=clamp(rx+(e.clientY-ly)*.012,-1.2,1.2);lx=e.clientX;ly=e.clientY;dirty=true;if(ptOn&&PT){orbit();PT.updateCamera();}});
     cv.addEventListener('pointerup',()=>{drag=false;});cv.addEventListener('pointercancel',()=>{drag=false;});
     cv.addEventListener('dblclick',()=>{auto=!auto;});
     let o=null,tmat=null;
     const api={el:cv,
-      shape(k){mesh.geometry=G[k]||G.Ball;if(k==='Plane'){rx=-.35;}dirty=true;},
-      setEnv(t){try{const nt=t?pm.fromEquirectangular(t).texture:pm.fromScene(new RoomEnvironment(),.04).texture;if(envT&&envT.dispose)envT.dispose();envT=nt;sc.environment=nt;dirty=true;}catch(e){}},
+      state,
+      shape(k){mesh.geometry=G[k]||G.Ball;if(k==='Plane'){rx=-.35;}dirty=true;ptDirty=true;},
+      setEnv(t){hdr=t||null;if(ptOn&&PT){ptEnv=hdr||ptEnv;sc.environment=hdr||ptEnv;ptDirty=true;}try{const nt=t?pm.fromEquirectangular(t).texture:pm.fromScene(new RoomEnvironment(),.04).texture;if(envT&&envT.dispose)envT.dispose();envT=nt;if(!(ptOn&&PT))sc.environment=nt;dirty=true;}catch(e){}},
       setObj(ob){o=ob;api.sync();},
       dirty(){dirty=true;},
       sync(){
@@ -160,11 +166,31 @@ export function createMatStudio(c){
         if(o&&o.nmat){const k=JSON.stringify(o.nmat);if(k!==ngKey){ngKey=k;try{const maps=buildMaps(o.nmat,256);ng=texturesFor(THREE,maps,ng);ng._maps=maps;}catch(e){ng=null;}}if(ng&&ng._maps)fillMaterial(THREE,m,ng,ng._maps);}
         else if(o&&o.ptex){const s=o.ptex;if(!(tex&&tex.s===s))texSet(s.id,s.res).then(T=>{if(o&&o.ptex===s){tex={T,s};api.sync();}}).catch(()=>{});if(tex&&tex.s===s){TK.forEach(k=>{const b=tex.T[k];if(!b){return;}if(m[k]&&m[k]!==b&&m[k].dispose)m[k].dispose();const t=b.clone();t.needsUpdate=true;t.repeat.set(s.rep,s.rep);t.colorSpace=b.colorSpace;m[k]=t;});m.color.set(s.tint||'#fff');m.roughness=tex.T.roughnessMap?clamp(s.rk,0,2):.5;m.metalness=tex.T.metalnessMap?1:0;if(m.normalScale)m.normalScale.set(s.nk,s.nk);}}
         const keep={...P};m.userData.pbOrig=m.userData.pbOrig||{emissive:new THREE.Color(0),emissiveIntensity:1,transparent:false};
-        physProps(THREE,m,keep);m.needsUpdate=true;dirty=true;
+        physProps(THREE,m,keep);m.needsUpdate=true;dirty=true;ptDirty=true;
       },
+      async setPT(on){
+        if(!on){ptOn=false;if(PT){try{PT.dispose();}catch(e){}PT=null;}sc.environment=envT;sc.background=null;mesh.rotation.set(rx,ry,0);dirty=true;state.samples=0;return true;}
+        try{
+          ptLib=ptLib||await import('three-gpu-pathtracer');
+          pcam=new ptLib.PhysicalCamera(32,(cv.clientWidth||300)/(cv.clientHeight||170),.1,50);setDof();
+          PT=new ptLib.WebGLPathTracer(rn);PT.bounces=6;PT.filterGlossyFactor=.4;PT.tiles.set(2,2);
+          if(!ptEnv){const g=new ptLib.GradientEquirectTexture();g.topColor.set('#e8edf5');g.bottomColor.set('#1a1b20');g.update();ptEnv=g;}
+          sc.environment=hdr||ptEnv;sc.background=new THREE.Color('#101114');mesh.rotation.set(0,0,0);auto=false;orbit();ptOn=true;ptDirty=true;state.samples=0;return true;
+        }catch(e){console.warn('path tracer',e);ptOn=false;PT=null;return false;}
+      },
+      pt:()=>ptOn,
+      blur(v){blur=v;setDof();ptDirty=true;},
+      cap(v){cap=v;},
+      snap(){snapNow=true;},
       live(){return cv.offsetParent!==null;}};
     let last=0;
     const loop=t=>{requestAnimationFrame(loop);if(!api.live())return;if(t-last<33)return;last=t;
+      if(ptOn&&PT){
+        const w2=cv.clientWidth,h2=cv.clientHeight;if(w2&&h2&&(cv._w!==w2||cv._h!==h2)){cv._w=w2;cv._h=h2;rn.setSize(w2,h2,false);pcam.aspect=w2/h2;pcam.updateProjectionMatrix();ptDirty=true;}
+        if(ptDirty){orbit();PT.setScene(sc,pcam);ptDirty=false;}
+        if(PT.samples<cap)PT.renderSample();state.samples=Math.floor(PT.samples);
+        if(snapNow){snapNow=false;cv.toBlob(b=>{if(!b)return;const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='material-render.png';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),4000);});}
+        return;}
       if(auto&&!drag){ry+=.012;dirty=true;}
       const w=cv.clientWidth,h=cv.clientHeight;if(w&&h&&(cv._w!==w||cv._h!==h)){cv._w=w;cv._h=h;rn.setSize(w,h,false);cam.aspect=w/h;cam.updateProjectionMatrix();dirty=true;}
       if(!dirty)return;dirty=false;mesh.rotation.set(rx,ry,0);rn.render(sc,cam);};
@@ -197,7 +223,13 @@ export function createMatStudio(c){
   }
 
   /* ---- the tab ---- */
-  const CSS=`.ms-prev{position:sticky;top:0;z-index:3;height:170px;margin:-2px -2px 8px;border-radius:16px;overflow:hidden;background:radial-gradient(circle at 50% 40%,#2b2d33,#0d0d10);border:1px solid var(--line)}
+  const CSS=`.ms-stk{position:sticky;top:0;z-index:3;background:var(--panel,#16171b);padding:0 0 6px;margin:-2px -2px 6px}
+.ms-nav{display:flex;gap:6px;overflow-x:auto;padding:6px 2px 0;scrollbar-width:none}.ms-nav::-webkit-scrollbar{display:none}
+.ms-nav button{flex:none;min-height:36px;padding:0 14px;border-radius:999px;border:1px solid var(--line);background:var(--raise);color:inherit;font:700 11px var(--lab,monospace);letter-spacing:.06em;text-transform:uppercase}
+.ms-nav button.hot{background:var(--accent);border-color:var(--accent);color:#111}
+.ms-pt{position:absolute;right:8px;top:8px;display:flex;gap:6px;align-items:center}.ms-pt span{font:600 10px var(--lab,monospace);color:#c9cbd2;background:rgba(10,10,12,.55);padding:4px 8px;border-radius:999px}
+.ms-pt button{min-height:32px;padding:0 12px;border-radius:999px;border:1px solid rgba(255,255,255,.18);background:rgba(10,10,12,.55);color:#e8e9ed;font:700 11px var(--lab,monospace);backdrop-filter:blur(8px)}.ms-pt button[aria-pressed=true]{background:#fff;color:#111}
+.ms-prev{position:relative;height:150px;margin:0;border-radius:16px;overflow:hidden;background:radial-gradient(circle at 50% 40%,#2b2d33,#0d0d10);border:1px solid var(--line)}
 .ms-prev .ms-shp{position:absolute;left:8px;right:8px;bottom:8px;display:flex;gap:4px;flex-wrap:wrap}
 .ms-prev .ms-shp button{min-height:30px;padding:0 10px;border-radius:999px;border:1px solid rgba(255,255,255,.18);background:rgba(10,10,12,.55);color:#e8e9ed;font:600 11px var(--lab,monospace);backdrop-filter:blur(8px)}
 .ms-prev .ms-shp button[aria-pressed=true]{background:#fff;color:#111}
@@ -213,7 +245,8 @@ export function createMatStudio(c){
 .ms-col{display:flex;align-items:center;justify-content:space-between;min-height:44px;gap:10px;font:600 11px var(--lab,monospace);color:var(--mute)}
 .ms-col input{width:56px;height:36px;border:1px solid var(--line);background:none;border-radius:8px;padding:0}
 .ms-cr{font-size:10.5px;color:var(--mute);margin-top:6px}`;
-  let pv=null,shown=null,shape='Ball',lastKey='';
+  let SB=null,pv=null,shown=null,shape='Ball',lastKey='',pvLabel=null;
+  setInterval(()=>{if(pv&&pvLabel&&pv.pt()&&!pane.hidden)pvLabel.textContent=pv.state.samples+' samples';},400);
   const st=document.createElement('style');st.textContent=CSS;document.head.appendChild(st);
   const colorRow=(parent,label,get,set)=>{const r=el('label','ms-col');r.append(label);const i=document.createElement('input');i.type='color';i.value=get();i.addEventListener('input',()=>set(i.value));r.appendChild(i);parent.appendChild(r);};
   let polyTex=null,polyHdr=null;
@@ -238,15 +271,43 @@ export function createMatStudio(c){
   function build(){
     pane.innerHTML='';
     const o=cur();shown=o?o.id:null;
-    const pw=el('div','ms-prev');
+    const stk=el('div','ms-stk'),pw=el('div','ms-prev');stk.appendChild(pw);
     if(!pv)pv=makePreview();pw.appendChild(pv.el);
     const sh=el('div','ms-shp');SHAPES.forEach(k=>{const b=el('button','',k);b.type='button';b.setAttribute('aria-pressed',k===shape);b.addEventListener('click',()=>{shape=k;pv.shape(k);[...sh.children].forEach(x=>x.setAttribute('aria-pressed',x===b));});sh.appendChild(b);});pw.appendChild(sh);
-    pane.appendChild(pw);pv.setObj(o&&surfaceOk(o)?o:null);pv.shape(shape);
+    const ptw=el('div','ms-pt'),ptl=el('span','','');ptl.hidden=true;const ptb=el('button','','Path trace');ptb.type='button';ptb.setAttribute('aria-pressed',pv.pt());ptb.title='Real lighting: reflections, glass and soft shadows, refined over a few seconds';
+    ptb.addEventListener('click',async()=>{if(pv.pt()){await pv.setPT(false);ptb.setAttribute('aria-pressed',false);ptl.hidden=true;return;}ptb.textContent='Loading…';const ok=await pv.setPT(true);ptb.textContent='Path trace';ptb.setAttribute('aria-pressed',ok);ptl.hidden=!ok;if(!ok)toast('Path tracing isn’t available here. It needs a recent GPU and a connection to load.',5000);});
+    ptw.append(ptl,ptb);pw.appendChild(ptw);pvLabel=ptl;
+    pane.appendChild(stk);pv.setObj(o&&surfaceOk(o)?o:null);pv.shape(shape);
     if(!o||!surfaceOk(o)){pane.appendChild(el('div','note','Pick an object (or add a shape) to give it a material. The preview above still works.'));}
     const live=()=>{const x=cur();pv.setObj(x&&surfaceOk(x)?x:null);bump();};
     const P=()=>norm((cur()||{}).pbr);
     const put=patch=>{const x=cur();if(!x||!surfaceOk(x)){toast('Pick an object first, or add a shape.');return false;}setPbr(x,patch);live();return true;};
 
+
+    /* paint */
+    {const s=sec(pane,'Paint','on the model');const B=PNT.B;
+      s.appendChild(el('div','note','Paint straight on the object. One brush lays down colour, roughness, metal, height and glow together. One finger paints, two fingers move the view.'));
+      const tog=(parent,label,get,set,cls)=>{const b=el('button',cls||'chip',label);b.type='button';b.setAttribute('aria-pressed',!!get());b.addEventListener('click',()=>{set(!get());b.setAttribute('aria-pressed',!!get());});parent.appendChild(b);return b;};
+      const r0=el('div','chips');
+      const onb=el('button','btn pri',B.on?'Painting: on':'Paint on model');onb.type='button';onb.setAttribute('aria-pressed',B.on);
+      onb.addEventListener('click',()=>{const x=cur();if(!B.on&&(!x||!surfaceOk(x))){toast('Pick an object first, or add a shape.');return;}PNT.setOn(!B.on);onb.setAttribute('aria-pressed',B.on);onb.textContent=B.on?'Painting: on':'Paint on model';if(B.on){peek&&peek();toast('Painting. One finger paints, two fingers move the view.',3500);}});
+      r0.appendChild(onb);
+      r0.append(btn('Undo','',()=>{PNT.undo(cur());live();}),btn('Fill all','',()=>{PNT.fill(cur());live();}),btn('Reset paint','',()=>{PNT.reset(cur());live();}),btn('Export PNGs','',()=>PNT.exportPng(cur())));
+      s.appendChild(r0);
+      s.appendChild(el('div','sub','Brush presets'));
+      const rp=el('div','chips');PNT.BRUSH_PRESETS.forEach(([n,d])=>rp.appendChild(btn(n,'',()=>{B.kind=d.kind;B.hard=d.hard;B.flow=d.flow;B.size=d.size;B.erase=false;Object.keys(B.use).forEach(k=>{B.use[k]=d.ch[k]!=null;});Object.assign(B.ch,d.ch);if(!B.on)onb.click();build2();})));s.appendChild(rp);
+      s.appendChild(el('div','sub','Brush'));
+      chipRow(s,PNT.KINDS,v=>B.kind===v,v=>{B.kind=v;B.erase=false;build2();});
+      sliderRow(s,'Size',()=>B.size,v=>{B.size=v;},2,100,1);sliderRow(s,'Hardness',()=>B.hard,v=>{B.hard=v;},0,1,.01);sliderRow(s,'Flow',()=>B.flow,v=>{B.flow=v;},.05,1,.01);
+      const rm=el('div','chips');tog(rm,'Mirror left and right',()=>B.mirror,v=>{B.mirror=v;});tog(rm,'Eraser',()=>B.erase,v=>{B.erase=v;});s.appendChild(rm);
+      s.appendChild(el('div','sub','The brush paints'));
+      const rc=el('div','chips');[['col','Colour'],['rou','Roughness'],['met','Metal'],['hgt','Height'],['em','Glow']].forEach(([k,l])=>tog(rc,l,()=>B.use[k],v=>{B.use[k]=v;build2();}));s.appendChild(rc);
+      if(B.use.col)colorRow(s,'Colour',()=>B.ch.col,v=>{B.ch.col=v;});
+      if(B.use.rou)sliderRow(s,'Roughness',()=>B.ch.rou,v=>{B.ch.rou=v;},0,1,.01);
+      if(B.use.met)sliderRow(s,'Metal',()=>B.ch.met,v=>{B.ch.met=v;},0,1,.01);
+      if(B.use.hgt)sliderRow(s,'Height (low dents, high bumps)',()=>B.ch.hgt,v=>{B.ch.hgt=v;},0,1,.01);
+      if(B.use.em)colorRow(s,'Glow colour',()=>B.ch.em,v=>{B.ch.em=v;});
+      s.appendChild(el('div','ms-cr','Paint lives on the object while this page is open. Export PNGs to keep it, then import them in any 3D tool.'));}
     /* quick materials */
     {const s=sec(pane,'Quick materials');const r=el('div','chips');
       RECIPES.forEach(([n,d])=>r.appendChild(btn(n,'',()=>{const x=cur();if(!x){toast('Pick an object first, or add a shape.');return;}if(x.ptex)clearTex(x);if(x.nmat){ngClear(x);}put({...PB,...d});build2();})));
@@ -295,11 +356,47 @@ export function createMatStudio(c){
       const r=el('div','chips');r.append(btn('Studio','',()=>{studioEnv(pv);bump();}));s.appendChild(r);
       library(s,'hdris',async(x,b)=>{b.style.opacity=.5;await useHdri(x.id,pv);b.style.opacity='';},id=>hdrId===id);
       sliderRow(s,'Strength',()=>S.env,v=>{S.env=v;c.setEnvStrength&&c.setEnvStrength(v);bump();},0,2,.05);}
+
+    /* light */
+    {const s=sec(pane,'Light','rigs and path tracing');s.appendChild(el('div','note','One tap sets up real lights around the selected object. For the best judge of glass, metal and soft shadows, switch on Path trace in the preview.'));
+      const t=()=>controls.target;const rigsBtn=[];
+      const RIGS=[
+        ['Studio',[['dir',{color:'#fff4e6',intensity:2.6,d:[3,4,3]}],['point',{color:'#8fb4ff',intensity:14,d:[-3,2,2]}],['spot',{color:'#ffffff',intensity:70,d:[0,3,-3]}]]],
+        ['Softbox',[['spot',{color:'#ffffff',intensity:110,d:[0,5,1],angle:55}],['point',{color:'#ffe9d6',intensity:10,d:[2,1,3]}]]],
+        ['Neon club',[['point',{color:'#ff2bd6',intensity:40,d:[-3,1.5,2]}],['point',{color:'#18e7ff',intensity:40,d:[3,1.5,2]}],['point',{color:'#7a4dff',intensity:20,d:[0,3,-3]}]]],
+        ['Golden hour',[['dir',{color:'#ffb868',intensity:3.4,d:[4,1.2,2]}],['point',{color:'#6f93ff',intensity:8,d:[-3,2,-2]}]]],
+        ['Rim light',[['spot',{color:'#ffffff',intensity:120,d:[-2,2,-4],angle:40}],['spot',{color:'#9fc2ff',intensity:90,d:[2.5,2,-4],angle:40}],['point',{color:'#ffd9b0',intensity:4,d:[0,1,4]}]]],
+        ['Underlight',[['point',{color:'#4dff9a',intensity:40,d:[0,-2,2]}],['point',{color:'#ff3a3a',intensity:6,d:[0,3,-2]}]]],
+        ['Moonlight',[['dir',{color:'#9db8ff',intensity:1.6,d:[-3,5,2]}],['point',{color:'#ffd9a8',intensity:6,d:[2,.5,3]}]]]
+      ];
+      const rr=el('div','chips');RIGS.forEach(([n,list])=>rr.appendChild(btn(n,'',async()=>{try{await LGT.clearLights();for(const [ty,p] of list){const tg=t();await LGT.addLight(ty,{color:p.color,intensity:p.intensity,angle:p.angle||35,pos:[tg.x+p.d[0],tg.y+p.d[1],tg.z+p.d[2]]});}S.needFrame=true;bump();toast(n+' lights set');}catch(e){toast('Couldn’t set those lights.');}})));
+      rr.appendChild(btn('Clear lights','',async()=>{await LGT.clearLights();bump();}));s.appendChild(rr);
+      s.appendChild(el('div','sub','Path trace (preview)'));
+      sliderRow(s,'Blur (depth of field)',()=>0,v=>{pv.blur(v);},0,1,.01);
+      sliderRow(s,'Quality (samples)',()=>160,v=>{pv.cap(Math.round(v));},20,600,10);
+      const r2=el('div','chips');r2.append(btn('Save render','',()=>pv.snap()),btn('Sun, sky and all lights','',()=>{gotoTab&&gotoTab('scene');}));s.appendChild(r2);
+      s.appendChild(el('div','ms-cr','Path tracing by three-gpu-pathtracer (MIT). It loads the first time you switch it on.'));}
+
+    /* effects and engine */
+    {const s=sec(pane,'Effects','n0ise engine');s.appendChild(el('div','note','The n0ise effects work on 3D too. Surface effects live in the object’s own material and move with it. The full effect stack and hardware looks work on the whole picture.'));
+      if(!SB&&createBall){try{SB=createBall(THREE,RoomEnvironment,88);}catch(e){}}
+      const x=cur();
+      if(x&&surfaceOk(x)&&SURF&&SURF.SURF){
+        const row=el('div','ballrow');row.style.cssText='display:flex;gap:10px;align-items:center;margin:4px 0';if(SB){row.appendChild(SB.el);SB.set(x.surf);}const ch=el('div','chips');ch.style.flex='1';
+        const none=el('button','chip','None');none.type='button';none.setAttribute('aria-pressed',!(x.surf&&x.surf.m));none.addEventListener('click',()=>{SURF.clear(x);bump();build2();});ch.appendChild(none);
+        SURF.SURF.forEach(([id,label])=>{const b=el('button','chip',label);b.type='button';b.setAttribute('aria-pressed',!!(x.surf&&x.surf.m===id));b.addEventListener('click',()=>{SURF.pick(x,id);bump();build2();});b.addEventListener('pointerenter',()=>SB&&SB.set({m:id,amt:1,sp:1,...SURF.defaults(id)}));b.addEventListener('pointerleave',()=>SB&&SB.set(x.surf));ch.appendChild(b);});
+        row.appendChild(ch);s.appendChild(row);}
+      const r=el('div','chips');r.append(btn('Edit n0ise effects','pri',()=>{fxOpen&&fxOpen();}),btn('Hardware looks','',()=>{openLook&&openLook();}),btn('Open Look tab','',()=>{gotoTab&&gotoTab('look');}));s.appendChild(r);}
+    /* jump bar */
+    {const nav=el('div','ms-nav');nav.setAttribute('role','navigation');nav.setAttribute('aria-label','Material sections');
+      [...pane.querySelectorAll(':scope > .sec')].forEach(sc=>{const nm=(sc.querySelector('.st span')||{}).textContent;if(!nm)return;sc.style.scrollMarginTop='230px';
+        const b=el('button',nm==='Paint'?'hot':'',nm.replace(' from Poly Haven','').replace('Textures','Textures'));b.type='button';b.addEventListener('click',()=>{sc.scrollIntoView({block:'start',behavior:'smooth'});});nav.appendChild(b);});
+      stk.appendChild(nav);}
     lastKey=keyOf(o);
   }
   const keyOf=o=>o?o.id+'|'+(o.ptex?o.ptex.id:'')+'|'+(o.nmat?1:0)+'|'+(o.pbr?1:0):'-';
   let t2=0;const build2=()=>{clearTimeout(t2);t2=setTimeout(()=>{const y=pane.parentElement?pane.parentElement.scrollTop:0;build();},20);};
   /* rebuild when another object is picked while the tab is open */
   setInterval(()=>{if(pane.hidden)return;const o=cur();const id=o?o.id:null;if(id!==shown){build();}},500);
-  return {show(){build();},refresh(){if(!pane.hidden)build();},applyTex,clearTex,setPbr,clearPbr,upgrade,physProps:o=>{if(o&&o.pbr){upgrade(o);phys(o).forEach(m=>physProps(THREE,m,norm(o.pbr)));}}};
+  return {paintOff(){PNT.setOn(false);},show(){build();},refresh(){if(!pane.hidden)build();},applyTex,clearTex,setPbr,clearPbr,upgrade,physProps:o=>{if(o&&o.pbr){upgrade(o);phys(o).forEach(m=>physProps(THREE,m,norm(o.pbr)));}}};
 }
