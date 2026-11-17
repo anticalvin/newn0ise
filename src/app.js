@@ -2610,7 +2610,8 @@ function buildUI(){
 }
 
 /* sheet / panel tabs: Effects (pick a look), Fuse (build a camera-style blend), Layers (edit the stack) */
-function setDock(v,quiet){
+const n0wipe=()=>{try{const b=document.body;b.classList.remove("n-wipe");void b.offsetWidth;b.classList.add('n-wipe');setTimeout(()=>b.classList.remove('n-wipe'),220);}catch(e){}};
+function setDock(v,quiet){if(!quiet)n0wipe();
   if(v==='fuse'){
     let ix=STACK.layers.findIndex(l=>l.module==='fuse');
     if(ix<0){STACK.layers.push(mkLayer('fuse'));ix=STACK.layers.length-1;}
@@ -3680,6 +3681,29 @@ function moduleThumb(id,w=160,h=120,over){
 }
 let NODES=null;
 const nodesView=()=>NODES||(NODES=createNodes({STACK,MODULES,IDENT,snap,undo,redo,rerender:q=>{refreshUI();q?renderStrip():renderInspector();},addEffect:()=>{setDock('layers');INS.gallery=true;renderInspector();},dupLayer,srcName:()=>SRC.name,toast:(...a)=>toast(...a),el:(...a)=>el(...a),showLayer:()=>{INS.gallery=false;setDock('layers');renderInspector();}}));
+const GESTURE_TIP='Drag the art to tune it · hold to compare · two-finger tap undoes';
+/* Phone shell: the top bar keeps the title, undo, redo and Save. Everything else lives in one menu, so nothing floats over the artwork except Hold for original. */
+function phoneShell(){
+  if(document.getElementById('menubtn'))return;
+  const acts=document.querySelector('header .acts'),redo=document.getElementById('redo');if(!acts||!redo)return;
+  const mb=el('button','btn ic','⋯');mb.id='menubtn';mb.type='button';mb.setAttribute('aria-label','More');mb.setAttribute('aria-haspopup','true');mb.setAttribute('aria-expanded','false');redo.after(mb);
+  const menu=el('div','','');menu.id='menu';menu.setAttribute('role','menu');menu.setAttribute('aria-label','More');document.body.appendChild(menu);
+  const sec=(t,cls='mgrid')=>{menu.appendChild(el('h5','',t));const g=el('div',cls);menu.appendChild(g);return g;};
+  const close=()=>{menu.removeAttribute('data-open');mb.setAttribute('aria-expanded','false');};
+  const open=()=>{menu.setAttribute('data-open','1');mb.setAttribute('aria-expanded','true');menu.querySelectorAll('[data-src]').forEach(x=>{const o=document.getElementById(x.dataset.src);if(o)x.setAttribute('aria-pressed',o.getAttribute('aria-pressed')||'false');});};
+  mb.addEventListener('click',e=>{e.stopPropagation();menu.hasAttribute('data-open')?close():open();});
+  document.addEventListener('pointerdown',e=>{if(menu.hasAttribute('data-open')&&!menu.contains(e.target)&&e.target!==mb)close();});
+  document.addEventListener('keydown',e=>{if(e.key==='Escape')close();});
+  /* proxies for the header buttons (they keep their own handlers) */
+  const g1=sec('Project');
+  [['open','Open'],['find','Find'],['plugins','Plugins'],['studiobtn','3D'],['cam','Camera'],['rec','Record']].forEach(([id,t])=>{const o=document.getElementById(id);if(!o)return;o.classList.add('hideph');
+    const b=el('button','',t);b.type='button';b.dataset.src=id;b.setAttribute('role','menuitem');b.addEventListener('click',()=>{close();o.click();});g1.appendChild(b);});
+  /* the canvas buttons are moved, not copied, so their state and handlers stay exactly as they are */
+  const g2=sec('On the picture');
+  ['artonly','srcchip','cmpbtn','reset','textoff','stillbtn','shuffle','paint','toolplace'].forEach(id=>{const o=document.getElementById(id);if(o)g2.appendChild(o);});
+  document.querySelectorAll('.float.tr .pill,.float.bl .pill').forEach(o=>{if(o.id!=='hold')g2.appendChild(o);});
+  const g3=sec('Help');const h=el('button','','Gesture tips');h.type='button';h.addEventListener('click',()=>{close();toast(GESTURE_TIP,5000);});g3.appendChild(h);
+}
 function renderStrip(){
   const s=$i('strip');s.innerHTML='';
   STACK.layers.forEach((l,i)=>{
@@ -3999,11 +4023,11 @@ function wireTouch(){
   ['pointerup','change'].forEach(ev=>addEventListener(ev,()=>{setTimeout(snap,60);autosave();}));
   /* left-handed layout */
   const lefty=lsGet('n0ise.lefty',false);if(lefty)document.body.dataset.lefty='1';
-  /* first-run coach: one dismissable card, three tips */
-  if(!lsGet('n0ise.coach',false)&&(document.body.dataset.sheet!==undefined||innerWidth<700)){
-    const c=el('div','coach glass',`<b>Quick gestures</b><span>Drag to change it. Tap a look.</span><span>Hold the art to compare the original</span><span>Two-finger tap undoes, three-finger swipe changes effect</span>`);
-    const b=el('button','','Got it');b.addEventListener('click',()=>{lsSet('n0ise.coach',true);c.remove();});c.appendChild(b);stage.appendChild(c);const gone=()=>{lsSet('n0ise.coach',true);c.remove();};setTimeout(gone,6000);canvas.addEventListener('pointerdown',gone,{once:true});
+  /* first-run tip: one line, shown once as a toast, never over the artwork. The "?" in the menu shows it again. */
+  if(!lsGet('n0ise.coach',false)&&(document.body.dataset.sheet!==undefined||innerWidth<700)&&!document.documentElement.dataset.boot){
+    setTimeout(()=>{if(!document.querySelector('.srcmenu:not([hidden])')){toast(GESTURE_TIP,5000);lsSet('n0ise.coach',true);}},1800);
   }
+  try{phoneShell();}catch(e){console.warn('menu',e);}
 }
 /* digital snow: one switch for the tape snow and the sensor noise on every look */
 window.__noiseK=(()=>{try{const v=localStorage.getItem('n0ise.noisek');return v===null?.3:+JSON.parse(v);}catch(e){return .3;}})();
@@ -4077,9 +4101,10 @@ const RAIL_FAMILY={patdith:'Dither',contour:'Lines',ridge:'Lines',dither:'Dither
 const RAIL_ORDER=['★ Favorites','Recent','Mine',...UFAM_ORDER];
 const THUMBS=new Map();   /* key: module id + source version -> canvas */
 function cachedThumb(id){const k=id+'|'+SRC.ver;if(id!=='crtlab'&&THUMBS.has(k))return THUMBS.get(k);const rc=id.startsWith('recipe:')&&loadRecipes().find(r=>'recipe:'+r.id===id);const fx=id.startsWith('fuse:')&&FXBY[id.slice(5)];const c=rc?moduleThumb('fuse',112,84,rc.p):fx?moduleThumb('fuse',112,84,{f1:fxIndex(fx.id),i1:fx.i,m1:fx.m}):moduleThumb(id,112,84);if(id!=='crtlab'){THUMBS.set(k,c);if(THUMBS.size>60)THUMBS.delete(THUMBS.keys().next().value);}return c;}
-function heroOf(l){const m=MODULES[l.module],h=(m.schema.hero||[])[0];if(!h)return null;
+function heroAt(l,n){const m=MODULES[l.module],h=(m.schema.hero||[])[n];if(!h)return null;
   if(l.module==='crtlab'){const c=CTL[h];return c&&c.t==='r'?{V:P,p:{k:c.k,label:c.l,min:c.min,max:c.max,step:c.step,t:'r'}}:null;}
   const p=m.params.find(x=>x.k===h);return p&&p.t==='r'?{V:l.params,p}:null;}
+function heroOf(l){return heroAt(l,0);}
 function replaceModule(l,id){
   /* tapping an effect swaps it into the layer you are on; CRT Lab is the one effect that can only exist once */
   if(id==='crtlab'){const o=STACK.layers.findIndex(x=>x.module==='crtlab');if(o>=0&&STACK.layers[o]!==l){STACK.sel=o;INS.gallery=false;renderInspector();return;}}
@@ -4095,20 +4120,30 @@ function cycleMode(l){
 }
 function renderPeek(){
   const host=$i('peek');if(!host)return;[...host.children].forEach(c=>{if(!c.classList.contains('railwrap'))c.remove();});const l=layer(),m=MODULES[l.module];
-  /* hero scrubber */
-  const h=heroOf(l),sc=el('div','scrub');
-  const lab=el('span','sl',h?h.p.label.toUpperCase():'—'),val=el('span','sv','');
-  const inp=document.createElement('input');inp.type='range';inp.setAttribute('aria-label',h?h.p.label:'Primary control');
-  if(h){inp.min=h.p.min;inp.max=h.p.max;inp.step=h.p.step||1;inp.value=h.V[h.p.k];val.textContent=fmtv(h.p,h.V[h.p.k]);inp.style.setProperty('--p',((h.V[h.p.k]-h.p.min)/(h.p.max-h.p.min)*100)+'%');
+  /* which effect these controls belong to, then its three main controls, then a way to the rest */
+  const nm=el('div','fxname');nm.append(el('b','',m.name),el('span','',effectId(l).startsWith('fuse:')?'Fuse':(IDENT&&''))) ;host.insertBefore(nm,host.querySelector('.railwrap'));
+  let shown=0;
+  for(let hi=0;hi<3;hi++){
+    const h=heroAt(l,hi);if(!h)continue;shown++;const sc=el('div','scrub');
+    const lab=el('span','sl',h.p.label),val=el('span','sv','');
+    const inp=document.createElement('input');inp.type='range';inp.setAttribute('aria-label',m.name+': '+h.p.label);
+    inp.min=h.p.min;inp.max=h.p.max;inp.step=h.p.step||1;inp.value=h.V[h.p.k];val.textContent=fmtv(h.p,h.V[h.p.k]);inp.style.setProperty('--p',((h.V[h.p.k]-h.p.min)/(h.p.max-h.p.min)*100)+'%');
+    const def=(l.module==='crtlab')?null:m.defaults&&m.defaults()[h.p.k];
     inp.addEventListener('input',()=>{h.V[h.p.k]=+inp.value;val.textContent=fmtv(h.p,+inp.value);inp.style.setProperty('--p',((+inp.value-h.p.min)/(h.p.max-h.p.min)*100)+'%');});
-    inp.addEventListener('change',()=>{if(l.module==='crtlab')snap();});}
-  else inp.disabled=true;
-  sc.append(lab,inp,val);host.insertBefore(sc,host.querySelector('.railwrap'));
-  /* MODE */
-  const row=el('div','moderow'),mb=el('button','btn mode','MODE 1');
-  const label=()=>{const p=l.module==='crtlab'?null:m.params.find(x=>x.t==='c');mb.textContent='MODE '+(p?(+l.params[p.k]+1):(l.module==='crtlab'?(PROFILES.filter(q=>q[0]!=='none').findIndex(q=>q[0]===P.profile)+1||1):(l.seed+1)));};
+    inp.addEventListener('change',()=>{if(l.module==='crtlab')snap();});
+    if(def!=null)inp.addEventListener('dblclick',()=>{inp.value=def;inp.dispatchEvent(new Event('input'));inp.dispatchEvent(new Event('change'));});
+    sc.append(lab,inp,val);host.insertBefore(sc,host.querySelector('.railwrap'));
+  }
+  if(!shown){const sc=el('div','scrub');const inp=document.createElement('input');inp.type='range';inp.disabled=true;sc.append(el('span','sl','—'),inp,el('span','sv',''));host.insertBefore(sc,host.querySelector('.railwrap'));}
+  /* MODE: cycles the effect's built-in variations. It now says what it is. */
+  const row=el('div','moderow'),mb=el('button','btn mode','Variation 1');
+  const label=()=>{const p=l.module==='crtlab'?null:m.params.find(x=>x.t==='c');
+    if(p){const o=p.opts[+l.params[p.k]]||'';mb.textContent=(p.label||'Style')+': '+o+' ›';}
+    else if(l.module==='crtlab'){const pr=PROFILES.filter(q=>q[0]!=='none').find(q=>q[0]===P.profile);mb.textContent='Preset: '+(pr?pr[1]:'1')+' ›';}
+    else mb.textContent='Variation '+(l.seed+1)+' of 4 ›';mb.title='Tap to try the next variation of this effect';};
   label();mb.addEventListener('click',()=>{const n=cycleMode(l);label();toast(n);if(navigator.vibrate)try{navigator.vibrate(6);}catch(e){}});
-  row.appendChild(mb);host.insertBefore(row,host.querySelector('.railwrap'));
+  const more=el('button','btn','More controls');more.type='button';more.addEventListener('click',()=>{if(SHEET.apply)SHEET.apply(2);});
+  row.append(mb,more);host.insertBefore(row,host.querySelector('.railwrap'));
   /* rail: kept between renders. A selection only moves the highlight; the list is rebuilt only when its contents change. */
   const curId=effectId(l),sig=[SRC.ver,Object.keys(MODULES).length,CAMFX.length,JSON.stringify(lsGet('n0ise.fav',[])),JSON.stringify(lsGet('n0ise.recent',[])),loadRecipes().map(r=>r.id).join()].join('|');
   const oldW=host.querySelector('.railwrap');
