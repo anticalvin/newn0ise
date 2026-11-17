@@ -150,7 +150,7 @@ export function createSigil(c){
     guideG=new THREE.Group();guideG.userData.noView=true;
     const mk=(rot,pos)=>{const g=new THREE.PlaneGeometry(4,4),m=new THREE.Mesh(g,new THREE.MeshBasicMaterial({color:0x27f5c9,transparent:true,opacity:.1,side:THREE.DoubleSide,depthWrite:false})),e=new THREE.LineSegments(new THREE.EdgesGeometry(g),new THREE.LineBasicMaterial({color:0x27f5c9,transparent:true,opacity:.7}));m.add(e);m.rotation.set(rot[0],rot[1],rot[2]);m.position.set(pos[0],pos[1],pos[2]);m.raycast=()=>{};e.raycast=()=>{};m.userData.noView=true;guideG.add(m);};
     if(B.mirror)mk([0,Math.PI/2,0],[B.mox,0,0]);if(B.mirY)mk([Math.PI/2,0,0],[0,B.moy,0]);if(B.mirZ)mk([0,0,0],[0,0,B.moz]);
-    o.holder.add(guideG);S.needFrame=true;
+    o.holder.add(guideG);bump();
   };
   function symMatrices(s){
     const out=[],R=Math.max(1,Math.min(16,s.rad|0)),ax=[s.mir?-1:1,s.my?-1:1,s.mz?-1:1],ra=s.ra===1||s.ra===2?s.ra:0;

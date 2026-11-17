@@ -104,7 +104,7 @@ export function createPainter(c){
   }
   let currentMeta=null;
   const syncLm=(o)=>{const m=meta(o);Object.values(o.paint.sets).forEach(s=>{s.lm=m.layers;});};
-  function composeAll(o){if(!o||!o.paint)return;syncLm(o);Object.values(o.paint.sets).forEach(s=>{compose(s,CH);CH.forEach(k=>{s.tex[k].needsUpdate=true;});});S.needFrame=true;}
+  function composeAll(o){if(!o||!o.paint)return;syncLm(o);Object.values(o.paint.sets).forEach(s=>{compose(s,CH);CH.forEach(k=>{s.tex[k].needsUpdate=true;});});bump();}
 
   /* ---- stamping into the active layer (or its mask) ---- */
   function stampOn(target,k,x,y,r,alpha,mode){
@@ -139,7 +139,7 @@ export function createPainter(c){
 
   /* ---- strokes ---- */
   let cur=null,last=null,raf=0,dirty=new Map();
-  const flush=()=>{raf=0;dirty.forEach((o,s)=>{syncLm(o);compose(s,CH);CH.forEach(k=>{s.tex[k].needsUpdate=true;});});dirty.clear();S.needFrame=true;};
+  const flush=()=>{raf=0;dirty.forEach((o,s)=>{syncLm(o);compose(s,CH);CH.forEach(k=>{s.tex[k].needsUpdate=true;});});dirty.clear();bump();};
   const mark=(s,o)=>{dirty.set(s,o);if(!raf)raf=requestAnimationFrame(flush);};
   function pushUndo(o,s){
     const L=activeL(o),Lc=lay(s,L.id),snap={s,id:L.id,cv:{},mask:null};

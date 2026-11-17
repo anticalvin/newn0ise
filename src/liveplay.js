@@ -62,9 +62,9 @@ export function createLive(c){
     const G=gridFor(null),c0=nearestFree(G,...cellOf(G,cn.x,cn.z));const p=c0?centre(G,c0[0],c0[1]):[cn.x,cn.z];
     f.g.position.set(p[0],fy,p[1]);scene.add(f.g);
     L.sim={...f,needs:{hunger:80,energy:85,fun:70,hygiene:80},path:[],state:'idle',idle:1,use:null,t:0,label:'Just moved in'};
-    showHud(true);toast('A Sim moved in. Watch it, or tap furniture to send it.',4000);scan();paintHud();S.needFrame=true;
+    showHud(true);toast('A Sim moved in. Watch it, or tap furniture to send it.',4000);scan();paintHud();bump();
   }
-  function remove(){if(!L.sim)return;scene.remove(L.sim.g);L.sim.g.traverse(n=>{if(n.geometry)n.geometry.dispose();});L.sim=null;showHud(false);S.needFrame=true;}
+  function remove(){if(!L.sim)return;scene.remove(L.sim.g);L.sim.g.traverse(n=>{if(n.geometry)n.geometry.dispose();});L.sim=null;showHud(false);bump();}
   function scan(){
     L.cands=[];S.objs.forEach(o=>{if(!o.meta||!o.meta.phModel||o.vis===false)return;const nm=o.name||'';for(const [re,need,verb,secs] of USES){if(re.test(nm)){L.cands.push({o,need,verb,secs,name:nm});break;}}});
     return L.cands;
@@ -105,7 +105,7 @@ export function createLive(c){
       if(u.c.need!=='energy')s.bob.position.y=Math.sin(s.t*3)*.015;
       if(u.left<=0||s.needs[u.c.need]>=99){s.use=null;s.state='idle';s.idle=1;s.bob.rotation.x=0;s.bob.position.y=0;s.label='Done';paintHud();}
     }else{s.legL.rotation.x=s.legR.rotation.x=s.armL.rotation.x=s.armR.rotation.x=0;s.idle-=dt;if(s.idle<=0&&L.auto)chooseNext();else if(s.idle<=0)s.idle=1;}
-    S.needFrame=true;
+    bump();
     if(hud&&((s.t*4|0)!==(s._h|0))){s._h=s.t*4;paintHud();}
     void worst;
   }

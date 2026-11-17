@@ -23,6 +23,7 @@ import {openNodeMat} from './nodemat-ui.js';
 import {createMatStudio,recipeMP} from './matstudio.js';
 import {openRender} from './render.js';
 import {createBuild} from './build.js';
+import {createGamepad} from './gamepad.js';
 import {loadModel as phLoad} from './phmodels.js';
 import {applyToObject as ngApply,clearFromObject as ngClear} from './nodemat.js';
 import {createLighting} from './lighting.js';
@@ -84,7 +85,7 @@ let envTex=null;
 let hdrEnv=null,hdrRaw=null;
 let renderUI=null;
 function renderScene(){if(renderUI){renderUI.close();renderUI=null;}if(MS)MS.paintOff();toast('Setting up the render…',1800);openRender({THREE,scene,camera,S,toast,getHdr:()=>hdrRaw,aspect:()=>canvas.clientWidth/Math.max(1,canvas.clientHeight),target:controls.target}).then(r=>{renderUI=r;}).catch(e=>{console.error(e);toast('Couldn’t start the render.');});}
-function setEnvHdr(t){hdrRaw=t||null;try{if(hdrEnv){hdrEnv.dispose();hdrEnv=null;}if(t){const pm=new THREE.PMREMGenerator(renderer);hdrEnv=pm.fromEquirectangular(t).texture;scene.environment=hdrEnv;}else scene.environment=envTex;scene.environmentIntensity=S.env;S.needFrame=true;}catch(e){console.warn('env',e);}}
+function setEnvHdr(t){hdrRaw=t||null;try{if(hdrEnv){hdrEnv.dispose();hdrEnv=null;}if(t){const pm=new THREE.PMREMGenerator(renderer);hdrEnv=pm.fromEquirectangular(t).texture;scene.environment=hdrEnv;}else scene.environment=envTex;scene.environmentIntensity=S.env;bump();}catch(e){console.warn('env',e);}}
 function setupEnv(){try{const pm=new THREE.PMREMGenerator(renderer);envTex=pm.fromScene(new RoomEnvironment(),.04).texture;scene.environment=envTex;scene.environmentIntensity=S.env;}catch(e){console.warn('env failed',e);}}
 const grid=new THREE.GridHelper(12,24,0x666670,0x2f2f36);grid.material.transparent=true;grid.material.opacity=.4;scene.add(grid);
 const tc=new TransformControls(camera,canvas);tc.setSize(.8);
@@ -2428,7 +2429,7 @@ function buildHud(){
   h.addEventListener('pointerdown',e=>{e.preventDefault();on(true);});['pointerup','pointercancel','pointerleave'].forEach(t=>h.addEventListener(t,()=>on(false)));h.addEventListener('contextmenu',e=>e.preventDefault());
   $('#bFrame').addEventListener('click',frameAll);
   $('#bMat').addEventListener('click',()=>{setTab('mat');if(!mqDesk.matches&&sheet.idx<2)sheet.setIdx(2);});
-  {const bl=$('#bLight');if(bl){try{const v=localStorage.getItem('n0.bright');S.bright=v==null?2:clamp(+v,0,3);}catch(e){S.bright=2;}const paint=()=>{bl.textContent='Light: '+BRIGHT[S.bright][2];};paint();bl.addEventListener('click',()=>{S.bright=(S.bright+1)%4;try{localStorage.setItem('n0.bright',S.bright);}catch(e){}paint();S.needFrame=true;bump();});}}
+  {const bl=$('#bLight');if(bl){try{const v=localStorage.getItem('n0.bright');S.bright=v==null?2:clamp(+v,0,3);}catch(e){S.bright=2;}const paint=()=>{bl.textContent='Light: '+BRIGHT[S.bright][2];};paint();bl.addEventListener('click',()=>{S.bright=(S.bright+1)%4;try{localStorage.setItem('n0.bright',S.bright);}catch(e){}paint();bump();});}}
   $('#bGrid').addEventListener('click',()=>{S.grid=!S.grid;$('#bGrid').setAttribute('aria-pressed',S.grid);});
   $('#bSpin').addEventListener('click',()=>{S.spin=!S.spin;$('#bSpin').setAttribute('aria-pressed',S.spin);});
   $('#bImport').addEventListener('click',()=>{$('#file').accept=FILE_ACCEPT;$('#file').click();});
@@ -2446,7 +2447,7 @@ function buildHud(){
 }
 
 /* ---------- boot ---------- */
-window.__sheet=sheet;studioDefaults();buildTabs();BLD=createBuild({THREE,addGroup,objById,S,dom:canvas,camera,controls,toast,bump,el,btn,sec,addModel:addPhModel,pane:paneEls.build,scene,stage:$('#stage'),LGT,walkIn:pos=>{try{if(S.walk)walk.exit();walk.enter({pos,yaw:0,noJump:true});}catch(e){toast('Couldn’t start walking.');}},peek:()=>{if(!mqDesk.matches)sheet.setIdx(1);}});MS=createMatStudio({THREE,sigilUse:d=>{try{SIG.B.mat='custom';SIG.B.mp=recipeMP(d);if(d.col)SIG.B.col=d.col;toast('The Sigil brush now uses this material. Open Sigil and draw.',4000);}catch(e){console.error(e);}},RoomEnvironment,el,btn,sliderRow,chipRow,sec,toast,objById,S,bump,MAT,SURF,ngApply,ngClear,openGraph:openNodeGraph,setEnvHdr,dom:canvas,camera,controls,LGT,renderScene,createBall,fxOpen,gotoTab:k=>{setTab(k);if(!mqDesk.matches&&sheet.idx<2)sheet.setIdx(2);},peek:()=>{if(!mqDesk.matches)sheet.setIdx(1);},openLook:()=>{const pp=document.getElementById('lookpop');window.__lookPop&&window.__lookPop.open('selected',document.getElementById('tab_mat'));},setEnvStrength:v=>{scene.environmentIntensity=v;hemi.intensity=.2+v*.7;},pane:paneEls.mat});placeTabs();mqDesk.addEventListener('change',placeTabs);buildHud();buildScenePane();buildScanPane();
+window.__sheet=sheet;studioDefaults();buildTabs();window.__gp=createGamepad({THREE,camera,controls,S,toast,sheet,bump,canvas,undo:()=>{if(S.tab==='build'&&BLD)BLD.undo();else undo3();},cycle:d=>{if(S.tab==='build'&&BLD)BLD.cycleTool(d);else if(S.tab==='mat'){const n=[...document.querySelectorAll('#pane_mat .ms-nav button[data-k]')].filter(b=>b.dataset.k!=='_pv');const i=n.findIndex(b=>b.getAttribute('aria-selected')==='true');if(n.length)n[(i+d+n.length)%n.length].click();}},vert:d=>{if(S.tab==='build'&&BLD){BLD.levelStep(d);return true;}return false;}});BLD=createBuild({THREE,addGroup,objById,S,dom:canvas,camera,controls,toast,bump,el,btn,sec,addModel:addPhModel,pane:paneEls.build,scene,stage:$('#stage'),LGT,walkIn:pos=>{try{if(S.walk)walk.exit();walk.enter({pos,yaw:0,noJump:true});}catch(e){toast('Couldn’t start walking.');}},peek:()=>{if(!mqDesk.matches)sheet.setIdx(1);}});MS=createMatStudio({THREE,sigilUse:d=>{try{SIG.B.mat='custom';SIG.B.mp=recipeMP(d);if(d.col)SIG.B.col=d.col;toast('The Sigil brush now uses this material. Open Sigil and draw.',4000);}catch(e){console.error(e);}},RoomEnvironment,el,btn,sliderRow,chipRow,sec,toast,objById,S,bump,MAT,SURF,ngApply,ngClear,openGraph:openNodeGraph,setEnvHdr,dom:canvas,camera,controls,LGT,renderScene,createBall,fxOpen,gotoTab:k=>{setTab(k);if(!mqDesk.matches&&sheet.idx<2)sheet.setIdx(2);},peek:()=>{if(!mqDesk.matches)sheet.setIdx(1);},openLook:()=>{const pp=document.getElementById('lookpop');window.__lookPop&&window.__lookPop.open('selected',document.getElementById('tab_mat'));},setEnvStrength:v=>{scene.environmentIntensity=v;hemi.intensity=.2+v*.7;},pane:paneEls.mat});placeTabs();mqDesk.addEventListener('change',placeTabs);buildHud();buildScenePane();buildScanPane();
 if(renderer){buildLookPane();}
 buildExportPane();wireSheet();
 setTab('scene');
@@ -2556,6 +2557,7 @@ async function loadProject(u8){
   return {count:pj.items.length,skipped:pj.skipped||[]};
 }
 window.__n0proj={projectFiles,loadProject,zipStore};
+window.__cam={camera,controls};
 async function saveProject(){
   const {files,skipped,count}=await projectFiles();if(!count){toast('Nothing to save yet. Add a photo or a shape first.');return;}
   await deliver(zipStore(files),'n0ise-3d-project.zip');

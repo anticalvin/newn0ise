@@ -80,11 +80,11 @@ export function createMatStudio(c){
   function setPbr(o,patch){
     if(!surfaceOk(o))return;
     upgrade(o);o.pbr=norm({...o.pbr,...patch});
-    phys(o).forEach(m=>physProps(THREE,m,o.pbr));S.needFrame=true;
+    phys(o).forEach(m=>physProps(THREE,m,o.pbr));bump();
   }
   function clearPbr(o){
     if(!o||!o.pbr)return;delete o.pbr;
-    phys(o).forEach(m=>{const k=m.userData.pbOrig;physProps(THREE,m,norm());if(k){m.color.copy(k.color);m.metalness=k.metalness;m.roughness=k.roughness;}m.needsUpdate=true;});S.needFrame=true;
+    phys(o).forEach(m=>{const k=m.userData.pbOrig;physProps(THREE,m,norm());if(k){m.color.copy(k.color);m.metalness=k.metalness;m.roughness=k.roughness;}m.needsUpdate=true;});bump();
   }
 
   /* ---- Poly Haven texture sets ---- */
@@ -115,15 +115,15 @@ export function createMatStudio(c){
     if(my!==tkn)return false;
     if(o.nmat)ngClear(o);upgrade(o);
     let n=0,skip=0;meshes(o).forEach(me=>{if(!me.geometry.attributes.uv){skip++;return;}(Array.isArray(me.material)?me.material:[me.material]).forEach(m=>{if(m.isMeshPhysicalMaterial){dress(m,T,spec);n++;}});});
-    o.ptex=spec;if(o.pbr)phys(o).forEach(m=>physProps(THREE,m,o.pbr));if(o.paint)PNT.activate(o);S.needFrame=true;
+    o.ptex=spec;if(o.pbr)phys(o).forEach(m=>physProps(THREE,m,o.pbr));if(o.paint)PNT.activate(o);bump();
     if(!n)toast('This object has no UV map, so a texture can’t be wrapped on it. Try a built-in shape.',5000);
     return n>0;
   }
-  function retile(o){const s=o.ptex;if(!s)return;let n=0;phys(o).forEach(m=>{TK.forEach(k=>{if(m[k]){m[k].repeat.set(s.rep,s.rep);}});if(m.normalScale)m.normalScale.set(s.nk,s.nk);if(m.userData.ptOrig&&m.roughnessMap)m.roughness=clamp(s.rk,0,2);m.color.set(s.tint||'#ffffff');n++;});S.needFrame=true;}
+  function retile(o){const s=o.ptex;if(!s)return;let n=0;phys(o).forEach(m=>{TK.forEach(k=>{if(m[k]){m[k].repeat.set(s.rep,s.rep);}});if(m.normalScale)m.normalScale.set(s.nk,s.nk);if(m.userData.ptOrig&&m.roughnessMap)m.roughness=clamp(s.rk,0,2);m.color.set(s.tint||'#ffffff');n++;});bump();}
   function clearTex(o){
     if(!o||!o.ptex)return;++tkn;
     phys(o).forEach(m=>{const k=m.userData.ptOrig;if(!k)return;TK.concat(['bumpMap']).forEach(a=>{if(m[a]&&m[a].dispose)m[a].dispose();m[a]=k.maps[a]||null;});m.color.copy(k.color);m.roughness=k.roughness;m.metalness=k.metalness;delete m.userData.ptOrig;m.needsUpdate=true;});
-    delete o.ptex;S.needFrame=true;
+    delete o.ptex;bump();
   }
 
   /* ---- environments ---- */
@@ -400,7 +400,7 @@ export function createMatStudio(c){
         ['Underlight',[['point',{color:'#4dff9a',intensity:40,d:[0,-2,2]}],['point',{color:'#ff3a3a',intensity:6,d:[0,3,-2]}]]],
         ['Moonlight',[['dir',{color:'#9db8ff',intensity:1.6,d:[-3,5,2]}],['point',{color:'#ffd9a8',intensity:6,d:[2,.5,3]}]]]
       ];
-      const rr=el('div','chips');RIGS.forEach(([n,list])=>rr.appendChild(btn(n,'',async()=>{try{await LGT.clearLights();for(const [ty,p] of list){const tg=t();await LGT.addLight(ty,{color:p.color,intensity:p.intensity,angle:p.angle||35,pos:[tg.x+p.d[0],tg.y+p.d[1],tg.z+p.d[2]]});}S.needFrame=true;bump();toast(n+' lights set');}catch(e){toast('Couldn’t set those lights.');}})));
+      const rr=el('div','chips');RIGS.forEach(([n,list])=>rr.appendChild(btn(n,'',async()=>{try{await LGT.clearLights();for(const [ty,p] of list){const tg=t();await LGT.addLight(ty,{color:p.color,intensity:p.intensity,angle:p.angle||35,pos:[tg.x+p.d[0],tg.y+p.d[1],tg.z+p.d[2]]});}bump();bump();toast(n+' lights set');}catch(e){toast('Couldn’t set those lights.');}})));
       rr.appendChild(btn('Clear lights','',async()=>{await LGT.clearLights();bump();}));s.appendChild(rr);
       s.appendChild(el('div','sub','Path trace (preview)'));
       sliderRow(s,'Blur (depth of field)',()=>0,v=>{pv.blur(v);},0,1,.01);
