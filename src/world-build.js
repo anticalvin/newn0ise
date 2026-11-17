@@ -251,7 +251,7 @@ export function createWorldBuilder(c){
         else if(w.trigger==='player-enter'||w.trigger==='object-touch'){const inn=R.playerIn(w.target,p,w.trigger==='object-touch'?.35:0),was=R.inside.get(i);if(inn&&!was)R.fire(rule,i);R.inside.set(i,inn);}
         else if(w.trigger==='player-interact'){const d=R.dist(w.target,p);if(d<nearD&&!(w.once&&R.fired.has(i))){nearD=d;near=i;}}});
       R.near=near;
-      if(R.btn){R.btn.hidden=near==null;if(near!=null){const t=R.list[near].when.target,o=W.map.get(t);R.btn.textContent='Use '+(o?o.name:'');}}
+      if(R.btn){R.btn.hidden=near==null;if(near!=null){const t=R.list[near].when.target,o=W.map.get(t);R.btn.textContent='Use '+(o?String(o.name).replace(/[_-]+/g,' '):'');}}
     },
     shot(id){R.list.forEach((rule,i)=>{if(rule.when.trigger==='object-shot'&&rule.when.target===id)R.fire(rule,i);});},
     interact(){if(W.mech&&W.mech.busy())return;if(R.near!=null&&walk.on){const rule=R.list[R.near];R.fire(rule,R.near);}},

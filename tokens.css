@@ -13,3 +13,10 @@
 .ws a[aria-current=page]{color:var(--n-ink,#f2efe8);border-bottom-color:var(--n-acc,#ff5a1f)}
 .ws a:focus-visible{outline:2px solid var(--n-acc,#ff5a1f);outline-offset:-2px}
 body[data-cam] .ws,body[data-walk] .ws{display:none!important}
+/* Large monitors: the interface is sized for laptops, so on wide screens everything scales up a step instead of asking people to zoom the browser.
+   zoom is used (not font-size) because the controls are sized in px; the canvas keeps its own pixel mapping because browsers apply zoom consistently to layout and pointer coordinates. */
+/* --uz is the zoom factor: viewport-unit heights are divided by it so zoomed pages still fit the window exactly */
+:root{--uz:1}
+@media (min-width:1600px) and (min-height:760px){:root{zoom:1.15;--uz:1.15}}
+@media (min-width:2200px) and (min-height:1000px){:root{zoom:1.35;--uz:1.35}}
+@media (min-width:3000px) and (min-height:1400px){:root{zoom:1.8;--uz:1.8}}

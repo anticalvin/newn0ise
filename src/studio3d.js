@@ -2537,7 +2537,7 @@ setTimeout(()=>{applyLookHash();offerRestore();},1200);
 
 
 /* ---------- walk mode, scene API and the AI bridge ---------- */
-const walk=createWalk({THREE,camera,controls,canvas,S,holderBox,sheet,bump,leaveRest,faceOffset:PLAYERFACE(),onTick:p=>goalCheck(p),tcDetach:()=>tc.detach()});
+const walk=createWalk({THREE,camera,controls,canvas,S,holderBox,sheet,bump,leaveRest,faceOffset:PLAYERFACE(),onTick:p=>goalCheck(p),tcDetach:()=>tc.detach(),onExit:()=>{if(PLAYER.hidden){PLAYER.hidden.holder.visible=true;PLAYER.hidden=null;bump();}}});
 /* World: you are the character. The human model is the default player; it runs, jumps and collides with what you place. */
 const PLAYER={goalHit:false};
 function PLAYERFACE(){return 0;}
@@ -2558,7 +2558,10 @@ async function playWorld(){
     /* the character joins the look of the world: if effects are on other objects and none is on the character yet, it gets the same, once */
     if(!o.meta.fxAuto){const key=S.engine==='stack'?'stack':'look',srcO=S.objs.find(x=>x!==o&&x[key]);
       if(srcO&&!o[key]){o.meta.fxAuto=true;o[key]=key==='stack'?srcO.stack:JSON.parse(JSON.stringify(srcO.look));o.meta.fxSnap=JSON.stringify(o[key]);S.fx=true;S.mask.mode=2;updateLookUI();toast('The character has the same effect as '+srcO.name+'. Change it in Look.',3500);}}
-    PLAYER.goalHit=false;walk.enter({third:true,player:o,rig:o.rig,pos:[start[0],start[1],start[2]],camYaw:(S.startYaw||0)*Math.PI/180});
+    PLAYER.goalHit=false;
+    const spp=NW&&NW.spawn&&NW.spawn.params;
+    if(spp&&spp.firstPerson){o.holder.visible=false;PLAYER.hidden=o;walk.enter({pos:[start[0],start[1],start[2]],yaw:S.startYaw||0});}
+    else walk.enter({third:true,player:o,rig:o.rig,pos:[start[0],start[1],start[2]],camYaw:(S.startYaw||0)*Math.PI/180});
   }catch(e){toast(String(e.message||e),4000);}
 }
 function setStart(){const o=S.objs.find(x=>x.meta&&x.meta.player);const t=o?o.holder.position:controls.target;S.start=[t.x,0,t.z];toast('Start set here');}
@@ -2815,6 +2818,29 @@ function shortcutSheet(){
 }
 
 /* the World pane: import, export, and edit the parameters of a selected prefab */
+
+/* ---- Places: the existing block-based Physics Sandbox, and the Night Station world. Same character, same mechanics, same look controls. ---- */
+async function loadPlace(kind){
+  if(walk.on)walk.exit();
+  try{
+    S.objs.filter(o=>!(o.meta&&o.meta.player)).map(o=>o.id).forEach(removeObj);
+    try{await api.run({cmd:'light',op:'clear'});}catch(e){}
+    S.start=null;S.startYaw=0;
+    if(kind==='sandbox'){await worldEd.level();}
+    else{
+      const r=await fetch('worlds/'+kind+'.n0world');if(!r.ok)throw new Error('The world file could not be loaded ('+r.status+').');
+      const v=validateWorld(await r.json());if(!v.ok)throw new Error((v.report.errors[0]||{}).msg||'invalid world');
+      await NW.build(v.doc);NW.hash=await hashJson(v.doc);NW.report=v.report;
+    }
+    S.needFrame=true;frameAll();bump();toast(kind==='sandbox'?'Physics Sandbox. Press Play as character to try it.':'Night Station. Press Play as character, then walk to the shop.',4500);
+  }catch(e){toast(String(e.message||e),6000);console.error(e);}
+}
+if(NW&&paneEls.world){
+  const ps=sec(paneEls.world,'Places','pick where to play');
+  ps.appendChild(el('div','note','Both use the same character, shooting and look controls.'));
+  const pr=el('div','chips');pr.append(btn('Night Station','pri',()=>loadPlace('night-station')),btn('Physics Sandbox','',()=>loadPlace('sandbox')),btn('Proving ground','',()=>loadPlace('proving-ground')));ps.appendChild(pr);
+  paneEls.world.insertBefore(ps,paneEls.world.firstChild);
+}
 if(NW&&paneEls.world){
   const wp=paneEls.world,s0=sec(wp,'AI worlds');
   s0.appendChild(el('div','note','Import a world an AI wrote (.n0world), explore it, change anything, then export it again. Files are checked first and anything unsupported is listed.'));
@@ -2883,4 +2909,4 @@ setTimeout(async()=>{const m=location.hash.match(/^#from=(\w+)/);if(!m)return;co
   if(!rec){toast('Nothing to open. Send a picture from the other page again.');return;}
   if(rec.meta&&rec.meta.form&&FORM){try{const j=JSON.parse(await rec.blob.text());await importFormFile(null,j,'local');}catch(e){toast('Couldn’t open the generator: '+(e.message||e),5000);}return;}
   await photoToRelief(new File([rec.blob],'from-'+m[1]+'.png',{type:rec.blob.type||'image/png'}));toast('Opened from '+m[1]);},1400);
-window.__studio={MECH:()=>MECH,FORM:()=>FORM,importFormFile,NW:()=>NW,worldImportSheet,exportWorldFile,validateWorld,addGroup,frame,get maskRT(){return maskRT;},renderSelMask,SKY,pickSky,followPlayer,DOC,LGT,MAT,openMatLab:c=>openMatLab({THREE,RoomEnvironment,el,btn,sliderRow,chipRow,toast,MAT,...c}),undo3,redo3,uPush,UH,apprOf,apprPut,apprWatch,autoPlace,SURF,addPhoto,sampleCanvas,S,N0,selectObj,addLook,removeLook,openInEffects,worldEd,api,walk,aiConnect,zipStore,zipRead,projectFiles,loadProject,saveProject,AUTO,autoStep,fxRandomise,fxEnsure,fxClear,FX3,SG,addViz,AU,buildViz,vizUpdate,enterRest,leaveRest,restTick,setFx,autoDepth,buildDepth,restD,MATTERS,CUT,autoCut,refineMask,applyAlpha,THREE,scene,camera,controls,renderer,importFiles,addPrimitive,sheet,SC,carve,surfaceNets,buildScan,makeRelief,pseudoDepth,photoToRelief,objById,removeObj,bump,setTab,rebuildRelief,applyView,frameAll,exportImage,get rt(){return rt;}};
+window.__studio={loadPlace,MECH:()=>MECH,FORM:()=>FORM,importFormFile,NW:()=>NW,worldImportSheet,exportWorldFile,validateWorld,addGroup,frame,get maskRT(){return maskRT;},renderSelMask,SKY,pickSky,followPlayer,DOC,LGT,MAT,openMatLab:c=>openMatLab({THREE,RoomEnvironment,el,btn,sliderRow,chipRow,toast,MAT,...c}),undo3,redo3,uPush,UH,apprOf,apprPut,apprWatch,autoPlace,SURF,addPhoto,sampleCanvas,S,N0,selectObj,addLook,removeLook,openInEffects,worldEd,api,walk,aiConnect,zipStore,zipRead,projectFiles,loadProject,saveProject,AUTO,autoStep,fxRandomise,fxEnsure,fxClear,FX3,SG,addViz,AU,buildViz,vizUpdate,enterRest,leaveRest,restTick,setFx,autoDepth,buildDepth,restD,MATTERS,CUT,autoCut,refineMask,applyAlpha,THREE,scene,camera,controls,renderer,importFiles,addPrimitive,sheet,SC,carve,surfaceNets,buildScan,makeRelief,pseudoDepth,photoToRelief,objById,removeObj,bump,setTab,rebuildRelief,applyView,frameAll,exportImage,get rt(){return rt;}};

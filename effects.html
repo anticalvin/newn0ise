@@ -41,7 +41,7 @@ button,select,input{font:inherit;color:inherit}
 button{cursor:pointer}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 
-.app{height:100%;height:100dvh;display:flex;flex-direction:column}
+.app{height:100%;height:calc(100dvh / var(--uz,1));display:flex;flex-direction:column}
 header{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;flex:none;gap:8px}
 .mark{font:800 21px/1 var(--display);letter-spacing:-.02em}
 .mark b{color:var(--accent);font-weight:800}
@@ -113,7 +113,7 @@ select.field{width:auto;margin:0}
 .xh{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 14px 6px;position:sticky;top:0;background:var(--panel);padding:2px 0 6px;z-index:2}
 .xh .btn{min-height:44px}
 .sheet{overflow-y:auto;overscroll-behavior:contain}
-.sheet>div{max-height:calc(100dvh - 40px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+.sheet>div{max-height:calc(100dvh / var(--uz,1) - 40px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
 .xp .btn.big{margin:6px 14px 0;min-height:48px;font-size:14px}
 .xp #xc{margin:6px 14px 0}.xp.busy,.sheet.busy .xp{opacity:.85}.sheet.busy .btn,.sheet.busy .chip{pointer-events:none;opacity:.5}
 .sheet p{margin:0;color:var(--mute);text-align:center}
@@ -371,7 +371,7 @@ body[data-cam] #stage{box-sizing:border-box;padding:calc(56px + env(safe-area-in
 @media (min-width:820px){.cambot{max-width:560px;left:50%;right:auto;transform:translateX(-50%);width:100%}}
 
 .camui.pro .cammoregrid,.camui.more .campro{display:none}
-.campro{display:none;position:absolute;left:8px;right:8px;bottom:calc(var(--campad,200px) + 6px);max-height:calc(100dvh - var(--campad,200px) - 80px);overflow-y:auto;background:rgba(10,10,10,.94);border:1px solid #3a3835;border-radius:3px;padding:6px 10px;pointer-events:auto;overscroll-behavior:contain}
+.campro{display:none;position:absolute;left:8px;right:8px;bottom:calc(var(--campad,200px) + 6px);max-height:calc(100dvh / var(--uz,1) - var(--campad,200px) - 80px);overflow-y:auto;background:rgba(10,10,10,.94);border:1px solid #3a3835;border-radius:3px;padding:6px 10px;pointer-events:auto;overscroll-behavior:contain}
 .camui.pro .campro{display:block}
 .prr{display:flex;flex-direction:column;gap:2px;padding:6px 0;border-bottom:1px solid #22201e}.prr:last-of-type{border-bottom:0}
 .prl{font:600 10px var(--lab);text-transform:uppercase;letter-spacing:.1em;color:#8d8a82}

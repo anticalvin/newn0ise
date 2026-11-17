@@ -28,6 +28,7 @@ export function createWalk(c){
       st.keys.add(e.code);if(e.code==='Space'){if(!e.repeat)jump();e.preventDefault();}
     }else{st.keys.delete(e.code);if(e.code==='Space')st.cut=true;}
   }
+  function kick(a){st.pitch=Math.max(-1.45,Math.min(1.45,st.pitch+a));st.rec=(st.rec||0)+a*.7;} // a shot nudges the view up, then it settles back
   function look(dx,dy){st.yaw-=dx*.0032;st.pitch=Math.max(-1.45,Math.min(1.45,st.pitch-dy*.0032));}
   function onMouse(e){if(st.on&&document.pointerLockElement===canvas)look(e.movementX,e.movementY);}
   function down(e){
@@ -77,6 +78,7 @@ export function createWalk(c){
     if(!st.on)return;dt=Math.min(dt,.05);
     if(controller&&controller.active()){if(performance.now()-st.boxT>1000)refreshBoxes();controller.tick(dt);c.bump();return;} // driving: the vehicle owns movement and the camera
     if(performance.now()-st.boxT>1000)refreshBoxes();
+    if(st.rec){const d=st.rec*Math.min(1,dt*9);st.pitch-=d;st.rec-=d;if(Math.abs(st.rec)<1e-4)st.rec=0;}
     const k=st.keys;let fx=(k.has('KeyD')||k.has('ArrowRight')?1:0)-(k.has('KeyA')||k.has('ArrowLeft')?1:0)+st.jx,fz=(k.has('KeyS')||k.has('ArrowDown')?1:0)-(k.has('KeyW')||k.has('ArrowUp')?1:0)+st.jy;
     const m=Math.hypot(fx,fz);if(m>1){fx/=m;fz/=m;}
     const sp=(k.has('ShiftLeft')||k.has('ShiftRight')?5.6:2.8),c1=Math.cos(st.yaw),s1=Math.sin(st.yaw);
@@ -124,5 +126,5 @@ export function createWalk(c){
     }else{camera.position.set(p.x,p.y+EYE,p.z);camera.rotation.set(st.pitch,st.yaw,0);if(c.onTick)c.onTick(p);}
     c.bump();
   }
-  return {enter,exit,tick,get on(){return st.on;},get third(){return st.third;},get pos(){return st.on?st.pos:null;},get yaw(){return st.yaw;},get keys(){return st.keys;},get boxes(){return st.boxes;},get climbing(){return st.climb;},get stick(){return [st.jx,st.jy];},get player(){return TP.obj;},setController(x){controller=x;},place(x,y,z){st.pos.set(x,y,z);},setYaw(y){st.yaw=y;},refreshBoxes};
+  return {enter,exit,tick,get on(){return st.on;},get third(){return st.third;},get pos(){return st.on?st.pos:null;},get yaw(){return st.yaw;},get keys(){return st.keys;},get boxes(){return st.boxes;},get climbing(){return st.climb;},get stick(){return [st.jx,st.jy];},get player(){return TP.obj;},setController(x){controller=x;},kick,place(x,y,z){st.pos.set(x,y,z);},setYaw(y){st.yaw=y;},refreshBoxes};
 }

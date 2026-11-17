@@ -14,7 +14,7 @@
 :root{--bg:#0a0a0a;--ink:#f2efe8;--mute:#8d8a82;--acc:#ff5a1f;--d:"Syne",system-ui,sans-serif;--m:"JetBrains Mono",ui-monospace,Menlo,monospace}
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 html,body{height:100%;background:var(--bg);color:var(--ink);font-family:var(--m);overflow:hidden}
-body{display:flex;flex-direction:column;height:100dvh;padding-top:env(safe-area-inset-top,0)}
+body{display:flex;flex-direction:column;height:calc(100dvh / var(--uz,1));padding-top:env(safe-area-inset-top,0)}
 header{flex:none;display:flex;justify-content:space-between;align-items:baseline;padding:12px 16px 10px;border-bottom:1px solid #2a2927;font-size:11px;letter-spacing:.14em;text-transform:uppercase}
 .mark{font:800 clamp(22px,6vw,30px)/1 var(--d);letter-spacing:-.02em;text-transform:none}
 .mark b{color:var(--acc)}

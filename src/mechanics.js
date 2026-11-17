@@ -22,31 +22,42 @@ export function createMechanics(c){
     canvas.addEventListener('pointerup',e=>{if(!dn)return;const q=dn;dn=null;if(e.pointerType==='mouse'&&Math.hypot(e.clientX-q.x,e.clientY-q.y)<6&&performance.now()-q.t<300)fire(walk.third?[e.clientX,e.clientY]:null);},true);
     addEventListener('keydown',e=>{if(!walk.on||e.repeat||/input|textarea|select/i.test((e.target&&e.target.tagName)||''))return;if(e.code==='KeyF')fire(null);if(e.code==='KeyE'){if(M.driving)exitCar();else if(M.near&&!(W.rules.near!=null))enterCar(M.near);}});
   }
-  const weaponOn=()=>!!(W.spawn&&W.spawn.params&&W.spawn.params.weapon);
+  const sp=()=>(W.spawn&&W.spawn.params)||{};
+  const weaponOn=()=>!!(sp().weapon||(W.flags&&W.flags.get('armed')));
+  /* the weapon is data: swap these (or the spawn params) for another gun. Fire rate in shots per second, damage in hit points, range in metres. */
+  M.weapon={name:'Demo pistol',get rate(){return sp().fireRate||6;},get damage(){return sp().damage||1;},get range(){return sp().range||60;},tracer:0xffd36a,flash:0xffc27a,recoil:.022,decals:true};
+  const emit=(name,d)=>{try{dispatchEvent(new CustomEvent('n0:gameplay',{detail:{name,...d}}));}catch(e){}};
   M.busy=()=>!!M.driving;
   /* ---- shooting ---- */
   function fire(at){
     if(!walk.on||M.driving||!weaponOn())return;
-    const now=performance.now();if(now-M.last<160)return;M.last=now;M.shots++;
+    const now=performance.now();if(now-M.last<1000/M.weapon.rate)return;M.last=now;M.shots++;
     const r=canvas.getBoundingClientRect(),ndc=at?new THREE.Vector2((at[0]-r.left)/r.width*2-1,-((at[1]-r.top)/r.height*2-1)):new THREE.Vector2(0,0);
-    rc.setFromCamera(ndc,camera);rc.far=120;
+    rc.setFromCamera(ndc,camera);rc.far=M.weapon.range;
     const pl=walk.player,list=[];S.objs.forEach(o=>{if(!o.vis||!o.holder.visible||(o.meta&&o.meta.player)||o===(pl&&S.objs.find(x=>x.holder===pl.holder)))return;list.push(o.holder);});
     const hits=rc.intersectObjects(list,true).filter(h=>!h.object.userData.noView&&!h.object.userData.zone&&h.object.visible);
     const from=pl&&pl.holder?new V3(pl.holder.position.x,pl.holder.position.y+1.3,pl.holder.position.z):camera.position.clone();
-    let end=rc.ray.at(60,new V3()),obj=null;
-    if(hits.length){end=hits[0].point.clone();let p=hits[0].object;while(p){if(p.userData&&p.userData.objId!=null){obj=objById(p.userData.objId);break;}p=p.parent;}}
+    let end=rc.ray.at(Math.min(60,M.weapon.range),new V3()),obj=null,nrm=null;
+    if(hits.length){end=hits[0].point.clone();if(hits[0].face)nrm=hits[0].face.normal.clone().transformDirection(hits[0].object.matrixWorld);let p=hits[0].object;while(p){if(p.userData&&p.userData.objId!=null){obj=objById(p.userData.objId);break;}p=p.parent;}}
     tracer(from,end,!!obj);W.rules.sound('click');
-    if(obj){spark(end);hit(obj);}
+    muzzle();if(!walk.third)walk.kick(M.weapon.recoil);kickCross();emit('fire',{});
+    if(hits.length){spark(end);if(M.weapon.decals&&nrm)decal(end,nrm);}
+    if(obj){hit(obj);emit('hit',{id:obj.meta&&obj.meta.n0w&&obj.meta.n0w.id});}
   }
   function tracer(a,b,hit){
     const g=new THREE.BufferGeometry().setFromPoints([a,b]),l=new THREE.Line(g,new THREE.LineBasicMaterial({color:hit?0xffd36a:0xffffff,transparent:true,opacity:.9}));l.frustumCulled=false;l.userData.noView=true;scene.add(l);M.fx.push({o:l,t:0,dur:.09,kind:'line'});bump();
   }
+  let flashL=null;
+  function muzzle(){if(!flashL)return;const o=camera.position.clone().addScaledVector(camera.getWorldDirection(new V3()),.8);flashL.position.copy(o);flashL.intensity=40;M.flashT=.06;}
+  function kickCross(){if(M.cross){M.cross.style.transform='scale(1.5)';setTimeout(()=>{M.cross.style.transform='';},90);}}
+  const decals=[];
+  function decal(p,n){const m=new THREE.Mesh(new THREE.CircleGeometry(.07,10),new THREE.MeshBasicMaterial({color:0x050505,transparent:true,opacity:.85,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-2}));m.position.copy(p).addScaledVector(n,.01);m.lookAt(p.clone().add(n));m.userData.noView=true;scene.add(m);decals.push({o:m,t:0});if(decals.length>30){const d=decals.shift();scene.remove(d.o);d.o.geometry.dispose();d.o.material.dispose();}}
   function spark(p){const m=new THREE.Mesh(new THREE.SphereGeometry(.09,8,6),new THREE.MeshBasicMaterial({color:0xffe08a,transparent:true,opacity:1}));m.position.copy(p);m.userData.noView=true;scene.add(m);M.fx.push({o:m,t:0,dur:.2,kind:'spark'});}
   function hit(o){
     const id=o.meta&&o.meta.n0w&&o.meta.n0w.id;
     if(id)W.rules.shot(id);
     if(o.meta&&o.meta.hp!=null&&o.vis){
-      o.meta.hp--;flash(o);
+      o.meta.hp-=M.weapon.damage;flash(o);
       if(o.meta.hp<=0){o.vis=false;o.holder.visible=false;M.kills++;W.flags.set('destroyed',M.kills);W.rules.sound('thud');walk.refreshBoxes&&walk.refreshBoxes();toast('Hit! '+M.kills+' down',1200);}
     }
   }
@@ -100,8 +111,19 @@ export function createMechanics(c){
   };
   M.fire=fire;M.enterCar=enterCar;M.exitCar=exitCar;
   walk.setController(drive);
+  /* a first-person gun, drawn on the camera so it follows the view */
+  let gun=null;
+  function viewmodel(on){
+    if(on&&!gun){gun=new THREE.Group();const b=new THREE.MeshStandardMaterial({color:0x2b2d31,roughness:.35,metalness:.6});const body=new THREE.Mesh(new THREE.BoxGeometry(.05,.07,.26),b),grip=new THREE.Mesh(new THREE.BoxGeometry(.04,.11,.05),b);grip.position.set(0,-.085,.09);body.position.set(0,0,0);gun.add(body,grip);gun.position.set(.17,-.17,-.38);gun.userData.noView=true;gun.traverse(n=>{n.userData.noView=true;n.castShadow=false;});}
+    if(!gun)return;if(on&&!gun.parent){camera.add(gun);if(!camera.parent)scene.add(camera);}else if(!on&&gun.parent)gun.parent.remove(gun);
+    if(on)gun.position.z=-.38+(M.flashT>0?.03:0);
+  }
   M.tick=dt=>{
     ui();
+    if(flashL&&M.flashT>0){M.flashT-=dt;if(M.flashT<=0)flashL.intensity=0;}
+    for(let i=decals.length-1;i>=0;i--){const d=decals[i];d.t+=dt;if(d.t>10){d.o.material.opacity=Math.max(0,.85*(1-(d.t-10)/3));if(d.t>13){scene.remove(d.o);d.o.geometry.dispose();d.o.material.dispose();decals.splice(i,1);}}}
+    if(walk.on&&weaponOn()&&!flashL){flashL=new THREE.PointLight(M.weapon.flash,0,8,2);flashL.userData.noView=true;scene.add(flashL);} // made once the weapon exists, so the scene's shaders only rebuild then
+    viewmodel(walk.on&&!walk.third&&weaponOn()&&!M.driving);
     for(let i=M.fx.length-1;i>=0;i--){const f=M.fx[i];f.t+=dt;const k=f.t/f.dur;if(f.kind==='line')f.o.material.opacity=.9*(1-k);else{f.o.material.opacity=1-k;f.o.scale.setScalar(1+k*2);}if(k>=1){scene.remove(f.o);f.o.geometry.dispose();f.o.material.dispose();M.fx.splice(i,1);}}
     if(!walk.on){M.btnFire.hidden=M.btnDrive.hidden=M.cross.hidden=M.speedEl.hidden=true;if(M.driving){M.driving.meta.vehicle.occupied=false;M.driving.meta.vehicle.v=0;M.driving=null;}return;}
     const w=weaponOn();
