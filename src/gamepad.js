@@ -4,8 +4,11 @@
 const GP_ID=777;
 const DEAD=.14;
 export function createGamepad(c){
-  const {camera,controls,S,toast,sheet,bump,cycle,vert,undo,redo,canvas,THREE}=c;
-  const st={pad:null,x:innerWidth/2,y:innerHeight/2,show:false,idle:0,down:null,prev:[],slow:false,speed:+(localStorage.getItem('n0.gpspeed')||1),legend:false,lastHot:null,rumble:true};
+  const {camera,controls,S,toast,sheet,bump,cycle,vert,undo,redo,canvas,THREE,getWalk}=c;
+  let CFG={swap:false,invY:false,rumble:true};try{Object.assign(CFG,JSON.parse(localStorage.getItem('n0.gpcfg')||'{}'));}catch(e){}
+  const saveCfg=()=>{try{localStorage.setItem('n0.gpcfg',JSON.stringify(CFG));}catch(e){}};
+  const rep={};let sony=false;
+  const st={pad:null,x:innerWidth/2,y:innerHeight/2,show:false,idle:0,down:null,prev:[],slow:false,speed:+(localStorage.getItem('n0.gpspeed')||1),legend:false,lastHot:null,rumble:CFG.rumble};
   /* the app's own pointer-capture calls would throw for a pointer the browser doesn't know; let them pass quietly for the controller's pointer */
   for(const fn of ['setPointerCapture','releasePointerCapture']){const o=Element.prototype[fn];Element.prototype[fn]=function(id){try{return o.call(this,id);}catch(e){if(id!==GP_ID)throw e;}};}
   const css=document.createElement('style');css.textContent=`#gpcur{position:fixed;left:0;top:0;width:28px;height:28px;margin:-14px 0 0 -14px;border-radius:50%;border:2.5px solid #fff;box-shadow:0 0 0 2px rgba(0,0,0,.65),0 2px 8px rgba(0,0,0,.5);z-index:100000;pointer-events:none;display:none;transition:transform .08s,background .1s}
@@ -17,17 +20,25 @@ export function createGamepad(c){
 #gplegend h4{margin:0 0 8px;font:800 15px var(--disp,system-ui)}
 #gplegend .r{display:flex;gap:8px;margin:2px 0}
 #gplegend input[type=range]{width:100%;min-height:36px}
+#gplegend .gpck{align-items:center;min-height:44px}#gplegend .gpck input{width:22px;height:22px}
 #gplegend button{min-height:44px;padding:0 16px;margin-top:10px;border-radius:12px;border:0;background:#ff5a1f;color:#111;font:800 12px var(--lab,monospace);letter-spacing:.06em;text-transform:uppercase}`;document.head.appendChild(css);
   const cur=document.createElement('div');cur.id='gpcur';cur.setAttribute('aria-hidden','true');document.body.appendChild(cur);
   const lg=document.createElement('div');lg.id='gplegend';lg.setAttribute('role','dialog');lg.setAttribute('aria-label','Controller help');
-  lg.innerHTML='<h4>Controller</h4>'+
-    [['Left stick','Move the cursor'],['A / ✕','Click, hold to drag or draw'],['B / ○','Cancel or escape'],['X / □','Undo'],['Y / △','Show or hide the panel'],['Right stick','Orbit the view, or scroll the panel'],['L2 / R2','Zoom out and in'],['L1 / R1','Previous and next tab'],['D-pad ◀ ▶','Previous and next tool'],['D-pad ▲ ▼','Level up and down, or scroll'],['L3','Slow, precise cursor'],['Select','Frame everything'],['Options','This help']]
+  const G=()=>sony?{a:'✕',b:'○',x:'□',y:'△',sel:'Create',opt:'Options'}:{a:'A',b:'B',x:'X',y:'Y',sel:'View',opt:'Menu'};
+  function renderLegend(){
+    const g=G();
+    lg.innerHTML='<h4>Controller</h4>'+
+    [['Left stick','Move the cursor (walk, in walk mode)'],[g.a,'Click, hold to drag or draw'],[g.b,'Cancel, close or leave walk'],[g.x,'Undo'],[g.y,'Show or hide the panel'],['Right stick','Orbit the view, scroll a panel, or look'],['L2 / R2','Zoom out and in'],['L1 / R1','Previous and next tab'],['D-pad over a panel','Jump between buttons'],['D-pad ◀ ▶ over the scene','Previous and next tool'],['D-pad ▲ ▼ over the scene','Level up and down'],['L3','Slow, precise cursor (run, in walk mode)'],['R3','Cursor to the middle'],[g.sel,'Frame everything'],[g.opt,'This help']]
       .map(([k,v])=>'<div class="r"><b>'+k+'</b><span>'+v+'</span></div>').join('')+
-    '<div class="r" style="margin-top:8px"><b>Cursor speed</b><input type="range" id="gpspd" min="0.5" max="2" step="0.1" aria-label="Cursor speed"></div><button type="button" id="gpok">Got it</button>';
+    '<div class="r" style="margin-top:8px"><b>Cursor speed</b><input type="range" id="gpspd" min="0.5" max="2" step="0.1" aria-label="Cursor speed"></div>'+
+    '<label class="r gpck"><input type="checkbox" id="gpswap"> Swap sticks (left hand)</label><label class="r gpck"><input type="checkbox" id="gpinv"> Invert look up and down</label><label class="r gpck"><input type="checkbox" id="gprum"> Vibration</label><button type="button" id="gpok">Got it</button>';
+    const spd=lg.querySelector('#gpspd');spd.value=st.speed;spd.addEventListener('input',()=>{st.speed=+spd.value;try{localStorage.setItem('n0.gpspeed',st.speed);}catch(e){}});
+    const ck=(id,k,f)=>{const i=lg.querySelector(id);i.checked=!!CFG[k];i.addEventListener('change',()=>{CFG[k]=i.checked;saveCfg();f&&f();});};
+    ck('#gpswap','swap');ck('#gpinv','invY');ck('#gprum','rumble',()=>{st.rumble=CFG.rumble;buzz(40,.2,.4);});
+    lg.querySelector('#gpok').addEventListener('click',()=>showLegend(false));
+  }
   document.body.appendChild(lg);
-  const spd=lg.querySelector('#gpspd');spd.value=st.speed;spd.addEventListener('input',()=>{st.speed=+spd.value;try{localStorage.setItem('n0.gpspeed',st.speed);}catch(e){}});
-  lg.querySelector('#gpok').addEventListener('click',()=>showLegend(false));
-  function showLegend(v){st.legend=v;lg.style.display=v?'block':'none';}
+  function showLegend(v){if(v)renderLegend();st.legend=v;lg.style.display=v?'block':'none';}
 
   const pads=()=>{try{return Array.from(navigator.getGamepads?navigator.getGamepads():[]).filter(Boolean);}catch(e){return [];}};
   const buzz=(ms,a=.2,b=.35)=>{if(!st.rumble)return;try{const p=st.pad;const act=p&&(p.vibrationActuator||(p.hapticActuators&&p.hapticActuators[0]));if(act&&act.playEffect)act.playEffect('dual-rumble',{startDelay:0,duration:ms,weakMagnitude:b,strongMagnitude:a});else if(act&&act.pulse)act.pulse(a,ms);}catch(e){}};
@@ -53,6 +64,8 @@ export function createGamepad(c){
     const d=st.down;if(!d)return;st.down=null;cur.dataset.d='false';const t=d.t;
     if(t.matches&&t.matches('input[type=range]')){t.dispatchEvent(new Event('change',{bubbles:true}));return;}
     pt(t,'pointerup');mouse(t,'mouseup');
+    if(!d.moved&&t.matches&&t.matches('textarea,input:not([type=range]):not([type=color]):not([type=checkbox]):not([type=radio]):not([type=button]):not([type=submit]):not([type=file])')){
+      const v=prompt((t.getAttribute('aria-label')||t.placeholder||'Type here')+(sony?'':''),t.value);if(v!=null){t.value=v;t.dispatchEvent(new Event('input',{bubbles:true}));t.dispatchEvent(new Event('change',{bubbles:true}));}return;}
     if(t.tagName!=='CANVAS'&&!d.moved){try{t.dispatchEvent(new MouseEvent('click',{clientX:st.x,clientY:st.y,button:0,bubbles:true,cancelable:true,view:window}));}catch(e){}buzz(18,.08,.25);}
   }
   function orbit(dt,rx,ry){
@@ -69,12 +82,47 @@ export function createGamepad(c){
   const tabs=()=>[...document.querySelectorAll('.tabs .tab')];
   const stepTab=d=>{const t=tabs();if(!t.length)return;let i=t.findIndex(b=>b.getAttribute('aria-selected')==='true');i=(i+d+t.length)%t.length;t[i].click();t[i].scrollIntoView&&t[i].scrollIntoView({inline:'center',block:'nearest'});buzz(15,.05,.2);};
   const key=(k,mod)=>{window.dispatchEvent(new KeyboardEvent('keydown',{key:k,bubbles:true,cancelable:true,...mod}));};
+  /* D-pad over a panel jumps to the nearest button in that direction, so menus work without steering the cursor */
+  function navDir(dx,dy){
+    const root=st.legend?lg:document.body,ox=st.x,oy=st.y;let best=null,bs=1e9;
+    root.querySelectorAll('button,a[href],input,select,textarea,summary,[role=button],[role=tab],label,.card,.chip,.tab').forEach(n=>{
+      if(n.closest('#gpcur')||(!st.legend&&n.closest('#gplegend')))return;
+      const r=n.getBoundingClientRect();if(r.width<8||r.height<8||r.bottom<0||r.top>innerHeight||r.right<0||r.left>innerWidth)return;
+      const cx=Math.min(innerWidth-2,Math.max(2,r.left+r.width/2)),cy=Math.min(innerHeight-2,Math.max(2,r.top+r.height/2));
+      const vx=cx-ox,vy=cy-oy,along=vx*dx+vy*dy,perp=Math.abs(vx*dy-vy*dx);if(along<6)return;
+      const e=document.elementFromPoint(cx,cy);if(!e||!(n===e||n.contains(e)||e.contains(n)))return;
+      const sc=along+perp*2.4;if(sc<bs){bs=sc;best={x:cx,y:cy,n};}
+    });
+    if(best){st.x=best.x;st.y=best.y;cur.style.left=st.x+'px';cur.style.top=st.y+'px';hot(best.n);buzz(10,.04,.12);return true;}
+    return false;
+  }
+  const overPanel=()=>{const t=hit();return !!t&&t.tagName!=='CANVAS'&&!t.closest('#walkui');};
+  /* held directions repeat after a short wait */
+  const edgeR=(i,on,dt)=>{if(!on){rep[i]=0;return false;}if(!rep[i]){rep[i]=.0001;return true;}rep[i]+=dt;if(rep[i]>.42){rep[i]=.3;return true;}return false;};
+  const wk=['KeyW','KeyA','KeyS','KeyD','ShiftLeft'];
+  let wasWalk=false;
   let last=performance.now();
   function frame(now){
     requestAnimationFrame(frame);const dt=Math.min(.05,(now-last)/1000);last=now;
     const list=pads();const p=list.find(x=>x.mapping==='standard')||list[0];st.pad=p||null;
     if(!p){if(st.show){st.show=false;cur.style.display='none';}return;}
-    const lx=ax(p,0),ly=ax(p,1),rx=ax(p,2),ry=ax(p,3),b=i=>btn(p,i),pb=i=>st.prev[i];
+    sony=/054c|dualsense|dualshock|wireless controller/i.test(p.id||'');
+    const sx=ax(p,0),sy=ax(p,1),tx=ax(p,2),ty=ax(p,3),lx=CFG.swap?tx:sx,ly=CFG.swap?ty:sy,rx=CFG.swap?sx:tx,ry0=CFG.swap?sy:ty,ry=CFG.invY?-ry0:ry0,b=i=>btn(p,i),pb=i=>st.prev[i];
+    const W=getWalk&&getWalk();
+    if(W&&W.on){
+      /* walking: left stick moves, right stick looks, A jumps, R2 acts, L3 runs, B leaves */
+      wasWalk=true;cur.style.display='none';
+      W.setStick&&W.setStick(lx,ly);W.rotate(-rx*dt*2.7,-ry*dt*2);
+      const run=btn(p,10);run?W.keys.add('ShiftLeft'):W.keys.delete('ShiftLeft');
+      if(btn(p,0)&&!st.prev[0])window.dispatchEvent(new KeyboardEvent('keydown',{code:'Space',key:' ',bubbles:true}));
+      if(!btn(p,0)&&st.prev[0])window.dispatchEvent(new KeyboardEvent('keyup',{code:'Space',key:' ',bubbles:true}));
+      if(val(p,7)>.5&&!st.fire){st.fire=true;const r=canvas.getBoundingClientRect(),o={pointerId:GP_ID,pointerType:'mouse',isPrimary:true,clientX:r.left+r.width/2,clientY:r.top+r.height/2,button:0,buttons:1,bubbles:true,cancelable:true};canvas.dispatchEvent(new PointerEvent('pointerdown',o));canvas.dispatchEvent(new PointerEvent('pointerup',{...o,buttons:0}));buzz(30,.2,.3);}
+      if(val(p,7)<.3)st.fire=false;
+      if(btn(p,1)&&!st.prev[1])key('Escape');
+      if(btn(p,9)&&!st.prev[9])showLegend(!st.legend);
+      st.prev=p.buttons.map(x=>x.pressed);return;
+    }
+    if(wasWalk){wasWalk=false;W&&W.setStick&&W.setStick(0,0);wk.forEach(k=>W&&W.keys.delete(k));if(st.show)cur.style.display='block';}
     const edge=i=>b(i)&&!pb(i);
     const active=lx||ly||rx||ry||p.buttons.some(x=>x.pressed)||val(p,6)>.1||val(p,7)>.1;
     if(active){st.idle=0;if(!st.show){st.show=true;cur.style.display='block';}}else st.idle+=dt;
@@ -98,20 +146,23 @@ export function createGamepad(c){
     /* buttons */
     for(let i=0;i<18;i++)if(edge(i)){(st.log=st.log||[]).push(i);if(st.log.length>20)st.log.shift();}
     if(edge(0))press();if(!b(0)&&pb(0))release();
-    if(edge(1)){key('Escape');buzz(15,.05,.2);}
+    if(edge(1)){if(st.legend)showLegend(false);else key('Escape');buzz(15,.05,.2);}
     if(edge(2)){if(undo)undo();else key('z',{ctrlKey:true});buzz(20,.1,.2);}
     if(edge(3)){const idx=sheet&&sheet.idx;if(sheet&&idx!=null)sheet.setIdx(idx>0?0:2);buzz(15,.05,.2);}
     if(edge(4))stepTab(-1);if(edge(5))stepTab(1);
-    if(edge(14)){cycle&&cycle(-1);buzz(12,.04,.15);}if(edge(15)){cycle&&cycle(1);buzz(12,.04,.15);}
-    if(edge(12)){const used=vert&&vert(1);if(!used){const sc=scrollable(hit());if(sc)sc.scrollTop-=220;}}
-    if(edge(13)){const used=vert&&vert(-1);if(!used){const sc=scrollable(hit());if(sc)sc.scrollTop+=220;}}
+    const pnl=(b(12)||b(13)||b(14)||b(15))?overPanel():false;
+    if(!pnl&&!st.legend){if(edgeR(14,b(14),dt)){cycle&&cycle(-1);buzz(12,.04,.15);}if(edgeR(15,b(15),dt)){cycle&&cycle(1);buzz(12,.04,.15);}}
+    if(pnl||st.legend){const d=[[12,0,-1],[13,0,1],[14,-1,0],[15,1,0]];for(const [i,dx,dy] of d)if(edgeR(i,b(i),dt)){if(!navDir(dx,dy)&&dy){const sc=scrollable(hit());if(sc)sc.scrollTop+=dy*220;}}}
+    else{rep[12]=rep[13]=0;
+      if(edgeR(12,b(12),dt)){const used=vert&&vert(1);if(!used){const sc=scrollable(hit());if(sc)sc.scrollTop-=220;}}
+      if(edgeR(13,b(13),dt)){const used=vert&&vert(-1);if(!used){const sc=scrollable(hit());if(sc)sc.scrollTop+=220;}}}
     if(edge(8)){const f=document.getElementById('bFrame');f&&f.click();}
     if(edge(9))showLegend(!st.legend);
     if(edge(10)){st.slow=!st.slow;toast(st.slow?'Precise cursor':'Normal cursor',1200);}
     if(edge(11)){st.x=innerWidth/2;st.y=innerHeight/2;}
     st.prev=p.buttons.map(x=>x.pressed);
   }
-  addEventListener('gamepadconnected',e=>{st.show=true;st.idle=0;cur.style.display='block';toast('Controller connected: '+(e.gamepad.id||'').replace(/\s*\(.*$/,'').slice(0,32)+'. Left stick moves the cursor, ✕ clicks. Options shows help.',5500);buzz(60,.2,.4);});
+  addEventListener('gamepadconnected',e=>{st.show=true;st.idle=0;cur.style.display='block';sony=/054c|dualsense|dualshock|wireless controller/i.test(e.gamepad.id||'');toast('Controller connected: '+(e.gamepad.id||'').replace(/\s*\(.*$/,'').slice(0,32)+'. Left stick moves the cursor, '+G().a+' clicks. '+G().opt+' shows help.',5500);buzz(60,.2,.4);});
   addEventListener('gamepaddisconnected',()=>{if(!pads().length){st.show=false;cur.style.display='none';toast('Controller disconnected.',2500);}});
   requestAnimationFrame(frame);
   return {showLegend,state:st};

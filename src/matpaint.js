@@ -1,6 +1,7 @@
 /* Paint on the model, Substance Painter style: layers with masks. One brush lays down colour, roughness, metal, height and glow together
    into the active layer; layers stack over the object's own material (the base) and are composited into the texture maps.
    Plain canvas 2D plus a ray cast, so there is no extra library. Paint is saved with the project as small PNG files. */
+import {PEN} from './pen.js';
 const R=1024;
 export const KINDS=[['round','Round'],['soft','Airbrush'],['spray','Spray'],['chalk','Chalk'],['square','Square'],['dots','Dots']];
 export const BLENDS=[['source-over','Normal'],['multiply','Multiply'],['screen','Screen'],['overlay','Overlay'],['lighter','Add']];
@@ -165,20 +166,24 @@ export function createPainter(c){
     e.stopImmediatePropagation();e.preventDefault();
     try{dom.setPointerCapture(e.pointerId);}catch(_){}
     const m=matAt(h);if(!m||!m.isMeshPhysicalMaterial)return;const s=ensureSet(o,m);pushUndo(o,s);
-    cur={o,id:e.pointerId};last=null;lastM=null;
-    const pr=e.pointerType==='pen'&&e.pressure?e.pressure:1;
+    cur={o,id:e.pointerId,was:B.erase};last=null;lastM=null;if(PEN.isEraser(e))B.erase=true;
+    const pr=PEN.p(e)*PEN.tiltK(e);
     last=paintHit(o,h,pr);
     if(B.mirror){const mh=mirrorHit(o,h);if(mh)lastM=paintHit(o,mh,pr);}
   }
   function move(e){
     if(!cur||e.pointerId!==cur.id)return;e.stopImmediatePropagation();
     const h=hitAt(cur.o,e);if(!h){last=null;lastM=null;return;}
-    const pr=e.pointerType==='pen'&&e.pressure?e.pressure:1;
+    const pr=PEN.p(e)*PEN.tiltK(e);
     last=paintHit(cur.o,h,pr,last);
     if(B.mirror){const mh=mirrorHit(cur.o,h);if(mh)lastM=paintHit(cur.o,mh,pr,lastM);}
   }
-  function up(e){if(!cur||e.pointerId!==cur.id)return;e.stopImmediatePropagation();cur=null;last=null;lastM=null;bump();c.onChange&&c.onChange();}
+  function up(e){if(!cur||e.pointerId!==cur.id)return;e.stopImmediatePropagation();B.erase=cur.was;cur=null;last=null;lastM=null;bump();c.onChange&&c.onChange();}
   function cancel(){cur=null;last=null;lastM=null;}
+  /* tablet express keys and the usual painter shortcuts: [ and ] change the size, E flips the eraser */
+  addEventListener('keydown',e=>{if(!B.on||e.ctrlKey||e.metaKey||e.altKey||(e.target&&e.target.matches&&e.target.matches('input,textarea,select')))return;
+    const k=e.key;if(k==='['||k===']'){B.size=Math.max(2,Math.min(100,Math.round(B.size*(k==='['?.8:1.25))));toast('Brush size '+B.size,900);}
+    else if(k==='e'||k==='E'){B.erase=!B.erase;toast(B.erase?'Eraser on':'Eraser off',900);}});
   dom.addEventListener('pointerdown',down,true);dom.addEventListener('pointermove',move,true);
   dom.addEventListener('pointerup',up,true);dom.addEventListener('pointercancel',up,true);
 

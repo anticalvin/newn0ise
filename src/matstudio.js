@@ -3,6 +3,7 @@
    Poly Haven assets are CC0 (https://polyhaven.com/license). Nothing is bundled: they load from their CDN on demand. */
 import {buildMaps,texturesFor,fillMaterial} from './nodemat.js';
 import {createPainter} from './matpaint.js';
+import {PEN} from './pen.js';
 import {cleanMP} from './sigil.js';
 
 const API='https://api.polyhaven.com';
@@ -336,7 +337,7 @@ export function createMatStudio(c){
       s.appendChild(el('div','sub','Brush'));
       chipRow(s,PNT.KINDS,v=>B.kind===v,v=>{B.kind=v;B.erase=false;build2();});
       sliderRow(s,'Size',()=>B.size,v=>{B.size=v;},2,100,1);sliderRow(s,'Hardness',()=>B.hard,v=>{B.hard=v;},0,1,.01);sliderRow(s,'Flow',()=>B.flow,v=>{B.flow=v;},.05,1,.01);
-      const rm=el('div','chips');tog(rm,'Mirror left and right',()=>B.mirror,v=>{B.mirror=v;});tog(rm,'Eraser',()=>B.erase,v=>{B.erase=v;});s.appendChild(rm);
+      const rm=el('div','chips');tog(rm,'Mirror left and right',()=>B.mirror,v=>{B.mirror=v;});tog(rm,'Eraser',()=>B.erase,v=>{B.erase=v;});s.appendChild(rm);PEN.ui(s);
       s.appendChild(el('div','sub','The brush paints'));
       const rc=el('div','chips');[['col','Colour'],['rou','Roughness'],['met','Metal'],['hgt','Height'],['em','Glow']].forEach(([k,l])=>tog(rc,l,()=>B.use[k],v=>{B.use[k]=v;build2();}));s.appendChild(rc);
       if(B.use.col)colorRow(s,'Colour',()=>B.ch.col,v=>{B.ch.col=v;});

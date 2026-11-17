@@ -2,6 +2,7 @@
    a tool dock along the bottom, one panel at a time above it, a size strip on the edge. One finger draws, two fingers move the view.
    Also holds the material creator and "my materials". */
 import {cleanMP} from './sigil.js';
+import {PEN} from './pen.js';
 import {RECIPES,recipeMP} from './matstudio.js';
 import {RoomEnvironment} from 'three/addons/environments/RoomEnvironment.js';
 
@@ -222,6 +223,7 @@ export function createSigilStudio(c){
     sliderRow(g,'Smoothing',()=>B.smooth,v=>{B.smooth=v;},0,.95,.05,v=>Math.round(v*100)+'%');
     sliderRow(g,'Taper',()=>B.taper,v=>{B.taper=v;},0,1,.05,v=>Math.round(v*100)+'%');
     sliderRow(g,'Depth from pressure',()=>B.depth,v=>{B.depth=v;},0,1,.05,v=>Math.round(v*100)+'%');
+    PEN.ui(g);
     chipRow(g,[['auto','Pen or speed'],['speed','Speed'],['even','Even']],v=>B.press===v,v=>{B.press=v;});
     chipRow(g,[['round','Round'],['flat','Flat ribbon']],v=>B.style===v,v=>{B.style=v;});
     const gs=group('Snap');

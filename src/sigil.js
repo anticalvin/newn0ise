@@ -2,6 +2,7 @@
    A drawing is one scene object (so Look, effect stacks, materials, physics, undo, project save and GLB export all work on it). It holds
    immutable strokes (centreline + per-point width + material) and, optionally, a photo plane to draw on. Strokes are rebuilt into tubes
    from that data. Drawing happens on the screen plane, a surface, the floor, a wall or the photo; orbit any time to see it is 3D. */
+import {PEN} from './pen.js';
 export const MATS={
   chrome:['Chrome','#dfe6ee',{metalness:1,roughness:.08},'linear-gradient(115deg,#24282c,#fff,#555d64,#e4f0ff,#14191d)'],
   mercury:['Mercury','#c6cad8',{metalness:1,roughness:.03},'linear-gradient(115deg,#15151a,#d2c9d9,#303036,#fff,#5a5c6b)'],
@@ -263,7 +264,7 @@ export function createSigil(c){
     const pen=e.pointerType==='pen'&&e.pressure>0;
     let target;
     if(B.press==='even')target=1;
-    else if(pen||(B.press==='auto'&&e.pointerType==='pen'))target=Math.max(.1,Math.pow(e.pressure||.5,.8));
+    else if(pen||(B.press==='auto'&&e.pointerType==='pen'))target=Math.max(.1,Math.pow(PEN.p(e),.8))*PEN.tiltK(e);
     else target=Math.min(1,Math.max(.25,1.08-(distPx/Math.max(1,dtms))*.38)); // faster stroke → thinner, slower → thicker
     D.w+=(target-D.w)*(pen?.5:.16);return D.w;
   }
@@ -280,7 +281,7 @@ export function createSigil(c){
     if(B.pick){ // "draw at a point": the next click sets where the drawing plane goes
       const pl0=planeFor(o),hh=hit0(e,o,pl0,0);if(hh){B.anchor=hh.p.toArray().map(q4);B.pick=false;canvas.style.cursor='crosshair';markAnchor();sync_ui&&sync_ui();toast('Drawing plane set here. It stays until you clear it.',2500);}
       return;}
-    if(B.mode==='erase'){drawing={erase:true,o,changed:false,keep:o.meta.sigil.strokes.slice()};eraseAt(e);canvas.setPointerCapture(e.pointerId);return;}
+    if(B.mode==='erase'||PEN.isEraser(e)){drawing={erase:true,o,changed:false,keep:o.meta.sigil.strokes.slice()};eraseAt(e);canvas.setPointerCapture(e.pointerId);return;}
     if(o.meta.sigil.strokes.length>=LIM.strokes){toast('This drawing has the most strokes it can hold. Start a new drawing.');return;}
     if(S.sel!==o.id)selectObj(o.id);SG.cur=o.id;
     const stL=o.meta.sigil,lyc=layerOf(stL,stL.curL);
@@ -309,7 +310,7 @@ export function createSigil(c){
   }
   const ls=o=>o.holder.scale.x||1;
   function onMove(e){
-    if(isDraw()&&B.mode!=='orbit'&&e.pointerType!=='touch'){const px=B.mode==='erase'?26:Math.max(6,B.size);ring.style.display='block';ring.style.left=e.clientX+'px';ring.style.top=e.clientY+'px';ring.style.width=ring.style.height=px+'px';}else ring.style.display='none';
+    if(isDraw()&&B.mode!=='orbit'&&e.pointerType!=='touch'){const px=B.mode==='erase'||PEN.isEraser(e)?26:Math.max(6,B.size);ring.style.display='block';ring.style.left=e.clientX+'px';ring.style.top=e.clientY+'px';ring.style.width=ring.style.height=px+'px';}else ring.style.display='none';
     if(!drawing&&isDraw()&&B.mode==='draw'&&e.pointerType!=='touch'){const o=target();if(o&&B.snap!=='off'&&B.snap!=='grid'){const sn=snapAt(e,o);if(sn){snapEl.style.display='block';snapEl.style.left=sn.x+'px';snapEl.style.top=sn.y+'px';}else snapEl.style.display='none';}else snapEl.style.display='none';}
     const D=drawing;if(!D||e.pointerId!==D.pid&&D.pid!=null)return;
     if(D.erase){eraseAt(e);return;}
