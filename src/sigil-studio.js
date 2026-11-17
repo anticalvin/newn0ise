@@ -2,6 +2,7 @@
    a tool dock along the bottom, one panel at a time above it, a size strip on the edge. One finger draws, two fingers move the view.
    Also holds the material creator and "my materials". */
 import {cleanMP} from './sigil.js';
+import {RECIPES,recipeMP} from './matstudio.js';
 import {RoomEnvironment} from 'three/addons/environments/RoomEnvironment.js';
 
 const PALETTE=['#ffffff','#dfe6ee','#8a8f98','#1a1a1c','#000000','#ff5a1f','#ff3b58','#f0a030','#ffd84a','#4fe39a','#2fb6a7','#3fa7ff','#5a55ff','#b06bff','#ff7ac8','#e8dcc2'];
@@ -25,7 +26,7 @@ export function previewCSS(col,p){
 }
 
 export function createSigilStudio(c){
-  const {THREE,SG,S,el,btn,sliderRow,chipRow,toast,canvas,controls,stage,setTab,exitStudio,savePic,lookOpen,bump}=c;
+  const {THREE,SG,S,el,btn,sliderRow,chipRow,toast,canvas,controls,stage,setTab,exitStudio,savePic,lookOpen,bump,matOpen}=c;
   const B=SG.B,MATS=SG.MATS;
   let root=null,panel=null,openP='',dock=null,undoB=null,redoB=null,sizeEl=null,sizeFill=null,bubble=null,matDot=null,spin=false,isOn=false;
   const hap=n=>{try{navigator.vibrate&&navigator.vibrate(n||8);}catch(e){}};
@@ -212,6 +213,10 @@ export function createSigilStudio(c){
   /* ---------- brush panel ---------- */
   function brushPanel(){
     head('Brush');
+    const refreshBrush=()=>{const y=panel.scrollTop;panel.innerHTML='';brushPanel();panel.scrollTop=y;paintAll();SG.guide&&SG.guide();};
+    {const gp=group('Brush presets');const pr=mk('div','sg-row');pr.style.flexWrap='wrap';
+      [['Ink pen',{size:6,smooth:.6,taper:.8,style:'round',jit:0,wob:0,wn:0,press:'auto'}],['Neon tube',{size:20,smooth:.5,taper:.15,style:'round',jit:0,wob:0,wn:0,press:'even'}],['Ribbon',{size:34,smooth:.55,taper:.5,style:'flat',jit:0,wob:0,wn:0,press:'auto'}],['Marker',{size:16,smooth:.3,taper:.2,style:'round',jit:0,wob:0,wn:0,press:'even'}],['Sketchy',{size:5,smooth:.1,taper:.7,style:'round',jit:.5,wob:.3,wn:.3,press:'auto'}],['Hair',{size:3,smooth:.8,taper:1,style:'round',jit:.15,wob:.2,wn:0,press:'auto'}],['Chalk',{size:26,smooth:.3,taper:.1,style:'round',jit:.2,wob:0,wn:.9,press:'even'}]]
+        .forEach(([n,v])=>{const b=mk('button','sg-wide',n);b.type='button';b.addEventListener('click',()=>{Object.assign(B,v);hap(8);refreshBrush();});pr.appendChild(b);});gp.appendChild(pr);}
     const g=group('');
     sliderRow(g,'Size',()=>B.size,v=>{B.size=v;paintSize();},2,80,1,v=>Math.round(v)+' px');
     sliderRow(g,'Smoothing',()=>B.smooth,v=>{B.smooth=v;},0,.95,.05,v=>Math.round(v*100)+'%');
@@ -225,17 +230,36 @@ export function createSigilStudio(c){
     const gy=group('Mirror');
     const axes=[['mirror','Left and right'],['mirY','Up and down'],['mirZ','Front and back']];
     const ax=mk('div','sg-row');
-    axes.forEach(([k,n])=>{const x=mk('button','sg-wide',n);x.type='button';const sync=()=>x.setAttribute('aria-pressed',String(!!B[k]));sync();x.addEventListener('click',()=>{B[k]=!B[k];sync();hap(8);});ax.appendChild(x);});
+    axes.forEach(([k,n])=>{const x=mk('button','sg-wide',n);x.type='button';const sync=()=>x.setAttribute('aria-pressed',String(!!B[k]));sync();x.addEventListener('click',()=>{B[k]=!B[k];sync();hap(8);SG.guide&&SG.guide();refreshBrush();});ax.appendChild(x);});
     gy.appendChild(ax);
+    gy.appendChild(note('A teal plane shows where the mirror is. Everything you draw is copied across it as you draw.'));
+    [['mirror','mox','Left and right plane'],['mirY','moy','Up and down plane'],['mirZ','moz','Front and back plane']].forEach(([k,o,n])=>{if(B[k])sliderRow(gy,n,()=>B[o],v=>{B[o]=v;SG.guide&&SG.guide();},-3,3,.05,v=>(+v).toFixed(2));});
+    {const gk=group('Symmetry presets');const kr=mk('div','sg-row');kr.style.flexWrap='wrap';
+      [['Off',{mirror:false,mirY:false,mirZ:false,rad:1}],['Mirror',{mirror:true,mirY:false,mirZ:false,rad:1}],['Four-way',{mirror:true,mirY:false,mirZ:true,rad:1}],['Snowflake',{mirror:true,mirY:false,mirZ:false,rad:6,rax:0}],['Mandala',{mirror:true,mirY:false,mirZ:false,rad:12,rax:0}],['Cube',{mirror:true,mirY:true,mirZ:true,rad:1}],['Orbit ring',{mirror:false,mirY:false,mirZ:false,rad:8,rax:1}]]
+        .forEach(([n,v])=>{const b=mk('button','sg-wide',n);b.type='button';b.addEventListener('click',()=>{Object.assign(B,v);hap(8);refreshBrush();});kr.appendChild(b);});gk.appendChild(kr);}
     const gr=group('Spin copies');
     sliderRow(gr,'Copies',()=>B.rad,v=>{B.rad=Math.round(v);},1,16,1,v=>v<2?'Off':Math.round(v)+'×');
     chipRow(gr,[['0','Upright'],['1','Left axis'],['2','Front axis']],v=>String(B.rax||0)===v,v=>{B.rax=+v;});
     gr.appendChild(note('Mirror and spin combine, so Left and right plus 6 copies draws a snowflake.'));
+    {const ge=group('Echo copies');
+      sliderRow(ge,'Copies',()=>B.ec,v=>{B.ec=Math.round(v);},1,12,1,v=>v<2?'Off':Math.round(v)+'×');
+      chipRow(ge,[['0','Along X'],['1','Along Y'],['2','Along Z']],v=>String(B.eax||0)===v,v=>{B.eax=+v;});
+      sliderRow(ge,'Spacing',()=>B.eo,v=>{B.eo=v;},-3,3,.05,v=>(+v).toFixed(2));
+      ge.appendChild(note('Repeats each stroke along a line, like fence posts, columns or a row of leaves.'));}
+    {const gc=group('Colour variety');
+      sliderRow(gc,'Hue drift per stroke',()=>B.hue,v=>{B.hue=v;},0,1,.05,v=>Math.round(v*100)+'%');
+      chipRow(gc,[['0','Steady'],['1','Rainbow']],v=>String(+B.rb)===v,v=>{B.rb=v==='1';});}
     const ga=group('Hand');
     sliderRow(ga,'Shake',()=>B.jit,v=>{B.jit=v;},0,1,.05,v=>Math.round(v*100)+'%');
     sliderRow(ga,'Ripple',()=>B.wob,v=>{B.wob=v;},0,1,.05,v=>Math.round(v*100)+'%');
     sliderRow(ga,'Ink wobble',()=>B.wn,v=>{B.wn=v;},0,1,.05,v=>Math.round(v*100)+'%');
     chipRow(ga,[['0','Freehand'],['1','Straight line']],v=>String(+B.line)===v,v=>{B.line=v==='1';});
+    {const gm=group('From the Material tab');
+      gm.appendChild(note('Pick a material made in the Material tab and your next strokes use it.'));
+      const mr=mk('div','sg-row');mr.style.flexWrap='wrap';
+      RECIPES.forEach(([n,d])=>{const b=mk('button','sg-wide',n);b.type='button';b.addEventListener('click',()=>{B.mat='custom';B.mp=recipeMP(d);if(d.col)B.col=d.col;hap(8);toast(n+' brush');paintAll();});mr.appendChild(b);});
+      gm.appendChild(mr);
+      const ob=mk('button','sg-wide pri','Open Material tab');ob.type='button';ob.addEventListener('click',()=>{matOpen&&matOpen();});gm.appendChild(ob);}
   }
   /* ---------- layers ---------- */
   function layersPanel(){head('Layers');const g=group('');g.appendChild(SG.sLayers);SG.paintLayers();}

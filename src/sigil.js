@@ -73,7 +73,7 @@ function patTex(THREE,type,c1,c2,amt,scale){
 const q4=v=>Math.round(v*1e4)/1e4;
 export function createSigil(c){
   const {THREE,S,scene,camera,controls,canvas,registerObject,objById,selectObj,bump,uPush,toast,el,btn,sec,sliderRow,chipRow,setShadowFlags,loadCanvas,tc,setTool,markDirty,applyView}=c;
-  const SG={cur:null,B:{snap:'ends',snapPx:16,grid:.1,anchor:null,pick:false,size:22,smooth:.4,taper:.6,press:'auto',depth:.3,style:'round',mat:'chrome',mp:null,col:'#dfe6ee',plane:'view',off:0,mirror:false,mirY:false,mirZ:false,rax:0,rad:1,jit:0,wob:0,wn:0,line:false,mode:'draw'}};
+  const SG={cur:null,B:{snap:'ends',snapPx:16,grid:.1,anchor:null,pick:false,size:22,smooth:.4,taper:.6,press:'auto',depth:.3,style:'round',mat:'chrome',mp:null,col:'#dfe6ee',plane:'view',off:0,mirror:false,mirY:false,mirZ:false,rax:0,rad:1,jit:0,wob:0,wn:0,line:false,mode:'draw',mox:0,moy:0,moz:0,ec:1,eax:0,eo:.3,hue:0,rb:false,rbh:0}};
   const B=SG.B;let uid=1,drawing=null,space=false,paneHost=null,sync_ui=null;
   const ray=new THREE.Raycaster(),ring=document.createElement('div');
   ring.style.cssText='position:fixed;z-index:30;pointer-events:none;border:1.5px solid #fff;mix-blend-mode:difference;border-radius:50%;transform:translate(-50%,-50%);display:none';document.body.appendChild(ring);
@@ -142,13 +142,25 @@ export function createSigil(c){
     else if(p.bump){const t=patTex(THREE,'noise','#ffffff','#000000',1,p.ps||1);m.bumpMap=t.bump;m.bumpScale=p.bump*4;}
     m.userData.sigilMat=s.m;return m;
   }
+  function strokeColor(){if(!(B.hue>0)&&!B.rb)return B.col;const c=new THREE.Color(B.col);if(B.rb){B.rbh=(B.rbh+.07)%1;c.offsetHSL(B.rbh,0,0);}else c.offsetHSL((Math.random()-.5)*B.hue,0,0);return '#'+c.getHexString();}
+  let guideG=null;
+  SG.guide=()=>{
+    if(guideG){if(guideG.parent)guideG.parent.remove(guideG);guideG.traverse(n=>{if(n.geometry)n.geometry.dispose();});guideG=null;}
+    const o=target();if(!o||!isDraw()||!(B.mirror||B.mirY||B.mirZ))return;
+    guideG=new THREE.Group();guideG.userData.noView=true;
+    const mk=(rot,pos)=>{const g=new THREE.PlaneGeometry(4,4),m=new THREE.Mesh(g,new THREE.MeshBasicMaterial({color:0x27f5c9,transparent:true,opacity:.1,side:THREE.DoubleSide,depthWrite:false})),e=new THREE.LineSegments(new THREE.EdgesGeometry(g),new THREE.LineBasicMaterial({color:0x27f5c9,transparent:true,opacity:.7}));m.add(e);m.rotation.set(rot[0],rot[1],rot[2]);m.position.set(pos[0],pos[1],pos[2]);m.raycast=()=>{};e.raycast=()=>{};m.userData.noView=true;guideG.add(m);};
+    if(B.mirror)mk([0,Math.PI/2,0],[B.mox,0,0]);if(B.mirY)mk([Math.PI/2,0,0],[0,B.moy,0]);if(B.mirZ)mk([0,0,0],[0,0,B.moz]);
+    o.holder.add(guideG);S.needFrame=true;
+  };
   function symMatrices(s){
     const out=[],R=Math.max(1,Math.min(16,s.rad|0)),ax=[s.mir?-1:1,s.my?-1:1,s.mz?-1:1],ra=s.ra===1||s.ra===2?s.ra:0;
+    const mo=Array.isArray(s.mo)?s.mo.map(v=>Math.max(-8,Math.min(8,+v||0))):[0,0,0],EC=Math.max(1,Math.min(12,s.ec|0||1)),ea=s.ea===1||s.ea===2?s.ea:0,eo=Math.max(-3,Math.min(3,+s.eo||0));
     const flips=[[1,1,1]];
     for(let k=0;k<3;k++)if(ax[k]<0)for(const f of flips.slice())flips.push(f.map((v,j)=>j===k?-v:v));
     const E=new THREE.Euler(),Q=new THREE.Quaternion(),P=new THREE.Vector3(),S1=new THREE.Vector3();
     for(let i=0;i<R;i++){const an=i/R*Math.PI*2;E.set(ra===1?an:0,ra===0?an:0,ra===2?an:0);Q.setFromEuler(E);
-      for(const f of flips)out.push(new THREE.Matrix4().compose(P.set(0,0,0),Q,S1.set(f[0],f[1],f[2])));}
+      for(const f of flips)for(let e=0;e<EC&&out.length<96;e++){P.set(f[0]<0?2*mo[0]:0,f[1]<0?2*mo[1]:0,f[2]<0?2*mo[2]:0);if(e)P.setComponent(ea,P.getComponent(ea)+e*eo);
+        out.push(new THREE.Matrix4().compose(P,Q,S1.set(f[0],f[1],f[2])));}}
     return out;
   }
   function strokeGroup(s){
@@ -277,8 +289,8 @@ export function createSigil(c){
     if(h0.snapped&&B.plane==='view'){plane=planeFor(o,h0.p);} // started on an existing point: keep that depth
     const ls=o.holder.scale.x||1,r0=B.size/2*px2w(h0.d)/ls;
     const D=drawing={o,plane,startSnap:!!h0.snapped,r0,d0:h0.d,lastD:h0.d,w:.3,raw:[],lp:h0.p.clone(),lastEv:{x:e.clientX,y:e.clientY,t:e.timeStamp},n0:h0.n.clone(),pid:e.pointerId,
-      id:'s'+Date.now().toString(36)+(uid++),
-      stroke(){const s=B,loc=this.raw;return {id:this.id,m:s.mat,...(s.mat==='custom'?{mp:{...s.mp}}:{}),c:s.col,st:s.style,sm:s.smooth,tp:s.taper,mir:s.mirror?1:0,...(s.mirY?{my:1}:{}),...(s.mirZ?{mz:1}:{}),...(s.rax?{ra:s.rax}:{}),rad:s.rad,ly:this.ly,r:this.rr,nrm:this.nl,pts:loc.flatMap(p=>p.p),w:loc.map(p=>p.w)};}};
+      id:'s'+Date.now().toString(36)+(uid++),col:strokeColor(),
+      stroke(){const s=B,loc=this.raw;return {id:this.id,m:s.mat,...(s.mat==='custom'?{mp:{...s.mp}}:{}),c:this.col||s.col,st:s.style,sm:s.smooth,tp:s.taper,mir:s.mirror?1:0,...((s.mox||s.moy||s.moz)?{mo:[s.mox,s.moy,s.moz]}:{}),...(s.ec>1?{ec:s.ec,ea:s.eax,eo:s.eo}:{}),...(s.mirY?{my:1}:{}),...(s.mirZ?{mz:1}:{}),...(s.rax?{ra:s.rax}:{}),rad:s.rad,ly:this.ly,r:this.rr,nrm:this.nl,pts:loc.flatMap(p=>p.p),w:loc.map(p=>p.w)};}};
     D.ly=stL.curL;D.rr=r0;D.nl=h0.n.clone().transformDirection(new THREE.Matrix4().copy(o.holder.matrixWorld).invert()).toArray().map(q4);
     addPoint(e,h0,0,0);canvas.setPointerCapture(e.pointerId);canvas.style.cursor='crosshair';
   }
@@ -347,7 +359,7 @@ export function createSigil(c){
   function setMode(m){B.mode=m;canvas.style.cursor=m==='orbit'?'grab':'crosshair';ring.style.display='none';sync_ui&&sync_ui();}
   /* ---------- tab enter / leave ---------- */
   SG.onTab=id=>{
-    try{markAnchor();}catch(e){}
+    try{markAnchor();}catch(e){}try{setTimeout(()=>SG.guide(),0);}catch(e){}
     if(id==='draw'){S.pivot=false;S.gizmo=null;if(tc)tc.detach();canvas.style.cursor=B.mode==='orbit'?'grab':'crosshair';const o=target();if(o&&S.sel!==o.id)selectObj(o.id);paint();}
     else{canvas.style.cursor='';ring.style.display='none';cancelDraw();}
   };

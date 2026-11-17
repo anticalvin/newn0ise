@@ -20,7 +20,7 @@ import {createSurface,createBall,CUSTOM_DEFAULT} from './surface.js';
 import {createMaterials,PRESETS as MATPRESETS,normMat} from './matsys.js';
 import {openMatLab} from './matlab.js';
 import {openNodeMat} from './nodemat-ui.js';
-import {createMatStudio} from './matstudio.js';
+import {createMatStudio,recipeMP} from './matstudio.js';
 import {openRender} from './render.js';
 import {createBuild} from './build.js';
 import {loadModel as phLoad} from './phmodels.js';
@@ -2442,7 +2442,7 @@ function buildHud(){
 }
 
 /* ---------- boot ---------- */
-window.__sheet=sheet;studioDefaults();buildTabs();BLD=createBuild({THREE,addGroup,objById,S,dom:canvas,camera,controls,toast,bump,el,btn,sec,addModel:addPhModel,pane:paneEls.build,peek:()=>{if(!mqDesk.matches)sheet.setIdx(1);}});MS=createMatStudio({THREE,RoomEnvironment,el,btn,sliderRow,chipRow,sec,toast,objById,S,bump,MAT,SURF,ngApply,ngClear,openGraph:openNodeGraph,setEnvHdr,dom:canvas,camera,controls,LGT,renderScene,createBall,fxOpen,gotoTab:k=>{setTab(k);if(!mqDesk.matches&&sheet.idx<2)sheet.setIdx(2);},peek:()=>{if(!mqDesk.matches)sheet.setIdx(1);},openLook:()=>{const pp=document.getElementById('lookpop');window.__lookPop&&window.__lookPop.open('selected',document.getElementById('tab_mat'));},setEnvStrength:v=>{scene.environmentIntensity=v;hemi.intensity=.2+v*.7;},pane:paneEls.mat});placeTabs();mqDesk.addEventListener('change',placeTabs);buildHud();buildScenePane();buildScanPane();
+window.__sheet=sheet;studioDefaults();buildTabs();BLD=createBuild({THREE,addGroup,objById,S,dom:canvas,camera,controls,toast,bump,el,btn,sec,addModel:addPhModel,pane:paneEls.build,peek:()=>{if(!mqDesk.matches)sheet.setIdx(1);}});MS=createMatStudio({THREE,sigilUse:d=>{try{SIG.B.mat='custom';SIG.B.mp=recipeMP(d);if(d.col)SIG.B.col=d.col;toast('The Sigil brush now uses this material. Open Sigil and draw.',4000);}catch(e){console.error(e);}},RoomEnvironment,el,btn,sliderRow,chipRow,sec,toast,objById,S,bump,MAT,SURF,ngApply,ngClear,openGraph:openNodeGraph,setEnvHdr,dom:canvas,camera,controls,LGT,renderScene,createBall,fxOpen,gotoTab:k=>{setTab(k);if(!mqDesk.matches&&sheet.idx<2)sheet.setIdx(2);},peek:()=>{if(!mqDesk.matches)sheet.setIdx(1);},openLook:()=>{const pp=document.getElementById('lookpop');window.__lookPop&&window.__lookPop.open('selected',document.getElementById('tab_mat'));},setEnvStrength:v=>{scene.environmentIntensity=v;hemi.intensity=.2+v*.7;},pane:paneEls.mat});placeTabs();mqDesk.addEventListener('change',placeTabs);buildHud();buildScenePane();buildScanPane();
 if(renderer){buildLookPane();}
 buildExportPane();wireSheet();
 setTab('scene');
@@ -2707,7 +2707,7 @@ RAG=createRagdoll({THREE,scene,walk,S,bump,toast});window.__rag=RAG;
 if(NW){NW.ragdoll=RAG;}
 if(NW){MECH=createMechanics({THREE,S,walk,camera,canvas,scene,W:NW,toast,bump,objById});NW.mech=MECH;}
 SIG=createSigil({THREE,S,scene,camera,controls,canvas,registerObject,objById,selectObj,bump,uPush:()=>uPush&&uPush(),toast,el,btn,sec,sliderRow,chipRow,setShadowFlags,loadCanvas,tc,markDirty,applyView});SIG.build(paneEls.draw);window.__setTab=setTab;
-const SGS=createSigilStudio({THREE,SG:SIG,S,el,btn,sliderRow,chipRow,toast,canvas,controls,stage:$('#stage'),bump,setTab,exitStudio:()=>{SGS.close();setTab('scene');if(!mqDesk.matches&&sheet.idx<2)sheet.setIdx(2);},savePic:()=>exportImage(1,true),lookOpen:b=>{const o=SIG.target();if(o&&S.sel!==o.id)selectObj(o.id);const pp=document.getElementById('lookpop');if(pp&&!pp.hidden){pp.hidden=true;return;}window.__lookPop&&window.__lookPop.open('selected',b);}});
+const SGS=createSigilStudio({THREE,SG:SIG,S,el,btn,sliderRow,chipRow,toast,canvas,controls,stage:$('#stage'),bump,setTab,matOpen:()=>{SGS.close();setTab('mat');if(!mqDesk.matches&&sheet.idx<2)sheet.setIdx(2);},exitStudio:()=>{SGS.close();setTab('scene');if(!mqDesk.matches&&sheet.idx<2)sheet.setIdx(2);},savePic:()=>exportImage(1,true),lookOpen:b=>{const o=SIG.target();if(o&&S.sel!==o.id)selectObj(o.id);const pp=document.getElementById('lookpop');if(pp&&!pp.hidden){pp.hidden=true;return;}window.__lookPop&&window.__lookPop.open('selected',b);}});
 window.__sgs=SGS;window.__sig=SIG;
 {const w=el('div','chips');w.style.margin='0 0 10px';const ob=btn('Open Sigil studio','pri',()=>SGS.open());w.append(ob);const nt=el('div','note');nt.textContent='A full-screen drawing page made for phones, with the material creator. Everything you draw stays in your scene.';paneEls.draw.insertBefore(nt,paneEls.draw.children[1]);paneEls.draw.insertBefore(w,paneEls.draw.children[1]);}
 DOC.setFormHooks({snap:o=>FORM.snap(o)||SIG.snap(o),apply:(o,fm)=>fm&&fm.sg!=null?SIG.apply(o,fm):FORM.apply(o,fm)});
@@ -3067,6 +3067,8 @@ if(/^#world/.test(location.hash)){S._wsChosen=true;setTab('world');worldEd.start
       model:()=>{close();$('#file').click();},
       scan:()=>{close();setTab('scan');},
       sigil:()=>{close();SGS.open();},
+      material:()=>{close();if(!S.objs.length){try{addPrimitive('Sphere');}catch(e){}}setTab('mat');if(!mqDesk.matches&&sheet.idx<2)sheet.setIdx(2);},
+      build:()=>{close();setTab('build');if(!mqDesk.matches&&sheet.idx<2)sheet.setIdx(2);BLD&&BLD.show();},
       scene:()=>{close();setTab('scene');toast('Empty scene. Add a shape from the Scene tab, or draw in the Sigil tab.',4000);}
     };
     L.querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=>go[b.dataset.go]()));

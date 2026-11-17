@@ -3,6 +3,7 @@
    Poly Haven assets are CC0 (https://polyhaven.com/license). Nothing is bundled: they load from their CDN on demand. */
 import {buildMaps,texturesFor,fillMaterial} from './nodemat.js';
 import {createPainter} from './matpaint.js';
+import {cleanMP} from './sigil.js';
 
 const API='https://api.polyhaven.com';
 const J=new Map();
@@ -20,6 +21,10 @@ export const RECIPES=[
   ['Car paint',{col:'#b3121b',met:.6,rou:.35,cc:1,ccr:.03}],['Candy',{col:'#ff3d7f',met:0,rou:.18,cc:1,ccr:.05}],['Pearl',{col:'#f2ece4',met:0,rou:.3,iri:1,iriI:1.6,cc:.6}],['Velvet',{col:'#5a1030',met:0,rou:.95,sh:1,shc:'#ff9ac0',shr:.35}],
   ['Gold',{col:'#ffc34d',met:1,rou:.22}],['Brushed steel',{col:'#c9ccd1',met:1,rou:.38,an:1}],['Copper',{col:'#d17a4f',met:1,rou:.28}],['Obsidian',{col:'#08080a',met:.1,rou:.05,cc:1,ccr:.02}],['Rubber',{col:'#232323',met:0,rou:.85}],['Neon tube',{col:'#111111',met:0,rou:.3,em:2.2,emc:'#9bf6ff'}]
 ];
+export const recipeMP=d=>{const p={metalness:d.met==null?0:d.met,roughness:d.rou==null?.5:d.rou};
+  if(d.cc)p.clearcoat=d.cc;if(d.ccr!=null&&d.cc)p.clearcoatRoughness=d.ccr;if(d.sh){p.sheen=d.sh;p.sheenRoughness=d.shr==null?.5:d.shr;if(d.shc)p.sheenColor=d.shc;}
+  if(d.tr){p.transmission=d.tr;p.thickness=d.th||1;p.ior=d.ior||1.5;}if(d.iri){p.iridescence=d.iri;p.iridescenceIOR=d.iriI||1.4;}if(d.an)p.aniso=d.an;
+  if(d.em>0){p.emissive=d.emc||'self';p.ei=d.em;}return cleanMP(p)||p;};
 const SHAPES=['Ball','Cube','Knot','Torus','Plane'];
 
 /* put the physical values onto one material */
@@ -35,7 +40,7 @@ export function physProps(THREE,m,P){
 }
 
 export function createMatStudio(c){
-  const {THREE,RoomEnvironment,el,btn,sliderRow,chipRow,sec,toast,objById,S,bump,MAT,SURF,ngApply,ngClear,openGraph,setEnvHdr,pane,dom,camera,controls,LGT,renderScene,createBall,fxOpen,gotoTab,peek,openLook}=c;
+  const {THREE,RoomEnvironment,el,btn,sliderRow,chipRow,sec,toast,objById,S,bump,MAT,SURF,ngApply,ngClear,openGraph,setEnvHdr,pane,dom,camera,controls,LGT,renderScene,createBall,fxOpen,gotoTab,peek,openLook,sigilUse}=c;
   const meshes=o=>{const out=[];if(!o||!o.holder)return out;o.holder.traverse(n=>{if(n.isMesh&&!n.isSplatMesh&&n.geometry&&n.material&&!(n.userData&&n.userData.noView))out.push(n);});return out;};
   const cur=()=>objById(S.sel!=null?S.sel:S.fxTarget);
   const surfaceOk=o=>o&&o.kind!=='viz'&&o.kind!=='splat';
@@ -335,6 +340,7 @@ export function createMatStudio(c){
     /* quick materials */
     {const s=sec(pane,'Quick materials');const r=el('div','chips');
       RECIPES.forEach(([n,d])=>r.appendChild(btn(n,'',()=>{const x=cur();if(!x){toast('Pick an object first, or add a shape.');return;}if(x.ptex)clearTex(x);if(x.nmat){ngClear(x);}put({...PB,...d});build2();})));
+      r.appendChild(btn('Use on Sigil brush','pri',()=>{const x=cur(),d=x&&x.pbr?x.pbr:null;if(!d){toast('Pick a quick material or set the Surface sliders first.');return;}if(sigilUse){sigilUse({met:d.met,rou:d.rou,cc:d.cc,ccr:d.ccr,sh:d.sh,shc:d.shc,shr:d.shr,tr:d.tr,th:d.th,ior:d.ior,iri:d.iri,iriI:d.iriI,an:d.an,em:d.em,emc:d.emc,col:d.col});}}));
       s.appendChild(r);}
     /* variations */
     {const s=sec(pane,'Evolve');s.appendChild(el('div','note','Six variations of what you have. Tap one to keep it, then evolve again. Surprise mixes the quick materials.'));
