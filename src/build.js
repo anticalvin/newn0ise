@@ -2,6 +2,7 @@
    raise levels, add stairs and roofs, restyle with one tap, then furnish with real CC0 models. The house is one editable object
    (data, not baked geometry), so it saves with the project and you can keep changing it. */
 import {modelList,thumb} from './phmodels.js';
+import {createLive} from './liveplay.js';
 const H=2.7,T=.16,FT=.14,LV=H+FT,GRID=.5;
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 export const STYLES={
@@ -14,7 +15,7 @@ export const STYLES={
 const styleOf=(k,id)=>(STYLES[k].find(s=>s[0]===id)||STYLES[k][0]);
 
 export function createBuild(c){
-  const {THREE,addGroup,objById,S,dom,camera,controls,toast,bump,el,btn,sec,addModel,pane,peek,selectObj,LGT,walkIn}=c;
+  const {THREE,addGroup,objById,S,dom,camera,controls,toast,bump,el,btn,sec,addModel,pane,peek,selectObj,LGT,walkIn,scene,stage}=c;
   let house=null;const ray=new THREE.Raycaster(),v2=new THREE.Vector2();
   const newData=()=>({walls:[],floors:[],roofs:[],stairs:[],lawn:true});
   const T0={tool:null,level:0,walls:'up',roofType:'gable',kit:null,style:{wall:'plaster',floor:'oak',roof:'shingle'},rot:0,place:null};
@@ -249,33 +250,78 @@ export function createBuild(c){
     (libP=libP||modelList()).then(a=>{lib=a;draw();}).catch(()=>{libP=null;msg.hidden=false;msg.textContent='Couldn’t reach the model library. It needs a connection.';});
   }
   const tog=(parent,label,on,fn)=>{const b=el('button','chip',label);b.type='button';b.setAttribute('aria-pressed',!!on);b.addEventListener('click',fn);parent.appendChild(b);return b;};
+  const HINT={kit:'Tap the middle of a room to furnish it.',fence:'Drag to draw a low fence.',wall:'Drag on the floor to draw a wall. It snaps to the grid.',room:'Drag a rectangle: walls and a floor.',floor:'Drag a rectangle to lay a floor.',door:'Tap a wall to add a door. Tap again to remove.',window:'Tap a wall to add a window. Tap again to remove.',stairs:'Drag the way the stairs climb. They rise one level.',roof:'Drag a rectangle over the walls for a roof.',paint:'Tap a wall, floor or roof to restyle it with the style you chose.',erase:'Tap a wall, floor, roof or stairs to remove it.'};
+  const ICON={wall:'<path d="M3 18V7h18v11M3 12.5h18M9 7v5.5M15 12.5V18"/>',room:'<rect x="4" y="5" width="16" height="14" rx="1"/><path d="M4 12h6M14 19v-3"/>',fence:'<path d="M5 20V8l1.5-2L8 8v12M11 20V8l1.5-2L14 8v12M17 20V8l1.5-2L20 8v12M3 12h18M3 17h18"/>',floor:'<path d="M3 15l9-5 9 5-9 5zM3 11l9-5 9 5"/>',door:'<rect x="6" y="3" width="12" height="18" rx="1"/><circle cx="15" cy="13" r=".9"/>',window:'<rect x="5" y="5" width="14" height="14" rx="1"/><path d="M12 5v14M5 12h14"/>',stairs:'<path d="M4 20h4v-4h4v-4h4V8h4"/>',roof:'<path d="M3 13l9-8 9 8M6 11.5V19h12v-7.5"/>',paint:'<path d="M5 17l8-9 4 4-9 8H5zM14 6l2-2 4 4-2 2"/>',erase:'<path d="M6 20h11M5 15l9-9 5 5-6 6H8z"/>',undo:'<path d="M9 7L4 12l5 5M4 12h10a6 6 0 0 1 0 8"/>',redo:'<path d="M15 7l5 5-5 5M20 12H10a6 6 0 0 0 0 8"/>',up:'<path d="M6 14l6-6 6 6"/>',down:'<path d="M6 10l6 6 6-6"/>'};
+  const svg=k=>'<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+ICON[k]+'</svg>';
+  /* a floating build bar over the viewport, like a home builder's tool strip */
+  const TOOLS=[['wall','Wall'],['room','Room'],['floor','Floor'],['door','Door'],['window','Window'],['stairs','Stairs'],['roof','Roof'],['fence','Fence'],['paint','Restyle'],['erase','Erase']];
+  const tb=document.createElement('div');tb.id='bdtb';tb.setAttribute('role','toolbar');tb.setAttribute('aria-label','Build tools');tb.hidden=true;document.body.appendChild(tb);
+  const css=document.createElement('style');css.textContent=`#bdtb{position:fixed;left:50%;transform:translateX(-50%);z-index:47;display:flex;gap:2px;align-items:stretch;max-width:calc(100vw - 12px);overflow-x:auto;padding:5px;border-radius:20px;background:rgba(18,18,20,.78);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border:1px solid rgba(255,255,255,.14);box-shadow:0 8px 28px rgba(0,0,0,.45);scrollbar-width:none}
+#bdtb::-webkit-scrollbar{display:none}
+#bdtb button{flex:none;min-width:52px;min-height:52px;padding:4px 2px;border:0;border-radius:14px;background:transparent;color:#e8e9ed;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font:700 9px var(--lab,monospace);letter-spacing:.04em;text-transform:uppercase}
+#bdtb button[aria-pressed=true]{background:var(--accent,#ff5a1f);color:#111}
+#bdtb i{width:1px;margin:8px 3px;background:rgba(255,255,255,.18);flex:none}
+.bd-nav{display:flex;gap:6px;overflow-x:auto;padding:2px 2px 8px;scrollbar-width:none;position:sticky;top:0;z-index:2;background:var(--panel,#16171b)}.bd-nav::-webkit-scrollbar{display:none}
+.bd-nav button{flex:1 0 auto;min-height:44px;padding:0 16px;border-radius:999px;border:1px solid var(--line);background:var(--raise);color:inherit;font:700 11px var(--lab,monospace);letter-spacing:.06em;text-transform:uppercase}
+.bd-nav button[aria-selected=true]{background:var(--accent);border-color:var(--accent);color:#111}
+.bd-sw{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:6px 0 10px}
+.bd-sw button{padding:0;border:2px solid transparent;border-radius:14px;overflow:hidden;background:var(--raise);color:inherit;min-height:44px}
+.bd-sw button[aria-pressed=true]{border-color:var(--accent)}
+.bd-sw canvas{display:block;width:100%;aspect-ratio:1}
+.bd-sw span{display:block;padding:3px 2px 5px;font:600 9.5px var(--lab,monospace);text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bd-lv{display:flex;align-items:center;gap:8px}.bd-lv b{min-width:78px;text-align:center;font:800 13px var(--disp,system-ui)}
+#pane_build .chip,#pane_build .btn{min-height:44px}`;document.head.appendChild(css);
+  const tbBtn=(key,label,fn,extra)=>{const b=document.createElement('button');b.type='button';b.dataset.k=key;b.innerHTML=svg(key)+'<span>'+label+'</span>';b.setAttribute('aria-label',label);b.addEventListener('click',fn);if(extra)b.dataset.x=extra;return b;};
+  const setTool=v=>{T0.tool=T0.tool===v?null:v;T0.place=null;T0.kit=null;ensure();if(T0.tool)peek&&peek();paintTB();refresh();};
+  const lvBtn=(d)=>{const b=document.createElement('button');b.type='button';b.innerHTML=svg(d>0?'up':'down')+'<span>'+(d>0?'Up':'Down')+'</span>';b.setAttribute('aria-label',d>0?'Level up':'Level down');b.addEventListener('click',()=>{T0.level=clamp(T0.level+d,0,4);rebuild();paintTB();refresh();});return b;};
+  TOOLS.forEach(([k,l])=>tb.appendChild(tbBtn(k,l,()=>setTool(k))));
+  {const sep=document.createElement('i');tb.appendChild(sep);tb.appendChild(tbBtn('undo','Undo',undo));tb.appendChild(tbBtn('redo','Redo',redoF));const s2=document.createElement('i');tb.appendChild(s2);tb.appendChild(lvBtn(-1));const lv=document.createElement('button');lv.type='button';lv.dataset.lv='1';lv.style.minWidth='44px';lv.style.pointerEvents='none';tb.appendChild(lv);tb.appendChild(lvBtn(1));}
+  function paintTB(){tb.querySelectorAll('button[data-k]').forEach(b=>{if(TOOLS.some(t=>t[0]===b.dataset.k))b.setAttribute('aria-pressed',T0.tool===b.dataset.k);});const lv=tb.querySelector('[data-lv]');if(lv)lv.innerHTML='<span style="font-size:13px">L'+(T0.level+1)+'</span>';}
+  let tbOn=false,tbT=0;
+  const placeTB=()=>{const ob=document.getElementById('objbar'),base=getComputedStyle(document.documentElement).getPropertyValue('--objb').trim()||'calc(54px + env(safe-area-inset-bottom))';tb.style.bottom='calc('+base+' + '+(ob&&!ob.hidden?'62px':'0px')+')';};
+  const showTB=v=>{tbOn=v;tb.hidden=!v;clearInterval(tbT);if(v){paintTB();placeTB();tbT=setInterval(placeTB,500);}};
+
+  /* the sim */
+  const LIVE=createLive({THREE,S,scene,objById,toast,el,btn,sec,stage,bump,dom,camera,host:{colliders,bounds:()=>bounds(),toWorld:v=>house?house.o.holder.localToWorld(v.clone()):v.clone(),floorY:()=>house?house.o.holder.localToWorld(new THREE.Vector3(0,topY(0),0)).y:FT,busy:()=>!!(T0.tool||T0.place)}});
+
+  let sub='build';
+  const SUBS=[['build','Build'],['styles','Styles'],['furnish','Furnish'],['live','Live']];
   function swatches(parent,kind,label){
-    parent.appendChild(el('div','sub',label));const row=el('div','chips');
-    STYLES[kind].forEach(([id,nm,col])=>{const b=el('button','chip',nm);b.type='button';b.setAttribute('aria-pressed',T0.style[kind]===id);b.style.cssText='border-left:14px solid '+col;b.addEventListener('click',()=>{T0.style[kind]=id;if(!T0.tool||T0.tool==='erase')T0.tool='paint';refresh();});row.appendChild(b);});parent.appendChild(row);
+    parent.appendChild(el('div','sub',label));const g=el('div','bd-sw');
+    STYLES[kind].forEach(([id,nm,col,pat])=>{const b=el('button');b.type='button';b.title=nm;b.setAttribute('aria-pressed',T0.style[kind]===id);
+      const cv=document.createElement('canvas');cv.width=cv.height=64;const x=cv.getContext('2d');
+      if(pat==='water'){x.fillStyle=col;x.fillRect(0,0,64,64);}else{const im=tex(kind,id).image;x.drawImage(im,0,0,64,64);}
+      b.append(cv,el('span','',nm));b.addEventListener('click',()=>{T0.style[kind]=id;if(!T0.tool||T0.tool==='erase'||T0.tool==='door'||T0.tool==='window')T0.tool='paint';paintTB();refresh();});g.appendChild(b);});
+    parent.appendChild(g);
   }
-  const HINT={kit:'Tap the middle of a room to furnish it. Use Rotate to turn the layout.',fence:'Drag to draw a low fence. Doors and windows work on it too.',wall:'Drag on the floor to draw a wall. It snaps to the grid.',room:'Drag a rectangle to make a room with walls and a floor.',floor:'Drag a rectangle to lay a floor.',door:'Tap a wall to put in a door. Tap it again to remove.',window:'Tap a wall to put in a window. Tap it again to remove.',stairs:'Drag in the direction the stairs should climb. They rise one level.',roof:'Drag a rectangle over the walls to put a gabled roof on.',paint:'Tap a wall, floor or roof to restyle it with the style you picked.',erase:'Tap a wall, floor, roof or stairs to remove it.'};
   function refresh(){if(!pane.hidden)show();}
   function show(){
-    pane.innerHTML='';const D=house&&house.data;
-    {const s=sec(pane,'Build','like a home builder');s.appendChild(el('div','note','Draw rooms on a grid, add doors, windows, stairs and roofs, change levels, restyle in one tap, then furnish with real furniture. The house stays editable and saves with the project.'));
-      const r=el('div','chips');r.append(btn('Starter house','pri',()=>starter('house')),btn('Cabin','',()=>starter('cabin')),btn('Undo','',undo),btn('Redo','',redoF),btn('Clear','',()=>{ensure();push();Object.assign(house.data,newData());rebuild();bump();}));s.appendChild(r);}
-    {const s=sec(pane,'Level and view');
-      const r=el('div','chips');r.append(btn('−','',()=>{T0.level=Math.max(0,T0.level-1);rebuild();refresh();}),el('span','chip','Level '+(T0.level+1)),btn('+','',()=>{T0.level=Math.min(4,T0.level+1);rebuild();refresh();}));s.appendChild(r);
-      const w=el('div','chips');[['up','Walls up'],['cut','Cutaway'],['down','Walls down']].forEach(([v,l])=>tog(w,l,T0.walls===v,()=>{T0.walls=v;rebuild();refresh();}));s.appendChild(w);
-      const tm=el('div','chips');[['Morning',8],['Noon',12.5],['Evening',18.3],['Night',22.5]].forEach(([n,h])=>tm.appendChild(btn(n,'',()=>{try{if(!LGT.on)LGT.setOn(true);LGT.setHour(h);S.needFrame=true;}catch(e){toast('Couldn’t change the time of day.');}})));s.appendChild(el('div','sub','Time of day'));s.appendChild(tm);
-      const v=el('div','chips');v.append(btn('Walk inside','pri',()=>{ensure();const b=bounds(),cn=b.getCenter(new THREE.Vector3()),p=house.o.holder.localToWorld(new THREE.Vector3(cn.x,topY(T0.level),cn.z));walkIn&&walkIn([p.x,p.y,p.z]);}),btn('Top view','',()=>view('top')),btn('Angled view','',()=>view('iso')),btn(!D||D.lawn!==false?'Lawn: on':'Lawn: off','',()=>{ensure();house.data.lawn=!house.data.lawn;rebuild();refresh();}));s.appendChild(v);}
-    {const s=sec(pane,'Tools');const r=el('div','chips');
-      [['wall','Wall'],['room','Room'],['fence','Fence'],['floor','Floor'],['door','Door'],['window','Window'],['stairs','Stairs'],['roof','Roof'],['paint','Restyle'],['erase','Erase']].forEach(([v,l])=>tog(r,l,T0.tool===v,()=>{T0.tool=T0.tool===v?null:v;T0.place=null;ensure();if(T0.tool)peek&&peek();refresh();}));
-      r.appendChild(btn('Done','',()=>{T0.tool=null;T0.place=null;dom.style.cursor='';refresh();}));s.appendChild(r);
-      if(T0.tool==='roof'){const rt=el('div','chips');[['gable','Gabled'],['flat','Flat'],['shed','Shed']].forEach(([v,l])=>tog(rt,l,T0.roofType===v,()=>{T0.roofType=v;refresh();}));s.appendChild(rt);}
-      s.appendChild(el('div','note',T0.tool?HINT[T0.tool]+' One finger builds, two fingers move the view.':T0.place?'Placing '+T0.place.name+'. Tap the floor. One finger places, two fingers move the view.':'Pick a tool, then build on the grid.'));
+    pane.innerHTML='';const D=house&&house.data;showTB(true);LIVE.showHud(true);
+    const nv=el('div','bd-nav');nv.setAttribute('role','tablist');SUBS.forEach(([k,l])=>{const b=el('button','',l);b.type='button';b.setAttribute('role','tab');b.setAttribute('aria-selected',k===sub);b.addEventListener('click',()=>{sub=k;const sc=pane.parentElement;if(sc)sc.scrollTop=0;show();});nv.appendChild(b);});pane.appendChild(nv);
+    if(sub==='build'){
+      {const s=sec(pane,'Start here');s.appendChild(el('div','note',T0.tool?HINT[T0.tool]+' One finger builds, two fingers move the view.':'Pick a tool from the bar over the picture, or start with a ready-made home.'));
+        const r=el('div','chips');r.append(btn('Starter house','pri',()=>starter('house')),btn('Cabin','',()=>starter('cabin')),btn('Clear all','',()=>{ensure();push();Object.assign(house.data,newData());rebuild();bump();}));s.appendChild(r);
+        if(T0.tool==='roof'){const rt=el('div','chips');[['gable','Gabled'],['flat','Flat'],['shed','Shed']].forEach(([v,l])=>tog(rt,l,T0.roofType===v,()=>{T0.roofType=v;refresh();}));s.appendChild(rt);}
+        if(T0.tool){s.appendChild(btn('Finish building','',()=>{T0.tool=null;T0.place=null;T0.kit=null;dom.style.cursor='';paintTB();refresh();}));}}
+      {const s=sec(pane,'Level');const r=el('div','bd-lv');r.append(btn('−','',()=>{T0.level=clamp(T0.level-1,0,4);rebuild();paintTB();refresh();}),el('b','','Level '+(T0.level+1)),btn('+','',()=>{T0.level=clamp(T0.level+1,0,4);rebuild();paintTB();refresh();}));s.appendChild(r);
+        const w=el('div','chips');[['up','Walls up'],['cut','Cutaway'],['down','Walls down']].forEach(([v,l])=>tog(w,l,T0.walls===v,()=>{T0.walls=v;rebuild();refresh();}));s.appendChild(w);}
+      {const s=sec(pane,'Camera and time');const v=el('div','chips');v.append(btn('Walk inside','pri',()=>{ensure();const b=bounds(),cn=b.getCenter(new THREE.Vector3()),p=house.o.holder.localToWorld(new THREE.Vector3(cn.x,topY(T0.level),cn.z));walkIn&&walkIn([p.x,p.y,p.z]);}),btn('Top view','',()=>view('top')),btn('Angled view','',()=>view('iso')),btn(!D||D.lawn!==false?'Lawn: on':'Lawn: off','',()=>{ensure();house.data.lawn=!house.data.lawn;rebuild();refresh();}));s.appendChild(v);
+        const tm=el('div','chips');[['Morning',8],['Noon',12.5],['Evening',18.3],['Night',22.5]].forEach(([n,h])=>tm.appendChild(btn(n,'',()=>{try{if(!LGT.on)LGT.setOn(true);LGT.setHour(h);S.needFrame=true;}catch(e){toast('Couldn’t change the time of day.');}})));s.appendChild(tm);}
+    }else if(sub==='styles'){
+      const s=sec(pane,'Styles','tap one, then tap a wall, floor or roof');swatches(s,'wall','Walls');swatches(s,'floor','Floors');swatches(s,'roof','Roofs');
+    }else if(sub==='furnish'){
+      const s=sec(pane,'Furnish a whole room');s.appendChild(el('div','note','Pick a room type, then tap the middle of a room. Matching furniture is chosen from the library and set out for you.'));
+      const kr=el('div','chips');KITS.forEach(k=>tog(kr,k[0],T0.tool==='kit'&&T0.kit===k,()=>{T0.kit=k;T0.tool='kit';T0.place=null;ensure();peek&&peek();paintTB();refresh();}));s.appendChild(kr);
       if(T0.tool==='kit'){const pr=el('div','chips');pr.append(btn('Rotate 90°','',()=>{T0.rot=(T0.rot+Math.PI/2)%(Math.PI*2);toast('Layout turned');}));s.appendChild(pr);}
-      if(T0.place){const pr=el('div','chips');pr.append(btn('Rotate 90°','',()=>{T0.rot=(T0.rot+Math.PI/2)%(Math.PI*2);toast('Turned');}),btn('Done placing','',()=>{T0.place=null;refresh();}));s.appendChild(pr);}}
-    {const s=sec(pane,'Styles');swatches(s,'wall','Walls');swatches(s,'floor','Floors');swatches(s,'roof','Roofs');}
-    {const s=sec(pane,'Furnish','CC0 models');s.appendChild(el('div','sub','Furnish a whole room'));{const kr=el('div','chips');KITS.forEach(k=>kr.appendChild(tog(kr,k[0],T0.tool==='kit'&&T0.kit===k,()=>{T0.kit=k;T0.tool='kit';T0.place=null;ensure();peek&&peek();refresh();})));s.appendChild(kr);}s.appendChild(el('div','sub','Or pick one piece'));s.appendChild(el('div','note','Real furniture, plants and props from Poly Haven. Pick one, then tap the floor. Placed pieces are normal objects: move, rotate, paint them in Material.'));model(s);}
+      const s2=sec(pane,'One piece at a time','CC0 models');s2.appendChild(el('div','note','Pick a piece, then tap the floor. Placed pieces are normal objects: move them, paint them in Material.'));
+      if(T0.place){const pr=el('div','chips');pr.append(btn('Rotate 90°','',()=>{T0.rot=(T0.rot+Math.PI/2)%(Math.PI*2);toast('Turned');}),btn('Done placing','',()=>{T0.place=null;refresh();}));s2.appendChild(pr);}
+      model(s2);
+    }else{
+      LIVE.panel(pane,refresh);
+    }
     dom.style.cursor=(T0.tool||T0.place)?'crosshair':'';
   }
-  return {show,fromItem(it){const data=it.data||newData(),group=new THREE.Group();const o=addGroup(it.name||'House',group,{build:data,noAuto:true});house={o,group,data};o.meta.build=data;o.meta.colliders=colliders;rebuild();return o;},
-    projectItem(o){return {kind:'build',name:o.name,data:o.meta.build};},off(){T0.tool=null;T0.place=null;dom.style.cursor='';if(drag){drag=null;clearGhost();}},
+  return {show,tick:dt=>LIVE.tick(dt),fromItem(it){const data=it.data||newData(),group=new THREE.Group();const o=addGroup(it.name||'House',group,{build:data,noAuto:true});house={o,group,data};o.meta.build=data;o.meta.colliders=colliders;rebuild();return o;},
+    projectItem(o){return {kind:'build',name:o.name,data:o.meta.build};},off(){T0.tool=null;T0.place=null;T0.kit=null;dom.style.cursor='';if(drag){drag=null;clearGhost();}showTB(false);LIVE.showHud(false);},
     isHouse:o=>!!(o&&o.meta&&o.meta.build),adopt(o){if(o&&o.meta&&o.meta.build){house={o,group:o.root,data:o.meta.build};}}};
 }

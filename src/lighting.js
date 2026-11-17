@@ -58,9 +58,9 @@ export function createLighting(c){
     if(key.castShadow&&key.shadow.mapSize.x!==L.shadowRes){key.shadow.mapSize.set(L.shadowRes,L.shadowRes);if(key.shadow.map){key.shadow.map.dispose();key.shadow.map=null;}}
     /* the second light is the moon at night and a cool fill from the other side by day */
     if(day>.25||!L.moon){rim.position.set(tg.x-dir.x*10,tg.y+4,tg.z-dir.z*10);rim.color.copy(C('#b4c4ff'));rim.intensity=.35*day*L.exp;}
-    else{rim.position.set(tg.x-dir.x*10,tg.y+Math.max(-dir.y,.1)*10,tg.z-dir.z*10);rim.color.copy(C('#8fa8ff'));rim.intensity=.3*night*L.exp;}
-    hemi.color.copy(mix(mix('#0a1024','#e8a07a',twi*1.2+day*.2),'#c4d8ff',day*day));hemi.groundColor.copy(mix('#07080c','#44444a',day));hemi.intensity=(.03+.42*day)*L.exp;
-    scene.environmentIntensity=d.S.env*(.05+.95*day)*L.exp*(.8+.2*high);
+    else{rim.position.set(tg.x-dir.x*10,tg.y+Math.max(-dir.y,.1)*10,tg.z-dir.z*10);rim.color.copy(C('#8fa8ff'));rim.intensity=.7*night*L.exp;}
+    hemi.color.copy(mix(mix('#0a1024','#e8a07a',twi*1.2+day*.2),'#c4d8ff',day*day));hemi.groundColor.copy(mix('#07080c','#44444a',day));hemi.intensity=(.12+.36*day)*L.exp;
+    scene.environmentIntensity=d.S.env*(.16+.84*day)*L.exp*(.8+.2*high);
     const horizon=mix(mix('#05070d','#e0a074',twi*1.3+day*.15),'#b9cade',day*day);
     if(L.fog>0){scene.fog=new THREE.Fog(horizon,L.fog*.25,L.fog);fogMine=true;}else if(fogMine){scene.fog=saved.fog;fogMine=false;}
     sky.visible=L.sky;stars.visible=L.sky&&L.stars;

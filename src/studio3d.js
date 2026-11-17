@@ -74,6 +74,8 @@ const controls=new OrbitControls(camera,canvas);
 controls.enableDamping=true;controls.dampingFactor=.12;controls.target.set(0,.9,0);controls.minDistance=.3;controls.maxDistance=60;
 controls.autoRotateSpeed=2.4;
 const world=new THREE.Group();scene.add(world);
+/* a fill on top of whatever the scene sets, so dark scenes stay readable: Natural, Clear (default), Bright, Full-bright */
+const BRIGHT=[[0,0,'Natural'],[.45,.45,'Clear'],[1.0,1.1,'Bright'],[1.8,1.9,'Full-bright']],FOGK=[1,1.3,2,3.2];
 const hemi=new THREE.HemisphereLight(0xffffff,0x44444a,.35);scene.add(hemi);
 const key=new THREE.DirectionalLight(0xffffff,1.5);key.position.set(3,5,4);scene.add(key);
 const rim=new THREE.DirectionalLight(0xaab8ff,.5);rim.position.set(-4,2,-3);scene.add(rim);
@@ -979,11 +981,12 @@ function frame(ts){
     tcHelper.visible=!S.exporting&&!S.walk&&!!(S.gizmo||S.pivot)&&S.sel!=null;
     /* anything that changes the picture without a bump() (visualizers, physics, spin, walking, recording, auto mode, breathing reliefs) must also
        invalidate the cached look frame, otherwise the effect keeps showing the first baked frame */
-    SURF.tick(t);MAT.tick(t);LGT.tick(t,dt);
+    SURF.tick(t);MAT.tick(t);LGT.tick(t,dt);if(BLD)BLD.tick(dt);
     S.animating=!!(SURF.any()||S.walk||S.spin||(typeof sim!=='undefined'&&sim.playing)||(typeof stRec!=='undefined'&&stRec.state==='recording')||AUTO.on||S.objs.some(o=>(o.kind==='viz'&&o.vis)||(o.kind==='relief'&&o.meta&&(o.meta.breathe||o.meta.furMats))));
     if(S.animating){S.ver++;N0.SRC.ver=S.ver;S.liveUntil=performance.now()+120;}
     bgCol.set(S.bg);
-    renderer.setRenderTarget(rt);renderer.setClearColor(bgCol,1);renderer.clear();renderer.render(scene,camera);
+    renderer.setRenderTarget(rt);renderer.setClearColor(bgCol,1);renderer.clear();
+    {const bi=S.bright==null?2:S.bright,bl=BRIGHT[bi]||BRIGHT[2],h0=hemi.intensity,e0=scene.environmentIntensity,fg=scene.fog,f0=fg?fg.far:0;const kk=clamp(1.5-(h0+(e0||0)+key.intensity*.35),0,1);hemi.intensity=h0+bl[0]*kk;scene.environmentIntensity=(e0||0)+bl[1]*kk;if(fg)fg.far=f0*(1+(FOGK[bi]-1)*kk);renderer.render(scene,camera);hemi.intensity=h0;scene.environmentIntensity=e0;if(fg)fg.far=f0;}
     const wantMask=S.fx&&!S.hold&&S.mask.mode===2&&!(S.engine!=='stack'&&anyLook());
     if(wantMask)renderSelMask();
     renderer.setRenderTarget(null);
@@ -2425,6 +2428,7 @@ function buildHud(){
   h.addEventListener('pointerdown',e=>{e.preventDefault();on(true);});['pointerup','pointercancel','pointerleave'].forEach(t=>h.addEventListener(t,()=>on(false)));h.addEventListener('contextmenu',e=>e.preventDefault());
   $('#bFrame').addEventListener('click',frameAll);
   $('#bMat').addEventListener('click',()=>{setTab('mat');if(!mqDesk.matches&&sheet.idx<2)sheet.setIdx(2);});
+  {const bl=$('#bLight');if(bl){try{const v=localStorage.getItem('n0.bright');S.bright=v==null?2:clamp(+v,0,3);}catch(e){S.bright=2;}const paint=()=>{bl.textContent='Light: '+BRIGHT[S.bright][2];};paint();bl.addEventListener('click',()=>{S.bright=(S.bright+1)%4;try{localStorage.setItem('n0.bright',S.bright);}catch(e){}paint();S.needFrame=true;bump();});}}
   $('#bGrid').addEventListener('click',()=>{S.grid=!S.grid;$('#bGrid').setAttribute('aria-pressed',S.grid);});
   $('#bSpin').addEventListener('click',()=>{S.spin=!S.spin;$('#bSpin').setAttribute('aria-pressed',S.spin);});
   $('#bImport').addEventListener('click',()=>{$('#file').accept=FILE_ACCEPT;$('#file').click();});
@@ -2442,7 +2446,7 @@ function buildHud(){
 }
 
 /* ---------- boot ---------- */
-window.__sheet=sheet;studioDefaults();buildTabs();BLD=createBuild({THREE,addGroup,objById,S,dom:canvas,camera,controls,toast,bump,el,btn,sec,addModel:addPhModel,pane:paneEls.build,LGT,walkIn:pos=>{try{if(S.walk)walk.exit();walk.enter({pos,yaw:0,noJump:true});}catch(e){toast('Couldn’t start walking.');}},peek:()=>{if(!mqDesk.matches)sheet.setIdx(1);}});MS=createMatStudio({THREE,sigilUse:d=>{try{SIG.B.mat='custom';SIG.B.mp=recipeMP(d);if(d.col)SIG.B.col=d.col;toast('The Sigil brush now uses this material. Open Sigil and draw.',4000);}catch(e){console.error(e);}},RoomEnvironment,el,btn,sliderRow,chipRow,sec,toast,objById,S,bump,MAT,SURF,ngApply,ngClear,openGraph:openNodeGraph,setEnvHdr,dom:canvas,camera,controls,LGT,renderScene,createBall,fxOpen,gotoTab:k=>{setTab(k);if(!mqDesk.matches&&sheet.idx<2)sheet.setIdx(2);},peek:()=>{if(!mqDesk.matches)sheet.setIdx(1);},openLook:()=>{const pp=document.getElementById('lookpop');window.__lookPop&&window.__lookPop.open('selected',document.getElementById('tab_mat'));},setEnvStrength:v=>{scene.environmentIntensity=v;hemi.intensity=.2+v*.7;},pane:paneEls.mat});placeTabs();mqDesk.addEventListener('change',placeTabs);buildHud();buildScenePane();buildScanPane();
+window.__sheet=sheet;studioDefaults();buildTabs();BLD=createBuild({THREE,addGroup,objById,S,dom:canvas,camera,controls,toast,bump,el,btn,sec,addModel:addPhModel,pane:paneEls.build,scene,stage:$('#stage'),LGT,walkIn:pos=>{try{if(S.walk)walk.exit();walk.enter({pos,yaw:0,noJump:true});}catch(e){toast('Couldn’t start walking.');}},peek:()=>{if(!mqDesk.matches)sheet.setIdx(1);}});MS=createMatStudio({THREE,sigilUse:d=>{try{SIG.B.mat='custom';SIG.B.mp=recipeMP(d);if(d.col)SIG.B.col=d.col;toast('The Sigil brush now uses this material. Open Sigil and draw.',4000);}catch(e){console.error(e);}},RoomEnvironment,el,btn,sliderRow,chipRow,sec,toast,objById,S,bump,MAT,SURF,ngApply,ngClear,openGraph:openNodeGraph,setEnvHdr,dom:canvas,camera,controls,LGT,renderScene,createBall,fxOpen,gotoTab:k=>{setTab(k);if(!mqDesk.matches&&sheet.idx<2)sheet.setIdx(2);},peek:()=>{if(!mqDesk.matches)sheet.setIdx(1);},openLook:()=>{const pp=document.getElementById('lookpop');window.__lookPop&&window.__lookPop.open('selected',document.getElementById('tab_mat'));},setEnvStrength:v=>{scene.environmentIntensity=v;hemi.intensity=.2+v*.7;},pane:paneEls.mat});placeTabs();mqDesk.addEventListener('change',placeTabs);buildHud();buildScenePane();buildScanPane();
 if(renderer){buildLookPane();}
 buildExportPane();wireSheet();
 setTab('scene');
