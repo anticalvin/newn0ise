@@ -536,6 +536,18 @@ body[data-cam] .tl{bottom:var(--campad,0px);max-height:32dvh;border-bottom:1px s
 .camlooks{display:none;position:absolute;left:50%;transform:translateX(-50%);bottom:calc(var(--campad,170px) + 10px);z-index:12;pointer-events:auto;align-items:center;gap:8px;min-height:44px;padding:0 18px;border-radius:999px;border:1px solid rgba(255,255,255,.28);background:rgba(10,10,10,.6);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);color:#f2efe8;font:700 12px var(--lab,monospace);letter-spacing:.08em;text-transform:uppercase;max-width:86%}
 .camlooks i{font-style:normal}.camlooks span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .camui.shoot .camlooks{display:flex}
+
+/* Pocket Studio on phones: 44px targets, readable labels, floating pills that never collide */
+@media (pointer:coarse),(max-width:520px){
+  .railtabs button,.railtabs button[aria-pressed]{min-height:44px!important;font-size:11.5px!important}
+  .ws a{min-height:44px;display:inline-flex;align-items:center;justify-content:center}
+  .acts .btn{min-height:44px}
+  .camcats button,.camui.ios .camcats button{min-height:44px}
+  #camstr{width:min(240px,calc(100% - 210px));align-self:flex-start;margin-left:16px}
+  .mark{display:inline-flex;align-items:center;min-height:44px}
+  .float .pill{min-height:44px}
+  .float.bl{max-width:calc(100% - 150px)}
+}
 </style>
 </head>
 <body>

@@ -26,3 +26,4 @@ body[data-cam] .ws,body[data-walk] .ws{display:none!important}
   --ps-r1:8px;--ps-r2:12px;--ps-r3:16px;--ps-s1:4px;--ps-s2:8px;--ps-s3:12px;--ps-s4:16px;--ps-s5:24px;--ps-hit:44px;
   --ps-fast:120ms;--ps-med:200ms;--ps-ease:cubic-bezier(.2,.8,.2,1)}
 @media (prefers-reduced-motion:reduce){:root{--ps-fast:0ms;--ps-med:0ms}}
+@media (pointer:coarse),(max-width:520px){.ws a{min-height:44px}}

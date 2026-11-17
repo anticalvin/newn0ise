@@ -1944,6 +1944,8 @@ const sheet={
     if(full!==this.fullH){this.fullH=full;sheetEl.style.setProperty('--fullh',full+'px');}
     if(this.h===0&&!this.inited){this.setIdx(1,true);this.inited=true;}
     if(!this.drag){
+      this.ht=this.snaps()[this.idx]; // always follows the current screen height, so a resize or keyboard can never leave the panel past its limit
+      const hi=this.snaps()[3];if(this.h>hi+1){this.h=hi;this.hv=0;}
       const w=17,k=w*w,d=2*w; // critically damped spring
       const a=-k*(this.h-this.ht)-d*this.hv;
       this.hv+=a*dt;this.h+=this.hv*dt;
