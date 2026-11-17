@@ -42,7 +42,7 @@ export function physProps(THREE,m,P){
 }
 
 export function createMatStudio(c){
-  const {THREE,RoomEnvironment,el,btn,sliderRow,chipRow,sec,toast,objById,S,bump,MAT,SURF,ngApply,ngClear,openGraph,setEnvHdr,pane,dom,camera,controls,LGT,renderScene,createBall,fxOpen,gotoTab,peek,openLook,sigilUse}=c;
+  const {THREE,RoomEnvironment,el,btn,sliderRow,chipRow,sec,toast,objById,S,bump,MAT,SURF,ngApply,ngClear,openGraph,setEnvHdr,pane,dom,camera,controls,LGT,renderScene,createBall,fxOpen,gotoTab,peek,openLook,sigilUse,undo,redo,commit}=c;
   const meshes=o=>{const out=[];if(!o||!o.holder)return out;o.holder.traverse(n=>{if(n.isMesh&&!n.isSplatMesh&&n.geometry&&n.material&&!(n.userData&&n.userData.noView))out.push(n);});return out;};
   const cur=()=>objById(S.sel!=null?S.sel:S.fxTarget);
   const surfaceOk=o=>o&&o.kind!=='viz'&&o.kind!=='splat';
@@ -231,7 +231,14 @@ export function createMatStudio(c){
   }
 
   /* ---- the tab ---- */
-  const CSS=`.ms-stk{position:sticky;top:0;z-index:3;background:var(--panel,#16171b);padding:0 0 6px;margin:-2px -2px 6px}
+  const CSS=`.ms-stk{display:contents}
+.ms-top{position:sticky;top:0;z-index:3;background:var(--panel,#16171b);padding:0 0 6px;margin:6px -2px 6px;border-bottom:1px solid var(--line)}
+.ms-tgt{display:flex;align-items:center;gap:6px;padding:6px 2px 0;min-height:44px}
+.ms-tgt .who{flex:1;min-width:0;font:600 10.5px var(--lab,monospace);color:var(--mute);letter-spacing:.04em;line-height:1.3;overflow:hidden}
+.ms-tgt .who b{display:block;color:var(--ink);font:800 13px var(--disp,system-ui);letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ms-tgt button{flex:none;min-width:44px;min-height:40px;padding:0 10px;border-radius:12px;border:1px solid var(--line);background:var(--raise);color:inherit;font:700 11px var(--lab,monospace);letter-spacing:.04em}
+.ms-tgt button:disabled{opacity:.4}
+.ms-prev{margin-top:2px}
 .ms-nav{display:flex;gap:6px;overflow-x:auto;padding:8px 2px 2px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
 .ms-nav button[aria-pressed=true]{border-color:var(--accent)}
 .ms-nav button[aria-selected=true]{background:var(--accent);border-color:var(--accent);color:#111}
@@ -428,7 +435,15 @@ export function createMatStudio(c){
     NAMES.forEach(([k,l])=>{const b=el('button','',l);b.type='button';b.dataset.k=k;b.setAttribute('role','tab');b.addEventListener('click',()=>{if(k!==curSec){curSec=k;lsSet('n0.matsec',k);const sc=pane.parentElement;if(sc)sc.scrollTop=0;renderBody();b.scrollIntoView({inline:'center',block:'nearest'});}});nav.appendChild(b);});
     {const pvb=el('button','','Preview');pvb.type='button';pvb.dataset.k='_pv';const hid=(()=>{try{return localStorage.getItem('n0.matprev')==='0';}catch(e){return false;}})();pw.style.display=hid?'none':'';pvb.setAttribute('aria-pressed',!hid);
       pvb.addEventListener('click',()=>{const h=pw.style.display!=='none';pw.style.display=h?'none':'';pvb.setAttribute('aria-pressed',!h);lsSet('n0.matprev',h?'0':'1');if(!h)pv.dirty();});nav.insertBefore(pvb,nav.firstChild);}
-    stk.appendChild(nav);pane.appendChild(body);renderBody();
+    const top=el('div','ms-top'),tgt=el('div','ms-tgt'),who=el('div','who');
+    const summ=x=>{if(!x)return 'Pick an object to edit its material';const bits=[];if(x.pbr)bits.push('surface');if(x.ptex)bits.push('texture');if(x.nmat)bits.push('pattern');if(x.paint&&Object.keys(x.paint.sets||{}).length)bits.push('paint');if(x.surf&&x.surf.m)bits.push('effect');return bits.length?bits.join(' · '):'original material';};
+    who.innerHTML='Editing<b></b><span></span>';who.querySelector('b').textContent=o?o.name:'Nothing selected';who.querySelector('span').textContent=summ(o);
+    const mk=(t,title,f)=>{const b=el('button','',t);b.type='button';b.title=title;b.setAttribute('aria-label',title);b.addEventListener('click',f);return b;};
+    const doReset=()=>{const x=cur();if(!x||!surfaceOk(x)){toast('Pick an object first.');return;}
+      try{clearPbr(x);clearTex(x);if(SURF&&SURF.clear)SURF.clear(x);if(x.nmat&&ngClear)ngClear(x);if(x.paint)PNT.reset(x);}catch(e){console.error(e);}
+      live();commit&&commit();build();toast('Material reset. Undo brings it back.',2600);};
+    tgt.append(who,mk('↶','Undo',()=>undo&&undo()),mk('↷','Redo',()=>redo&&redo()),mk('Reset','Reset this object’s material',doReset));
+    top.append(tgt,nav);stk.appendChild(top);pane.appendChild(body);renderBody();
     lastKey=keyOf(o);
   }
   const keyOf=o=>o?o.id+'|'+(o.ptex?o.ptex.id:'')+'|'+(o.nmat?1:0)+'|'+(o.pbr?1:0):'-';

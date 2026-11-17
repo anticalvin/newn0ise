@@ -27,3 +27,7 @@ body[data-cam] .ws,body[data-walk] .ws{display:none!important}
   --ps-fast:120ms;--ps-med:200ms;--ps-ease:cubic-bezier(.2,.8,.2,1)}
 @media (prefers-reduced-motion:reduce){:root{--ps-fast:0ms;--ps-med:0ms}}
 @media (pointer:coarse),(max-width:520px){.ws a{min-height:44px}}
+
+/* Controls: one size scale for dense tools. 36px on a mouse, 44px on touch; type never below 10.5px. Pages opt in with var(--n-ctl) and var(--n-ctl-fs). */
+:root{--n-ctl:36px;--n-ctl-sm:30px;--n-ctl-fs:11px;--n-ctl-gap:6px;--n-focus:2px solid var(--n-acc,#ff5a1f)}
+@media (pointer:coarse),(max-width:899px){:root{--n-ctl:44px;--n-ctl-sm:44px;--n-ctl-fs:11px}}

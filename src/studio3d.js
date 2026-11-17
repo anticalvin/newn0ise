@@ -316,7 +316,10 @@ async function addMyCharacter(){
 function addPrimitive(k){
   const g=PRIMS[k]();if(k==='Plane')g.rotateX(-Math.PI/2);
   const m=new THREE.Mesh(g,new THREE.MeshStandardMaterial({color:0xb9b4ac,roughness:.55,metalness:.1}));
-  return registerObject(k,m,'mesh',{size:k==='Plane'?3:1.6,meta:{asset:k.toLowerCase()}});
+  try{uPush();}catch(e){}
+  const made=registerObject(k,m,'mesh',{size:k==='Plane'?3:1.6,meta:{asset:k.toLowerCase()}});
+  try{uPush();}catch(e){}
+  return made;
 }
 
 
@@ -2438,6 +2441,10 @@ function buildHud(){
   const h=$('#bHold');const on=v=>{S.hold=v;h.setAttribute('aria-pressed',v);};
   h.addEventListener('pointerdown',e=>{e.preventDefault();on(true);});['pointerup','pointercancel','pointerleave'].forEach(t=>h.addEventListener(t,()=>on(false)));h.addEventListener('contextmenu',e=>e.preventDefault());
   $('#bFrame').addEventListener('click',frameAll);
+  $('#bUndo').addEventListener('click',()=>undo3());$('#bRedo').addEventListener('click',()=>redo3());$('#bSave').addEventListener('click',()=>saveProject());
+  {const cx=$('#ctx');let last='';const TN={scene:'Scene',world:'World',build:'Build',draw:'Sigil',scan:'Scan',look:'Look',mat:'Material',export:'Export'};
+   const upd=()=>{if(document.hidden)return;const o=objById(S.sel),tool=S.gizmo?{translate:'Move',rotate:'Rotate',scale:'Scale'}[S.gizmo]:'Orbit';const h=(TN[S.tab]||S.tab||'')+' · '+(o?'<b>'+o.name.replace(/[<>&]/g,'')+'</b> selected · '+tool:'nothing selected');if(h!==last){last=h;cx.innerHTML=h;}};
+   upd();setInterval(upd,400);}
   $('#bTools').addEventListener('click',()=>{const on=!document.body.hasAttribute('data-tools');document.body.toggleAttribute('data-tools',on);$('#bTools').setAttribute('aria-expanded',String(on));});
   $('#bMat').addEventListener('click',()=>{setTab('mat');if(!mqDesk.matches&&sheet.idx<2)sheet.setIdx(2);});
   {const bl=$('#bLight');if(bl){try{const v=localStorage.getItem('n0.bright');S.bright=v==null?2:clamp(+v,0,3);}catch(e){S.bright=2;}const paint=()=>{bl.textContent='Light: '+BRIGHT[S.bright][2];};paint();bl.addEventListener('click',()=>{S.bright=(S.bright+1)%4;try{localStorage.setItem('n0.bright',S.bright);}catch(e){}paint();bump();});}}
@@ -2458,7 +2465,7 @@ function buildHud(){
 }
 
 /* ---------- boot ---------- */
-window.__sheet=sheet;studioDefaults();buildTabs();initPen({canvas,toast});const SCU=window.__scu=createSculpt({THREE,camera,canvas,S,objById,bump,toast,onChange:()=>{try{markDirty();uPush();}catch(e){}}});window.__gp=createGamepad({THREE,camera,controls,S,toast,sheet,bump,canvas,getWalk:()=>walk,scene:{sel:()=>{let o=objById(S.sel);if(!o&&S.objs.length){selectObj(S.objs[S.objs.length-1].id);o=objById(S.sel);}return o;},shapes:Object.keys(PRIMS),add:k=>{const o=addPrimitive(k);selectObj(o.id);bump();},dup:()=>dupObj(objById(S.sel)),del:()=>{removeObj(S.sel);},sculpt:()=>{if(!SCU.on&&!S.objs.length){selectObj(addPrimitive('Clay').id);}SCU.toggle();},sculpting:()=>SCU.on,mat:()=>setTab('mat'),commit:()=>{try{markDirty();uPush();}catch(e){}}},undo:()=>{if(S.tab==='build'&&BLD)BLD.undo();else undo3();},cycle:d=>{if(SCU.on)SCU.cycleBrush(d);else if(S.tab==='build'&&BLD)BLD.cycleTool(d);else if(S.tab==='mat'){const n=[...document.querySelectorAll('#pane_mat .ms-nav button[data-k]')].filter(b=>b.dataset.k!=='_pv');const i=n.findIndex(b=>b.getAttribute('aria-selected')==='true');if(n.length)n[(i+d+n.length)%n.length].click();}else{const L=S.objs;if(L.length){let i=L.findIndex(o=>o.id===S.sel);i=(i+d+L.length)%L.length;selectObj(L[i].id);bump();toast(L[i].name,900);}}},vert:d=>{if(SCU.on){SCU.size(d);return true;}if(S.tab==='build'&&BLD){BLD.levelStep(d);return true;}return false;}});BLD=createBuild({THREE,addGroup,objById,S,dom:canvas,camera,controls,toast,bump,el,btn,sec,addModel:addPhModel,pane:paneEls.build,scene,stage:$('#stage'),LGT,walkIn:pos=>{try{if(S.walk)walk.exit();walk.enter({pos,yaw:0,noJump:true});}catch(e){toast('Couldn’t start walking.');}},peek:()=>{if(!mqDesk.matches)sheet.setIdx(1);}});MS=createMatStudio({THREE,sigilUse:d=>{try{SIG.B.mat='custom';SIG.B.mp=recipeMP(d);if(d.col)SIG.B.col=d.col;toast('The Sigil brush now uses this material. Open Sigil and draw.',4000);}catch(e){console.error(e);}},RoomEnvironment,el,btn,sliderRow,chipRow,sec,toast,objById,S,bump,MAT,SURF,ngApply,ngClear,openGraph:openNodeGraph,setEnvHdr,dom:canvas,camera,controls,LGT,renderScene,createBall,fxOpen,gotoTab:k=>{setTab(k);if(!mqDesk.matches&&sheet.idx<2)sheet.setIdx(2);},peek:()=>{if(!mqDesk.matches)sheet.setIdx(1);},openLook:()=>{const pp=document.getElementById('lookpop');window.__lookPop&&window.__lookPop.open('selected',document.getElementById('tab_mat'));},setEnvStrength:v=>{scene.environmentIntensity=v;hemi.intensity=.2+v*.7;},pane:paneEls.mat});placeTabs();mqDesk.addEventListener('change',placeTabs);buildHud();buildScenePane();buildScanPane();
+window.__sheet=sheet;studioDefaults();buildTabs();initPen({canvas,toast});const SCU=window.__scu=createSculpt({THREE,camera,canvas,S,objById,bump,toast,onChange:()=>{try{markDirty();uPush();}catch(e){}}});window.__gp=createGamepad({THREE,camera,controls,S,toast,sheet,bump,canvas,getWalk:()=>walk,scene:{sel:()=>{let o=objById(S.sel);if(!o&&S.objs.length){selectObj(S.objs[S.objs.length-1].id);o=objById(S.sel);}return o;},shapes:Object.keys(PRIMS),add:k=>{const o=addPrimitive(k);selectObj(o.id);bump();},dup:()=>dupObj(objById(S.sel)),del:()=>{removeObj(S.sel);},sculpt:()=>{if(!SCU.on&&!S.objs.length){selectObj(addPrimitive('Clay').id);}SCU.toggle();},sculpting:()=>SCU.on,mat:()=>setTab('mat'),commit:()=>{try{markDirty();uPush();}catch(e){}}},undo:()=>{if(S.tab==='build'&&BLD)BLD.undo();else undo3();},cycle:d=>{if(SCU.on)SCU.cycleBrush(d);else if(S.tab==='build'&&BLD)BLD.cycleTool(d);else if(S.tab==='mat'){const n=[...document.querySelectorAll('#pane_mat .ms-nav button[data-k]')].filter(b=>b.dataset.k!=='_pv');const i=n.findIndex(b=>b.getAttribute('aria-selected')==='true');if(n.length)n[(i+d+n.length)%n.length].click();}else{const L=S.objs;if(L.length){let i=L.findIndex(o=>o.id===S.sel);i=(i+d+L.length)%L.length;selectObj(L[i].id);bump();toast(L[i].name,900);}}},vert:d=>{if(SCU.on){SCU.size(d);return true;}if(S.tab==='build'&&BLD){BLD.levelStep(d);return true;}return false;}});BLD=createBuild({THREE,addGroup,objById,S,dom:canvas,camera,controls,toast,bump,el,btn,sec,addModel:addPhModel,pane:paneEls.build,scene,stage:$('#stage'),LGT,walkIn:pos=>{try{if(S.walk)walk.exit();walk.enter({pos,yaw:0,noJump:true});}catch(e){toast('Couldn’t start walking.');}},peek:()=>{if(!mqDesk.matches)sheet.setIdx(1);}});MS=createMatStudio({undo:()=>undo3(),redo:()=>redo3(),commit:()=>{try{markDirty();uPush();}catch(e){}},THREE,sigilUse:d=>{try{SIG.B.mat='custom';SIG.B.mp=recipeMP(d);if(d.col)SIG.B.col=d.col;toast('The Sigil brush now uses this material. Open Sigil and draw.',4000);}catch(e){console.error(e);}},RoomEnvironment,el,btn,sliderRow,chipRow,sec,toast,objById,S,bump,MAT,SURF,ngApply,ngClear,openGraph:openNodeGraph,setEnvHdr,dom:canvas,camera,controls,LGT,renderScene,createBall,fxOpen,gotoTab:k=>{setTab(k);if(!mqDesk.matches&&sheet.idx<2)sheet.setIdx(2);},peek:()=>{if(!mqDesk.matches)sheet.setIdx(1);},openLook:()=>{const pp=document.getElementById('lookpop');window.__lookPop&&window.__lookPop.open('selected',document.getElementById('tab_mat'));},setEnvStrength:v=>{scene.environmentIntensity=v;hemi.intensity=.2+v*.7;},pane:paneEls.mat});placeTabs();mqDesk.addEventListener('change',placeTabs);buildHud();buildScenePane();buildScanPane();
 if(renderer){buildLookPane();}
 buildExportPane();wireSheet();
 setTab('scene');
@@ -2589,15 +2596,20 @@ const uSnap=()=>JSON.stringify(DOC.snapScene());
 function uApply(js){
   UH.busy=true;
   try{const d=JSON.parse(js);
+    {const keep=new Set(d.objs.map(o=>o.id));S.objs.filter(o=>!keep.has(o.id)).forEach(o=>removeObj(o.id));}
     for(const od of d.objs){const o=objById(od.id);if(o)DOC.applyObject(o,od);}
     DOC.applyStage(d.stage,{env:v=>{scene.environmentIntensity=v;hemi.intensity=.2+v*.7;}});
     const so=objById(S.sel);if(so)apprLoad(so);
     renderObjList&&renderObjList();refreshInspector&&refreshInspector();try{surfRefresh();}catch(e){}bump();}
   finally{UH.busy=false;UH.last=uSnap();}
 }
-function uPush(){if(UH.busy||S.tab==='world'||!S.objs.length)return;const n=uSnap();if(UH.last==null||JSON.parse(UH.last).objs.map(d=>d.id).join()!==S.objs.map(o=>o.id).join()){UH.last=n;return;}if(n===UH.last)return;UH.u.push(UH.last);if(UH.u.length>50)UH.u.shift();UH.r.length=0;UH.last=n;}
+function uPush(){if(UH.busy||S.tab==='world'||!S.objs.length)return;const n=uSnap();
+  if(UH.last!=null){const was=JSON.parse(UH.last).objs.map(d=>d.id),now=S.objs.map(o=>o.id);
+    /* objects were added: that step can be undone (the added objects are removed again). Removals still just reset the baseline. */
+    if(was.join()!==now.join()){if(now.length>was.length&&was.every(i=>now.includes(i))){UH.u.push(UH.last);if(UH.u.length>50)UH.u.shift();UH.r.length=0;}UH.last=n;return;}}
+  else{UH.last=n;return;}if(n===UH.last)return;UH.u.push(UH.last);if(UH.u.length>50)UH.u.shift();UH.r.length=0;UH.last=n;}
 function undo3(){if(!UH.u.length){toast('Nothing to undo');return;}UH.r.push(uSnap());uApply(UH.u.pop());toast('Undo');}
-function redo3(){if(!UH.r.length){toast('Nothing to redo');return;}UH.u.push(uSnap());uApply(UH.r.pop());toast('Redo');}
+function redo3(){if(!UH.r.length){toast('Nothing to redo');return;}{const nx=JSON.parse(UH.r[UH.r.length-1]).objs;if(nx.some(d=>!objById(d.id))){UH.r.pop();toast('That step added an object. Add it again to redo.',3000);return;}}UH.u.push(uSnap());uApply(UH.r.pop());toast('Redo');}
 ['pointerup','keyup','change'].forEach(ev=>addEventListener(ev,()=>setTimeout(uPush,30),true));
 addEventListener('keydown',e=>{const k=e.key.toLowerCase();if(!(e.metaKey||e.ctrlKey)||k!=='z'||e.target.matches&&e.target.matches('input,textarea,select'))return;if(S.tab==='world')return;e.preventDefault();e.shiftKey?redo3():undo3();});
 setTimeout(()=>{try{UH.last=uSnap();}catch(e){}},1500);

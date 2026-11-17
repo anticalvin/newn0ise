@@ -36,11 +36,15 @@ button{cursor:pointer}
 .logo{font:800 17px/1 var(--disp);letter-spacing:-.02em}.logo b{color:var(--accent);font-weight:800}
 .logo small{font:600 9px var(--lab);letter-spacing:.16em;color:var(--mute);margin-left:8px;text-transform:uppercase}
 .grow{flex:1}
-.btn{min-height:32px;padding:0 12px;border:1px solid var(--line);background:var(--raise);border-radius:var(--rad);font:700 10px var(--lab);letter-spacing:.1em;text-transform:uppercase;white-space:nowrap}
+.btn{min-height:var(--n-ctl,36px);padding:0 14px;border:1px solid var(--line);background:var(--raise);border-radius:var(--rad);font:700 10.5px var(--lab);letter-spacing:.1em;text-transform:uppercase;white-space:nowrap}
 .btn.pri{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
 .btn[aria-pressed=true]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
 .btn:active{transform:translateY(1px)}
-.btn:disabled{opacity:.4}
+.btn:disabled,.chip:disabled,.chipb:disabled{opacity:.4;cursor:not-allowed}
+.btn[aria-busy=true],.chip[aria-busy=true],.chipb[aria-busy=true]{opacity:.7;cursor:progress;background-image:linear-gradient(90deg,transparent,rgba(255,255,255,.18),transparent);background-size:200% 100%;animation:busy 1s linear infinite}
+@keyframes busy{to{background-position:-200% 0}}
+@media (hover:hover){.btn:hover,.chip:hover,.chipb:hover,.seg button:hover{border-color:var(--mute)}.seg button:not([aria-pressed=true]):hover{color:var(--ink)}}
+@media (prefers-reduced-motion:reduce){.btn[aria-busy=true],.chip[aria-busy=true],.chipb[aria-busy=true]{animation:none}}
 .main{flex:1;min-height:0;position:relative;display:flex}
 #stage{position:relative;flex:1;min-width:0;background:var(--stage);overflow:hidden}
 #gl{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;outline:none}
@@ -48,9 +52,9 @@ button{cursor:pointer}
 .hud>*{pointer-events:auto}
 .hud.tl{left:8px;top:8px}.hud.tr{right:8px;top:8px}.hud.bl{left:8px;bottom:10px}.hud.br{right:8px;bottom:10px}
 .seg{display:flex;border:1px solid var(--line);background:color-mix(in srgb,var(--bg) 82%,transparent);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
-.seg button{border:0;background:none;padding:0 7px;min-height:30px;font:700 8.5px var(--lab);letter-spacing:.06em;text-transform:uppercase;color:var(--mute)}
+.seg button{border:0;background:none;padding:0 10px;min-height:var(--n-ctl,36px);font:700 10.5px var(--lab);letter-spacing:.06em;text-transform:uppercase;color:var(--mute)}
 .seg button[aria-pressed=true]{background:var(--ink);color:var(--bg)}
-.chipb{min-height:30px;padding:0 10px;border:1px solid var(--line);background:color-mix(in srgb,var(--bg) 82%,transparent);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);font:700 9px var(--lab);letter-spacing:.1em;text-transform:uppercase;border-radius:var(--rad)}
+.chipb{min-height:var(--n-ctl,36px);padding:0 12px;border:1px solid var(--line);background:color-mix(in srgb,var(--bg) 82%,transparent);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);font:700 10.5px var(--lab);letter-spacing:.08em;text-transform:uppercase;border-radius:var(--rad)}
 .chipb[aria-pressed=true]{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
 .drop{position:absolute;inset:0;display:none;place-items:center;background:color-mix(in srgb,var(--bg) 70%,transparent);border:2px dashed var(--accent);z-index:6;font:700 12px var(--lab);letter-spacing:.14em;text-transform:uppercase;pointer-events:none}
 #stage.drag .drop{display:grid}
@@ -63,22 +67,22 @@ button{cursor:pointer}
 .grab{flex:none;height:22px;display:grid;place-items:center;touch-action:none;cursor:grab}
 .grab::after{content:"";width:34px;height:3px;background:var(--line)}
 .tabs{flex:none;display:flex;border-bottom:1px solid var(--line);touch-action:none}
-.tab{flex:1;min-height:38px;border:0;background:none;font:700 10px var(--lab);letter-spacing:.14em;text-transform:uppercase;color:var(--mute);border-bottom:2px solid transparent;margin-bottom:-1px}
+.tab{flex:1;min-height:42px;border:0;background:none;font:700 10.5px var(--lab);letter-spacing:.14em;text-transform:uppercase;color:var(--mute);border-bottom:2px solid transparent;margin-bottom:-1px}
 .tab[aria-selected=true]{color:var(--ink);border-bottom-color:var(--accent)}
 .panes{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding-bottom:calc(var(--safe-b) + 40px)}
 .sec{border-bottom:1px solid var(--line);padding:10px 12px}
-.st{font:700 9px var(--lab);letter-spacing:.16em;text-transform:uppercase;color:var(--mute);margin-bottom:6px;display:flex;justify-content:space-between;align-items:center}
-.row{display:grid;grid-template-columns:96px 1fr 44px;align-items:center;gap:8px;min-height:30px}
+.st{font:700 10px var(--lab);letter-spacing:.16em;text-transform:uppercase;color:var(--mute);margin-bottom:6px;display:flex;justify-content:space-between;align-items:center}
+.row{display:grid;grid-template-columns:104px 1fr 52px;align-items:center;gap:10px;min-height:36px}
 .row label{font:600 10px var(--lab);letter-spacing:.06em;color:var(--mute);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .row output{text-align:right;font-size:11px}
-input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:26px;margin:0;background:transparent}
-input[type=range]::-webkit-slider-runnable-track{height:2px;background:linear-gradient(90deg,var(--accent) var(--p,50%),var(--line) var(--p,50%))}
-input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:18px;background:var(--ink);border:0;margin-top:-8px;border-radius:1px}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:32px;margin:0;background:transparent}
+input[type=range]::-webkit-slider-runnable-track{height:3px;background:linear-gradient(90deg,var(--accent) var(--p,50%),var(--line) var(--p,50%))}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:22px;background:var(--ink);border:0;margin-top:-9.5px;border-radius:2px;box-shadow:0 0 0 2px var(--bg)}
 input[type=range]::-moz-range-track{height:2px;background:var(--line)}input[type=range]::-moz-range-progress{height:2px;background:var(--accent)}
 input[type=range]::-moz-range-thumb{width:12px;height:18px;background:var(--ink);border:0;border-radius:1px}
 .chips{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none;padding:2px 0 4px;-webkit-overflow-scrolling:touch}
 .chips::-webkit-scrollbar{display:none}
-.chip{flex:none;min-height:30px;padding:0 10px;border:1px solid var(--line);background:var(--raise);border-radius:var(--rad);font:700 9.5px var(--lab);letter-spacing:.08em;text-transform:uppercase}
+.chip{flex:none;min-height:var(--n-ctl,36px);padding:0 12px;border:1px solid var(--line);background:var(--raise);border-radius:var(--rad);font:700 10.5px var(--lab);letter-spacing:.08em;text-transform:uppercase}
 .chip[aria-pressed=true]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
 .sw{flex:none;width:46px;height:28px;border:1px solid var(--line);border-radius:var(--rad);padding:0}
 .sw[aria-pressed=true]{outline:2px solid var(--accent);outline-offset:1px}
@@ -90,16 +94,16 @@ input[type=range]::-moz-range-thumb{width:12px;height:18px;background:var(--ink)
 .badge{font:700 8.5px var(--lab);letter-spacing:.12em;color:var(--mute);text-transform:uppercase;padding-right:6px}
 .card{border:1px solid var(--line);background:var(--raise);border-radius:var(--rad);padding:10px;margin-bottom:8px}
 .card h4{margin:0 0 4px;font:800 14px var(--disp);letter-spacing:-.01em}
-.card p{margin:0 0 8px;color:var(--mute);font-size:10.5px;line-height:1.5}
+.card p{margin:0 0 8px;color:var(--mute);font-size:11.5px;line-height:1.5}
 .card .acts{display:flex;gap:6px;flex-wrap:wrap}
-.note{color:var(--mute);font-size:10px;line-height:1.5;padding:4px 0}
+.note{color:var(--mute);font-size:11px;line-height:1.5;padding:4px 0}
 details.acc{border-bottom:1px solid var(--line)}
-details.acc>summary{list-style:none;min-height:36px;display:flex;align-items:center;justify-content:space-between;padding:0 12px;font:700 9.5px var(--lab);letter-spacing:.14em;text-transform:uppercase;cursor:pointer}
+details.acc>summary{list-style:none;min-height:42px;display:flex;align-items:center;justify-content:space-between;padding:0 12px;font:700 10.5px var(--lab);letter-spacing:.14em;text-transform:uppercase;cursor:pointer}
 details.acc>summary::-webkit-details-marker{display:none}
 details.acc>summary::after{content:"+";color:var(--mute)}details.acc[open]>summary::after{content:"–"}
 details.acc>.in{padding:0 12px 10px}
 .sub{font:700 9px var(--lab);letter-spacing:.12em;text-transform:uppercase;color:var(--mute);padding:8px 0 2px}
-.field{width:100%;background:var(--raise);border:1px solid var(--line);border-radius:var(--rad);padding:6px 8px}
+.field{width:100%;min-height:var(--n-ctl,36px);font-size:12px;background:var(--raise);border:1px solid var(--line);border-radius:var(--rad);padding:6px 10px}
 .cutbar{position:absolute;left:50%;top:calc(var(--safe-t) + 56px);transform:translateX(-50%);width:min(320px,86%);background:var(--panel);border:1px solid var(--line);border-radius:var(--rad);padding:8px 10px;z-index:6;font:700 10px var(--lab);letter-spacing:.08em;text-transform:uppercase;color:var(--ink)}.cutbar .prog{margin:6px 0 0}
 #wipe{position:absolute;pointer-events:none;z-index:4;overflow:hidden}#wipe img{position:absolute;inset:0;width:100%;height:100%;display:block}#wipe i{position:absolute;top:0;bottom:0;width:2px;margin-left:-1px;background:var(--ink)}
 #wipebar{position:absolute;left:50%;bottom:calc(var(--safe-b) + 14px);transform:translateX(-50%);display:flex;align-items:center;gap:8px;z-index:5;font:700 9px var(--lab);letter-spacing:.1em;text-transform:uppercase;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:var(--rad);padding:6px 10px}#wipebar input{width:min(160px,28vw)}#wipe[hidden],#wipebar[hidden]{display:none}.cutbar[hidden]{display:none}
@@ -347,13 +351,22 @@ body[data-walk] .restore,body[data-sgs] .restore,body[data-sgs] .bar,body[data-s
   nav.ws a{min-height:36px!important;padding-top:0!important;padding-bottom:0!important;font-size:10px!important}
   .restore{top:calc(96px + env(safe-area-inset-top,0px))!important;padding:6px 8px!important}.restore span{font-size:12px!important;flex:1 1 90px!important}
 }
+
+.ctx{min-width:0;margin-left:14px;color:var(--mute);font:600 10.5px var(--lab);letter-spacing:.06em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.ctx b{color:var(--ink);font-weight:700}
+.btn.ic{min-width:var(--n-ctl,36px);padding:0;font-size:16px;letter-spacing:0}
+@media (max-width:899px){.ctx{display:none}.lnk-save{display:none}}
+
+@media (min-width:900px) and (max-width:1320px){.hud.tr{top:calc(8px + var(--n-ctl,36px) + 6px);left:8px;right:auto;max-width:calc(100% - 16px);flex-wrap:wrap}}
+
+@media (max-width:520px){#bLab{display:none}header.bar{gap:4px;padding-left:8px;padding-right:8px}.logo small{display:none}}
 </style>
 </head>
 <body>
 <div class="app">
   <header class="bar">
     <a class="logo" href="index.html" aria-label="n0ise home" style="text-decoration:none;color:inherit">n<b>0</b>ise<small>3D</small></a>
-    <div class="grow"></div>
+    <div class="grow ctx" id="ctx" role="status" aria-live="polite"></div>
+    <button class="btn ic" id="bUndo" type="button" title="Undo (Ctrl+Z)" aria-label="Undo">↶</button><button class="btn ic" id="bRedo" type="button" title="Redo (Ctrl+Shift+Z)" aria-label="Redo">↷</button><button class="btn lnk-save" id="bSave" type="button" title="Save the project to a file">Save</button>
     <a class="btn lnk" id="bLab" href="effects.html">Effects</a>
     <button class="btn" id="bImport">Import</button>
     <button class="btn pri" id="bExport">Export</button>
@@ -364,8 +377,8 @@ body[data-walk] .restore,body[data-sgs] .restore,body[data-sgs] .bar,body[data-s
       <canvas id="gl" tabindex="0"></canvas>
       <button class="chipb" id="bTools" type="button" aria-expanded="false" aria-controls="hudBL">Tools</button>
       <div class="hud tl"><div class="seg" id="viewSeg"></div></div>
-      <div class="hud tr"><span id="fxnote" class="fxnote" aria-live="polite"></span><button class="chipb" id="bLight" title="Brighten dark scenes">Light</button><button class="chipb" id="bMat">Material</button><button class="chipb" id="bFx" aria-pressed="true">FX</button></div>
-      <div class="hud bl" id="hudBL"><button class="chipb" id="bFrame">Frame</button><button class="chipb" id="bGrid" aria-pressed="true">Grid</button><button class="chipb" id="bWalk">Walk</button><button class="chipb" id="bSpin" aria-pressed="false">Spin</button></div>
+      <div class="hud tr"><span id="fxnote" class="fxnote" aria-live="polite"></span><button class="chipb" id="bLight" title="Brighten dark scenes">Light</button><button class="chipb" id="bMat" title="Open the Material tab">Material</button><button class="chipb" id="bFx" title="Effects on the whole picture" aria-pressed="true">FX</button></div>
+      <div class="hud bl" id="hudBL"><button class="chipb" id="bFrame" title="Frame everything">Frame</button><button class="chipb" id="bGrid" title="Show or hide the floor grid" aria-pressed="true">Grid</button><button class="chipb" id="bWalk" title="Walk inside the scene">Walk</button><button class="chipb" id="bSpin" title="Turn the scene slowly" aria-pressed="false">Spin</button></div>
       <div class="hud br" id="hudBR"><button class="chipb" id="bHold">Hold: original</button></div>
       <div class="empty" id="empty"><b>Bring a model, a photo or a scan.</b>glb · gltf · obj · stl · ply · splat · spz · audio — or use the Scan tab</div>
       <div class="drop">Drop files to import</div>
@@ -408,6 +421,6 @@ body[data-walk] .restore,body[data-sgs] .restore,body[data-sgs] .bar,body[data-s
 <button class="card" data-w="import"><b>Import a world</b><span>Open a .n0world file an AI wrote, or one you exported.</span></button>
 </div></div></div>
 
-<script type="module" src="assets/studio.js?v=055a81b4"></script>
+<script type="module" src="assets/studio.js?v=d279cb84"></script>
 </body>
 </html>
