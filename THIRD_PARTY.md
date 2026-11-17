@@ -68,3 +68,9 @@ No new dependencies. The Character page and Sculpt are our own code on three.js 
 - Used: base mesh, skeleton, skin weights, modifier list, morph targets. Licence: **CC0 1.0** for assets (their LICENSE.md, section C).
 - Not used: any MakeHuman program code (AGPL-3.0). `jontechlabs/makehuman-web` (AGPL-3.0) and `kblood/CharacterCreator` (GPL-3.0) were studied only.
 - Packed by our own `tools/pack-human.mjs` into `assets/human/`.
+
+## MakeHuman CC0 asset packs (hair, clothes, skins, brows, lashes)
+- Packs: `makehuman_system_assets_cc0.zip` and `suits05_cc0.zip` from https://static.makehumancommunity.org/assets/assetpacks.html (each `.mhclo` header states: released as CC0 in September 2020).
+- Not included: CC-BY packs (they would need attribution per author) such as suits03 and suits04.
+- Packed by our `tools/pack-assets.py` (textures resized, hair and brows greyscaled so a tint colours them) into `assets/human/a/`.
+- Balaclava, beanie, mask, headband, scarf and glasses are our own procedural shapes.

@@ -31,7 +31,7 @@ const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(H.S));}catch(e){}};
 /* ---- undo / redo of the whole editable state ---- */
 const U={u:[],r:[],pend:false};
 function touch(){if(U.pend)return;U.pend=true;U.u.push(JSON.stringify(H.S));if(U.u.length>60)U.u.shift();U.r.length=0;setTimeout(()=>U.pend=false,700);}
-async function restore(js){H.load(JSON.parse(js));await H.apply();H.outfit();H.pose(H.S.pose);H.expr();show(tab,true);save();bump();}
+async function restore(js){H.load(JSON.parse(js));await H.apply();await H.outfit();H.pose(H.S.pose);H.expr();show(tab,true);save();bump();}
 async function undo(){if(!U.u.length){toast('Nothing to undo.');return;}U.r.push(JSON.stringify(H.S));await restore(U.u.pop());}
 async function redo(){if(!U.r.length){toast('Nothing to redo.');return;}U.u.push(JSON.stringify(H.S));await restore(U.r.pop());}
 
@@ -58,21 +58,38 @@ function dslider(p,label,id,mx=1){if(!id)return;const d=H.man.detail.find(x=>x.i
 function sw(p,label,cols,get,set){const r=el('div','row sw');r.append(el('span','',label));const w=el('div','swatches');cols.forEach((c,i)=>{const b=el('button','');b.type='button';b.style.background=c;b.setAttribute('aria-label',label+' '+(i+1));b.setAttribute('aria-pressed',String(get()===c));b.addEventListener('click',()=>{touch();set(c);w.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));save();bump();});w.appendChild(b);});r.appendChild(w);p.appendChild(r);}
 function chips(p,label,list,get,set){const r=el('div','row sw');r.append(el('span','',label));const w=el('div','chips');list.forEach(n=>{const b=el('button','chip',n);b.type='button';b.setAttribute('aria-pressed',String(get()===n));b.addEventListener('click',()=>{touch();set(n);w.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));save();bump();});w.appendChild(b);});r.appendChild(w);p.appendChild(r);}
 const head=(p,t)=>p.appendChild(el('h3','',t));
+function tiles(p,label,items,get,set){const r=el('div','row sw');r.append(el('span','',label));const w=el('div','tiles');
+  items.forEach(it=>{const b=el('button','tile');b.type='button';b.title=it.label;b.setAttribute('aria-label',it.label);b.setAttribute('aria-pressed',String(get()===it.id));
+    if(it.thumb){const im=el('img');im.src=it.thumb;im.alt='';im.loading='lazy';b.appendChild(im);}else b.appendChild(el('b','',it.glyph||it.label.slice(0,2)));b.appendChild(el('small','',it.label));
+    b.addEventListener('click',()=>{touch();set(it.id);w.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));});w.appendChild(b);});r.appendChild(w);p.appendChild(r);}
+const th=id=>'assets/human/a/'+id+'_t.webp';
+const nice=id=>id.replace(/^culturalibre_/,'').replace(/_/g,' ').replace(/(\D)0?(\d+)$/,'$1 $2');
+const libItems=(kind,filter)=>H.lib[kind].filter(x=>!filter||filter(x.id)).map(x=>({id:x.id,label:nice(x.id),thumb:th(x.id)}));
+const none={id:'none',label:'None',glyph:'∅'};
+const refit=()=>H.outfit().then(()=>{save();bump();});
+const SUITS=id=>/suit|culturalibre/.test(id);
 const TABS=[
   p=>{head(p,'Body');slider(p,'Gender',()=>H.S.gender,v=>H.S.gender=v,0,1);slider(p,'Age',()=>H.S.age,v=>H.S.age=v,0,1,v=>Math.round(ageYears(v))+' yrs');slider(p,'Muscle',()=>H.S.muscle,v=>H.S.muscle=v,0,1);slider(p,'Weight',()=>H.S.weight,v=>H.S.weight=v,0,1);slider(p,'Height',()=>H.S.height,v=>H.S.height=v,0,1);slider(p,'Proportions',()=>H.S.prop,v=>H.S.prop=v,0,1);
     head(p,'Build');dslider(p,'Shoulders',D('torso','torso-scale-horiz'));dslider(p,'Chest depth',D('torso','torso-scale-depth'));dslider(p,'Waist',D('hip','hip-waist'));dslider(p,'Hips',D('hip','hip-scale-horiz'));dslider(p,'Belly',D('stomach','stomach-pregnant'));dslider(p,'Arms',D('armslegs','upperarm-fat'));dslider(p,'Legs',D('armslegs','upperleg-fat'));dslider(p,'Neck',D('neck','neck-scale-horiz'));
     head(p,'Ancestry blend');for(const k of['african','asian','caucasian'])slider(p,k[0].toUpperCase()+k.slice(1),()=>H.S.race[k],v=>H.S.race[k]=v,0,1);
-    head(p,'Skin');sw(p,'Skin tone',SKIN,()=>H.S.skin,c=>H.setSkin(c));},
+    head(p,'Skin');tiles(p,'Texture',[{id:'auto',label:'Auto',glyph:'✦'},{id:'none',label:'Flat',glyph:'▭'},...H.lib.skins.map(x=>({id:x.id,label:nice(x.id),thumb:th('skin_'+x.id)}))],()=>H.S.skinTex,id=>{H.S.skinTex=id;H.applySkin();save();bump();});
+    slider(p,'Tone',()=>H.S.tone,v=>{H.S.tone=v;H.applySkin();},.55,1.35);sw(p,'Flat colour',SKIN,()=>H.S.skin,c=>{H.S.skin=c;H.S.skinTex='none';H.applySkin();show(0,true);});},
   p=>{head(p,'Expression');chips(p,'Expression',Object.keys(EXPRESSIONS),()=>Object.keys(EXPRESSIONS).find(k=>JSON.stringify(EXPRESSIONS[k])===JSON.stringify(H.S.expr))||'',n=>{H.S.expr={...EXPRESSIONS[n]};H.expr();});
     head(p,'Head and brow');dslider(p,'Head width',D('head','head-scale-horiz'));dslider(p,'Head height',D('head','head-scale-vert'));dslider(p,'Head depth',D('head','head-scale-depth'));dslider(p,'Forehead',D('forehead','forehead-scale-vert'));dslider(p,'Brow ridge',D('forehead','forehead-nubian'));dslider(p,'Brow angle',D('eyebrows','eyebrows-angle'));
+    tiles(p,'Eyebrows',[none,...libItems('eyebrows')],()=>H.S.brows.style,n=>{H.S.brows.style=n;refit();});
     head(p,'Eyes');dslider(p,'Eye size',D('eyes','eye-scale'));dslider(p,'Eye height',D('eyes','eye-height1'));dslider(p,'Eye spacing',D('eyes','eye-push1'));dslider(p,'Eye corners',D('eyes','eye-corner1'));dslider(p,'Eye bags',D('eyes','eye-bag-height'));
+    chips(p,'Lashes',['On','Off'],()=>H.S.lashes?'On':'Off',n=>{H.S.lashes=n==='On';refit();});
     head(p,'Nose');dslider(p,'Nose width',D('nose','nose-scale-horiz'));dslider(p,'Nose length',D('nose','nose-scale-vert'));dslider(p,'Nose depth',D('nose','nose-scale-depth'));dslider(p,'Bridge hump',D('nose','nose-hump'));dslider(p,'Tip',D('nose','nose-point'));dslider(p,'Nostrils',D('nose','nose-nostrils-width'));
     head(p,'Mouth and jaw');dslider(p,'Mouth width',D('mouth','mouth-scale-horiz'));dslider(p,'Lip fullness',D('mouth','mouth-lowerlip-volume'));dslider(p,'Upper lip',D('mouth','mouth-upperlip-volume'));dslider(p,'Chin',D('chin','chin-prominent'));dslider(p,'Jaw width',D('chin','chin-width'));dslider(p,'Chin height',D('chin','chin-height'));dslider(p,'Cheeks',D('cheek','cheek-volume'));dslider(p,'Cheekbones',D('cheek','cheek-bones'));dslider(p,'Ear size',D('ears','ear-scale'));
     head(p,'Eye colour');sw(p,'Eyes',EYE,()=>H.S.eye,c=>H.setEye(c));},
-  p=>{head(p,'Hair');chips(p,'Style',STYLE.hair,()=>H.S.hair.style,n=>{H.S.hair.style=n;H.outfit();});sw(p,'Colour',HAIRC,()=>H.S.hair.color,c=>{H.S.hair.color=c;H.outfit();});},
-  p=>{head(p,'Top');chips(p,'Style',STYLE.top,()=>H.S.top.style,n=>{H.S.top.style=n;H.outfit();});sw(p,'Colour',PAL,()=>H.S.top.color,c=>{H.S.top.color=c;H.outfit();});
-    head(p,'Bottom');chips(p,'Style',STYLE.bottom,()=>H.S.bottom.style,n=>{H.S.bottom.style=n;H.outfit();});sw(p,'Colour',PAL,()=>H.S.bottom.color,c=>{H.S.bottom.color=c;H.outfit();});
-    head(p,'Shoes');chips(p,'Style',STYLE.shoes,()=>H.S.shoes.style,n=>{H.S.shoes.style=n;H.outfit();});sw(p,'Colour',PAL,()=>H.S.shoes.color,c=>{H.S.shoes.color=c;H.outfit();});},
+  p=>{head(p,'Hair');tiles(p,'Style',[none,...libItems('hair'),{id:'buzz',label:'Buzz',glyph:'▪'},{id:'bun',label:'Bun',glyph:'●'},{id:'mohawk',label:'Mohawk',glyph:'▮'}],()=>H.S.hair.style,n=>{H.S.hair.style=n;refit();});
+    sw(p,'Colour',['#ffffff',...HAIRC],()=>H.S.hair.color,c=>{H.S.hair.color=c;H.S.brows.color=c==='#ffffff'?'#ffffff':c;refit();});},
+  p=>{head(p,'Outfit');tiles(p,'Full outfit',[none,...libItems('clothes',SUITS)],()=>H.S.suit.style,n=>{H.S.suit.style=n;refit();});sw(p,'Tint',['#ffffff',...PAL],()=>H.S.suit.color,c=>{H.S.suit.color=c;refit();});
+    head(p,'Basics (no outfit)');chips(p,'Top',STYLE.top,()=>H.S.top.style,n=>{H.S.top.style=n;refit();});sw(p,'Colour',PAL,()=>H.S.top.color,c=>{H.S.top.color=c;refit();});chips(p,'Bottom',STYLE.bottom,()=>H.S.bottom.style,n=>{H.S.bottom.style=n;refit();});sw(p,'Colour',PAL,()=>H.S.bottom.color,c=>{H.S.bottom.color=c;refit();});
+    head(p,'Shoes');tiles(p,'Shoes',[none,{id:'sneaker',label:'Sneaker',glyph:'👟'},...libItems('clothes',id=>/^shoes/.test(id))],()=>H.S.shoes.style,n=>{H.S.shoes.style=n;refit();});sw(p,'Tint',['#ffffff',...PAL],()=>H.S.shoes.color,c=>{H.S.shoes.color=c;refit();});
+    head(p,'Head and face');tiles(p,'Headwear',[none,{id:'balaclava',label:'Balaclava',glyph:'🥷'},{id:'beanie',label:'Beanie',glyph:'🧢'},{id:'mask',label:'Mask',glyph:'😷'},{id:'headband',label:'Headband',glyph:'▬'},...libItems('clothes',id=>/fedora/.test(id))],()=>H.S.head.style,n=>{H.S.head.style=n;refit();});sw(p,'Colour',['#1a1a1a','#ffffff',...PAL],()=>H.S.head.color,c=>{H.S.head.color=c;refit();});
+    tiles(p,'Glasses',[none,{id:'sunglasses',label:'Shades',glyph:'🕶'},{id:'round',label:'Round',glyph:'👓'},{id:'visor',label:'Visor',glyph:'▰'}],()=>H.S.glasses.style,n=>{H.S.glasses.style=n;refit();});
+    tiles(p,'Neck',[none,{id:'scarf',label:'Scarf',glyph:'🧣'}],()=>H.S.neck.style,n=>{H.S.neck.style=n;refit();});},
   p=>{head(p,'Pose');chips(p,'Pose',Object.keys(POSES),()=>H.S.pose,n=>{H.pose(n);});}
 ];
 function show(i,keep){tab=(i+TN.length)%TN.length;try{localStorage.setItem('n0.figtab',tab);}catch(e){}
@@ -88,16 +105,16 @@ function randomState(seed){
   const rr=[r(),r(),r()],s=rr[0]+rr[1]+rr[2];S.race={african:rr[0]/s,asian:rr[1]/s,caucasian:rr[2]/s};
   const ids=H.man.detail.filter(d=>/^(head|forehead|eyes|nose|mouth|chin|cheek|ears|neck|torso|hip)$/.test(d.group)&&!/trans|corner|rot|flap|wing|shape/.test(d.id)).map(d=>d.id);
   for(let i=0;i<10;i++){const id=pick(ids),d=H.man.detail.find(x=>x.id===id);S.detail[id]=(d.bi?(r()*2-1):r())*.55;}
-  S.skin=pick(SKIN);S.eye=pick(EYE);S.hair={style:pick(STYLE.hair),color:pick(HAIRC)};S.top={style:pick(STYLE.top.slice(1)),color:pick(PAL)};S.bottom={style:pick(STYLE.bottom.slice(1)),color:pick(PAL)};S.shoes={style:'sneaker',color:pick(PAL)};
+  S.skin=pick(SKIN);S.eye=pick(EYE);const hc=pick(['#ffffff',...HAIRC]);S.hair={style:pick(H.lib.hair.map(x=>x.id)),color:hc};S.brows={style:pick(H.lib.eyebrows.map(x=>x.id)),color:hc};S.suit={style:r()<.6?pick(H.lib.clothes.map(x=>x.id).filter(SUITS)):'none',color:'#ffffff'};S.top={style:pick(STYLE.top.slice(1)),color:pick(PAL)};S.bottom={style:pick(STYLE.bottom.slice(1)),color:pick(PAL)};S.shoes={style:r()<.5?'sneaker':pick(H.lib.clothes.map(x=>x.id).filter(x=>/^shoes/.test(x))),color:'#ffffff'};S.head={style:pick(['none','none','balaclava','beanie','mask','headband']),color:pick(['#1a1a1a','#ffffff',...PAL])};S.glasses={style:pick(['none','none','sunglasses','round','visor']),color:'#111111'};S.pose=pick(['A-pose','Power','Catwalk','Pockets','Lean','Hero']);
   return S;
 }
 const PRESETS={
-  Athlete:{gender:.8,age:.42,muscle:.9,weight:.45,height:.65,prop:.8,hair:{style:'buzz',color:'#16100c'},top:{style:'tank',color:'#2563eb'},bottom:{style:'shorts',color:'#111111'},skin:SKIN[3]},
-  Elder:{gender:.35,age:.92,muscle:.2,weight:.6,height:.35,prop:.4,hair:{style:'short',color:'#c8c8c8'},top:{style:'long',color:'#0f766e'},bottom:{style:'trousers',color:'#64748b'},skin:SKIN[1]},
-  Teen:{gender:.55,age:.27,muscle:.35,weight:.4,height:.4,prop:.55,hair:{style:'ponytail',color:'#7a4a25'},top:{style:'tee',color:'#d946ef'},bottom:{style:'shorts',color:'#334155'},skin:SKIN[2]},
-  Runner:{gender:.3,age:.45,muscle:.6,weight:.3,height:.7,prop:.85,hair:{style:'bun',color:'#3b2417'},top:{style:'tank',color:'#c2410c'},bottom:{style:'shorts',color:'#111111'},skin:SKIN[4],pose:'Run'}
+  Athlete:{gender:.8,age:.42,muscle:.9,weight:.45,height:.65,prop:.8,hair:{style:'short02',color:'#ffffff'},top:{style:'tank',color:'#2563eb'},bottom:{style:'shorts',color:'#111111'},pose:'Flex'},
+  Elder:{gender:.35,age:.92,muscle:.2,weight:.6,height:.35,prop:.4,hair:{style:'short04',color:'#c8c8c8'},suit:{style:'male_elegantsuit01',color:'#ffffff'},pose:'Pockets'},
+  Teen:{gender:.55,age:.27,muscle:.35,weight:.4,height:.4,prop:.55,hair:{style:'ponytail01',color:'#ffffff'},top:{style:'tee',color:'#d946ef'},bottom:{style:'shorts',color:'#334155'},pose:'Cheer'},
+  Runner:{gender:.3,age:.45,muscle:.6,weight:.3,height:.7,prop:.85,hair:{style:'braid01',color:'#ffffff'},top:{style:'tank',color:'#c2410c'},bottom:{style:'shorts',color:'#111111'},pose:'Run'}
 };
-async function setState(S){touch();H.load(S);await H.apply();H.outfit();H.pose(H.S.pose);H.expr();show(tab,true);save();bump();}
+async function setState(S){touch();H.load(S);await H.apply();await H.outfit();H.pose(H.S.pose);H.expr();show(tab,true);save();bump();}
 $('#frand').addEventListener('click',()=>setState(randomState(Math.floor(Math.random()*1e9))));
 $('#fpre').addEventListener('click',()=>{const k=Object.keys(PRESETS),i=(+($('#fpre').dataset.i||0))%k.length;$('#fpre').dataset.i=i+1;toast('Preset: '+k[i],1200);setState({...structuredClone(DEFAULT),...structuredClone(PRESETS[k[i]])});});
 $('#freset').addEventListener('click',()=>setState(structuredClone(DEFAULT)));
@@ -128,10 +145,10 @@ new ResizeObserver(()=>size()).observe($('#panel'));
 /* ---- start ---- */
 const loading=$('#fload');
 try{
-  H=await createHuman({THREE});
-  try{const s=JSON.parse(localStorage.getItem(KEY)||'null');if(s){H.load(s);await H.apply();H.outfit();H.pose(H.S.pose);H.expr();}}catch(e){}
+  H=await createHuman({THREE,onTex:bump});
+  try{const s=JSON.parse(localStorage.getItem(KEY)||'null');if(s){H.load(s);await H.apply();await H.outfit();H.pose(H.S.pose);H.expr();}}catch(e){}
   scene.add(H.root);show(tab);size();frame('body');
-  loading.hidden=true;window.__hum=H;
+  loading.hidden=true;window.__hum=H;window.__r={renderer,scene,camera,controls};
 }catch(e){console.error(e);loading.textContent='Couldn’t load the character data: '+(e.message||e)+'. Check your connection and reload.';}
 initPen({canvas,toast});
 window.__gp=createGamepad({THREE,camera,controls,S:{},toast,sheet:null,bump,canvas,cycle:d=>{if(!H)return;const k=Object.keys(POSES),i=(k.indexOf(H.S.pose)+d+k.length)%k.length;H.pose(k[i]);toast(k[i],900);bump();if(tab===4)show(4,true);},vert:()=>false});

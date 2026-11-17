@@ -30,6 +30,11 @@ a{color:inherit}button,.btn{font:inherit;color:inherit;cursor:pointer}
 #panel[data-lvl="0"]{max-height:112px}#panel[data-lvl="0"] #fp,#panel[data-lvl="0"] #facts{display:none}#panel[data-lvl="2"]{max-height:82dvh}
 #fhandle{border:0;background:none;min-height:44px;margin:-4px 0 -14px;display:grid;place-items:center;touch-action:none;color:inherit}#fhandle i{width:44px;height:5px;border-radius:3px;background:currentColor;opacity:.4}
 #facts{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding-top:2px}#facts .b{flex:none}#facts .go{flex:1;min-width:120px}
+.tiles{display:flex;gap:6px;overflow-x:auto;flex:1 1 100%;padding:2px 2px 8px;scrollbar-width:thin;-webkit-overflow-scrolling:touch}
+.tile{flex:none;width:68px;min-height:88px;padding:4px;border-radius:14px;border:1px solid var(--ln);background:transparent;display:flex;flex-direction:column;align-items:center;gap:3px;color:inherit}
+.tile img{width:56px;height:56px;object-fit:cover;border-radius:10px;background:rgba(128,128,128,.15)}.tile b{width:56px;height:56px;border-radius:10px;display:grid;place-items:center;font-size:22px;background:rgba(128,128,128,.15)}
+.tile small{font:600 9px var(--lab);line-height:1.1;text-align:center;max-width:60px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.tile[aria-pressed=true]{border-color:var(--ac);box-shadow:0 0 0 2px var(--ac)}
+.row.sw>span:first-child{flex:1 1 100%;width:auto}
 h3{margin:10px 0 2px;font:800 12px var(--lab);letter-spacing:.1em;text-transform:uppercase;opacity:.6}output{width:64px;text-align:right;opacity:.7}
 #fload{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:9;padding:16px 22px;border-radius:20px;max-width:calc(100vw - 32px);text-align:center}#fload[hidden]{display:none}
 .tabs{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none}.tabs::-webkit-scrollbar{display:none}
@@ -69,6 +74,6 @@ h3{margin:10px 0 2px;font:800 12px var(--lab);letter-spacing:.1em;text-transform
 </div>
 <div id="fload" class="glass" role="status">Loading the character…</div>
 <div id="ft" class="glass" role="status" hidden></div>
-<script type="module" src="assets/figure.js?v=06ab0e49"></script>
+<script type="module" src="assets/figure.js?v=379eb4f1"></script>
 </body>
 </html>
