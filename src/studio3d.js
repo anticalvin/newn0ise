@@ -19,6 +19,8 @@ import {rigHuman} from './rig.js';
 import {createSurface,createBall,CUSTOM_DEFAULT} from './surface.js';
 import {createMaterials,PRESETS as MATPRESETS,normMat} from './matsys.js';
 import {openMatLab} from './matlab.js';
+import {openNodeMat} from './nodemat-ui.js';
+import {applyToObject as ngApply,clearFromObject as ngClear} from './nodemat.js';
 import {createLighting} from './lighting.js';
 import {createWorldBuilder} from './world-build.js';
 import {validateWorld,LIMITS as WLIM,PREFABS,TRIGGERS,ACTIONS} from './world-schema.js';
@@ -1934,7 +1936,7 @@ const mqDesk=matchMedia('(min-width:900px)');
 /* ---------- bottom sheet: one rAF spring, transform only ---------- */
 const sheet={
   h:0,hv:0,ht:0,drag:false,idx:2,fullH:600,last:-1,
-  snaps(){const H=window.innerHeight;return[Math.round(66+(parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--safe-b'))||0)),Math.round(Math.min(250,H*.3)),Math.round(H*.5),Math.round(H*.5)];}, // never past halfway: the art keeps the top half and the panel scrolls
+  snaps(){const H=window.innerHeight;return[Math.round((tabsEl.classList.contains('dock')?30:66+(parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--safe-b'))||0))),Math.round(Math.min(250,H*.3)),Math.round(H*.5),Math.round(H*.5)];}, // never past halfway: the art keeps the top half and the panel scrolls
   coverPx(){return mqDesk.matches?0:this.h;},
   setIdx(i,instant){const s=this.snaps();this.idx=clamp(i,0,3);this.ht=s[this.idx];if(instant){this.h=this.ht;this.hv=0;}},
   nearest(h,v){const s=this.snaps(),p=h+v*.16;let b=0,bd=1e9;s.forEach((x,i)=>{const d=Math.abs(x-p);if(d<bd){bd=d;b=i;}});return b;},
@@ -2001,9 +2003,17 @@ function setTab(id){
   if(id==='world'&&!S._wsChosen&&!S._wsBoot&&window.__wsShow&&!S.objs.some(o=>!(o.meta&&o.meta.player)))window.__wsShow();
   if(id==='world'&&!S._plSpawn&&typeof ensurePlayer==='function'){S._plSpawn=1;ensurePlayer().then(()=>{S.needFrame=true;}).catch(()=>{});}
 }
+const TABIC={world:'<path d="M3 12a9 9 0 1 0 18 0 9 9 0 0 0-18 0M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/>',scene:'<path d="M12 3 3 8l9 5 9-5zM3 8v8l9 5 9-5V8M12 13v8"/>',draw:'<path d="M4 20c2-6 4-12 9-12 3 0 3 4 1 6-2 2-5 0-3-3M16 5l3 3"/>',scan:'<path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M4 12h16"/>',look:'<circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 0 0 16z" fill="currentColor"/>',export:'<path d="M12 15V4M7 9l5-5 5 5M5 15v4h14v-4"/>'};
+function placeTabs(){
+  const app=document.querySelector('.app'),main=document.querySelector('.main');
+  if(!mqDesk.matches){if(tabsEl.parentNode!==app){app.insertBefore(tabsEl,main.nextSibling);}tabsEl.classList.add('dock');}
+  else{if(tabsEl.parentNode!==sheetEl){sheetEl.insertBefore(tabsEl,panes);}tabsEl.classList.remove('dock');}
+  sheet.last=-1;
+  requestAnimationFrame(()=>{const h=tabsEl.classList.contains('dock')?tabsEl.offsetHeight:0;document.documentElement.style.setProperty('--objb',h?(h+54)+'px':'');});
+}
 function buildTabs(){
   TABN.forEach(([k,l])=>{
-    const b=el('button','tab',l);b.id='tab_'+k;b.setAttribute('role','tab');
+    const b=el('button','tab',l);b.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'+(TABIC[k]||'')+'</svg><span>'+l+'</span>';b.id='tab_'+k;b.setAttribute('role','tab');
     b.addEventListener('click',()=>{if(suppressTab)return;setTab(k);if(!mqDesk.matches){if(k==='draw')sheet.setIdx(1);else if(sheet.idx<2)sheet.setIdx(2);}});
     tabsEl.appendChild(b);
     const p=el('div');p.id='pane_'+k;p.hidden=true;panes.appendChild(p);paneEls[k]=p;
@@ -2190,8 +2200,9 @@ function ctlRow(parent,c){
 /* Surface shader: effects in the object's own material. They follow the surface instead of masking the screen. */
 const SURF=createSurface({THREE,S,objById});
 const MAT=createMaterials({THREE,S});
-const DOC=createSceneDoc({S,SURF,MAT,LGT});
-let matLab=null;
+const NG={apply:(o,g)=>{try{return ngApply(THREE,o,g,512);}catch(e){console.error(e);}},clear:o=>ngClear(o)};
+const DOC=createSceneDoc({S,SURF,MAT,LGT,NG});
+let matLab=null,nodeMat=null;
 if(renderer)renderer.debug.onShaderError=(g,prog,vs,fs)=>{try{const log=(g.getShaderInfoLog(fs)||'').split('\n').filter(l=>/ERROR/.test(l)).slice(0,2).join(' ').replace(/ERROR: \d+:(\d+)/g,'line $1');if(SURF.onError&&S.objs.some(o=>o.surf&&o.surf.m==='custom'))SURF.onError(log);}catch(e){}};
 let surfBox=null,editBadge=null,SURFBALL=null;
 const myLooks=()=>{try{return JSON.parse(localStorage.getItem('n0.mylooks')||'[]');}catch(e){return[];}};
@@ -2241,6 +2252,8 @@ function buildLookPane(){
   const p=paneEls.look,P=N0.P;
   {const ms=sec(p,'Material');ms.appendChild(el('div','note','A real material for the selected object: colour, metal, roughness, glow, bump and opacity, each from a value or a procedural pattern. Opens a workshop with a 3D preview.'));
     const mr=el('div','chips');
+    mr.appendChild(btn('Material graph (nodes)','pri',()=>{const o=objById(S.sel!=null?S.sel:S.fxTarget);if(!o){toast('Pick an object first, or add a shape.');return;}if(o.kind==='viz'||o.kind==='splat'){toast('This kind of object has no surface to shade.');return;}
+      if(nodeMat)nodeMat.close();nodeMat=openNodeMat({THREE,RoomEnvironment,el,sliderRow,chipRow,toast,o,onApply:g=>{const r=ngApply(THREE,o,g,512);bump();toast(r.done?'Material applied to '+o.name+'.'+(r.skipped?' Some parts have no UV map and were skipped.':''):'This object has no UV map, so the graph can’t be wrapped on it. Try a built-in shape.',5000);},onClear:()=>{bump();},onClose:()=>{nodeMat=null;bump();}});}));
     mr.appendChild(btn('Open material creator','pri',()=>{const o=objById(S.sel!=null?S.sel:S.fxTarget);if(!o){toast('Pick an object first, or add a shape.');return;}if(o.kind==='viz'||o.kind==='splat'){toast('This kind of object has no surface to shade.');return;}
       if(matLab)matLab.close();matLab=openMatLab({THREE,RoomEnvironment,el,btn,sliderRow,chipRow,toast,o,MAT,applyAll:d=>{S.objs.forEach(x=>{if(!(x.kind==='viz'||x.kind==='splat'))MAT.set(x,d);});bump();},onChange:bump,onClose:()=>{matLab=null;bump();}});}));
     ms.appendChild(mr);
@@ -2408,7 +2421,7 @@ function buildHud(){
 }
 
 /* ---------- boot ---------- */
-window.__sheet=sheet;studioDefaults();buildTabs();buildHud();buildScenePane();buildScanPane();
+window.__sheet=sheet;studioDefaults();buildTabs();placeTabs();mqDesk.addEventListener('change',placeTabs);buildHud();buildScenePane();buildScanPane();
 if(renderer){buildLookPane();}
 buildExportPane();wireSheet();
 setTab('scene');
@@ -2709,7 +2722,7 @@ async function dupObj(o){
   }catch(e){toast(String(e.message||e),4000);}
 }
 const bar=document.createElement('div');bar.id='objbar';bar.hidden=true;bar.setAttribute('role','toolbar');bar.setAttribute('aria-label','Selected object');
-bar.style.cssText='position:fixed;left:50%;transform:translateX(-50%);bottom:calc(54px + env(safe-area-inset-bottom));z-index:48;display:flex;gap:4px;align-items:center;max-width:calc(100vw - 16px);overflow-x:auto;padding:5px;border-radius:16px;background:rgba(18,18,20,.74);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border:1px solid rgba(255,255,255,.16);box-shadow:inset 0 1px 0 rgba(255,255,255,.2),0 10px 30px rgba(0,0,0,.45);color:#f2efe9;font:12px/1 system-ui,sans-serif;white-space:nowrap';
+bar.style.cssText='position:fixed;left:50%;transform:translateX(-50%);bottom:var(--objb,calc(54px + env(safe-area-inset-bottom)));z-index:48;display:flex;gap:4px;align-items:center;max-width:calc(100vw - 16px);overflow-x:auto;padding:5px;border-radius:16px;background:rgba(18,18,20,.74);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border:1px solid rgba(255,255,255,.16);box-shadow:inset 0 1px 0 rgba(255,255,255,.2),0 10px 30px rgba(0,0,0,.45);color:#f2efe9;font:12px/1 system-ui,sans-serif;white-space:nowrap';
 document.body.appendChild(bar);
 function paintBar(){
   const o=objById(S.sel);bar.hidden=!o||S.walk||S.exporting||S.tab==='draw';if(bar.hidden)return;

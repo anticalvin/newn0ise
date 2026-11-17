@@ -4,16 +4,17 @@
    applying one gives the object its own copies back, so two objects never end up sharing a look or a material. */
 const J=x=>x==null?null:JSON.parse(JSON.stringify(x));
 export function createSceneDoc(c){
-  const {S,SURF,MAT,LGT}=c;let formHooks=null;
+  const {S,SURF,MAT,LGT,NG}=c;let formHooks=null;
   function colorOf(o){let col=null;o.holder.traverse(n=>{if(!col&&n.isMesh&&n.material&&!n.userData.noView){const m=Array.isArray(n.material)?n.material[0]:n.material;if(m&&m.color)col='#'+m.color.getHexString();}});return col;}
   function setColor(o,hex){o.holder.traverse(n=>{if(!n.isMesh||n.userData.noView||!n.material)return;(Array.isArray(n.material)?n.material:[n.material]).forEach(m=>{if(m.color)m.color.set(hex);});});}
-  const appearance=o=>({look:J(o.look),stack:o.stack||null,surf:o.surf?{...o.surf}:null,mat:J(o.mat)});
+  const appearance=o=>({look:J(o.look),stack:o.stack||null,surf:o.surf?{...o.surf}:null,mat:J(o.mat),ng:J(o.nmat)});
   function putAppearance(o,a){
     if(!a)return;
     if(a.look)o.look=J(a.look);else delete o.look;
     if(a.stack)o.stack=a.stack;else delete o.stack;
     if(a.surf)SURF.set(o,{...a.surf});else if(o.surf)SURF.set(o,{m:'',ta:0});
     if(a.mat)MAT.set(o,a.mat);else if(o.mat)MAT.clear(o);
+    if(NG){if(a.ng){if(JSON.stringify(o.nmat)!==JSON.stringify(a.ng))NG.apply(o,a.ng);}else if(o.nmat)NG.clear(o);}
   }
   function snapObject(o){
     const h=o.holder;
