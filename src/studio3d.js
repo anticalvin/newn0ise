@@ -22,6 +22,8 @@ import {openMatLab} from './matlab.js';
 import {openNodeMat} from './nodemat-ui.js';
 import {createMatStudio} from './matstudio.js';
 import {openRender} from './render.js';
+import {createBuild} from './build.js';
+import {loadModel as phLoad} from './phmodels.js';
 import {applyToObject as ngApply,clearFromObject as ngClear} from './nodemat.js';
 import {createLighting} from './lighting.js';
 import {createWorldBuilder} from './world-build.js';
@@ -293,6 +295,11 @@ function photoInspector(o){
 }
 function pickPhoto(kind,replace){const i=document.createElement('input');i.type='file';i.accept='image/*';i.onchange=async()=>{const f=i.files[0];if(!f)return;try{const cv=await loadCanvas(f);if(replace){replace.meta.p3d.src=cv;rebuildPhoto(replace);}else addPhoto(kind,cv);}catch(e){toast(e.message);}};i.click();}
 /* an object made of several meshes (worlds: prefabs, groups). Stays one editable object. */
+async function addPhModel(id,name,{res='1k',pos=null,rotY=0,noAuto=false}={}){
+  try{toast('Loading '+(name||id)+'…',2500);const g=await phLoad(gltfLoader,id,res);const o=addGroup(name||id,g,{phModel:{id,res},noAuto:noAuto||!!pos});
+    if(pos)o.holder.position.set(pos[0],pos[1],pos[2]);o.holder.rotation.y=rotY;o.holder.updateMatrixWorld(true);S.needFrame=false;bump();return o;}
+  catch(e){console.warn(e);toast('Couldn’t load that model. Check the connection and try again.',4000);return null;}
+}
 function addGroup(name,group,meta){return registerObject(name,group,'group',{fit:false,meta});}
 function addPrimitive(k){
   const g=PRIMS[k]();if(k==='Plane')g.rotateX(-Math.PI/2);
@@ -2000,18 +2007,19 @@ function wireSheet(){
 let suppressTab=false;
 
 /* ---------- tabs ---------- */
-const TABN=[['world','World'],['scene','Scene'],['draw','Sigil'],['scan','Scan'],['look','Look'],['mat','Material'],['export','Export']];
+const TABN=[['world','World'],['build','Build'],['scene','Scene'],['draw','Sigil'],['scan','Scan'],['look','Look'],['mat','Material'],['export','Export']];
 const paneEls={};
 addEventListener('pointerup',e=>{if(e.target.closest&&e.target.closest('#panes'))S.apprTouch=performance.now();},true);addEventListener('input',e=>{if(e.target.closest&&e.target.closest('#panes'))S.apprTouch=performance.now();},true);addEventListener('change',e=>{if(e.target.closest&&e.target.closest('#panes'))S.apprTouch=performance.now();},true);
 function setTab(id){
   TABN.forEach(([k])=>{$('#tab_'+k).setAttribute('aria-selected',k===id);paneEls[k].hidden=k!==id;});
   panes.scrollTop=0;S.tab=id;try{SIG&&SIG.onTab(id);}catch(e){console.error(e);}try{setSelBox();}catch(e){}try{paintBar();}catch(e){}
   if(id!=='mat'&&MS)MS.paintOff();
+  if(BLD){if(id==='build')BLD.show();else BLD.off();}
   if(id==='mat'&&MS)MS.show();
   if(id==='world'&&!S._wsChosen&&!S._wsBoot&&window.__wsShow&&!S.objs.some(o=>!(o.meta&&o.meta.player)))window.__wsShow();
   if(id==='world'&&!S._plSpawn&&typeof ensurePlayer==='function'){S._plSpawn=1;ensurePlayer().then(()=>{S.needFrame=true;}).catch(()=>{});}
 }
-const TABIC={world:'<path d="M3 12a9 9 0 1 0 18 0 9 9 0 0 0-18 0M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/>',scene:'<path d="M12 3 3 8l9 5 9-5zM3 8v8l9 5 9-5V8M12 13v8"/>',draw:'<path d="M4 20c2-6 4-12 9-12 3 0 3 4 1 6-2 2-5 0-3-3M16 5l3 3"/>',scan:'<path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M4 12h16"/>',look:'<circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 0 0 16z" fill="currentColor"/>',mat:'<circle cx="12" cy="12" r="8"/><path d="M8 9.5a5 5 0 0 1 3.5-2.4M15.5 16.5a5 5 0 0 1-3 1.2"/>',export:'<path d="M12 15V4M7 9l5-5 5 5M5 15v4h14v-4"/>'};
+const TABIC={build:'<path d="M3 11 12 4l9 7M5 10v10h14V10M10 20v-6h4v6"/>',world:'<path d="M3 12a9 9 0 1 0 18 0 9 9 0 0 0-18 0M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/>',scene:'<path d="M12 3 3 8l9 5 9-5zM3 8v8l9 5 9-5V8M12 13v8"/>',draw:'<path d="M4 20c2-6 4-12 9-12 3 0 3 4 1 6-2 2-5 0-3-3M16 5l3 3"/>',scan:'<path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M4 12h16"/>',look:'<circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 0 0 16z" fill="currentColor"/>',mat:'<circle cx="12" cy="12" r="8"/><path d="M8 9.5a5 5 0 0 1 3.5-2.4M15.5 16.5a5 5 0 0 1-3 1.2"/>',export:'<path d="M12 15V4M7 9l5-5 5 5M5 15v4h14v-4"/>'};
 function placeTabs(){
   const app=document.querySelector('.app'),main=document.querySelector('.main');
   if(!mqDesk.matches){if(tabsEl.parentNode!==app){app.insertBefore(tabsEl,main.nextSibling);}tabsEl.classList.add('dock');}
@@ -2209,7 +2217,7 @@ function ctlRow(parent,c){
 const SURF=createSurface({THREE,S,objById});
 const MAT=createMaterials({THREE,S});
 const NG={apply:(o,g)=>{try{return ngApply(THREE,o,g,512);}catch(e){console.error(e);}},clear:o=>ngClear(o)};
-let MS=null;
+let MS=null,BLD=null;
 const PHX={setPbr:(o,a)=>MS&&MS.setPbr(o,a),clearPbr:o=>MS&&MS.clearPbr(o),applyTex:(o,a)=>MS&&MS.applyTex(o,a),clearTex:o=>MS&&MS.clearTex(o)};
 const DOC=createSceneDoc({S,SURF,MAT,LGT,NG,PH:PHX});
 let matLab=null,nodeMat=null;
@@ -2434,7 +2442,7 @@ function buildHud(){
 }
 
 /* ---------- boot ---------- */
-window.__sheet=sheet;studioDefaults();buildTabs();MS=createMatStudio({THREE,RoomEnvironment,el,btn,sliderRow,chipRow,sec,toast,objById,S,bump,MAT,SURF,ngApply,ngClear,openGraph:openNodeGraph,setEnvHdr,dom:canvas,camera,controls,LGT,renderScene,createBall,fxOpen,gotoTab:k=>{setTab(k);if(!mqDesk.matches&&sheet.idx<2)sheet.setIdx(2);},peek:()=>{if(!mqDesk.matches)sheet.setIdx(1);},openLook:()=>{const pp=document.getElementById('lookpop');window.__lookPop&&window.__lookPop.open('selected',document.getElementById('tab_mat'));},setEnvStrength:v=>{scene.environmentIntensity=v;hemi.intensity=.2+v*.7;},pane:paneEls.mat});placeTabs();mqDesk.addEventListener('change',placeTabs);buildHud();buildScenePane();buildScanPane();
+window.__sheet=sheet;studioDefaults();buildTabs();BLD=createBuild({THREE,addGroup,objById,S,dom:canvas,camera,controls,toast,bump,el,btn,sec,addModel:addPhModel,pane:paneEls.build,peek:()=>{if(!mqDesk.matches)sheet.setIdx(1);}});MS=createMatStudio({THREE,RoomEnvironment,el,btn,sliderRow,chipRow,sec,toast,objById,S,bump,MAT,SURF,ngApply,ngClear,openGraph:openNodeGraph,setEnvHdr,dom:canvas,camera,controls,LGT,renderScene,createBall,fxOpen,gotoTab:k=>{setTab(k);if(!mqDesk.matches&&sheet.idx<2)sheet.setIdx(2);},peek:()=>{if(!mqDesk.matches)sheet.setIdx(1);},openLook:()=>{const pp=document.getElementById('lookpop');window.__lookPop&&window.__lookPop.open('selected',document.getElementById('tab_mat'));},setEnvStrength:v=>{scene.environmentIntensity=v;hemi.intensity=.2+v*.7;},pane:paneEls.mat});placeTabs();mqDesk.addEventListener('change',placeTabs);buildHud();buildScenePane();buildScanPane();
 if(renderer){buildLookPane();}
 buildExportPane();wireSheet();
 setTab('scene');
@@ -2483,13 +2491,15 @@ const apprOf=o=>DOC.appearance(o),apprPut=(o,a)=>DOC.putAppearance(o,a);
 async function projectFiles(){
   const files={},items=[],skipped=[];let i=0;
   {const so=objById(S.sel);if(so&&so[apprKey()]){try{apprStore(so);}catch(e){}}}
-  let worldSeen=false;
-  for(const o of S.objs){
+  let worldSeen=false,curO=null;{const _p=items.push.bind(items);items.push=it=>{if(curO&&it&&it.oid==null)it.oid=curO.id;return _p(it);};}
+  for(const o of S.objs){curO=o;
     if(o.meta&&o.meta.form&&FORM){items.push({...FORM.projectItem(o),ap:apprOf(o)});continue;} // the recipe is saved; geometry is rebuilt on open
     if(o.meta&&o.meta.sigil&&SIG){const it=SIG.projectItem(o);if(it.hasPhoto){const id='d'+(i++);files[id+'.png']=await toPNG(SIG.photoOf(o));it.pid=id;}items.push({...it,ap:apprOf(o)});continue;}
     if(o.meta&&o.meta.n0w&&NW){worldSeen=true;continue;} // rebuilt from the world document on open
     const tr={p:o.holder.position.toArray(),r:[o.holder.rotation.x,o.holder.rotation.y,o.holder.rotation.z],s:o.holder.scale.toArray()};
     const m=o.meta;
+    if(m&&m.build&&BLD){items.push({...BLD.projectItem(o),tr,vis:o.vis,ap:apprOf(o)});continue;}
+    if(m&&m.phModel){items.push({kind:'phmodel',...m.phModel,name:o.name,tr,vis:o.vis,ap:apprOf(o),phys:m.phys||null});continue;}
     if(o.kind==='relief'&&m&&m.photo&&m.depth){
       const id='r'+(i++);files[id+'.png']=await toPNG(m.photo);
       files[id+'.depth']=new Uint8Array(m.depth.buffer.slice(m.depth.byteOffset,m.depth.byteOffset+m.depth.byteLength));
@@ -2499,6 +2509,7 @@ async function projectFiles(){
     }else if(o.kind==='mesh'&&PRIMS[o.name]&&o.root.material&&o.root.material.color)items.push({kind:'prim',name:o.name,tr,vis:o.vis,color:o.root.material.color.getHex(),ap:apprOf(o),phys:(m&&m.phys)||null});
     else skipped.push(o.name);
   }
+  curO=null;if(MS)for(const it of items){const o=it.oid!=null?objById(it.oid):null;if(!o||!o.paint)continue;try{const r=await MS.paintFiles(o,'pt'+it.oid);if(r){it.paint={meta:r.meta,refs:r.refs};Object.assign(files,r.files);}}catch(e){console.warn('paint save',e);}}
   const pj={n0ise:'studio',v:1,items,skipped,view:{view:S.view,bg:S.bg,env:S.env,grid:S.grid,fx:S.fx,mask:S.mask},engine:S.engine,light:LGT.state(),sky:{look:SKY.look||null,stack:SKY.stack||null},pseudo:{light:{look:LIGHTO.look||null,stack:LIGHTO.stack||null},ground:{look:GROUNDO.look||null,stack:GROUNDO.stack||null}},cam:{p:camera.position.toArray(),t:controls.target.toArray()}};
   if(worldSeen&&NW){try{NW.lightsCache=(await api.run({cmd:'scene'})).lights;}catch(e){}pj.world=NW.exportDoc().doc;}
   files['project.json']=new TextEncoder().encode(JSON.stringify(pj));
@@ -2522,10 +2533,13 @@ async function loadProject(u8){
       const al=F[it.id+'.alpha'];
       if(al){const a=new Float32Array(al.length);for(let k=0;k<a.length;k++)a[k]=al[k]/255;o.meta.alpha0=Float32Array.from(a);setAlpha(o,a,o.meta.cutBy||'project');}else rebuildRelief(o);
     }else if(it.kind==='prim'){o=addPrimitive(it.name);if(o.root.material)o.root.material.color.setHex(it.color);}
+    else if(it.kind==='build'){if(BLD)o=BLD.fromItem(it);}
+    else if(it.kind==='phmodel'){o=await addPhModel(it.id,it.name,{res:it.res,noAuto:true});}
     if(!o)continue;
     o.holder.position.fromArray(it.tr.p);o.holder.rotation.set(...it.tr.r);o.holder.scale.fromArray(it.tr.s);o.vis=it.vis!==false;o.holder.visible=o.vis;
     try{apprPut(o,it.ap);}catch(e){}
     if(it.phys){o.meta=o.meta||{};o.meta.phys={...it.phys};}
+    if(it.paint&&MS){try{await MS.paintLoad(o,it.paint,'pt'+it.oid,n=>F[n]);}catch(e){console.warn('paint load',e);}}
   }
   if(S.rest)leaveRest();
   if(pj.world&&NW&&!SAFE_MODE){try{await api.run({cmd:'light',op:'clear'});const v=validateWorld(pj.world);if(v.ok)await NW.build(v.doc,{replace:false});else toast('The world inside this project couldn’t be read: '+(v.report.errors[0]||{}).msg,6000);}catch(e){toast('The world inside this project couldn’t be built: '+e.message,6000);}}
@@ -2537,6 +2551,7 @@ async function loadProject(u8){
   applyView();renderObjList&&renderObjList();refreshInspector&&refreshInspector();bump();
   return {count:pj.items.length,skipped:pj.skipped||[]};
 }
+window.__n0proj={projectFiles,loadProject,zipStore};
 async function saveProject(){
   const {files,skipped,count}=await projectFiles();if(!count){toast('Nothing to save yet. Add a photo or a shape first.');return;}
   await deliver(zipStore(files),'n0ise-3d-project.zip');

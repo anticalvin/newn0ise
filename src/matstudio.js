@@ -109,7 +109,7 @@ export function createMatStudio(c){
     if(my!==tkn)return false;
     if(o.nmat)ngClear(o);upgrade(o);
     let n=0,skip=0;meshes(o).forEach(me=>{if(!me.geometry.attributes.uv){skip++;return;}(Array.isArray(me.material)?me.material:[me.material]).forEach(m=>{if(m.isMeshPhysicalMaterial){dress(m,T,spec);n++;}});});
-    o.ptex=spec;if(o.pbr)phys(o).forEach(m=>physProps(THREE,m,o.pbr));S.needFrame=true;
+    o.ptex=spec;if(o.pbr)phys(o).forEach(m=>physProps(THREE,m,o.pbr));if(o.paint)PNT.activate(o);S.needFrame=true;
     if(!n)toast('This object has no UV map, so a texture can’t be wrapped on it. Try a built-in shape.',5000);
     return n>0;
   }
@@ -269,6 +269,7 @@ export function createMatStudio(c){
   }
 
   function build(){
+    const sc0=pane.parentElement,sy=sc0&&shown===(cur()?cur().id:null)?sc0.scrollTop:0;
     pane.innerHTML='';
     const o=cur();shown=o?o.id:null;
     const stk=el('div','ms-stk'),pw=el('div','ms-prev');stk.appendChild(pw);
@@ -294,6 +295,29 @@ export function createMatStudio(c){
       r0.appendChild(onb);
       r0.append(btn('Undo','',()=>{PNT.undo(cur());live();}),btn('Fill all','',()=>{PNT.fill(cur());live();}),btn('Reset paint','',()=>{PNT.reset(cur());live();}),btn('Export PNGs','',()=>PNT.exportPng(cur())));
       s.appendChild(r0);
+
+      s.appendChild(el('div','sub','Layers'));
+      {const ox=cur();
+        if(ox&&surfaceOk(ox)){const M=PNT.meta(ox),act=PNT.activeL(ox);
+          const lw=el('div');lw.style.cssText='display:flex;flex-direction:column;gap:4px;margin:4px 0';
+          [...M.layers].reverse().forEach(l=>{const row=el('div');row.style.cssText='display:flex;gap:4px;align-items:center';
+            const eye=el('button','chip',l.vis?'On':'Off');eye.type='button';eye.setAttribute('aria-pressed',l.vis);eye.setAttribute('aria-label','Show or hide '+l.name);eye.style.minWidth='52px';eye.addEventListener('click',()=>{l.vis=!l.vis;PNT.composeAll(ox);live();build2();});
+            const nm=el('button','chip',l.name+(l.mask?'  ·  masked':''));nm.type='button';nm.setAttribute('aria-pressed',l.id===act.id);nm.style.cssText='flex:1;text-align:left;justify-content:flex-start';nm.addEventListener('click',()=>{M.active=l.id;if(!l.mask)B.target='layer';build2();});
+            row.append(eye,nm);lw.appendChild(row);});
+          s.appendChild(lw);
+          const lr=el('div','chips');lr.append(btn('Add layer','pri',()=>{PNT.addLayer(ox);build2();}),
+            btn('Rename','',()=>{const n=(prompt('Layer name',act.name)||'').trim().slice(0,24);if(n){act.name=n;build2();}}),
+            btn('Up','',()=>{PNT.moveLayer(ox,act.id,1);live();build2();}),btn('Down','',()=>{PNT.moveLayer(ox,act.id,-1);live();build2();}),
+            btn('Delete','',()=>{PNT.delLayer(ox,act.id);live();build2();}));s.appendChild(lr);
+          sliderRow(s,'Layer opacity',()=>act.op,v=>{act.op=v;PNT.composeAll(ox);live();},0,1,.01);
+          chipRow(s,PNT.BLENDS,v=>act.blend===v,v=>{act.blend=v;PNT.composeAll(ox);live();build2();});
+          const mr=el('div','chips');
+          if(!act.mask)mr.appendChild(btn('Add mask','',()=>{PNT.addMask(ox,act.id);build2();}));
+          else{mr.appendChild(btn('Remove mask','',()=>{PNT.delMask(ox,act.id);live();build2();}));
+            [['layer','Paint layer'],['hide','Mask: hide'],['reveal','Mask: reveal']].forEach(([v,l])=>{const b=el('button','chip',l);b.type='button';b.setAttribute('aria-pressed',B.target===v);b.addEventListener('click',()=>{B.target=v;if(v!=='layer'&&!B.on)onb.click();build2();});mr.appendChild(b);});}
+          s.appendChild(mr);
+          if(act.mask)s.appendChild(el('div','ms-cr','A mask hides parts of a layer without erasing it. Paint with Hide to cover, Reveal to bring it back.'));
+        }}
       s.appendChild(el('div','sub','Brush presets'));
       const rp=el('div','chips');PNT.BRUSH_PRESETS.forEach(([n,d])=>rp.appendChild(btn(n,'',()=>{B.kind=d.kind;B.hard=d.hard;B.flow=d.flow;B.size=d.size;B.erase=false;Object.keys(B.use).forEach(k=>{B.use[k]=d.ch[k]!=null;});Object.assign(B.ch,d.ch);if(!B.on)onb.click();build2();})));s.appendChild(rp);
       s.appendChild(el('div','sub','Brush'));
@@ -307,7 +331,7 @@ export function createMatStudio(c){
       if(B.use.met)sliderRow(s,'Metal',()=>B.ch.met,v=>{B.ch.met=v;},0,1,.01);
       if(B.use.hgt)sliderRow(s,'Height (low dents, high bumps)',()=>B.ch.hgt,v=>{B.ch.hgt=v;},0,1,.01);
       if(B.use.em)colorRow(s,'Glow colour',()=>B.ch.em,v=>{B.ch.em=v;});
-      s.appendChild(el('div','ms-cr','Paint lives on the object while this page is open. Export PNGs to keep it, then import them in any 3D tool.'));}
+      s.appendChild(el('div','ms-cr','Paint is saved with the project (Scene → Save project) and also exports as PNG maps.'));}
     /* quick materials */
     {const s=sec(pane,'Quick materials');const r=el('div','chips');
       RECIPES.forEach(([n,d])=>r.appendChild(btn(n,'',()=>{const x=cur();if(!x){toast('Pick an object first, or add a shape.');return;}if(x.ptex)clearTex(x);if(x.nmat){ngClear(x);}put({...PB,...d});build2();})));
@@ -393,10 +417,11 @@ export function createMatStudio(c){
         const b=el('button',nm==='Paint'?'hot':'',nm.replace(' from Poly Haven','').replace('Textures','Textures'));b.type='button';b.addEventListener('click',()=>{sc.scrollIntoView({block:'start',behavior:'smooth'});});nav.appendChild(b);});
       stk.appendChild(nav);}
     lastKey=keyOf(o);
+    if(sc0&&sy)requestAnimationFrame(()=>{sc0.scrollTop=sy;});
   }
   const keyOf=o=>o?o.id+'|'+(o.ptex?o.ptex.id:'')+'|'+(o.nmat?1:0)+'|'+(o.pbr?1:0):'-';
   let t2=0;const build2=()=>{clearTimeout(t2);t2=setTimeout(()=>{const y=pane.parentElement?pane.parentElement.scrollTop:0;build();},20);};
   /* rebuild when another object is picked while the tab is open */
   setInterval(()=>{if(pane.hidden)return;const o=cur();const id=o?o.id:null;if(id!==shown){build();}},500);
-  return {paintOff(){PNT.setOn(false);},show(){build();},refresh(){if(!pane.hidden)build();},applyTex,clearTex,setPbr,clearPbr,upgrade,physProps:o=>{if(o&&o.pbr){upgrade(o);phys(o).forEach(m=>physProps(THREE,m,norm(o.pbr)));}}};
+  return {paintOff(){PNT.setOn(false);},paintFiles:(o,p)=>PNT.toFiles(o,p),paintLoad:(o,i,p,g)=>PNT.fromFiles(o,i,p,g),show(){build();},refresh(){if(!pane.hidden)build();},applyTex,clearTex,setPbr,clearPbr,upgrade,physProps:o=>{if(o&&o.pbr){upgrade(o);phys(o).forEach(m=>physProps(THREE,m,norm(o.pbr)));}}};
 }

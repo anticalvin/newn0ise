@@ -55,7 +55,7 @@ Model files are fetched once, kept with the Cache API (`n0ise-models-v1`) with v
 | Rapier (`@dimforge/rapier3d-compat`) | 0.14.0 (jsDelivr, pinned) | Apache-2.0 | Rigid-body physics in `src/sim.js`, loaded at runtime when Play is first pressed |
 | `@modelcontextprotocol/sdk`, `ws`, `zod` | 1.12.1, 8.18.2, 3.25.30 | MIT | `tools/mcp` bridge only; not shipped to the browser |
 | `assets/models/human.glb` | n/a | **Not stated. Supplied by the project owner; confirm the licence before launch.** | The "Human" object in the World tab |
-| Poly Haven textures and HDRIs (`api.polyhaven.com`, `dl.polyhaven.org`) | n/a, fetched on demand, nothing bundled | CC0 1.0 | Material tab in 3D: photographed PBR texture sets and environment lighting; authors are shown in the panel |
+| Poly Haven textures, HDRIs and models (`api.polyhaven.com`, `dl.polyhaven.org`) | n/a, fetched on demand, nothing bundled | CC0 1.0 | Material tab in 3D: photographed PBR texture sets and environment lighting; Build tab: furniture and props (`src/phmodels.js`); authors are shown in the panel |
 | `RGBELoader`, `RoomEnvironment` (three.js examples) | 0.187.0 (jsDelivr, pinned) | MIT | Material tab environments |
 | `three-gpu-pathtracer` | 0.0.27 (jsDelivr, pinned) | MIT | Path-traced preview in the Material tab, loaded only when switched on |
 | `three-mesh-bvh` | 0.9.17 (jsDelivr, pinned) | MIT | Needed by the path tracer, same lazy loading |

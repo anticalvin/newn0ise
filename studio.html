@@ -320,8 +320,8 @@ body[data-walk] .restore,body[data-sgs] .restore,body[data-sgs] .bar,body[data-s
 /* Pocket Studio dock: on phones the tabs become a bottom tool dock with icons */
 .tab svg{display:none;width:22px;height:22px}
 @media (max-width:899px){
-  .tabs.dock{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:2px;padding:6px 6px calc(6px + var(--safe-b));border-top:1px solid var(--line);border-bottom:0;background:var(--panel);z-index:6}
-  .tabs.dock .tab{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-height:56px;padding:4px 0;font-size:9.5px;letter-spacing:.06em;border-radius:var(--ps-r2)}
+  .tabs.dock{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:2px;padding:6px 6px calc(6px + var(--safe-b));border-top:1px solid var(--line);border-bottom:0;background:var(--panel);z-index:6}
+  .tabs.dock .tab{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-height:56px;padding:4px 0;font-size:8.5px;letter-spacing:.02em;border-radius:var(--ps-r2)}
   .tabs.dock .tab svg{display:block}
   .tabs.dock .tab[aria-selected=true]{background:var(--raise);color:var(--ink)}
   .tabs.dock .tab[aria-selected=true] svg{color:var(--accent)}
@@ -384,6 +384,6 @@ body[data-walk] .restore,body[data-sgs] .restore,body[data-sgs] .bar,body[data-s
 <button class="card" data-w="import"><b>Import a world</b><span>Open a .n0world file an AI wrote, or one you exported.</span></button>
 </div></div></div>
 
-<script type="module" src="assets/studio.js?v=b9afd19d"></script>
+<script type="module" src="assets/studio.js?v=4c0874d1"></script>
 </body>
 </html>
