@@ -12,6 +12,7 @@ const thumb=(id,w=200,h=200)=>'https://cdn.polyhaven.com/asset_img/thumbs/'+id+'
 const loadImg=u=>new Promise((ok,no)=>{const i=new Image();i.crossOrigin='anonymous';i.onload=()=>ok(i);i.onerror=()=>no(new Error('image'));i.src=u;});
 const clone=x=>x==null?x:JSON.parse(JSON.stringify(x));
 const rnd=(a,b)=>a+Math.random()*(b-a);
+const lsSet=(k,v)=>{try{localStorage.setItem(k,v);}catch(e){}};
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 
 export const PB={cc:0,ccr:.15,sh:0,shc:'#ffffff',shr:.5,tr:0,th:1,ior:1.5,iri:0,iriI:1.3,an:0,spi:1,atc:'#ffffff',atd:0,em:0,emc:'#ffffff',col:null,met:null,rou:null,opa:1};
@@ -143,7 +144,8 @@ export function createMatStudio(c){
     const cv=document.createElement('canvas');cv.className='msprev';cv.style.cssText='width:100%;height:100%;display:block;touch-action:none;border-radius:inherit';
     let rn=null;try{rn=new THREE.WebGLRenderer({canvas:cv,antialias:true,alpha:true});}catch(e){}
     if(!rn)return {el:cv,setObj(){},setEnv(){},shape(){},dirty(){},live(){return false;}};
-    rn.setPixelRatio(Math.min(2,window.devicePixelRatio||1));rn.outputColorSpace=THREE.SRGBColorSpace;rn.toneMapping=THREE.ACESFilmicToneMapping;
+    cv.addEventListener('webglcontextlost',e=>{e.preventDefault();});cv.addEventListener('webglcontextrestored',()=>{dirty=true;try{api.sync();}catch(e){}});
+    rn.setPixelRatio(Math.min(1.5,window.devicePixelRatio||1));rn.outputColorSpace=THREE.SRGBColorSpace;rn.toneMapping=THREE.ACESFilmicToneMapping;
     const sc=new THREE.Scene(),cam=new THREE.PerspectiveCamera(32,1,.1,50);cam.position.set(0,0,4.6);
     const dl=new THREE.DirectionalLight(0xffffff,1.1);dl.position.set(2,3,3);sc.add(dl);
     const pm=new THREE.PMREMGenerator(rn);let envT=pm.fromScene(new RoomEnvironment(),.04).texture;sc.environment=envT;
@@ -229,12 +231,18 @@ export function createMatStudio(c){
 
   /* ---- the tab ---- */
   const CSS=`.ms-stk{position:sticky;top:0;z-index:3;background:var(--panel,#16171b);padding:0 0 6px;margin:-2px -2px 6px}
-.ms-nav{display:flex;gap:6px;overflow-x:auto;padding:6px 2px 0;scrollbar-width:none}.ms-nav::-webkit-scrollbar{display:none}
-.ms-nav button{flex:none;min-height:36px;padding:0 14px;border-radius:999px;border:1px solid var(--line);background:var(--raise);color:inherit;font:700 11px var(--lab,monospace);letter-spacing:.06em;text-transform:uppercase}
+.ms-nav{display:flex;gap:6px;overflow-x:auto;padding:8px 2px 2px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.ms-nav button[aria-pressed=true]{border-color:var(--accent)}
+.ms-nav button[aria-selected=true]{background:var(--accent);border-color:var(--accent);color:#111}
+#pane_mat .chip,#pane_mat .btn,#pane_mat .ms-shp button,#pane_mat .ms-pt button{min-height:44px}
+#pane_mat .ms-shp button,#pane_mat .ms-pt button{min-height:36px}
+#pane_mat .row{min-height:44px}#pane_mat .ms-body{padding-top:4px}
+#pane_mat input[type=color]{min-height:44px;min-width:56px}.ms-nav::-webkit-scrollbar{display:none}
+.ms-nav button{flex:none;min-height:44px;padding:0 14px;border-radius:999px;border:1px solid var(--line);background:var(--raise);color:inherit;font:700 11px var(--lab,monospace);letter-spacing:.06em;text-transform:uppercase}
 .ms-nav button.hot{background:var(--accent);border-color:var(--accent);color:#111}
 .ms-pt{position:absolute;right:8px;top:8px;display:flex;gap:6px;align-items:center}.ms-pt span{font:600 10px var(--lab,monospace);color:#c9cbd2;background:rgba(10,10,12,.55);padding:4px 8px;border-radius:999px}
 .ms-pt button{min-height:32px;padding:0 12px;border-radius:999px;border:1px solid rgba(255,255,255,.18);background:rgba(10,10,12,.55);color:#e8e9ed;font:700 11px var(--lab,monospace);backdrop-filter:blur(8px)}.ms-pt button[aria-pressed=true]{background:#fff;color:#111}
-.ms-prev{position:relative;height:150px;margin:0;border-radius:16px;overflow:hidden;background:radial-gradient(circle at 50% 40%,#2b2d33,#0d0d10);border:1px solid var(--line)}
+.ms-prev{position:relative;height:124px;margin:0;border-radius:16px;overflow:hidden;background:radial-gradient(circle at 50% 40%,#2b2d33,#0d0d10);border:1px solid var(--line)}
 .ms-prev .ms-shp{position:absolute;left:8px;right:8px;bottom:8px;display:flex;gap:4px;flex-wrap:wrap}
 .ms-prev .ms-shp button{min-height:30px;padding:0 10px;border-radius:999px;border:1px solid rgba(255,255,255,.18);background:rgba(10,10,12,.55);color:#e8e9ed;font:600 11px var(--lab,monospace);backdrop-filter:blur(8px)}
 .ms-prev .ms-shp button[aria-pressed=true]{background:#fff;color:#111}
@@ -250,7 +258,7 @@ export function createMatStudio(c){
 .ms-col{display:flex;align-items:center;justify-content:space-between;min-height:44px;gap:10px;font:600 11px var(--lab,monospace);color:var(--mute)}
 .ms-col input{width:56px;height:36px;border:1px solid var(--line);background:none;border-radius:8px;padding:0}
 .ms-cr{font-size:10.5px;color:var(--mute);margin-top:6px}`;
-  let SB=null,pv=null,shown=null,shape='Ball',lastKey='',pvLabel=null;
+  let curSec=(()=>{try{return localStorage.getItem('n0.matsec')||'quick';}catch(e){return 'quick';}})(),renderBody=null,SB=null,pv=null,shown=null,shape='Ball',lastKey='',pvLabel=null;
   setInterval(()=>{if(pv&&pvLabel&&pv.pt()&&!pane.hidden)pvLabel.textContent=pv.state.samples+' samples';},400);
   const st=document.createElement('style');st.textContent=CSS;document.head.appendChild(st);
   const colorRow=(parent,label,get,set)=>{const r=el('label','ms-col');r.append(label);const i=document.createElement('input');i.type='color';i.value=get();i.addEventListener('input',()=>set(i.value));r.appendChild(i);parent.appendChild(r);};
@@ -290,8 +298,8 @@ export function createMatStudio(c){
     const put=patch=>{const x=cur();if(!x||!surfaceOk(x)){toast('Pick an object first, or add a shape.');return false;}setPbr(x,patch);live();return true;};
 
 
-    /* paint */
-    {const s=sec(pane,'Paint','on the model');const B=PNT.B;
+    const SEC={};
+    SEC.paint=host=>{const s=sec(host,'Paint','on the model');const B=PNT.B;
       s.appendChild(el('div','note','Paint straight on the object. One brush lays down colour, roughness, metal, height and glow together. One finger paints, two fingers move the view.'));
       const tog=(parent,label,get,set,cls)=>{const b=el('button',cls||'chip',label);b.type='button';b.setAttribute('aria-pressed',!!get());b.addEventListener('click',()=>{set(!get());b.setAttribute('aria-pressed',!!get());});parent.appendChild(b);return b;};
       const r0=el('div','chips');
@@ -337,20 +345,17 @@ export function createMatStudio(c){
       if(B.use.hgt)sliderRow(s,'Height (low dents, high bumps)',()=>B.ch.hgt,v=>{B.ch.hgt=v;},0,1,.01);
       if(B.use.em)colorRow(s,'Glow colour',()=>B.ch.em,v=>{B.ch.em=v;});
       s.appendChild(el('div','ms-cr','Paint is saved with the project (Scene → Save project) and also exports as PNG maps.'));}
-    /* quick materials */
-    {const s=sec(pane,'Quick materials');const r=el('div','chips');
+    SEC.quick=host=>{const s=sec(host,'Quick materials');const r=el('div','chips');
       RECIPES.forEach(([n,d])=>r.appendChild(btn(n,'',()=>{const x=cur();if(!x){toast('Pick an object first, or add a shape.');return;}if(x.ptex)clearTex(x);if(x.nmat){ngClear(x);}put({...PB,...d});build2();})));
       r.appendChild(btn('Use on Sigil brush','pri',()=>{const x=cur(),d=x&&x.pbr?x.pbr:null;if(!d){toast('Pick a quick material or set the Surface sliders first.');return;}if(sigilUse){sigilUse({met:d.met,rou:d.rou,cc:d.cc,ccr:d.ccr,sh:d.sh,shc:d.shc,shr:d.shr,tr:d.tr,th:d.th,ior:d.ior,iri:d.iri,iriI:d.iriI,an:d.an,em:d.em,emc:d.emc,col:d.col});}}));
       s.appendChild(r);}
-    /* variations */
-    {const s=sec(pane,'Evolve');s.appendChild(el('div','note','Six variations of what you have. Tap one to keep it, then evolve again. Surprise mixes the quick materials.'));
+    SEC.evolve=host=>{const s=sec(host,'Evolve');s.appendChild(el('div','note','Six variations of what you have. Tap one to keep it, then evolve again. Surprise mixes the quick materials.'));
       const tiles=el('div','ms-tiles'),cvs=[];let vars=[];
       for(let i=0;i<6;i++){const b=el('button');b.type='button';b.setAttribute('aria-label','Variation '+(i+1));const c2=document.createElement('canvas');c2.width=c2.height=112;b.appendChild(c2);cvs.push(c2);tiles.appendChild(b);b.addEventListener('click',()=>{if(vars[i]&&put(vars[i])){toast('Variation kept');build2();}});}
       const gen=mode=>{vars=[];for(let i=0;i<6;i++)vars.push(mode==='s'?surprise():evolve(P(),i<3?.5:1));renderTiles(vars,cvs);};
       const r=el('div','chips');r.append(btn('Evolve','pri',()=>gen('e')),btn('Gentle','',()=>{vars=[];for(let i=0;i<6;i++)vars.push(evolve(P(),.3));renderTiles(vars,cvs);}),btn('Surprise me','',()=>gen('s')));
-      s.append(tiles,r);setTimeout(()=>gen('e'),30);}
-    /* textures */
-    {const s=sec(pane,'Textures from Poly Haven','CC0');s.appendChild(el('div','note','Real photographed materials, free for any use. They load from Poly Haven when you tap one.'));
+      s.append(tiles,r);s.appendChild(el('div','ms-cr','Tap Evolve to make six variations.'));}
+    SEC.tex=host=>{const s=sec(host,'Textures from Poly Haven','CC0');s.appendChild(el('div','note','Real photographed materials, free for any use. They load from Poly Haven when you tap one.'));
       const ctrl=el('div');
       library(s,'textures',async(x,b)=>{const o2=cur();if(!o2||!surfaceOk(o2)){toast('Pick an object first, or add a shape.');return;}b.style.opacity=.5;const ok=await applyTex(o2,{id:x.id,name:x.name,author:x.au});b.style.opacity='';if(ok){live();toast(x.name+' on '+o2.name);build2();}},id=>{const x=cur();return x&&x.ptex&&x.ptex.id===id;});
       s.appendChild(ctrl);
@@ -361,8 +366,7 @@ export function createMatStudio(c){
         colorRow(s,'Tint',()=>T.tint||'#ffffff',v=>{T.tint=v;u();});
         s.appendChild(btn('Remove texture','',()=>{clearTex(o2);live();build2();}));
         if(T.author)s.appendChild(el('div','ms-cr','Poly Haven · CC0 · '+T.author));}}
-    /* surface */
-    {const s=sec(pane,'Surface');const set=(k,v)=>{put({[k]:v});};
+    SEC.surface=host=>{const s=sec(host,'Surface');const set=(k,v)=>{put({[k]:v});};
       s.appendChild(el('div','note','Layers on top of any texture or pattern. Clear coat is a glossy lacquer, sheen is fabric fuzz, glass lets light through, iridescence is oil-slick colour.'));
       const o2=cur(),pp=P();
       colorRow(s,'Base colour',()=>pp.col||'#d8d8d8',v=>set('col',v));
@@ -378,17 +382,14 @@ export function createMatStudio(c){
       sliderRow(s,'Opacity',()=>P().opa,v=>set('opa',v),0,1,.01);
       const r=el('div','chips');r.append(btn('Reset surface','',()=>{const x=cur();if(!x)return;clearPbr(x);live();build2();}),
         btn('Copy to all objects','',()=>{const x=cur();if(!x||!x.pbr)return;S.objs.forEach(y=>{if(y!==x&&surfaceOk(y))setPbr(y,clone(x.pbr));});bump();toast('Copied to every object');}));s.appendChild(r);}
-    /* pattern */
-    {const s=sec(pane,'Pattern');s.appendChild(el('div','note','Build a procedural material from nodes, like Substance Designer. It sits under the layers above.'));
+    SEC.pattern=host=>{const s=sec(host,'Pattern');s.appendChild(el('div','note','Build a procedural material from nodes, like Substance Designer. It sits under the layers above.'));
       const r=el('div','chips');r.append(btn('Open node graph','pri',()=>{openGraph();}),btn('Remove pattern','',()=>{const x=cur();if(x&&x.nmat){ngClear(x);live();build2();}}));s.appendChild(r);}
-    /* environment */
-    {const s=sec(pane,'Environment','CC0');s.appendChild(el('div','note','The light and reflections your materials see. Pick a real place to judge glass and metal.'));
+    SEC.env=host=>{const s=sec(host,'Environment','CC0');s.appendChild(el('div','note','The light and reflections your materials see. Pick a real place to judge glass and metal.'));
       const r=el('div','chips');r.append(btn('Studio','',()=>{studioEnv(pv);bump();}));s.appendChild(r);
       library(s,'hdris',async(x,b)=>{b.style.opacity=.5;await useHdri(x.id,pv);b.style.opacity='';},id=>hdrId===id);
       sliderRow(s,'Strength',()=>S.env,v=>{S.env=v;c.setEnvStrength&&c.setEnvStrength(v);bump();},0,2,.05);}
 
-    /* light */
-    {const s=sec(pane,'Light','rigs and path tracing');s.appendChild(el('div','note','One tap sets up real lights around the selected object. For the best judge of glass, metal and soft shadows, switch on Path trace in the preview.'));
+    SEC.light=host=>{const s=sec(host,'Light','rigs and path tracing');s.appendChild(el('div','note','One tap sets up real lights around the selected object. For the best judge of glass, metal and soft shadows, switch on Path trace in the preview.'));
       const t=()=>controls.target;const rigsBtn=[];
       const RIGS=[
         ['Studio',[['dir',{color:'#fff4e6',intensity:2.6,d:[3,4,3]}],['point',{color:'#8fb4ff',intensity:14,d:[-3,2,2]}],['spot',{color:'#ffffff',intensity:70,d:[0,3,-3]}]]],
@@ -407,8 +408,7 @@ export function createMatStudio(c){
       const r2=el('div','chips');r2.append(btn('Render scene','pri',()=>{renderScene&&renderScene();}),btn('Save preview','',()=>pv.snap()),btn('Sun, sky and all lights','',()=>{gotoTab&&gotoTab('scene');}));s.appendChild(r2);
       s.appendChild(el('div','ms-cr','Path tracing by three-gpu-pathtracer (MIT). It loads the first time you switch it on.'));}
 
-    /* effects and engine */
-    {const s=sec(pane,'Effects','n0ise engine');s.appendChild(el('div','note','The n0ise effects work on 3D too. Surface effects live in the object’s own material and move with it. The full effect stack and hardware looks work on the whole picture.'));
+    SEC.fx=host=>{const s=sec(host,'Effects','n0ise engine');s.appendChild(el('div','note','The n0ise effects work on 3D too. Surface effects live in the object’s own material and move with it. The full effect stack and hardware looks work on the whole picture.'));
       if(!SB&&createBall){try{SB=createBall(THREE,RoomEnvironment,88);}catch(e){}}
       const x=cur();
       if(x&&surfaceOk(x)&&SURF&&SURF.SURF){
@@ -417,16 +417,21 @@ export function createMatStudio(c){
         SURF.SURF.forEach(([id,label])=>{const b=el('button','chip',label);b.type='button';b.setAttribute('aria-pressed',!!(x.surf&&x.surf.m===id));b.addEventListener('click',()=>{SURF.pick(x,id);bump();build2();});b.addEventListener('pointerenter',()=>SB&&SB.set({m:id,amt:1,sp:1,...SURF.defaults(id)}));b.addEventListener('pointerleave',()=>SB&&SB.set(x.surf));ch.appendChild(b);});
         row.appendChild(ch);s.appendChild(row);}
       const r=el('div','chips');r.append(btn('Edit n0ise effects','pri',()=>{fxOpen&&fxOpen();}),btn('Hardware looks','',()=>{openLook&&openLook();}),btn('Open Look tab','',()=>{gotoTab&&gotoTab('look');}));s.appendChild(r);}
-    /* jump bar */
-    {const nav=el('div','ms-nav');nav.setAttribute('role','navigation');nav.setAttribute('aria-label','Material sections');
-      [...pane.querySelectorAll(':scope > .sec')].forEach(sc=>{const nm=(sc.querySelector('.st span')||{}).textContent;if(!nm)return;sc.style.scrollMarginTop='230px';
-        const b=el('button',nm==='Paint'?'hot':'',nm.replace(' from Poly Haven','').replace('Textures','Textures'));b.type='button';b.addEventListener('click',()=>{sc.scrollIntoView({block:'start',behavior:'smooth'});});nav.appendChild(b);});
-      stk.appendChild(nav);}
+    const NAMES=[['quick','Quick'],['paint','Paint'],['tex','Textures'],['surface','Surface'],['evolve','Evolve'],['pattern','Pattern'],['light','Light'],['env','Environment'],['fx','Effects']];
+    const nav=el('div','ms-nav');nav.setAttribute('role','tablist');nav.setAttribute('aria-label','Material sections');
+    const body=el('div','ms-body');
+    renderBody=()=>{const sc=pane.parentElement,y=sc?sc.scrollTop:0;body.innerHTML='';
+      [...nav.children].forEach(b=>{if(b.dataset.k!=='_pv')b.setAttribute('aria-selected',b.dataset.k===curSec);});
+      try{SEC[curSec](body);}catch(e){console.error(e);body.appendChild(el('div','note','This section hit a problem. Try another one, then come back.'));}
+      if(sc&&y)requestAnimationFrame(()=>{sc.scrollTop=y;});};
+    NAMES.forEach(([k,l])=>{const b=el('button','',l);b.type='button';b.dataset.k=k;b.setAttribute('role','tab');b.addEventListener('click',()=>{if(k!==curSec){curSec=k;lsSet('n0.matsec',k);const sc=pane.parentElement;if(sc)sc.scrollTop=0;renderBody();b.scrollIntoView({inline:'center',block:'nearest'});}});nav.appendChild(b);});
+    {const pvb=el('button','','Preview');pvb.type='button';pvb.dataset.k='_pv';const hid=(()=>{try{return localStorage.getItem('n0.matprev')==='0';}catch(e){return false;}})();pw.style.display=hid?'none':'';pvb.setAttribute('aria-pressed',!hid);
+      pvb.addEventListener('click',()=>{const h=pw.style.display!=='none';pw.style.display=h?'none':'';pvb.setAttribute('aria-pressed',!h);lsSet('n0.matprev',h?'0':'1');if(!h)pv.dirty();});nav.insertBefore(pvb,nav.firstChild);}
+    stk.appendChild(nav);pane.appendChild(body);renderBody();
     lastKey=keyOf(o);
-    if(sc0&&sy)requestAnimationFrame(()=>{sc0.scrollTop=sy;});
   }
   const keyOf=o=>o?o.id+'|'+(o.ptex?o.ptex.id:'')+'|'+(o.nmat?1:0)+'|'+(o.pbr?1:0):'-';
-  let t2=0;const build2=()=>{clearTimeout(t2);t2=setTimeout(()=>{const y=pane.parentElement?pane.parentElement.scrollTop:0;build();},20);};
+  let t2=0;const build2=()=>{clearTimeout(t2);t2=setTimeout(()=>{renderBody&&renderBody();},20);};
   /* rebuild when another object is picked while the tab is open */
   setInterval(()=>{if(pane.hidden)return;const o=cur();const id=o?o.id:null;if(id!==shown){build();}},500);
   return {paintOff(){PNT.setOn(false);},paintFiles:(o,p)=>PNT.toFiles(o,p),paintLoad:(o,i,p,g)=>PNT.fromFiles(o,i,p,g),show(){build();},refresh(){if(!pane.hidden)build();},applyTex,clearTex,setPbr,clearPbr,upgrade,physProps:o=>{if(o&&o.pbr){upgrade(o);phys(o).forEach(m=>physProps(THREE,m,norm(o.pbr)));}}};

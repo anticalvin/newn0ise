@@ -6,18 +6,18 @@ const H=2.7,T=.16,FT=.14,LV=H+FT,GRID=.5;
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 export const STYLES={
   wall:[['plaster','Plaster','#e9e4da','plain'],['cream','Cream','#f1e6c9','plain'],['sage','Sage','#a9b8a0','plain'],['sky','Sky','#9db8d8','plain'],['blush','Blush','#e7b8b0','plain'],['char','Charcoal','#3a3b40','plain'],
-    ['stripes','Stripes','#d9d2c3','stripes'],['brick','Brick','#9c4a37','bricks'],['panel','Panelling','#8a6a4a','planksV'],['tile','White tile','#e8ecef','tiles']],
+    ['fence','Fence','#a67c52','planksV'],['stripes','Stripes','#d9d2c3','stripes'],['brick','Brick','#9c4a37','bricks'],['panel','Panelling','#8a6a4a','planksV'],['tile','White tile','#e8ecef','tiles']],
   floor:[['oak','Oak','#b58b5c','planks'],['dark','Walnut','#5a3f2c','planks'],['checker','Checker','#f0f0ee','checker'],['marble','Marble','#e8e6e1','marble'],['slate','Slate','#55585e','tiles'],
-    ['carpet','Carpet','#7b6a8f','noise'],['terra','Terracotta','#b55d3d','tiles'],['concrete','Concrete','#9a9a98','noise']],
+    ['carpet','Carpet','#7b6a8f','noise'],['terra','Terracotta','#b55d3d','tiles'],['concrete','Concrete','#9a9a98','noise'],['water','Pool water','#3f9fd4','water'],['grass','Grass','#6f9a5b','noise'],['sand','Sand','#d8c48f','noise'],['path','Stone path','#8d8a84','tiles']],
   roof:[['shingle','Shingle','#5a4a44','shingle'],['terra','Clay','#b04a2c','shingle'],['slate','Slate','#44484f','shingle'],['thatch','Thatch','#b7a063','noise']]
 };
 const styleOf=(k,id)=>(STYLES[k].find(s=>s[0]===id)||STYLES[k][0]);
 
 export function createBuild(c){
-  const {THREE,addGroup,objById,S,dom,camera,controls,toast,bump,el,btn,sec,addModel,pane,peek,selectObj}=c;
+  const {THREE,addGroup,objById,S,dom,camera,controls,toast,bump,el,btn,sec,addModel,pane,peek,selectObj,LGT,walkIn}=c;
   let house=null;const ray=new THREE.Raycaster(),v2=new THREE.Vector2();
   const newData=()=>({walls:[],floors:[],roofs:[],stairs:[],lawn:true});
-  const T0={tool:null,level:0,walls:'up',style:{wall:'plaster',floor:'oak',roof:'shingle'},rot:0,place:null};
+  const T0={tool:null,level:0,walls:'up',roofType:'gable',kit:null,style:{wall:'plaster',floor:'oak',roof:'shingle'},rot:0,place:null};
   let hist=[],redo=[];
 
   /* ---- textures from styles, shared and repeating once per metre ---- */
@@ -36,11 +36,12 @@ export function createBuild(c){
     else if(pat==='tiles'){dark(.3);g.fillRect(0,0,N,2);g.fillRect(0,0,2,N);g.fillRect(0,N/2,N,2);g.fillRect(N/2,0,2,N);}
     else if(pat==='marble'){for(let i=0;i<14;i++){g.strokeStyle='rgba(60,60,70,'+(.08+rnd()*.18)+')';g.lineWidth=1+rnd()*2;g.beginPath();let x=rnd()*N,y=0;g.moveTo(x,y);for(let j=0;j<8;j++){x+=(rnd()-.5)*40;y+=N/8;g.lineTo(x,y);}g.stroke();}}
     else if(pat==='noise'){for(let i=0;i<1400;i++){g.fillStyle='rgba('+(rnd()<.5?'0,0,0':'255,255,255')+','+(rnd()*.12)+')';g.fillRect(rnd()*N,rnd()*N,2,2);}}
+    else if(pat==='water'){}
     else if(pat==='shingle'){for(let y=0;y<N;y+=16){dark(.35);g.fillRect(0,y,N,2);for(let x=((y/16)%2)*16;x<N;x+=32)g.fillRect(x,y,2,16);}}
     const t=new THREE.CanvasTexture(cv);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.colorSpace=THREE.SRGBColorSpace;t.anisotropy=8;texC.set(k,t);return t;
   }
   const matC=new Map();
-  const mat=(kind,id)=>{const k=kind+id;if(!matC.has(k)){const st=styleOf(kind,id);matC.set(k,new THREE.MeshStandardMaterial({map:tex(kind,id),roughness:kind==='floor'&&st[3]==='marble'?.25:.85,metalness:0}));}return matC.get(k);};
+  const mat=(kind,id)=>{const k=kind+id;if(!matC.has(k)){const st=styleOf(kind,id);matC.set(k,st[3]==='water'?new THREE.MeshStandardMaterial({color:st[2],roughness:.04,metalness:.15,transparent:true,opacity:.72}):new THREE.MeshStandardMaterial({map:tex(kind,id),roughness:kind==='floor'&&st[3]==='marble'?.25:.85,metalness:0}));}return matC.get(k);};
   const woodM=new THREE.MeshStandardMaterial({color:'#6b4a2f',roughness:.7}),frameM=new THREE.MeshStandardMaterial({color:'#f4f1ea',roughness:.6}),
     glassM=new THREE.MeshStandardMaterial({color:'#bfe3ff',roughness:.05,transparent:true,opacity:.28}),lawnM=new THREE.MeshStandardMaterial({color:'#6f9a5b',roughness:1}),stepM=null;
 
@@ -56,15 +57,15 @@ export function createBuild(c){
   const lvY=l=>l*LV;                       // slab bottom of level l
   const topY=l=>lvY(l)+FT;                 // walking surface of level l
   function wallHeight(w){const v=T0.walls;if(w.l>T0.level)return 0;if(w.l===T0.level){if(v==='cut')return 1.05;if(v==='down')return .12;}return H;}
-  function addWall(g,w,i,hh){
-    const dx=w.b[0]-w.a[0],dz=w.b[1]-w.a[1],L=Math.hypot(dx,dz);if(L<.05||hh<=0)return;
+  function addWall(g,w,i,hh,out){
+    const dx=w.b[0]-w.a[0],dz=w.b[1]-w.a[1],L=Math.hypot(dx,dz),WH=Math.min(w.h||H,H),tt=w.t||T;hh=Math.min(hh,WH);if(L<.05||hh<=0)return;
     const ang=Math.atan2(dz,dx),ux=dx/L,uz=dz/L,y0=topY(w.l),m=mat('wall',w.m);
-    const piece=(s0,s1,a,b)=>{b=Math.min(b,hh);if(s1-s0<.01||b-a<.01)return;const p=mesh(box(s1-s0,b-a,T),m,{t:'wall',i});
-      const sm=(s0+s1)/2;p.position.set(w.a[0]+ux*sm,y0+(a+b)/2,w.a[1]+uz*sm);p.rotation.y=-ang;g.add(p);};
-    const items=[...(w.items||[])].sort((p,q)=>p.at-q.at);let s=-T/2;
-    items.forEach(it=>{const hw=it.w/2,l=clamp(it.at-hw,0,L),r=clamp(it.at+hw,0,L);piece(s,l,0,H);
-      if(it.t==='door'){piece(l,r,2.1,H);frame(g,w,i,it,0,2.1,y0,ux,uz,ang,hh);}else{piece(l,r,0,.9);piece(l,r,2.0,H);frame(g,w,i,it,.9,2.0,y0,ux,uz,ang,hh);}s=r;});
-    piece(s,L+T/2,0,H);
+    const piece=(s0,s1,a,b)=>{b=Math.min(b,hh);if(s1-s0<.01||b-a<.01)return;if(out){out.push({s0,s1,a,b,ux,uz,y0,w});return;}
+      const p=mesh(box(s1-s0,b-a,tt),m,{t:'wall',i});const sm=(s0+s1)/2;p.position.set(w.a[0]+ux*sm,y0+(a+b)/2,w.a[1]+uz*sm);p.rotation.y=-ang;g.add(p);};
+    const items=[...(w.items||[])].sort((p,q)=>p.at-q.at);let s=-tt/2;
+    items.forEach(it=>{const hw=it.w/2,l=clamp(it.at-hw,0,L),r=clamp(it.at+hw,0,L);piece(s,l,0,WH);
+      if(it.t==='door'){piece(l,r,2.1,WH);if(!out)frame(g,w,i,it,0,2.1,y0,ux,uz,ang,hh);}else{piece(l,r,0,.9);piece(l,r,2.0,WH);if(!out)frame(g,w,i,it,.9,2.0,y0,ux,uz,ang,hh);}s=r;});
+    piece(s,L+tt/2,0,WH);
   }
   function frame(g,w,i,it,a,b,y0,ux,uz,ang,hh){
     if(a>=hh)return;const at=it.at,hw=it.w/2,bk={t:'wall',i};
@@ -82,12 +83,12 @@ export function createBuild(c){
   function addRoof(g,r,i){
     if(r.l>T0.level)return;if(r.l===T0.level&&T0.walls!=='up')return;
     const x0=Math.min(r.x0,r.x1)-.4,x1=Math.max(r.x0,r.x1)+.4,z0=Math.min(r.z0,r.z1)-.4,z1=Math.max(r.z0,r.z1)+.4,w=x1-x0,d=z1-z0;
-    const along=w>=d?'x':'z',span=along==='x'?d:w,len=along==='x'?w:d,rise=clamp(span*.32,.8,2.6);
-    const sh=new THREE.Shape();sh.moveTo(-span/2,0);sh.lineTo(span/2,0);sh.lineTo(0,rise);sh.closePath();
+    const along=w>=d?'x':'z',span=along==='x'?d:w,len=along==='x'?w:d,rise=clamp(span*.32,.8,2.6),m=mat('roof',r.m).clone();m.side=THREE.DoubleSide;
+    if(r.t==='flat'){const p=mesh(box(w,.22,d),m,{t:'roof',i});p.position.set((x0+x1)/2,topY(r.l)+H+.11,(z0+z1)/2);g.add(p);return;}
+    const sh=new THREE.Shape();sh.moveTo(-span/2,0);sh.lineTo(span/2,0);if(r.t==='shed'){sh.lineTo(span/2,rise*.85);}else sh.lineTo(0,rise);sh.closePath();
     const geo=new THREE.ExtrudeGeometry(sh,{depth:len,bevelEnabled:false});geo.translate(0,0,-len/2);
     const uv=geo.attributes.uv;for(let k=0;k<uv.count;k++)uv.setXY(k,uv.getX(k)*.5,uv.getY(k)*.5);
-    const m=mat('roof',r.m).clone();m.side=THREE.DoubleSide;const p=mesh(geo,m,{t:'roof',i});
-    p.position.set((x0+x1)/2,topY(r.l)+H,(z0+z1)/2);if(along==='x')p.rotation.y=Math.PI/2;g.add(p);
+    const p=mesh(geo,m,{t:'roof',i});p.position.set((x0+x1)/2,topY(r.l)+H,(z0+z1)/2);if(along==='x')p.rotation.y=Math.PI/2;g.add(p);
   }
   function addStairs(g,st,i){
     if(st.l>T0.level)return;const n=Math.round(LV/.19),rise=LV/n,run=.28,ang=Math.atan2(st.dz,st.dx);
@@ -105,7 +106,7 @@ export function createBuild(c){
   function ensure(){
     if(house&&objById(house.o.id))return house;
     const data=newData(),group=new THREE.Group();const o=addGroup('House',group,{build:data,noAuto:true});
-    house={o,group,data};o.meta.build=data;rebuild();return house;
+    house={o,group,data};o.meta.build=data;o.meta.colliders=colliders;rebuild();return house;
   }
   /* ---- history ---- */
   const snap=()=>JSON.stringify(house.data);
@@ -130,7 +131,7 @@ export function createBuild(c){
   const gm=new THREE.MeshBasicMaterial({color:0x27f5c9,transparent:true,opacity:.35,depthWrite:false});
   function showGhost(tool,a,b){
     clearGhost();if(!a||!b)return;ghost=new THREE.Group();const y=topY(T0.level);
-    if(tool==='wall'){const dx=b[0]-a[0],dz=b[1]-a[1],L=Math.hypot(dx,dz);if(L>.05){const p=new THREE.Mesh(new THREE.BoxGeometry(L,H,T),gm);p.position.set((a[0]+b[0])/2,y+H/2,(a[1]+b[1])/2);p.rotation.y=-Math.atan2(dz,dx);ghost.add(p);}}
+    if(tool==='wall'||tool==='fence'){const dx=b[0]-a[0],dz=b[1]-a[1],L=Math.hypot(dx,dz);if(L>.05){const p=new THREE.Mesh(new THREE.BoxGeometry(L,H,T),gm);p.position.set((a[0]+b[0])/2,y+H/2,(a[1]+b[1])/2);p.rotation.y=-Math.atan2(dz,dx);ghost.add(p);}}
     else{const w=Math.abs(b[0]-a[0]),d=Math.abs(b[1]-a[1]);if(w>.05&&d>.05){const p=new THREE.Mesh(new THREE.BoxGeometry(w,tool==='room'?H:tool==='roof'?.2:FT,d),gm);p.position.set((a[0]+b[0])/2,y+(tool==='room'?H/2:tool==='roof'?H:FT/2),(a[1]+b[1])/2);ghost.add(p);}}
     house.group.add(ghost);S.needFrame=true;
   }
@@ -141,7 +142,8 @@ export function createBuild(c){
     else if(tool==='room'){const w=Math.abs(b[0]-a[0]),d=Math.abs(b[1]-a[1]);if(w<1||d<1)return;push();const x0=Math.min(a[0],b[0]),x1=Math.max(a[0],b[0]),z0=Math.min(a[1],b[1]),z1=Math.max(a[1],b[1]);
       D.floors.push({x0,z0,x1,z1,l,m:st.floor});[[[x0,z0],[x1,z0]],[[x1,z0],[x1,z1]],[[x1,z1],[x0,z1]],[[x0,z1],[x0,z0]]].forEach(([p,q])=>D.walls.push({a:p,b:q,l,m:st.wall,items:[]}));}
     else if(tool==='floor'){const w=Math.abs(b[0]-a[0]),d=Math.abs(b[1]-a[1]);if(w<.5||d<.5)return;push();D.floors.push({x0:Math.min(a[0],b[0]),z0:Math.min(a[1],b[1]),x1:Math.max(a[0],b[0]),z1:Math.max(a[1],b[1]),l,m:st.floor});}
-    else if(tool==='roof'){const w=Math.abs(b[0]-a[0]),d=Math.abs(b[1]-a[1]);if(w<1||d<1)return;push();D.roofs.push({x0:Math.min(a[0],b[0]),z0:Math.min(a[1],b[1]),x1:Math.max(a[0],b[0]),z1:Math.max(a[1],b[1]),l,m:st.roof});}
+    else if(tool==='roof'){const w=Math.abs(b[0]-a[0]),d=Math.abs(b[1]-a[1]);if(w<1||d<1)return;push();D.roofs.push({x0:Math.min(a[0],b[0]),z0:Math.min(a[1],b[1]),x1:Math.max(a[0],b[0]),z1:Math.max(a[1],b[1]),l,m:st.roof,t:T0.roofType});}
+    else if(tool==='fence'){if(near(a,b)<.4)return;push();D.walls.push({a,b,l,m:'fence',h:1.1,t:.07,items:[]});}
     else if(tool==='stairs'){const dx=b[0]-a[0],dz=b[1]-a[1];if(Math.hypot(dx,dz)<.4)return;push();const ax=Math.abs(dx)>=Math.abs(dz);D.stairs.push({x:a[0],z:a[1],dx:ax?Math.sign(dx):0,dz:ax?0:Math.sign(dz),l});}
     rebuild();bump();
   }
@@ -166,6 +168,7 @@ export function createBuild(c){
     if(T0.place){const p=planeHit(e,T0.level);if(!p)return;e.stopImmediatePropagation();e.preventDefault();
       const pos=house.o.holder.localToWorld(new THREE.Vector3(Math.round(p.x/.25)*.25,topY(T0.level),Math.round(p.z/.25)*.25));
       addModel(T0.place.id,T0.place.name,{pos:[pos.x,pos.y,pos.z],rotY:T0.rot});return;}
+    if(T0.tool==='kit'&&T0.kit){const p=planeHit(e,T0.level);if(!p)return;e.stopImmediatePropagation();e.preventDefault();placeKit(T0.kit,p);return;}
     const tool=T0.tool;
     if(['door','window','erase','paint'].includes(tool)){const h=pickEl(e);if(!h)return;e.stopImmediatePropagation();e.preventDefault();click(e,tool);return;}
     const p=planeHit(e,T0.level);if(!p)return;e.stopImmediatePropagation();e.preventDefault();
@@ -173,11 +176,37 @@ export function createBuild(c){
     drag={id:e.pointerId,a:snapP(p),b:snapP(p),tool};
   }
   function move(e){if(!drag||e.pointerId!==drag.id)return;e.stopImmediatePropagation();const p=planeHit(e,T0.level);if(!p)return;drag.b=snapP(p);
-    if(drag.tool==='wall'){const dx=drag.b[0]-drag.a[0],dz=drag.b[1]-drag.a[1];if(Math.abs(Math.abs(dx)-Math.abs(dz))>GRID*1.5){if(Math.abs(dx)>Math.abs(dz))drag.b[1]=drag.a[1];else drag.b[0]=drag.a[0];}}
+    if(drag.tool==='wall'||drag.tool==='fence'){const dx=drag.b[0]-drag.a[0],dz=drag.b[1]-drag.a[1];if(Math.abs(Math.abs(dx)-Math.abs(dz))>GRID*1.5){if(Math.abs(dx)>Math.abs(dz))drag.b[1]=drag.a[1];else drag.b[0]=drag.a[0];}}
     showGhost(drag.tool,drag.a,drag.b);}
   function up(e){if(!drag||e.pointerId!==drag.id)return;e.stopImmediatePropagation();const d=drag;drag=null;clearGhost();commit(d.tool,d.a,d.b);}
   dom.addEventListener('pointerdown',down,true);dom.addEventListener('pointermove',move,true);dom.addEventListener('pointerup',up,true);dom.addEventListener('pointercancel',e=>{if(drag){drag=null;clearGhost();}},true);
 
+  /* ---- walking: the walls become solid boxes, doorways stay open ---- */
+  function colliders(){
+    if(!house)return [];const hm=house.o.holder.matrixWorld,out=[];hm&&house.o.holder.updateMatrixWorld(true);
+    house.data.walls.forEach(w=>{const parts=[];addWall(null,w,0,H,parts);const tt=w.t||T;
+      parts.forEach(pc=>{const len=pc.s1-pc.s0,n=Math.max(1,Math.ceil(len/.4)),half=len/n/2;
+        for(let k=0;k<n;k++){const sm=pc.s0+(k+.5)*len/n,cx=w.a[0]+pc.ux*sm,cz=w.a[1]+pc.uz*sm,ex=Math.abs(pc.ux)*half+Math.abs(pc.uz)*tt/2,ez=Math.abs(pc.uz)*half+Math.abs(pc.ux)*tt/2;
+          out.push(new THREE.Box3(new THREE.Vector3(cx-ex,pc.y0+pc.a,cz-ez),new THREE.Vector3(cx+ex,pc.y0+pc.b,cz+ez)).applyMatrix4(hm));}});});
+    return out;
+  }
+  /* ---- furnish a whole room in one tap: pick matching models from the library and set them out ---- */
+  const KITS=[
+    ['Living room',[['sofa|couch',0,-1.3,0],['coffee.?table|low.?table|table',0,.1,0],['arm.?chair|chair',-1.9,.1,Math.PI/2],['plant|vase|flower',1.9,-1.6,0],['lamp|light',-1.8,-1.7,0],['tv|television|cabinet|sideboard|shelf',0,1.8,Math.PI]]],
+    ['Bedroom',[['bed',0,0,0],['bedside|night|drawer|table',1.5,-.9,0],['wardrobe|cabinet|dresser|shelf',-1.7,1.5,Math.PI],['lamp|light',-1.5,-1.1,0],['rug|carpet|plant',1.6,1.4,0]]],
+    ['Dining',[['table',0,0,0],['chair',-.9,0,Math.PI/2],['chair',.9,0,-Math.PI/2],['chair',0,-.9,0],['chair',0,.9,Math.PI],['lamp|plant|vase',1.8,1.6,0]]],
+    ['Kitchen',[['fridge|refrigerator',-1.6,-1.6,0],['stove|oven|cooker|kitchen',0,-1.7,0],['table',0,.4,0],['chair',-.8,.4,Math.PI/2],['chair',.8,.4,-Math.PI/2],['pot|pan|kettle|bowl',0,.4,0]]],
+    ['Garden',[['tree',0,0,0],['bush|shrub|plant',2,1,0],['rock|stone',-1.8,1.1,0],['bench|chair',0,2.2,Math.PI],['flower|plant',-2,-1.5,0]]]
+  ];
+  async function placeKit(kit,p){
+    if(!lib){try{lib=await (libP=libP||modelList());}catch(e){toast('The model library needs a connection.');return;}}
+    toast('Furnishing: '+kit[0]+'…',3500);const cr=Math.cos(T0.rot),sr=Math.sin(T0.rot);let placed=0;
+    for(const [re,dx,dz,ry] of kit[1]){const rx=new RegExp(re,'i');let pool=lib.filter(x=>rx.test(x.name));if(!pool.length)pool=lib.filter(x=>x.tags.some(t=>rx.test(t)));if(!pool.length)continue;
+      const m=pool[Math.floor(Math.random()*Math.min(pool.length,10))],ox=dx*cr-dz*sr,oz=dx*sr+dz*cr;
+      const pos=house.o.holder.localToWorld(new THREE.Vector3(Math.round((p.x+ox)/.25)*.25,topY(T0.level),Math.round((p.z+oz)/.25)*.25));
+      const o=await addModel(m.id,m.name,{pos:[pos.x,pos.y,pos.z],rotY:ry+T0.rot});if(o)placed++;}
+    toast(placed?kit[0]+': '+placed+' pieces placed. Move any of them like a normal object.':'Couldn’t find matching furniture in the library.',4500);
+  }
   /* ---- starters ---- */
   function wallsRect(D,x0,z0,x1,z1,l,m){[[[x0,z0],[x1,z0]],[[x1,z0],[x1,z1]],[[x1,z1],[x0,z1]],[[x0,z1],[x0,z0]]].forEach(([a,b])=>D.walls.push({a,b,l,m,items:[]}));}
   function starter(kind){
@@ -224,7 +253,7 @@ export function createBuild(c){
     parent.appendChild(el('div','sub',label));const row=el('div','chips');
     STYLES[kind].forEach(([id,nm,col])=>{const b=el('button','chip',nm);b.type='button';b.setAttribute('aria-pressed',T0.style[kind]===id);b.style.cssText='border-left:14px solid '+col;b.addEventListener('click',()=>{T0.style[kind]=id;if(!T0.tool||T0.tool==='erase')T0.tool='paint';refresh();});row.appendChild(b);});parent.appendChild(row);
   }
-  const HINT={wall:'Drag on the floor to draw a wall. It snaps to the grid.',room:'Drag a rectangle to make a room with walls and a floor.',floor:'Drag a rectangle to lay a floor.',door:'Tap a wall to put in a door. Tap it again to remove.',window:'Tap a wall to put in a window. Tap it again to remove.',stairs:'Drag in the direction the stairs should climb. They rise one level.',roof:'Drag a rectangle over the walls to put a gabled roof on.',paint:'Tap a wall, floor or roof to restyle it with the style you picked.',erase:'Tap a wall, floor, roof or stairs to remove it.'};
+  const HINT={kit:'Tap the middle of a room to furnish it. Use Rotate to turn the layout.',fence:'Drag to draw a low fence. Doors and windows work on it too.',wall:'Drag on the floor to draw a wall. It snaps to the grid.',room:'Drag a rectangle to make a room with walls and a floor.',floor:'Drag a rectangle to lay a floor.',door:'Tap a wall to put in a door. Tap it again to remove.',window:'Tap a wall to put in a window. Tap it again to remove.',stairs:'Drag in the direction the stairs should climb. They rise one level.',roof:'Drag a rectangle over the walls to put a gabled roof on.',paint:'Tap a wall, floor or roof to restyle it with the style you picked.',erase:'Tap a wall, floor, roof or stairs to remove it.'};
   function refresh(){if(!pane.hidden)show();}
   function show(){
     pane.innerHTML='';const D=house&&house.data;
@@ -233,17 +262,20 @@ export function createBuild(c){
     {const s=sec(pane,'Level and view');
       const r=el('div','chips');r.append(btn('−','',()=>{T0.level=Math.max(0,T0.level-1);rebuild();refresh();}),el('span','chip','Level '+(T0.level+1)),btn('+','',()=>{T0.level=Math.min(4,T0.level+1);rebuild();refresh();}));s.appendChild(r);
       const w=el('div','chips');[['up','Walls up'],['cut','Cutaway'],['down','Walls down']].forEach(([v,l])=>tog(w,l,T0.walls===v,()=>{T0.walls=v;rebuild();refresh();}));s.appendChild(w);
-      const v=el('div','chips');v.append(btn('Top view','',()=>view('top')),btn('Angled view','',()=>view('iso')),btn(!D||D.lawn!==false?'Lawn: on':'Lawn: off','',()=>{ensure();house.data.lawn=!house.data.lawn;rebuild();refresh();}));s.appendChild(v);}
+      const tm=el('div','chips');[['Morning',8],['Noon',12.5],['Evening',18.3],['Night',22.5]].forEach(([n,h])=>tm.appendChild(btn(n,'',()=>{try{if(!LGT.on)LGT.setOn(true);LGT.setHour(h);S.needFrame=true;}catch(e){toast('Couldn’t change the time of day.');}})));s.appendChild(el('div','sub','Time of day'));s.appendChild(tm);
+      const v=el('div','chips');v.append(btn('Walk inside','pri',()=>{ensure();const b=bounds(),cn=b.getCenter(new THREE.Vector3()),p=house.o.holder.localToWorld(new THREE.Vector3(cn.x,topY(T0.level),cn.z));walkIn&&walkIn([p.x,p.y,p.z]);}),btn('Top view','',()=>view('top')),btn('Angled view','',()=>view('iso')),btn(!D||D.lawn!==false?'Lawn: on':'Lawn: off','',()=>{ensure();house.data.lawn=!house.data.lawn;rebuild();refresh();}));s.appendChild(v);}
     {const s=sec(pane,'Tools');const r=el('div','chips');
-      [['wall','Wall'],['room','Room'],['floor','Floor'],['door','Door'],['window','Window'],['stairs','Stairs'],['roof','Roof'],['paint','Restyle'],['erase','Erase']].forEach(([v,l])=>tog(r,l,T0.tool===v,()=>{T0.tool=T0.tool===v?null:v;T0.place=null;ensure();if(T0.tool)peek&&peek();refresh();}));
+      [['wall','Wall'],['room','Room'],['fence','Fence'],['floor','Floor'],['door','Door'],['window','Window'],['stairs','Stairs'],['roof','Roof'],['paint','Restyle'],['erase','Erase']].forEach(([v,l])=>tog(r,l,T0.tool===v,()=>{T0.tool=T0.tool===v?null:v;T0.place=null;ensure();if(T0.tool)peek&&peek();refresh();}));
       r.appendChild(btn('Done','',()=>{T0.tool=null;T0.place=null;dom.style.cursor='';refresh();}));s.appendChild(r);
+      if(T0.tool==='roof'){const rt=el('div','chips');[['gable','Gabled'],['flat','Flat'],['shed','Shed']].forEach(([v,l])=>tog(rt,l,T0.roofType===v,()=>{T0.roofType=v;refresh();}));s.appendChild(rt);}
       s.appendChild(el('div','note',T0.tool?HINT[T0.tool]+' One finger builds, two fingers move the view.':T0.place?'Placing '+T0.place.name+'. Tap the floor. One finger places, two fingers move the view.':'Pick a tool, then build on the grid.'));
+      if(T0.tool==='kit'){const pr=el('div','chips');pr.append(btn('Rotate 90°','',()=>{T0.rot=(T0.rot+Math.PI/2)%(Math.PI*2);toast('Layout turned');}));s.appendChild(pr);}
       if(T0.place){const pr=el('div','chips');pr.append(btn('Rotate 90°','',()=>{T0.rot=(T0.rot+Math.PI/2)%(Math.PI*2);toast('Turned');}),btn('Done placing','',()=>{T0.place=null;refresh();}));s.appendChild(pr);}}
     {const s=sec(pane,'Styles');swatches(s,'wall','Walls');swatches(s,'floor','Floors');swatches(s,'roof','Roofs');}
-    {const s=sec(pane,'Furnish','CC0 models');s.appendChild(el('div','note','Real furniture, plants and props from Poly Haven. Pick one, then tap the floor. Placed pieces are normal objects: move, rotate, paint them in Material.'));model(s);}
+    {const s=sec(pane,'Furnish','CC0 models');s.appendChild(el('div','sub','Furnish a whole room'));{const kr=el('div','chips');KITS.forEach(k=>kr.appendChild(tog(kr,k[0],T0.tool==='kit'&&T0.kit===k,()=>{T0.kit=k;T0.tool='kit';T0.place=null;ensure();peek&&peek();refresh();})));s.appendChild(kr);}s.appendChild(el('div','sub','Or pick one piece'));s.appendChild(el('div','note','Real furniture, plants and props from Poly Haven. Pick one, then tap the floor. Placed pieces are normal objects: move, rotate, paint them in Material.'));model(s);}
     dom.style.cursor=(T0.tool||T0.place)?'crosshair':'';
   }
-  return {show,fromItem(it){const data=it.data||newData(),group=new THREE.Group();const o=addGroup(it.name||'House',group,{build:data,noAuto:true});house={o,group,data};o.meta.build=data;rebuild();return o;},
+  return {show,fromItem(it){const data=it.data||newData(),group=new THREE.Group();const o=addGroup(it.name||'House',group,{build:data,noAuto:true});house={o,group,data};o.meta.build=data;o.meta.colliders=colliders;rebuild();return o;},
     projectItem(o){return {kind:'build',name:o.name,data:o.meta.build};},off(){T0.tool=null;T0.place=null;dom.style.cursor='';if(drag){drag=null;clearGhost();}},
     isHouse:o=>!!(o&&o.meta&&o.meta.build),adopt(o){if(o&&o.meta&&o.meta.build){house={o,group:o.root,data:o.meta.build};}}};
 }
