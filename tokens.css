@@ -9,7 +9,7 @@
 @media (prefers-color-scheme:light){:root:not([data-skin]){--n-bg:#f2efe8;--n-panel:#e9e5dc;--n-raise:#ded9ce;--n-line:#c9c3b6;--n-ink:#0a0a0a;--n-mute:#6b6860;--n-acc:#d9480f;--n-on-acc:#fff}}
 /* workspace switcher: Camera, Effects, 3D, World */
 .ws{display:flex;gap:2px;padding:0 8px;border-bottom:1px solid var(--n-line,#2a2927);background:var(--n-bg,#0a0a0a);flex:none}
-.ws a{flex:1;min-height:36px;display:flex;align-items:center;justify-content:center;font:600 10.5px var(--n-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--n-mute,#8d8a82);text-decoration:none;border-bottom:2px solid transparent}
+.ws a{flex:1;min-height:36px;display:flex;align-items:center;justify-content:center;font:600 11px var(--n-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--n-mute,#8d8a82);text-decoration:none;border-bottom:2px solid transparent}
 .ws a[aria-current=page]{color:var(--n-ink,#f2efe8);border-bottom-color:var(--n-acc,#ff5a1f)}
 .ws a:focus-visible{outline:2px solid var(--n-acc,#ff5a1f);outline-offset:-2px}
 body[data-cam] .ws,body[data-walk] .ws{display:none!important}
@@ -26,8 +26,35 @@ body[data-cam] .ws,body[data-walk] .ws{display:none!important}
   --ps-r1:8px;--ps-r2:12px;--ps-r3:16px;--ps-s1:4px;--ps-s2:8px;--ps-s3:12px;--ps-s4:16px;--ps-s5:24px;--ps-hit:44px;
   --ps-fast:120ms;--ps-med:200ms;--ps-ease:cubic-bezier(.2,.8,.2,1)}
 @media (prefers-reduced-motion:reduce){:root{--ps-fast:0ms;--ps-med:0ms}}
-@media (pointer:coarse),(max-width:520px){.ws a{min-height:44px}}
+@media (pointer:coarse),(max-width:899px){.ws a{min-height:44px}}
 
 /* Controls: one size scale for dense tools. 36px on a mouse, 44px on touch; type never below 10.5px. Pages opt in with var(--n-ctl) and var(--n-ctl-fs). */
 :root{--n-ctl:36px;--n-ctl-sm:30px;--n-ctl-fs:11px;--n-ctl-gap:6px;--n-focus:2px solid var(--n-acc,#ff5a1f)}
 @media (pointer:coarse),(max-width:899px){:root{--n-ctl:44px;--n-ctl-sm:44px;--n-ctl-fs:11px}}
+
+/* Tap areas for text links in headers (logos, workspace names) */
+@media (pointer:coarse),(max-width:899px){.mark,.logo,header a.lnk{display:inline-flex;align-items:center;min-height:var(--n-ctl,44px)}}
+.mark,.logo{display:inline-flex;align-items:center;min-height:32px}
+
+/* ---- Shell tokens and shared pieces (opt-in; Apple clarity, Cyberpunk attitude, orange as the only accent) ---- */
+:root{
+  --n-sheet-peek:112px; --n-sheet-half:50dvh; --n-sheet-full:88dvh; --n-spring:cubic-bezier(.2,.9,.25,1.12);
+  --n-chamfer:9px; --n-bracket:12px; --n-bracket-w:2px; --n-wipe:180ms;
+}
+/* chamfered primary buttons: one cut corner, no gradients */
+.n-chamfer,.btn.primary,.btn.pri{clip-path:polygon(0 0,calc(100% - var(--n-chamfer)) 0,100% var(--n-chamfer),100% 100%,var(--n-chamfer) 100%,0 calc(100% - var(--n-chamfer)))}
+/* corner brackets on the selected or active thing (the homepage's mark) */
+.n-brackets{position:relative}
+.n-brackets::before,.n-brackets::after,.rtile[aria-pressed=true]::before,.tile[aria-pressed=true]::before{content:"";position:absolute;width:var(--n-bracket);height:var(--n-bracket);pointer-events:none;border:0 solid var(--n-acc)}
+.n-brackets::before,.rtile[aria-pressed=true]::before,.tile[aria-pressed=true]::before{left:-1px;top:-1px;border-left-width:var(--n-bracket-w);border-top-width:var(--n-bracket-w)}
+.n-brackets::after{right:-1px;bottom:-1px;border-right-width:var(--n-bracket-w);border-bottom-width:var(--n-bracket-w)}
+.rtile,.tile{position:relative}
+/* mode switch: a thin scanline sweep, under 200 ms, off under reduced motion */
+body.n-wipe::after{content:"";position:fixed;left:0;right:0;top:0;height:2px;z-index:120;pointer-events:none;background:var(--n-acc);box-shadow:0 0 14px color-mix(in srgb,var(--n-acc) 60%,transparent);animation:n-wipe var(--n-wipe) linear 1 both}
+@keyframes n-wipe{from{transform:translateY(0);opacity:.9}to{transform:translateY(100dvh);opacity:0}}
+@media (prefers-reduced-motion:reduce){body.n-wipe::after{display:none}}
+/* a "More" disclosure any page can use: <details class="n-more"><summary>More</summary>…</details> */
+.n-more>summary{list-style:none;min-height:var(--n-ctl,44px);display:flex;align-items:center;gap:8px;font:600 11px var(--n-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--n-mute);cursor:pointer}
+.n-more>summary::-webkit-details-marker{display:none}.n-more>summary::after{content:"+";margin-left:auto}.n-more[open]>summary::after{content:"–"}
+/* the one-line hint toast and an empty state */
+.n-empty{display:grid;gap:10px;justify-items:center;text-align:center;padding:24px;color:var(--n-mute);font:600 12px var(--n-mono)}
