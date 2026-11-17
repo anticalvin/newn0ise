@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Syne:wght@800&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#0a0a0a;--ink:#f2efe8;--mute:#8d8a82;--acc:#e9ecf2;--d:"Syne",system-ui,sans-serif;--m:"JetBrains Mono",ui-monospace,Menlo,monospace}
+:root{--bg:#0a0a0a;--ink:#f2efe8;--mute:#8d8a82;--acc:#2f6bff;--d:"Syne",system-ui,sans-serif;--m:"JetBrains Mono",ui-monospace,Menlo,monospace}
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 html,body{height:100%;background:var(--bg);color:var(--ink);font-family:var(--m);overflow:hidden}
 body{display:flex;flex-direction:column;height:calc(100dvh / var(--uz,1));padding-top:env(safe-area-inset-top,0)}
@@ -116,6 +116,6 @@ document.querySelectorAll('.door').forEach(d=>{['pointerenter','pointerdown','to
   d.addEventListener('click',e=>{if(!document.startViewTransition||e.metaKey||e.ctrlKey||e.shiftKey||e.button)return;e.preventDefault();const h=d.href;document.startViewTransition(()=>{location.href=h;});});});
 if('serviceWorker' in navigator&&location.protocol!=='file:')navigator.serviceWorker.register('sw.js').catch(()=>{});
 </script>
-<script type="module" src="assets/gp.js?v=6eb3b27d"></script>
+<script type="module" src="assets/gp.js?v=d1441efb"></script>
 </body>
 </html>

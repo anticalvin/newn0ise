@@ -16,7 +16,7 @@
       r=Math.min(255,r*k);g=Math.min(255,g*k);b=Math.min(255,b*k);col='rgb('+(r|0)+','+(g|0)+','+(b|0)+')';}
     if(col!==last){last=col;col?root.style.setProperty('--art',col):root.style.removeProperty('--art');}
   }
-  setInterval(pick,350);
+  /* accent is fixed CRT electric blue; pick() kept for a future per-project accent */
   /* glass costs frame time on weak phones: when frames run long for a few seconds, fall back to a solid translucent fill */
   let n=0,slow=0,t0=performance.now();
   (function f(t){if(t-t0>1000){const fps=n*1000/(t-t0);slow=fps<24?slow+1:0;n=0;t0=t;if(slow>=3)root.classList.add('glass-lite');}n++;if(!root.classList.contains('glass-lite'))requestAnimationFrame(f);})(t0);

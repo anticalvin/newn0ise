@@ -17,7 +17,7 @@ export function createGamepad(c){
 .gp-hot{outline:3px solid #ffd23d!important;outline-offset:1px}
 #gppie{position:fixed;left:50%;top:50%;width:0;height:0;z-index:100002;display:none}
 #gppie .pi{position:absolute;width:86px;height:46px;margin:-23px 0 0 -43px;line-height:1.1;display:grid;place-items:center;border-radius:18px;background:rgba(14,15,18,.92);border:1px solid rgba(255,255,255,.2);color:#eee;font:800 12px var(--lab,monospace);text-align:center;letter-spacing:.04em;transition:transform .08s}
-#gppie .pi.on{background:#e9ecf2;color:#111;transform:scale(1.14);border-color:#fff}#gppie .pc{position:absolute;width:10px;height:10px;margin:-5px;border-radius:50%;background:#fff;box-shadow:0 0 0 2px rgba(0,0,0,.6)}
+#gppie .pi.on{background:#2f6bff;color:#fff;transform:scale(1.14);border-color:#fff}#gppie .pc{position:absolute;width:10px;height:10px;margin:-5px;border-radius:50%;background:#fff;box-shadow:0 0 0 2px rgba(0,0,0,.6)}
 #gphud{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 66px);transform:translateX(-50%);z-index:100002;display:none;max-width:calc(100vw - 20px);padding:10px 16px;border-radius:16px;background:rgba(14,15,18,.92);border:1px solid rgba(255,255,255,.2);color:#eee;font:700 12px/1.4 var(--lab,monospace);text-align:center}#gphud b{color:#ffd23d}
 #gplegend{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:100001;width:min(360px,calc(100vw - 24px));max-height:calc(100dvh - 24px);overflow-y:auto;padding:16px;border-radius:20px;background:rgba(14,15,18,.94);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border:1px solid rgba(255,255,255,.18);color:#eee;font:600 12px/1.55 var(--lab,ui-monospace,monospace);display:none}
 #gplegend b{display:inline-block;min-width:78px;color:#ffd23d}
@@ -25,7 +25,7 @@ export function createGamepad(c){
 #gplegend .r{display:flex;gap:8px;margin:2px 0}
 #gplegend input[type=range]{width:100%;min-height:36px}
 #gplegend .gpck{align-items:center;min-height:44px}#gplegend .gpck input{width:22px;height:22px}
-#gplegend button{min-height:44px;padding:0 16px;margin-top:10px;border-radius:12px;border:0;background:#e9ecf2;color:#111;font:800 12px var(--lab,monospace);letter-spacing:.06em;text-transform:uppercase}`;document.head.appendChild(css);
+#gplegend button{min-height:44px;padding:0 16px;margin-top:10px;border-radius:12px;border:0;background:#2f6bff;color:#fff;font:800 12px var(--lab,monospace);letter-spacing:.06em;text-transform:uppercase}`;document.head.appendChild(css);
   const cur=document.createElement('div');cur.id='gpcur';cur.setAttribute('aria-hidden','true');document.body.appendChild(cur);
   const lg=document.createElement('div');lg.id='gplegend';lg.setAttribute('role','dialog');lg.setAttribute('aria-label','Controller help');
   const G=()=>sony?{a:'✕',b:'○',x:'□',y:'△',sel:'Create',opt:'Options'}:{a:'A',b:'B',x:'X',y:'Y',sel:'View',opt:'Menu'};

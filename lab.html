@@ -517,6 +517,6 @@ import('./assets/labeditor.js?v=1').then(m=>{
 }).catch(()=>{$('status').textContent='Using the plain editor (the code editor could not load)'});
 $('modeForm').addEventListener('click',async()=>{const b=$('modeForm');b.disabled=true;try{const m=await import('./assets/labform.js?v=1');await m.openFormLab();}catch(e){$('status').textContent='3D object mode couldn’t load: '+(e.message||e);}b.disabled=false;});
 if('serviceWorker' in navigator&&location.protocol!=='file:')navigator.serviceWorker.register('sw.js').catch(()=>{});
-</script><script type="module" src="assets/gp.js?v=6eb3b27d"></script>
+</script><script type="module" src="assets/gp.js?v=d1441efb"></script>
 <script src="glass.js"></script>
 </body></html>
