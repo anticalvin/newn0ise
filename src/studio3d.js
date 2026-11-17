@@ -2031,6 +2031,7 @@ const TABN=[['world','World'],['build','Build'],['scene','Scene'],['draw','Sigil
 const paneEls={};
 addEventListener('pointerup',e=>{if(e.target.closest&&e.target.closest('#panes'))S.apprTouch=performance.now();},true);addEventListener('input',e=>{if(e.target.closest&&e.target.closest('#panes'))S.apprTouch=performance.now();},true);addEventListener('change',e=>{if(e.target.closest&&e.target.closest('#panes'))S.apprTouch=performance.now();},true);
 function setTab(id){
+  try{const b=document.body;b.classList.remove('n-wipe');void b.offsetWidth;b.classList.add('n-wipe');setTimeout(()=>b.classList.remove('n-wipe'),220);}catch(e){}
   try{if(window.__scu&&window.__scu.on&&id!=='scene'&&id!=='mat')window.__scu.setOn(false);}catch(e){}
   TABN.forEach(([k])=>{$('#tab_'+k).setAttribute('aria-selected',k===id);paneEls[k].hidden=k!==id;});
   panes.scrollTop=0;S.tab=id;try{SIG&&SIG.onTab(id);}catch(e){console.error(e);}try{setSelBox();}catch(e){}try{paintBar();}catch(e){}
@@ -2460,6 +2461,9 @@ function buildHud(){
   {const cx=$('#ctx');let last='';const TN={scene:'Scene',world:'World',build:'Build',draw:'Sigil',scan:'Scan',look:'Look',mat:'Material',export:'Export'};
    const upd=()=>{if(document.hidden)return;const o=objById(S.sel),tool=S.gizmo?{translate:'Move',rotate:'Rotate',scale:'Scale'}[S.gizmo]:'Orbit';const h=(TN[S.tab]||S.tab||'')+' · '+(o?'<b>'+o.name.replace(/[<>&]/g,'')+'</b> selected · '+tool:'nothing selected');if(h!==last){last=h;cx.innerHTML=h;}};
    upd();setInterval(upd,400);}
+  $('#eImport').addEventListener('click',()=>$('#file').click());$('#eDraw').addEventListener('click',()=>{try{SGS.open();}catch(e){setTab('draw');}});
+  $('#eShape').addEventListener('click',()=>{const o=addPrimitive('Cube');selectObj(o.id);bump();});
+  $('#eDemo').addEventListener('click',()=>{try{setTab('world');worldEd.starter();wsShow();}catch(e){toast('Open the World tab for the demo.');}});
   $('#bTools').addEventListener('click',()=>{const on=!document.body.hasAttribute('data-tools');document.body.toggleAttribute('data-tools',on);$('#bTools').setAttribute('aria-expanded',String(on));});
   $('#bMat').addEventListener('click',()=>{setTab('mat');if(!mqDesk.matches&&sheet.idx<2)sheet.setIdx(2);});
   {const bl=$('#bLight');if(bl){try{const v=localStorage.getItem('n0.bright');S.bright=v==null?2:clamp(+v,0,3);}catch(e){S.bright=2;}const paint=()=>{bl.textContent='Light: '+BRIGHT[S.bright][2];};paint();bl.addEventListener('click',()=>{S.bright=(S.bright+1)%4;try{localStorage.setItem('n0.bright',S.bright);}catch(e){}paint();bump();});}}
@@ -3117,7 +3121,7 @@ if(/^#world/.test(location.hash)){S._wsChosen=true;setTab('world');worldEd.start
       build:()=>{close();setTab('build');if(!mqDesk.matches&&sheet.idx<2)sheet.setIdx(2);BLD&&BLD.show();},
       sculpt:()=>{close();const o=addPrimitive('Clay');selectObj(o.id);setTab('scene');if(!mqDesk.matches&&sheet.idx>1)sheet.setIdx(1);SCU.setOn(true);},
       character:()=>{location.href='character.html';},
-      scene:()=>{close();setTab('scene');toast('Empty scene. Add a shape from the Scene tab, or draw in the Sigil tab.',4000);}
+      scene:()=>{close();setTab('scene');if(!mqDesk.matches)sheet.setIdx(1);}
     };
     L.querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=>go[b.dataset.go]()));
     addEventListener('keydown',e=>{if(!L.hidden&&e.key==='Escape')close();});
