@@ -73,7 +73,7 @@ function patTex(THREE,type,c1,c2,amt,scale){
 const q4=v=>Math.round(v*1e4)/1e4;
 export function createSigil(c){
   const {THREE,S,scene,camera,controls,canvas,registerObject,objById,selectObj,bump,uPush,toast,el,btn,sec,sliderRow,chipRow,setShadowFlags,loadCanvas,tc,setTool,markDirty,applyView}=c;
-  const SG={cur:null,B:{snap:'ends',snapPx:16,grid:.1,anchor:null,pick:false,size:22,smooth:.4,taper:.6,press:'auto',depth:.3,style:'round',mat:'chrome',mp:null,col:'#dfe6ee',plane:'view',off:0,mirror:false,rad:1,mode:'draw'}};
+  const SG={cur:null,B:{snap:'ends',snapPx:16,grid:.1,anchor:null,pick:false,size:22,smooth:.4,taper:.6,press:'auto',depth:.3,style:'round',mat:'chrome',mp:null,col:'#dfe6ee',plane:'view',off:0,mirror:false,mirY:false,mirZ:false,rax:0,rad:1,jit:0,wob:0,wn:0,line:false,mode:'draw'}};
   const B=SG.B;let uid=1,drawing=null,space=false,paneHost=null,sync_ui=null;
   const ray=new THREE.Raycaster(),ring=document.createElement('div');
   ring.style.cssText='position:fixed;z-index:30;pointer-events:none;border:1.5px solid #fff;mix-blend-mode:difference;border-radius:50%;transform:translate(-50%,-50%);display:none';document.body.appendChild(ring);
@@ -143,13 +143,17 @@ export function createSigil(c){
     m.userData.sigilMat=s.m;return m;
   }
   function symMatrices(s){
-    const out=[],R=Math.max(1,s.rad|0);
-    for(let i=0;i<R;i++){const rot=i/R*Math.PI*2;out.push({ry:rot,sx:1});if(s.mir)out.push({ry:rot,sx:-1});}
+    const out=[],R=Math.max(1,Math.min(16,s.rad|0)),ax=[s.mir?-1:1,s.my?-1:1,s.mz?-1:1],ra=s.ra===1||s.ra===2?s.ra:0;
+    const flips=[[1,1,1]];
+    for(let k=0;k<3;k++)if(ax[k]<0)for(const f of flips.slice())flips.push(f.map((v,j)=>j===k?-v:v));
+    const E=new THREE.Euler(),Q=new THREE.Quaternion(),P=new THREE.Vector3(),S1=new THREE.Vector3();
+    for(let i=0;i<R;i++){const an=i/R*Math.PI*2;E.set(ra===1?an:0,ra===0?an:0,ra===2?an:0);Q.setFromEuler(E);
+      for(const f of flips)out.push(new THREE.Matrix4().compose(P.set(0,0,0),Q,S1.set(f[0],f[1],f[2])));}
     return out;
   }
   function strokeGroup(s){
     const g=new THREE.Group(),geo=tubeGeometry(s),mat=makeMat(s);g.userData.sid=s.id;g.userData.src=s;
-    for(const t of symMatrices(s)){const m=new THREE.Mesh(geo,mat);m.rotation.y=t.ry;m.scale.x=t.sx;m.userData.sid=s.id;m.castShadow=m.receiveShadow=!!S.shadows;g.add(m);}
+    for(const M of symMatrices(s)){const m=new THREE.Mesh(geo,mat);m.matrixAutoUpdate=false;m.matrix.copy(M);m.userData.sid=s.id;m.castShadow=m.receiveShadow=!!S.shadows;g.add(m);}
     return g;
   }
   function disposeG(g){const gs=new Set(),ms=new Set();g.traverse(n=>{if(n.isMesh){gs.add(n.geometry);ms.add(n.material);}});gs.forEach(x=>x.dispose());ms.forEach(x=>x.dispose());}
@@ -274,16 +278,18 @@ export function createSigil(c){
     const ls=o.holder.scale.x||1,r0=B.size/2*px2w(h0.d)/ls;
     const D=drawing={o,plane,startSnap:!!h0.snapped,r0,d0:h0.d,lastD:h0.d,w:.3,raw:[],lp:h0.p.clone(),lastEv:{x:e.clientX,y:e.clientY,t:e.timeStamp},n0:h0.n.clone(),pid:e.pointerId,
       id:'s'+Date.now().toString(36)+(uid++),
-      stroke(){const s=B,loc=this.raw;return {id:this.id,m:s.mat,...(s.mat==='custom'?{mp:{...s.mp}}:{}),c:s.col,st:s.style,sm:s.smooth,tp:s.taper,mir:s.mirror?1:0,rad:s.rad,ly:this.ly,r:this.rr,nrm:this.nl,pts:loc.flatMap(p=>p.p),w:loc.map(p=>p.w)};}};
+      stroke(){const s=B,loc=this.raw;return {id:this.id,m:s.mat,...(s.mat==='custom'?{mp:{...s.mp}}:{}),c:s.col,st:s.style,sm:s.smooth,tp:s.taper,mir:s.mirror?1:0,...(s.mirY?{my:1}:{}),...(s.mirZ?{mz:1}:{}),...(s.rax?{ra:s.rax}:{}),rad:s.rad,ly:this.ly,r:this.rr,nrm:this.nl,pts:loc.flatMap(p=>p.p),w:loc.map(p=>p.w)};}};
     D.ly=stL.curL;D.rr=r0;D.nl=h0.n.clone().transformDirection(new THREE.Matrix4().copy(o.holder.matrixWorld).invert()).toArray().map(q4);
     addPoint(e,h0,0,0);canvas.setPointerCapture(e.pointerId);canvas.style.cursor='crosshair';
   }
   function addPoint(e,h,dtms,distPx){
     const D=drawing,o=D.o,lazy=B.smooth*.8;
     if(h.snapped)D.lp.copy(h.p);else D.lp.lerp(h.p,D.raw.length?1-lazy:1);
-    const w=pressureOf(e,D,dtms,distPx)*Math.min(4,Math.max(.25,h.d/D.d0));
+    let w=pressureOf(e,D,dtms,distPx)*Math.min(4,Math.max(.25,h.d/D.d0));
+    if(B.wn){D.wv=(D.wv||0)+((Math.random()-.5)*2-(D.wv||0))*.35;w*=1+D.wv*B.wn*.9;} // width noise: a hand-inked wobble in thickness
     const p=D.lp.clone();
     if(!h.snapped)p.addScaledVector(h.n,(h.surf?px2w(h.d)*B.size*.35*w:0)+(w-.5)*2*B.depth*D.r0*ls(o)*5); // pressure also pushes in depth
+    if(!h.snapped&&(B.jit||B.wob)){const sc=D.r0*ls(o),k=D.raw.length;if(B.jit)p.addScaledVector(h.n,(Math.random()-.5)*2*B.jit*sc*3).add(_v.set(Math.random()-.5,Math.random()-.5,Math.random()-.5).multiplyScalar(B.jit*sc*3));if(B.wob)p.addScaledVector(h.n,Math.sin(k*.9)*B.wob*sc*4);} // jitter shakes the line, ripple waves it
     const L=o.holder.worldToLocal(p);
     const prev=D.raw[D.raw.length-1];if(prev&&!h.snapped&&Math.hypot(L.x-prev.p[0],L.y-prev.p[1],L.z-prev.p[2])<D.r0*.35)return false;
     if(D.raw.length>=LIM.pts)return false;
@@ -309,6 +315,7 @@ export function createSigil(c){
     if(D.erase){drawing=null;if(D.changed)commit(D.o,D.o.meta.sigil.strokes.slice());return;}
     const st=D.o.meta.sigil;if(D.liveG){st.layer.remove(D.liveG);disposeG(D.liveG);}drawing=null;
     snapEl.style.display='none';
+    if(B.line&&D.raw.length>2){D.raw=[D.raw[0],D.raw[D.raw.length-1]];} // straight line: keep just the ends
     if(D.raw.length>=1){const s=D.stroke();let ls2=null;const ly=layerOf(st,s.ly);
       if(!ly.plane&&B.plane!=='photo'){const n=D.plane.normal.clone().transformDirection(new THREE.Matrix4().copy(D.o.holder.matrixWorld).invert()),pp=D.o.holder.worldToLocal(D.plane.coplanarPoint(new THREE.Vector3()));ls2=cloneL(st.layers);ls2.find(l=>l.id===ly.id).plane={p:pp.toArray().map(q4),n:n.toArray().map(q4)};} // the layer remembers its plane: later strokes on it share the same depth
       commit(D.o,st.strokes.concat([s]),ls2);}
@@ -457,9 +464,15 @@ export function createSigil(c){
     const lab=document.createElement('label');lab.className='chip';lab.textContent='Colour ';const col=document.createElement('input');col.type='color';col.value=B.col;col.addEventListener('input',()=>{B.col=col.value;});lab.appendChild(col);
     const cr=el('div','chips');cr.append(lab,btn('Recolour last stroke','',()=>{const o=target();if(!o)return;const st=o.meta.sigil;if(!st.strokes.length)return;const a=st.strokes.slice(),l=a[a.length-1];a[a.length-1]={...l,...matOf()};commit(o,a);}),btn('Recolour all','',()=>{const o=target();if(!o||!o.meta.sigil.strokes.length)return;commit(o,o.meta.sigil.strokes.map(x=>({...x,...matOf()})));}));s3.appendChild(cr);
     const s4=sec(parent,'Symmetry');
-    chipRow(s4,[['0','Off'],['1','Mirror']],v=>String(+B.mirror)===v,v=>{B.mirror=v==='1';});
-    chipRow(s4,[['1','No spin'],['3','3'],['4','4'],['6','6'],['8','8']],v=>String(B.rad)===v,v=>{B.rad=+v;});
-    s4.appendChild(T('Mirror across the left and right of the drawing. The number is copies spun around its upright axis.'));
+    [['mirror','Mirror left and right'],['mirY','Mirror up and down'],['mirZ','Mirror front and back']].forEach(([k,n])=>chipRow(s4,[['0','Off'],['1',n]],v=>String(+!!B[k])===v,v=>{B[k]=v==='1';}));
+    sliderRow(s4,'Spin copies',()=>B.rad,v=>{B.rad=Math.round(v);},1,16,1,v=>v<2?'Off':Math.round(v)+'×');
+    chipRow(s4,[['0','Upright'],['1','Left axis'],['2','Front axis']],v=>String(B.rax||0)===v,v=>{B.rax=+v;});
+    s4.appendChild(T('Mirror and spin combine. Spin turns copies around the chosen axis of the drawing.'));
+    const s4b=sec(parent,'Hand','shake, ripple, wobble');
+    sliderRow(s4b,'Shake',()=>B.jit,v=>{B.jit=v;},0,1,.05,v=>Math.round(v*100)+'%');
+    sliderRow(s4b,'Ripple',()=>B.wob,v=>{B.wob=v;},0,1,.05,v=>Math.round(v*100)+'%');
+    sliderRow(s4b,'Ink wobble',()=>B.wn,v=>{B.wn=v;},0,1,.05,v=>Math.round(v*100)+'%');
+    chipRow(s4b,[['0','Freehand'],['1','Straight line']],v=>String(+B.line)===v,v=>{B.line=v==='1';});
     const s5=sec(parent,'Photo','draw on top of a picture');photoRow=s5;
     const pr=el('div','chips');pr.append(btn('Add photo','pri',()=>{const i=document.createElement('input');i.type='file';i.accept='image/*';i.onchange=()=>i.files[0]&&addPhotoFile(i.files[0]);i.click();}));
     const fb=btn('Face the photo','',()=>{const o=target();o&&faceCamera(o);B.plane='photo';});fb.dataset.needsPhoto='1';

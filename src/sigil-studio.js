@@ -222,9 +222,20 @@ export function createSigilStudio(c){
     const gs=group('Snap');
     chipRow(gs,[['ends','Line ends'],['lines','Along lines'],['grid','Grid'],['off','Off']],v=>B.snap===v,v=>{B.snap=v;const o=SG.target();if(o)o.meta.sigil.cand=null;});
     gs.appendChild(note('An orange ring shows what the line will join, so shapes connect exactly in 3D.'));
-    const gy=group('Symmetry');
-    chipRow(gy,[['0','Off'],['1','Mirror']],v=>String(+B.mirror)===v,v=>{B.mirror=v==='1';});
-    chipRow(gy,[['1','No spin'],['3','3'],['4','4'],['6','6'],['8','8']],v=>String(B.rad)===v,v=>{B.rad=+v;});
+    const gy=group('Mirror');
+    const axes=[['mirror','Left and right'],['mirY','Up and down'],['mirZ','Front and back']];
+    const ax=mk('div','sg-row');
+    axes.forEach(([k,n])=>{const x=mk('button','sg-wide',n);x.type='button';const sync=()=>x.setAttribute('aria-pressed',String(!!B[k]));sync();x.addEventListener('click',()=>{B[k]=!B[k];sync();hap(8);});ax.appendChild(x);});
+    gy.appendChild(ax);
+    const gr=group('Spin copies');
+    sliderRow(gr,'Copies',()=>B.rad,v=>{B.rad=Math.round(v);},1,16,1,v=>v<2?'Off':Math.round(v)+'×');
+    chipRow(gr,[['0','Upright'],['1','Left axis'],['2','Front axis']],v=>String(B.rax||0)===v,v=>{B.rax=+v;});
+    gr.appendChild(note('Mirror and spin combine, so Left and right plus 6 copies draws a snowflake.'));
+    const ga=group('Hand');
+    sliderRow(ga,'Shake',()=>B.jit,v=>{B.jit=v;},0,1,.05,v=>Math.round(v*100)+'%');
+    sliderRow(ga,'Ripple',()=>B.wob,v=>{B.wob=v;},0,1,.05,v=>Math.round(v*100)+'%');
+    sliderRow(ga,'Ink wobble',()=>B.wn,v=>{B.wn=v;},0,1,.05,v=>Math.round(v*100)+'%');
+    chipRow(ga,[['0','Freehand'],['1','Straight line']],v=>String(+B.line)===v,v=>{B.line=v==='1';});
   }
   /* ---------- layers ---------- */
   function layersPanel(){head('Layers');const g=group('');g.appendChild(SG.sLayers);SG.paintLayers();}
@@ -255,7 +266,7 @@ export function createSigilStudio(c){
     const g5=group('Look');
     const lk=mk('button','sg-wide','Hardware look and effects');lk.type='button';lk.addEventListener('click',e=>{lookOpen(e.currentTarget);});g5.appendChild(lk);
     const g6=group('');const dice=mk('button','sg-wide','Surprise me (random material and brush)');dice.type='button';
-    dice.addEventListener('click',()=>{const ks=Object.keys(MATS),k=ks[Math.floor(Math.random()*ks.length)];B.mat=k;B.mp=null;B.col=MATS[k][1];B.size=8+Math.floor(Math.random()*40);B.style=Math.random()<.2?'flat':'round';B.mirror=Math.random()<.25;hap(14);toast(MATS[k][0]+', '+B.size+' px');paintAll();});g6.appendChild(dice);
+    dice.addEventListener('click',()=>{const ks=Object.keys(MATS),k=ks[Math.floor(Math.random()*ks.length)];B.mat=k;B.mp=null;B.col=MATS[k][1];B.size=8+Math.floor(Math.random()*40);B.style=Math.random()<.2?'flat':'round';B.mirror=Math.random()<.25;B.rad=Math.random()<.3?[3,4,6][Math.floor(Math.random()*3)]:1;hap(14);toast(MATS[k][0]+', '+B.size+' px');paintAll();});g6.appendChild(dice);
   }
 
   /* ---------- open / close ---------- */

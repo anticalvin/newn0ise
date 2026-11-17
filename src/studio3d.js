@@ -2872,6 +2872,27 @@ if(window.__photo){
   bar.appendChild(sep());
   const gb=pill('Grid','Thirds grid',b=>{T.grid=!T.grid;mark(b,T.grid);paintFrame();});bar.appendChild(gb);
   const tb=pill('3s','Three second timer',b=>{T.timer=!T.timer;mark(b,T.timer);});bar.appendChild(tb);
+  /* phone motion (settings, off by default): tilt the phone to look, walk on the spot to move, and let your real stride bob the view */
+  const MO={tilt:localStorage.getItem('n0ise.mo.tilt')==='1',steps:localStorage.getItem('n0ise.mo.steps')==='1',bob:localStorage.getItem('n0ise.mo.bob')==='1',lastA:null,lastB:null,g:9.8,bobV:0,lt:0,on:false};
+  const moAsk=async()=>{try{for(const C of [window.DeviceOrientationEvent,window.DeviceMotionEvent]){if(C&&typeof C.requestPermission==='function'){const r=await C.requestPermission();if(r!=='granted')return false;}}return true;}catch(e){return false;}};
+  const moOn=()=>MO.tilt||MO.steps||MO.bob;
+  const onOri=e=>{if(!MO.tilt||!window.__studio||!walk.on||e.alpha==null||e.beta==null)return;
+    const ang=(screen.orientation&&screen.orientation.angle)||0;if(ang!==0&&ang!==180){MO.lastA=null;return;} // portrait only
+    if(MO.lastA!=null&&e.beta<170){let dA=e.alpha-MO.lastA;if(dA>180)dA-=360;if(dA<-180)dA+=360;const dB=e.beta-MO.lastB;if(Math.abs(dA)<40&&Math.abs(dB)<40)walk.rotate(dA*Math.PI/180,dB*Math.PI/180);}
+    MO.lastA=e.alpha;MO.lastB=e.beta;};
+  const onMot=e=>{if(!walk.on||!(MO.steps||MO.bob)){MO.bobV=0;walk.setBob(0);return;}const a=e.accelerationIncludingGravity;if(!a||a.x==null)return;
+    const m=Math.hypot(a.x,a.y,a.z);MO.g+=(m-MO.g)*.04;const hp=m-MO.g,now=performance.now();
+    if(MO.steps&&hp>2.4&&now-MO.lt>340){MO.lt=now;walk.step();}
+    if(MO.bob){MO.bobV+=(Math.max(-.07,Math.min(.07,hp*.012))-MO.bobV)*.35;walk.setBob(MO.bobV);}else walk.setBob(0);};
+  const moSync=()=>{const want=moOn();if(want&&!MO.on){addEventListener('deviceorientation',onOri);addEventListener('devicemotion',onMot);MO.on=true;MO.lastA=null;}else if(!want&&MO.on){removeEventListener('deviceorientation',onOri);removeEventListener('devicemotion',onMot);MO.on=false;walk.setBob(0);}};
+  if(('ontouchstart' in window||navigator.maxTouchPoints>0)&&window.DeviceOrientationEvent){
+    if(typeof window.DeviceOrientationEvent.requestPermission==='function'){MO.tilt=MO.steps=MO.bob=false;} // iOS asks again each visit, so start off
+    bar.appendChild(sep());
+    [['tilt','Tilt','Tilt the phone to look around'],['steps','Steps','Walk on the spot to move forward'],['bob','Bob','Your real stride bobs the view']].forEach(([k,l,aria])=>{
+      const b=pill(l,aria,async()=>{if(!MO[k]){if(!await moAsk()){toast('Motion access was declined. Allow it in the browser or Settings to use phone motion.',4200);return;}}MO[k]=!MO[k];localStorage.setItem('n0ise.mo.'+k,MO[k]?'1':'0');mark(b,MO[k]);MO.lastA=null;moSync();if(window.hap)window.hap(10);});
+      mark(b,MO[k]);bar.appendChild(b);});
+    moSync();
+  }
   addEventListener('resize',paintFrame);
   document.body.appendChild(bar);
   /* crop the saved photo to the frame shape */

@@ -81,6 +81,7 @@ export function createWalk(c){
     if(performance.now()-st.boxT>1000)refreshBoxes();
     if(st.rec){const d=st.rec*Math.min(1,dt*9);st.pitch-=d;st.rec-=d;if(Math.abs(st.rec)<1e-4)st.rec=0;}
     const k=st.keys;let fx=(k.has('KeyD')||k.has('ArrowRight')?1:0)-(k.has('KeyA')||k.has('ArrowLeft')?1:0)+st.jx,fz=(k.has('KeyS')||k.has('ArrowDown')?1:0)-(k.has('KeyW')||k.has('ArrowUp')?1:0)+st.jy;
+    if(st.stepT>0){fz-=1;st.stepT-=dt;} // a real step on the phone walks you forward a little
     const m=Math.hypot(fx,fz);if(m>1){fx/=m;fz/=m;}
     const sp=(k.has('ShiftLeft')||k.has('ShiftRight')?5.6:2.8),c1=Math.cos(st.yaw),s1=Math.sin(st.yaw);
     const tx=(fx*c1+fz*s1)*sp,tz=(-fx*s1+fz*c1)*sp,p=st.pos;
@@ -125,8 +126,8 @@ export function createWalk(c){
       camera.position.copy(TP.cp).addScaledVector(fwd,-TP.dc);camera.position.y=Math.max(.25,camera.position.y);camera.lookAt(TP.cp);
       const fv=(st.saved&&st.saved.fov||camera.fov)+(sp2>4?TP.amt*6:0),nf=camera.fov+(fv-camera.fov)*Math.min(1,dt*6);if(Math.abs(nf-camera.fov)>.005){camera.fov=nf;camera.updateProjectionMatrix();}
       if(c.onTick)c.onTick(p);
-    }else{camera.position.set(p.x,p.y+EYE,p.z);if(st.eyeO)camera.position.copy(st.eyeO);camera.rotation.set(st.pitch,st.yaw,0);if(c.onTick)c.onTick(p);}
+    }else{camera.position.set(p.x,p.y+EYE+(st.bob||0),p.z);if(st.eyeO)camera.position.copy(st.eyeO);camera.rotation.set(st.pitch,st.yaw,0);if(c.onTick)c.onTick(p);}
     c.bump();
   }
-  return {enter,exit,tick,get on(){return st.on;},get noJump(){return !!st.noJump;},get third(){return st.third;},get pos(){return st.on?st.pos:null;},get yaw(){return st.yaw;},get keys(){return st.keys;},get boxes(){return st.boxes;},get climbing(){return st.climb;},get stick(){return [st.jx,st.jy];},get player(){return TP.obj;},setController(x){controller=x;},kick,setHook,vel(){return new THREE.Vector3(st.cvx,0,st.cvz);},place(x,y,z){st.pos.set(x,y,z);},setYaw(y){st.yaw=y;},refreshBoxes};
+  return {enter,exit,tick,get on(){return st.on;},get noJump(){return !!st.noJump;},get third(){return st.third;},get pos(){return st.on?st.pos:null;},get yaw(){return st.yaw;},get keys(){return st.keys;},get boxes(){return st.boxes;},get climbing(){return st.climb;},get stick(){return [st.jx,st.jy];},get player(){return TP.obj;},setController(x){controller=x;},kick,setHook,rotate(dyaw,dpitch){st.yaw+=dyaw;st.pitch=Math.max(-1.45,Math.min(1.45,st.pitch+dpitch));},step(){st.stepT=.28;},setBob(v){st.bob=v;},vel(){return new THREE.Vector3(st.cvx,0,st.cvz);},place(x,y,z){st.pos.set(x,y,z);},setYaw(y){st.yaw=y;},refreshBoxes};
 }
