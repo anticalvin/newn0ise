@@ -307,6 +307,12 @@ async function addPhModel(id,name,{res='1k',pos=null,rotY=0,noAuto=false}={}){
   catch(e){console.warn(e);toast('Couldn’t load that model. Check the connection and try again.',4000);return null;}
 }
 function addGroup(name,group,meta){return registerObject(name,group,'group',{fit:false,meta});}
+async function addMyCharacter(){
+  try{const buf=await new Promise((ok,no)=>{const r=indexedDB.open('n0fig',1);r.onupgradeneeded=()=>r.result.createObjectStore('f');r.onsuccess=()=>{const g=r.result.transaction('f').objectStore('f').get('glb');g.onsuccess=()=>ok(g.result);g.onerror=()=>no(g.error);};r.onerror=()=>no(r.error);});
+    if(!buf)throw new Error('No character yet. Open the Character page, make one, and press Open in 3D.');
+    await importFiles([new File([buf],'Character.glb',{type:'model/gltf-binary'})]);history.replaceState(null,'',location.pathname);}
+  catch(e){toast(String(e.message||e),5000);}
+}
 function addPrimitive(k){
   const g=PRIMS[k]();if(k==='Plane')g.rotateX(-Math.PI/2);
   const m=new THREE.Mesh(g,new THREE.MeshStandardMaterial({color:0xb9b4ac,roughness:.55,metalness:.1}));
@@ -2079,7 +2085,7 @@ function buildScenePane(){
   objListEl=el('div','olist');s1.appendChild(objListEl);
   const grp=(title,open)=>{const d=el('details','acc');if(open)d.open=true;d.innerHTML=`<summary>${title}</summary>`;const inn=el('div','in');inn.classList.add('chips');d.appendChild(inn);s1.appendChild(d);return inn;};
   const top=el('div','chips');top.style.margin='8px 0';top.append(btn('Import files','pri',()=>$('#file').click()),btn('Sigil: draw in 3D','',()=>{setTab('draw');if(!mqDesk.matches)sheet.setIdx(1);}),btn('Sample photo','',()=>addPhoto('fold',sampleCanvas())));s1.appendChild(top);
-  const gS=grp('Shapes',true);Object.keys(PRIMS).forEach(k=>gS.appendChild(btn('+ '+k,'',()=>addPrimitive(k))));
+  const gS=grp('Shapes',true);Object.keys(PRIMS).forEach(k=>gS.appendChild(btn('+ '+k,'',()=>addPrimitive(k))));gS.appendChild(btn('+ My character','pri',()=>addMyCharacter()));gS.appendChild(btn('Edit character','',()=>{location.href='character.html';}));
   const gC=grp('Characters and sound');
   gC.appendChild(btn('+ Human','',async()=>{try{await api.run({cmd:'add',type:'human'});api.run({cmd:'camera',frame:true});}catch(e){toast(e.message||String(e));}}));
   gC.appendChild(btn('+ Visualizer','',()=>addViz('waterfall')));
@@ -2432,6 +2438,7 @@ function buildHud(){
   const h=$('#bHold');const on=v=>{S.hold=v;h.setAttribute('aria-pressed',v);};
   h.addEventListener('pointerdown',e=>{e.preventDefault();on(true);});['pointerup','pointercancel','pointerleave'].forEach(t=>h.addEventListener(t,()=>on(false)));h.addEventListener('contextmenu',e=>e.preventDefault());
   $('#bFrame').addEventListener('click',frameAll);
+  $('#bTools').addEventListener('click',()=>{const on=!document.body.hasAttribute('data-tools');document.body.toggleAttribute('data-tools',on);$('#bTools').setAttribute('aria-expanded',String(on));});
   $('#bMat').addEventListener('click',()=>{setTab('mat');if(!mqDesk.matches&&sheet.idx<2)sheet.setIdx(2);});
   {const bl=$('#bLight');if(bl){try{const v=localStorage.getItem('n0.bright');S.bright=v==null?2:clamp(+v,0,3);}catch(e){S.bright=2;}const paint=()=>{bl.textContent='Light: '+BRIGHT[S.bright][2];};paint();bl.addEventListener('click',()=>{S.bright=(S.bright+1)%4;try{localStorage.setItem('n0.bright',S.bright);}catch(e){}paint();bump();});}}
   $('#bGrid').addEventListener('click',()=>{S.grid=!S.grid;$('#bGrid').setAttribute('aria-pressed',S.grid);});
@@ -3085,7 +3092,7 @@ if(/^#world/.test(location.hash)){S._wsChosen=true;setTab('world');worldEd.start
     };
     L.querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=>go[b.dataset.go]()));
     addEventListener('keydown',e=>{if(!L.hidden&&e.key==='Escape')close();});
-    if(q==='#figure'){L.hidden=true;setTimeout(async()=>{try{const buf=await new Promise((ok,no)=>{const r=indexedDB.open('n0fig',1);r.onupgradeneeded=()=>r.result.createObjectStore('f');r.onsuccess=()=>{const g=r.result.transaction('f').objectStore('f').get('glb');g.onsuccess=()=>ok(g.result);g.onerror=()=>no(g.error);};r.onerror=()=>no(r.error);});if(!buf)throw new Error('No character was waiting. Open the Character page and press Open in 3D.');await importFiles([new File([buf],'Character.glb',{type:'model/gltf-binary'})]);history.replaceState(null,'',location.pathname);}catch(e){toast(String(e.message||e),5000);}},600);}
+    if(q==='#figure'){L.hidden=true;setTimeout(()=>addMyCharacter(),600);}
     else if(/^#sigil/.test(q)){L.hidden=true;SGS.open();}
     else if(/^#(world|from=|look=)/.test(q))L.hidden=true;
     else{L.hidden=false;

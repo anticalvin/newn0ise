@@ -328,6 +328,25 @@ body[data-walk] .restore,body[data-sgs] .restore,body[data-sgs] .bar,body[data-s
   .tabs.dock{min-height:0}
   #sheet{border-radius:var(--ps-r3) var(--ps-r3) 0 0}
 }
+
+/* phones: keep the view clear. One Tools button opens the view controls as a compact strip; the header is slimmer */
+#bTools{display:none}
+@media (max-width:899px){
+  #bTools{display:inline-flex;align-items:center;position:absolute;left:8px;top:8px;z-index:3;min-height:44px;padding:0 16px;border-radius:22px;background:rgba(20,21,24,.78);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.16);color:#f2efe8}
+  #bTools[aria-expanded=true]{background:#f2efe8;color:#111}
+  .hud{display:none}
+  body[data-tools] .hud{display:flex;overflow-x:auto;scrollbar-width:none;padding:3px;border-radius:18px;background:rgba(20,21,24,.78);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.14)}
+  body[data-tools] .hud::-webkit-scrollbar{display:none}
+  body[data-tools] #objbar{display:none}
+  body[data-tools] .hud.tl{top:60px;left:8px;right:8px;bottom:auto}
+  body[data-tools] .hud.tr{top:112px;left:8px;right:8px;bottom:auto;justify-content:flex-start}
+  body[data-tools] .hud.bl{top:164px;left:8px;right:8px;bottom:auto}
+  body[data-tools] .hud.br{top:216px;left:8px;right:auto;bottom:auto}
+  header.bar{min-height:46px!important;padding-top:4px!important;padding-bottom:4px!important}
+  header.bar .btn{min-height:40px!important;padding:0 12px!important}
+  nav.ws a{min-height:36px!important;padding-top:0!important;padding-bottom:0!important;font-size:10px!important}
+  .restore{top:calc(96px + env(safe-area-inset-top,0px))!important;padding:6px 8px!important}.restore span{font-size:12px!important;flex:1 1 90px!important}
+}
 </style>
 </head>
 <body>
@@ -343,6 +362,7 @@ body[data-walk] .restore,body[data-sgs] .restore,body[data-sgs] .bar,body[data-s
   <div class="main">
     <div id="stage">
       <canvas id="gl" tabindex="0"></canvas>
+      <button class="chipb" id="bTools" type="button" aria-expanded="false" aria-controls="hudBL">Tools</button>
       <div class="hud tl"><div class="seg" id="viewSeg"></div></div>
       <div class="hud tr"><span id="fxnote" class="fxnote" aria-live="polite"></span><button class="chipb" id="bLight" title="Brighten dark scenes">Light</button><button class="chipb" id="bMat">Material</button><button class="chipb" id="bFx" aria-pressed="true">FX</button></div>
       <div class="hud bl" id="hudBL"><button class="chipb" id="bFrame">Frame</button><button class="chipb" id="bGrid" aria-pressed="true">Grid</button><button class="chipb" id="bWalk">Walk</button><button class="chipb" id="bSpin" aria-pressed="false">Spin</button></div>
@@ -388,6 +408,6 @@ body[data-walk] .restore,body[data-sgs] .restore,body[data-sgs] .bar,body[data-s
 <button class="card" data-w="import"><b>Import a world</b><span>Open a .n0world file an AI wrote, or one you exported.</span></button>
 </div></div></div>
 
-<script type="module" src="assets/studio.js?v=5700d467"></script>
+<script type="module" src="assets/studio.js?v=055a81b4"></script>
 </body>
 </html>
