@@ -21,20 +21,24 @@ const LIM={strokes:400,pts:700};
 const q4=v=>Math.round(v*1e4)/1e4;
 export function createSigil(c){
   const {THREE,S,scene,camera,controls,canvas,registerObject,objById,selectObj,bump,uPush,toast,el,btn,sec,sliderRow,chipRow,setShadowFlags,loadCanvas,tc,setTool,markDirty,applyView}=c;
-  const SG={cur:null,B:{size:22,smooth:.4,taper:.6,press:'auto',depth:.3,style:'round',mat:'chrome',col:'#dfe6ee',plane:'view',off:0,mirror:false,rad:1,mode:'draw'}};
+  const SG={cur:null,B:{snap:'ends',snapPx:16,grid:.1,anchor:null,pick:false,size:22,smooth:.4,taper:.6,press:'auto',depth:.3,style:'round',mat:'chrome',col:'#dfe6ee',plane:'view',off:0,mirror:false,rad:1,mode:'draw'}};
   const B=SG.B;let uid=1,drawing=null,space=false,paneHost=null,sync_ui=null;
   const ray=new THREE.Raycaster(),ring=document.createElement('div');
   ring.style.cssText='position:fixed;z-index:30;pointer-events:none;border:1.5px solid #fff;mix-blend-mode:difference;border-radius:50%;transform:translate(-50%,-50%);display:none';document.body.appendChild(ring);
   const isDraw=()=>S.tab==='draw'&&!S.walk;
   /* ---------- state of one drawing ---------- */
-  function newState(){return {strokes:[],rev:0,revs:new Map([[0,[]]]),undo:[],redo:[],photo:null,layer:null,photoMesh:null};}
-  function commit(o,strokes){
+  const L0=()=>[{id:'L1',name:'Layer 1',vis:true,lock:false,plane:null}];
+  const cloneL=a=>a.map(l=>({...l,plane:l.plane?{p:l.plane.p.slice(),n:l.plane.n.slice()}:null}));
+  function newState(){return {strokes:[],layers:L0(),curL:'L1',rev:0,revs:new Map([[0,{s:[],l:L0()}]]),undo:[],redo:[],photo:null,layer:null,photoMesh:null,cand:null};}
+  const layerOf=(st,id)=>st.layers.find(l=>l.id===id)||st.layers[0];
+  function commit(o,strokes,layers){
     const st=o.meta.sigil;st.undo.push(st.rev);if(st.undo.length>80)st.undo.shift();st.redo.length=0;
-    const r=++st.rev;st.strokes=strokes;st.revs.set(r,strokes.slice());
+    if(layers)st.layers=layers;
+    const r=++st.rev;st.strokes=strokes;st.revs.set(r,{s:strokes.slice(),l:cloneL(st.layers)});
     if(st.revs.size>100){for(const k of st.revs.keys()){if(!st.undo.includes(k)&&k!==st.rev){st.revs.delete(k);break;}}}
     sync(o);paint();bump();markDirty&&markDirty();
   }
-  function setRev(o,r){const st=o.meta.sigil;if(!st.revs.has(r))return false;st.rev=r;st.strokes=st.revs.get(r).slice();sync(o);paint();bump();return true;}
+  function setRev(o,r){const st=o.meta.sigil;if(!st.revs.has(r))return false;const e=st.revs.get(r);st.rev=r;st.strokes=e.s.slice();st.layers=cloneL(e.l);if(!st.layers.some(l=>l.id===st.curL))st.curL=st.layers[0].id;sync(o);paint();bump();return true;}
   function undo(){const o=target();if(!o)return;const st=o.meta.sigil;if(!st.undo.length){toast('Nothing to undo');return;}st.redo.push(st.rev);setRev(o,st.undo.pop());}
   function redo(){const o=target();if(!o)return;const st=o.meta.sigil;if(!st.redo.length)return;st.undo.push(st.rev);setRev(o,st.redo.pop());}
   function target(){const s=objById(S.sel);if(s&&s.meta&&s.meta.sigil)return s;const o=SG.cur!=null?objById(SG.cur):null;return o&&o.meta&&o.meta.sigil?o:null;}
@@ -95,6 +99,8 @@ export function createSigil(c){
     const want=new Set(st.strokes.map(s=>s.id));
     for(const [id,g] of have)if(!want.has(id)){layer.remove(g);disposeG(g);have.delete(id);}
     for(const s of st.strokes){const g=have.get(s.id);if(g&&g.userData.src===s)continue;if(g){layer.remove(g);disposeG(g);}layer.add(strokeGroup(s));}
+    layer.children.forEach(g=>{const ly=layerOf(st,g.userData.src&&g.userData.src.ly);g.visible=ly.vis!==false;});
+    st.cand=null;
     applyView&&applyView();
   }
   /* ---------- photo ---------- */
@@ -122,16 +128,19 @@ export function createSigil(c){
   }
   /* ---------- picking a point to draw at ---------- */
   function rayAt(e){const r=canvas.getBoundingClientRect();ray.setFromCamera(new THREE.Vector2((e.clientX-r.left)/r.width*2-1,-((e.clientY-r.top)/r.height*2-1)),camera);return ray;}
-  function planeFor(o){
-    const dir=camera.getWorldDirection(new THREE.Vector3()),pl=new THREE.Plane();
-    if(B.plane==='floor')pl.set(new THREE.Vector3(0,1,0),-.001);
-    else if(B.plane==='wall')pl.setFromNormalAndCoplanarPoint(new THREE.Vector3(0,0,1),controls.target);
+  const anchorP=()=>B.anchor?new THREE.Vector3(...B.anchor):controls.target.clone();
+  function planeFor(o,through){
+    const dir=camera.getWorldDirection(new THREE.Vector3()),pl=new THREE.Plane(),A=through||anchorP();
+    const ly=layerOf(o.meta.sigil,o.meta.sigil.curL);
+    if(B.plane==='layer'&&ly.plane){const n=new THREE.Vector3(...ly.plane.n).transformDirection(o.holder.matrixWorld),pp=o.holder.localToWorld(new THREE.Vector3(...ly.plane.p));pl.setFromNormalAndCoplanarPoint(n,pp);}
+    else if(B.plane==='floor')pl.set(new THREE.Vector3(0,1,0),-(through?through.y:(B.anchor?B.anchor[1]:0))-.001);
+    else if(B.plane==='wall')pl.setFromNormalAndCoplanarPoint(new THREE.Vector3(0,0,1),A);
     else if(B.plane==='photo'&&o.meta.sigil.photoMesh){const m=o.meta.sigil.photoMesh;m.updateMatrixWorld(true);pl.setFromNormalAndCoplanarPoint(new THREE.Vector3(0,0,1).transformDirection(m.matrixWorld),new THREE.Vector3().setFromMatrixPosition(m.matrixWorld).addScaledVector(new THREE.Vector3(0,0,1).transformDirection(m.matrixWorld),.003));}
-    else pl.setFromNormalAndCoplanarPoint(dir.clone().negate(),controls.target.clone().addScaledVector(dir,B.off));
+    else pl.setFromNormalAndCoplanarPoint(dir.clone().negate(),A.clone().addScaledVector(dir,through?0:B.off));
     if(pl.normal.dot(camera.getWorldDirection(new THREE.Vector3()))>0)pl.negate(); // always face the viewer
     return pl;
   }
-  function hit(e,o,plane,lastD){
+  function hit0(e,o,plane,lastD){
     const rr=rayAt(e);
     if(B.plane==='surface'){
       const objs=S.objs.filter(x=>x.vis).map(x=>x.holder),hs=rr.intersectObjects(objs,true).filter(h=>h.object.isMesh&&!h.object.userData.live);
@@ -140,6 +149,31 @@ export function createSigil(c){
     }
     const p=rr.ray.intersectPlane(plane,new THREE.Vector3());if(!p)return null;const d=p.distanceTo(camera.position);if(d>90)return null;
     return {p,n:plane.normal.clone(),d};
+  }
+  /* snapping: the line lands exactly on the end (or any point) of a stroke you already drew, or on a grid, so shapes can be truly connected in 3D */
+  const _sv=new THREE.Vector3();
+  function candidates(o){
+    const st=o.meta.sigil;if(st.cand)return st.cand;const out=[],step=B.snap==='lines'?1:0;
+    for(const s of st.strokes){if(layerOf(st,s.ly).vis===false)continue;const n=s.w.length;
+      const take=step?Array.from({length:n},(_,i)=>i).filter(i=>i%2===0||i===n-1):[0,n-1];
+      for(const i of take){if(out.length>5000)break;out.push(o.holder.localToWorld(new THREE.Vector3(s.pts[i*3],s.pts[i*3+1],s.pts[i*3+2])));}}
+    st.cand=out;st.candMode=B.snap;return out;
+  }
+  function snapAt(e,o,extra){
+    if(B.snap==='off'||B.snap==='grid')return null;
+    const st=o.meta.sigil;if(st.candMode&&st.candMode!==B.snap)st.cand=null;
+    const cs=extra?candidates(o).concat(extra):candidates(o),r=canvas.getBoundingClientRect();let best=null,bd=B.snapPx;
+    for(const c of cs){_sv.copy(c).project(camera);if(_sv.z>1||_sv.z<-1)continue;const x=r.left+(_sv.x+1)/2*r.width,y=r.top+(1-_sv.y)/2*r.height,d=Math.hypot(x-e.clientX,y-e.clientY);if(d<bd){bd=d;best={p:c,x,y};}}
+    return best;
+  }
+  const snapEl=document.createElement('div');snapEl.style.cssText='position:fixed;z-index:31;pointer-events:none;width:20px;height:20px;margin:-10px 0 0 -10px;border:2px solid #ff5a1f;border-radius:50%;box-shadow:0 0 0 2px rgba(0,0,0,.5);display:none';document.body.appendChild(snapEl);
+  function hit(e,o,plane,lastD,extra){
+    const h=hit0(e,o,plane,lastD);
+    if(!h)return h;
+    if(B.snap==='grid'){const g=B.grid,l=o.holder.worldToLocal(h.p.clone());l.set(Math.round(l.x/g)*g,Math.round(l.y/g)*g,Math.round(l.z/g)*g);h.p=o.holder.localToWorld(l);h.snapped=true;snapEl.style.display='none';return h;}
+    const sn=snapAt(e,o,extra);
+    if(sn){h.p=sn.p.clone();h.d=h.p.distanceTo(camera.position);h.snapped=true;snapEl.style.display='block';snapEl.style.left=sn.x+'px';snapEl.style.top=sn.y+'px';}else snapEl.style.display='none';
+    return h;
   }
   const px2w=d=>2*d*Math.tan(THREE.MathUtils.degToRad(camera.fov)/2)/Math.max(1,canvas.clientHeight);
   /* ---------- drawing ---------- */
@@ -168,36 +202,44 @@ export function createSigil(c){
     if(tc&&tc.object)tc.detach();
     let o=target();if(!o&&B.mode==='draw')o=create();
     if(!o)return;
+    if(B.pick){ // "draw at a point": the next click sets where the drawing plane goes
+      const pl0=planeFor(o),hh=hit0(e,o,pl0,0);if(hh){B.anchor=hh.p.toArray().map(q4);B.pick=false;canvas.style.cursor='crosshair';markAnchor();sync_ui&&sync_ui();toast('Drawing plane set here. It stays until you clear it.',2500);}
+      return;}
     if(B.mode==='erase'){drawing={erase:true,o,changed:false,keep:o.meta.sigil.strokes.slice()};eraseAt(e);canvas.setPointerCapture(e.pointerId);return;}
     if(o.meta.sigil.strokes.length>=LIM.strokes){toast('This drawing has the most strokes it can hold. Start a new drawing.');return;}
     if(S.sel!==o.id)selectObj(o.id);SG.cur=o.id;
-    const plane=planeFor(o),h0=hit(e,o,plane,0);if(!h0)return;
+    const stL=o.meta.sigil,lyc=layerOf(stL,stL.curL);
+    if(lyc.lock){toast('“'+lyc.name+'” is locked. Unlock it or pick another layer.');return;}
+    let plane=planeFor(o),h0=hit(e,o,plane,0);if(!h0)return;
+    if(h0.snapped&&B.plane==='view'){plane=planeFor(o,h0.p);} // started on an existing point: keep that depth
     const ls=o.holder.scale.x||1,r0=B.size/2*px2w(h0.d)/ls;
-    const D=drawing={o,plane,r0,d0:h0.d,lastD:h0.d,w:.3,raw:[],lp:h0.p.clone(),lastEv:{x:e.clientX,y:e.clientY,t:e.timeStamp},n0:h0.n.clone(),pid:e.pointerId,
+    const D=drawing={o,plane,startSnap:!!h0.snapped,r0,d0:h0.d,lastD:h0.d,w:.3,raw:[],lp:h0.p.clone(),lastEv:{x:e.clientX,y:e.clientY,t:e.timeStamp},n0:h0.n.clone(),pid:e.pointerId,
       id:'s'+Date.now().toString(36)+(uid++),
-      stroke(){const s=B,loc=this.raw;return {id:this.id,m:s.mat,c:s.col,st:s.style,sm:s.smooth,tp:s.taper,mir:s.mirror?1:0,rad:s.rad,r:this.rr,nrm:this.nl,pts:loc.flatMap(p=>p.p),w:loc.map(p=>p.w)};}};
-    D.rr=r0;D.nl=h0.n.clone().transformDirection(new THREE.Matrix4().copy(o.holder.matrixWorld).invert()).toArray().map(q4);
+      stroke(){const s=B,loc=this.raw;return {id:this.id,m:s.mat,c:s.col,st:s.style,sm:s.smooth,tp:s.taper,mir:s.mirror?1:0,rad:s.rad,ly:this.ly,r:this.rr,nrm:this.nl,pts:loc.flatMap(p=>p.p),w:loc.map(p=>p.w)};}};
+    D.ly=stL.curL;D.rr=r0;D.nl=h0.n.clone().transformDirection(new THREE.Matrix4().copy(o.holder.matrixWorld).invert()).toArray().map(q4);
     addPoint(e,h0,0,0);canvas.setPointerCapture(e.pointerId);canvas.style.cursor='crosshair';
   }
   function addPoint(e,h,dtms,distPx){
     const D=drawing,o=D.o,lazy=B.smooth*.8;
-    D.lp.lerp(h.p,D.raw.length?1-lazy:1);
+    if(h.snapped)D.lp.copy(h.p);else D.lp.lerp(h.p,D.raw.length?1-lazy:1);
     const w=pressureOf(e,D,dtms,distPx)*Math.min(4,Math.max(.25,h.d/D.d0));
     const p=D.lp.clone();
-    p.addScaledVector(h.n,(h.surf?px2w(h.d)*B.size*.35*w:0)+(w-.5)*2*B.depth*D.r0*ls(o)*5); // pressure also pushes in depth
+    if(!h.snapped)p.addScaledVector(h.n,(h.surf?px2w(h.d)*B.size*.35*w:0)+(w-.5)*2*B.depth*D.r0*ls(o)*5); // pressure also pushes in depth
     const L=o.holder.worldToLocal(p);
-    const prev=D.raw[D.raw.length-1];if(prev&&Math.hypot(L.x-prev.p[0],L.y-prev.p[1],L.z-prev.p[2])<D.r0*.35)return false;
+    const prev=D.raw[D.raw.length-1];if(prev&&!h.snapped&&Math.hypot(L.x-prev.p[0],L.y-prev.p[1],L.z-prev.p[2])<D.r0*.35)return false;
     if(D.raw.length>=LIM.pts)return false;
     D.raw.push({p:[q4(L.x),q4(L.y),q4(L.z)],w:q4(Math.min(2.5,Math.max(.06,w)))});return true;
   }
   const ls=o=>o.holder.scale.x||1;
   function onMove(e){
     if(isDraw()&&B.mode!=='orbit'&&e.pointerType!=='touch'){const px=B.mode==='erase'?26:Math.max(6,B.size);ring.style.display='block';ring.style.left=e.clientX+'px';ring.style.top=e.clientY+'px';ring.style.width=ring.style.height=px+'px';}else ring.style.display='none';
+    if(!drawing&&isDraw()&&B.mode==='draw'&&e.pointerType!=='touch'){const o=target();if(o&&B.snap!=='off'&&B.snap!=='grid'){const sn=snapAt(e,o);if(sn){snapEl.style.display='block';snapEl.style.left=sn.x+'px';snapEl.style.top=sn.y+'px';}else snapEl.style.display='none';}else snapEl.style.display='none';}
     const D=drawing;if(!D||e.pointerId!==D.pid&&D.pid!=null)return;
     if(D.erase){eraseAt(e);return;}
     const evs=e.getCoalescedEvents?e.getCoalescedEvents():[e];let added=false;
     for(const ev of (evs.length?evs:[e])){
-      const h=hit(ev,D.o,D.plane,D.lastD);if(!h)continue;D.lastD=h.d;
+      const extra=D.raw.length>10?[D.o.holder.localToWorld(new THREE.Vector3(...D.raw[0].p))]:null; // close a loop on your own start
+      const h=hit(ev,D.o,D.plane,D.lastD,extra);if(!h)continue;D.lastD=h.d;
       const dpx=Math.hypot(ev.clientX-D.lastEv.x,ev.clientY-D.lastEv.y),dt=Math.max(1,ev.timeStamp-D.lastEv.t);D.lastEv={x:ev.clientX,y:ev.clientY,t:ev.timeStamp};
       if(addPoint(ev,h,dt,dpx))added=true;
     }
@@ -207,12 +249,17 @@ export function createSigil(c){
     const D=drawing;if(!D||(D.pid!=null&&e.pointerId!==D.pid))return;
     if(D.erase){drawing=null;if(D.changed)commit(D.o,D.o.meta.sigil.strokes.slice());return;}
     const st=D.o.meta.sigil;if(D.liveG){st.layer.remove(D.liveG);disposeG(D.liveG);}drawing=null;
-    if(D.raw.length>=1){const s=D.stroke();commit(D.o,st.strokes.concat([s]));}
+    snapEl.style.display='none';
+    if(D.raw.length>=1){const s=D.stroke();let ls2=null;const ly=layerOf(st,s.ly);
+      if(!ly.plane&&B.plane!=='photo'){const n=D.plane.normal.clone().transformDirection(new THREE.Matrix4().copy(D.o.holder.matrixWorld).invert()),pp=D.o.holder.worldToLocal(D.plane.coplanarPoint(new THREE.Vector3()));ls2=cloneL(st.layers);ls2.find(l=>l.id===ly.id).plane={p:pp.toArray().map(q4),n:n.toArray().map(q4)};} // the layer remembers its plane: later strokes on it share the same depth
+      commit(D.o,st.strokes.concat([s]),ls2);}
     bump();
   }
   function cancelDraw(){const D=drawing;if(!D)return;if(D.liveG){const st=D.o.meta.sigil;st.layer.remove(D.liveG);disposeG(D.liveG);}drawing=null;bump();}
   function eraseAt(e){
     const D=drawing,st=D.o.meta.sigil,rr=rayAt(e),hs=rr.intersectObjects(st.layer.children,true);
+    const hh=hs.find(h=>{let g=h.object;while(g&&!g.userData.src)g=g.parent;const sc=g&&g.userData.src;return !sc||(layerOf(st,sc.ly).vis!==false&&!layerOf(st,sc.ly).lock);});
+    if(hh)hs.splice(0,hs.length,hh);else hs.length=0;
     if(hs[0]){const id=hs[0].object.userData.sid;const left=st.strokes.filter(s=>s.id!==id);if(left.length!==st.strokes.length){st.strokes=left;sync(D.o);D.changed=true;bump();}}
   }
   canvas.addEventListener('pointerdown',onDown,true);canvas.addEventListener('pointermove',onMove,true);
@@ -234,6 +281,7 @@ export function createSigil(c){
   function setMode(m){B.mode=m;canvas.style.cursor=m==='orbit'?'grab':'crosshair';ring.style.display='none';sync_ui&&sync_ui();}
   /* ---------- tab enter / leave ---------- */
   SG.onTab=id=>{
+    try{markAnchor();}catch(e){}
     if(id==='draw'){S.pivot=false;S.gizmo=null;if(tc)tc.detach();canvas.style.cursor=B.mode==='orbit'?'grab':'crosshair';const o=target();if(o&&S.sel!==o.id)selectObj(o.id);paint();}
     else{canvas.style.cursor='';ring.style.display='none';cancelDraw();}
   };
@@ -243,11 +291,78 @@ export function createSigil(c){
     const o=target();
     if(infoEl)infoEl.textContent=o?(o.name+' · '+o.meta.sigil.strokes.length+' stroke'+(o.meta.sigil.strokes.length===1?'':'s')+(o.meta.sigil.photo?' · photo':'')):'Nothing yet. Draw to start.';
     if(undoB)undoB.disabled=!o||!o.meta.sigil.undo.length;if(redoB)redoB.disabled=!o||!o.meta.sigil.redo.length;
+    paintLayers();
     if(planeRow)planeRow.querySelectorAll('.chip').forEach(c=>c.setAttribute('aria-pressed',B.plane===c.dataset.v));
     if(photoRow)photoRow.querySelectorAll('[data-needs-photo]').forEach(b=>b.hidden=!(o&&o.meta.sigil.photo));
   }
+
+  /* ---------- the drawing plane's anchor point, and layers ---------- */
+  let anchorMesh=null,anchorBox=null,layerBox=null;
+  function markAnchor(){
+    if(!anchorMesh){anchorMesh=new THREE.Mesh(new THREE.OctahedronGeometry(.07),new THREE.MeshBasicMaterial({color:0xff5a1f,wireframe:true,depthTest:false,transparent:true}));anchorMesh.userData.noView=true;anchorMesh.renderOrder=999;scene.add(anchorMesh);}
+    anchorMesh.visible=!!B.anchor&&isDraw();if(B.anchor)anchorMesh.position.set(...B.anchor);bump();paintAnchor();
+  }
+  function paintAnchor(){
+    if(!anchorBox)return;anchorBox.innerHTML='';
+    const T=(t)=>{const d=el('div','note');d.textContent=t;return d;};
+    const r=el('div','chips');
+    r.append(btn(B.pick?'Click a spot…':'Pick a point','pri',()=>{B.pick=!B.pick;canvas.style.cursor=B.pick?'cell':'crosshair';paintAnchor();}),btn('Use view centre','',()=>{B.anchor=controls.target.toArray().map(q4);markAnchor();}),btn('Clear','',()=>{B.anchor=null;B.pick=false;markAnchor();}));
+    anchorBox.appendChild(r);
+    if(B.anchor)['X','Y','Z'].forEach((a,i)=>sliderRow(anchorBox,a,()=>B.anchor[i],v=>{B.anchor[i]=v;markAnchor();},-10,10,.01));
+    anchorBox.appendChild(T(B.anchor?'Screen, Wall and Floor drawing now go through this point. Type exact numbers by clicking a value.':'Pick a point, then Screen, Wall and Floor drawing go through it. Without one they use the view centre.'));
+  }
+  function layerCommit(o,mut){const st=o.meta.sigil,ls=cloneL(st.layers);mut(ls);commit(o,st.strokes.slice(),ls);}
+  function paintLayers(){
+    if(!layerBox)return;layerBox.innerHTML='';const o=target();if(!o){layerBox.appendChild(el('div','note','Draw something first.'));return;}
+    const st=o.meta.sigil;
+    st.layers.forEach((l,i)=>{
+      const n=st.strokes.filter(s=>(s.ly||'L1')===l.id).length,row=el('div','orow');row.setAttribute('aria-selected',st.curL===l.id);
+      const eye=el('button','',l.vis===false?'○':'◉');eye.title='Show or hide';eye.addEventListener('click',()=>layerCommit(o,a=>{a[i].vis=a[i].vis===false;}));
+      const nm=el('button','nm',l.name+' · '+n);nm.title='Draw on this layer';nm.addEventListener('click',()=>{st.curL=l.id;paintLayers();});
+      const lk=el('button','',l.lock?'🔒':'🔓');lk.title='Lock';lk.addEventListener('click',()=>layerCommit(o,a=>{a[i].lock=!a[i].lock;}));
+      const bd=el('span','badge',l.plane?'depth set':'free');
+      row.append(eye,nm,bd,lk);layerBox.appendChild(row);
+    });
+    const r=el('div','chips');
+    r.append(btn('New layer','pri',()=>{let k=st.layers.length+1;while(st.layers.some(l=>l.id==='L'+k))k++;const id='L'+k;layerCommit(o,a=>a.push({id,name:'Layer '+k,vis:true,lock:false,plane:null}));st.curL=id;paintLayers();}),
+      btn('Merge down','',()=>mergeDown(o)),btn('Reset depth','',()=>layerCommit(o,a=>{const l=a.find(x=>x.id===st.curL);if(l)l.plane=null;})),btn('Delete layer','',()=>delLayer(o)));
+    layerBox.appendChild(r);
+    const fl=document.createElement('label');fl.className='chip';fl.textContent='Flatten onto the lower layer’s depth ';const cb=document.createElement('input');cb.type='checkbox';cb.checked=!!B.flatten;cb.addEventListener('change',()=>{B.flatten=cb.checked;});fl.appendChild(cb);layerBox.appendChild(fl);
+    layerBox.appendChild(el('div','note','Each layer remembers the depth of its first stroke. Choose “Layer depth” under Draw on to keep adding to that same depth. Merge down joins this layer into the one below so they move and look as one.'));
+  }
+  function mergeDown(o){
+    const st=o.meta.sigil,i=st.layers.findIndex(l=>l.id===st.curL);if(i<=0){toast('This is the bottom layer. There is nothing below to merge into.');return;}
+    const src=st.layers[i],dst=st.layers[i-1];
+    const proj=(s)=>{ // flatten: slide every point onto the lower layer's plane
+      if(!B.flatten||!dst.plane)return s;const n=new THREE.Vector3(...dst.plane.n).normalize(),pp=new THREE.Vector3(...dst.plane.p),pts=s.pts.slice(),v=new THREE.Vector3();
+      for(let k=0;k<pts.length;k+=3){v.set(pts[k],pts[k+1],pts[k+2]);const d=v.clone().sub(pp).dot(n);v.addScaledVector(n,-d);pts[k]=q4(v.x);pts[k+1]=q4(v.y);pts[k+2]=q4(v.z);}
+      return {...s,pts};};
+    const strokes=st.strokes.map(s=>(s.ly||'L1')===src.id?{...proj(s),ly:dst.id}:s),ls=cloneL(st.layers).filter(l=>l.id!==src.id);
+    st.curL=dst.id;commit(o,strokes,ls);toast('Merged “'+src.name+'” into “'+dst.name+'”');
+  }
+  function delLayer(o){
+    const st=o.meta.sigil;if(st.layers.length<2){toast('A drawing needs at least one layer.');return;}
+    const id=st.curL,strokes=st.strokes.filter(s=>(s.ly||'L1')!==id),ls=cloneL(st.layers).filter(l=>l.id!==id);st.curL=ls[Math.max(0,ls.findIndex(()=>true))].id;commit(o,strokes,ls);toast('Layer deleted. Undo brings it back.');
+  }
+  /* ---------- n0ise brand: noise-grain strip with the Sigil mark ---------- */
+  function brand(parent){
+    const b=el('div');b.style.cssText='position:relative;margin:0 0 12px;border:1px solid var(--n-line,#2a2927);border-radius:3px;overflow:hidden;background:#0a0a0a';
+    const cv=document.createElement('canvas');cv.width=120;cv.height=40;cv.style.cssText='display:block;width:100%;height:72px;image-rendering:pixelated;opacity:.9';cv.setAttribute('aria-hidden','true');
+    const lab=document.createElement('div');lab.style.cssText='position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;padding:0 14px;pointer-events:none;mix-blend-mode:normal';
+    lab.innerHTML='<div style="font:600 9px var(--n-mono,ui-monospace,monospace);letter-spacing:.2em;color:#cfc9bd;text-shadow:0 1px 2px #000">N0ISE / SPATIAL FORM</div><div style="font:800 26px/1 var(--n-display,Syne,system-ui);letter-spacing:-.04em;color:#f2efe8;text-shadow:0 2px 6px #000">sigil<span style="color:#ff5a1f">.</span><span style="font:600 10px var(--n-mono,monospace);letter-spacing:.18em;margin-left:8px;color:#ff9b6b">02</span></div>';
+    b.append(cv,lab);parent.appendChild(b);
+    const g=cv.getContext('2d'),img=g.createImageData(120,40);let t=0,seed=7;const rnd=()=>{seed=(seed*1664525+1013904223)>>>0;return seed/4294967296;};
+    function draw(){
+      if(S.tab!=='draw'||document.hidden)return;
+      const d=img.data;for(let y=0;y<40;y++)for(let x=0;x<120;x++){const i=(y*120+x)*4,n=rnd(),band=Math.sin((x*.07)+t*.9+Math.sin(y*.22+t)*1.4)*.5+.5,v=Math.min(255,(n*n*150+band*70)|0);
+        const hot=n>.985?1:0;d[i]=hot?255:v;d[i+1]=hot?90:v*.92;d[i+2]=hot?31:v*.85;d[i+3]=255;}
+      g.putImageData(img,0,0);t+=.18;
+    }
+    draw();setInterval(draw,120); // slow, low-res grain: costs almost nothing, and only runs while this tab is showing
+  }
   SG.build=parent=>{
     paneHost=parent;const T=(t,s)=>{const d=el('div','note');d.textContent=t;if(s)d.style.cssText=s;return d;};
+    brand(parent);
     const s0=sec(parent,'Drawing');infoEl=T('');infoEl.style.fontWeight='600';s0.appendChild(infoEl);
     const modes=chipRow(s0,[['draw','Draw'],['erase','Erase'],['orbit','Orbit']],v=>B.mode===v,v=>setMode(v));
     const ur=el('div','chips');undoB=btn('Undo','',undo);redoB=btn('Redo','',redo);
@@ -262,9 +377,16 @@ export function createSigil(c){
     chipRow(s1,[['auto','Pen or speed'],['speed','Speed'],['even','Even']],v=>B.press===v,v=>{B.press=v;});
     chipRow(s1,[['round','Round'],['flat','Flat ribbon']],v=>B.style===v,v=>{B.style=v;});
     const s2=sec(parent,'Draw on','where the line lands');
-    planeRow=chipRow(s2,[['view','Screen'],['surface','Surface'],['floor','Floor'],['wall','Wall'],['photo','Photo']],v=>B.plane===v,v=>{B.plane=v;});
+    planeRow=chipRow(s2,[['view','Screen'],['surface','Surface'],['layer','Layer depth'],['floor','Floor'],['wall','Wall'],['photo','Photo']],v=>B.plane===v,v=>{B.plane=v;});
     sliderRow(s2,'Screen depth',()=>B.off,v=>{B.off=v;},-4,4,.05,v=>(+v).toFixed(2));
     s2.appendChild(T('Screen: a plane facing you through the view centre. Surface: sticks to whatever is under the cursor. Strokes from different angles cross each other in real 3D.'));
+    const sS=sec(parent,'Snap','connect lines');
+    chipRow(sS,[['ends','Line ends'],['lines','Along lines'],['grid','Grid'],['off','Off']],v=>B.snap===v,v=>{B.snap=v;const o=target();if(o)o.meta.sigil.cand=null;});
+    sliderRow(sS,'Snap reach',()=>B.snapPx,v=>{B.snapPx=v;},6,40,1,v=>Math.round(v)+' px');
+    sliderRow(sS,'Grid size',()=>B.grid,v=>{B.grid=Math.max(.01,v);},.02,1,.01,v=>(+v).toFixed(2));
+    sS.appendChild(T('An orange ring shows what the line will connect to. A new line that starts on a ring keeps that point\u2019s depth, so shapes join up exactly in 3D. Closing a loop on your own start works too.'));
+    const sP=sec(parent,'Draw at a point','anchor');anchorBox=el('div');sP.appendChild(anchorBox);paintAnchor();
+    const sL=sec(parent,'Layers','depth sheets');layerBox=el('div');sL.appendChild(layerBox);paintLayers();
     const s3=sec(parent,'Material');
     const grid=el('div');grid.style.cssText='display:grid;grid-template-columns:repeat(3,1fr);gap:6px';
     const sw={};
@@ -294,12 +416,13 @@ export function createSigil(c){
   SG.snap=o=>o.meta&&o.meta.sigil?{sg:o.meta.sigil.rev}:null;
   SG.apply=(o,fm)=>{if(o.meta&&o.meta.sigil&&fm&&fm.sg!=null&&fm.sg!==o.meta.sigil.rev)setRev(o,fm.sg);};
   /* ---------- project files ---------- */
-  SG.projectItem=o=>{const st=o.meta.sigil,h=o.holder;return{kind:'sigil',name:o.name,tr:{p:h.position.toArray(),r:[h.rotation.x,h.rotation.y,h.rotation.z],s:h.scale.toArray()},vis:o.vis,strokes:st.strokes,hasPhoto:!!st.photo};};
+  SG.projectItem=o=>{const st=o.meta.sigil,h=o.holder;return{kind:'sigil',name:o.name,tr:{p:h.position.toArray(),r:[h.rotation.x,h.rotation.y,h.rotation.z],s:h.scale.toArray()},vis:o.vis,strokes:st.strokes,layers:st.layers,hasPhoto:!!st.photo};};
   SG.photoOf=o=>o.meta.sigil.photo;
   SG.fromItem=(it,photoCv)=>{
     const o=create({name:it.name||'Drawing'});const st=o.meta.sigil;
     st.strokes=(it.strokes||[]).filter(s=>s&&Array.isArray(s.pts)&&Array.isArray(s.w)&&s.pts.length===s.w.length*3&&s.w.length<=LIM.pts&&s.pts.every(Number.isFinite)).slice(0,LIM.strokes).map(s=>({...s,m:MATS[s.m]?s.m:'chrome'}));
-    st.revs.set(0,st.strokes.slice());sync(o);if(photoCv)setPhoto(o,photoCv);
+    if(Array.isArray(it.layers)&&it.layers.length)st.layers=it.layers.slice(0,32).map((l,i)=>({id:String(l.id||'L'+(i+1)).slice(0,12),name:String(l.name||'Layer '+(i+1)).slice(0,30),vis:l.vis!==false,lock:!!l.lock,plane:l.plane&&Array.isArray(l.plane.p)&&Array.isArray(l.plane.n)&&l.plane.p.every(Number.isFinite)&&l.plane.n.every(Number.isFinite)?{p:l.plane.p.slice(0,3),n:l.plane.n.slice(0,3)}:null}));
+    st.curL=st.layers[0].id;st.revs.set(0,{s:st.strokes.slice(),l:cloneL(st.layers)});sync(o);if(photoCv)setPhoto(o,photoCv);
     o.holder.position.fromArray(it.tr.p);o.holder.rotation.set(...it.tr.r);o.holder.scale.fromArray(it.tr.s);o.vis=it.vis!==false;o.holder.visible=o.vis;
     return o;
   };

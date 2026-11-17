@@ -96,7 +96,7 @@ export function createApi(c){
     bump();return{id:a.id};
   }
   function ensureGround(on,color,size){
-    if(!groundMesh){groundMesh=new THREE.Mesh(new THREE.PlaneGeometry(1,1).rotateX(-Math.PI/2),new THREE.MeshStandardMaterial({color:'#8a8a86',roughness:.95,metalness:0}));groundMesh.userData.noView=true;groundMesh.receiveShadow=true;groundMesh.position.y=-.002;scene.add(groundMesh);}
+    if(!groundMesh){groundMesh=new THREE.Mesh(new THREE.PlaneGeometry(1,1).rotateX(-Math.PI/2),new THREE.MeshStandardMaterial({color:'#8a8a86',roughness:.95,metalness:0}));groundMesh.userData.noView=true;groundMesh.userData.ground=true;groundMesh.receiveShadow=true;groundMesh.position.y=-.002;scene.add(groundMesh);}
     groundMesh.visible=!!on;if(color)groundMesh.material.color.set(color);if(size)groundMesh.scale.set(size,1,size);
   }
   function envCmd(a){

@@ -225,6 +225,7 @@ export function createWorldBuilder(c){
         case 'teleport':{walk.place(a.pos[0],a.pos[1],a.pos[2]);if(a.yaw!=null&&walk.setYaw)walk.setYaw(a.yaw*D2R);break;}
         case 'collect':{const o=W.map.get(a.target);if(!o||!o.vis)return;o.vis=false;o.holder.visible=false;W.collected++;W.flags.set('collected',W.collected);const tot=[...W.map.values()].length;R.sound('ding');walk.refreshBoxes&&walk.refreshBoxes();toast('Collected '+W.collected,1500);break;}
         case 'destroy':{const o=W.map.get(a.target);if(!o||!o.vis)return;o.vis=false;o.holder.visible=false;R.sound('thud');walk.refreshBoxes&&walk.refreshBoxes();break;}
+        case 'ragdoll':W.ragdoll&&W.ragdoll.start({push:a.push,up:a.up});break;
         case 'set-flag':W.flags.set(a.flag,a.value);break;
         case 'show-message':toast(a.text,Math.round(a.seconds*1000));break;
         case 'play-sound':R.sound(a.sound);break;

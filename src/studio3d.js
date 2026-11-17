@@ -27,6 +27,7 @@ import {WORLD_BRIEF} from './world-brief.js';
 import {createForms} from './formobj.js';
 import {createMechanics} from './mechanics.js';
 import {createSigil} from './sigil.js';
+import {createRagdoll} from './ragdoll.js';
 import {validateFormFile} from './form-schema.js';
 import {FORM_BRIEF} from './form-brief.js';
 import {createSceneDoc} from './scenedoc.js';
@@ -143,10 +144,13 @@ controls.addEventListener('change',bump);
 let idc=0;
 /* the sky is a look target too: not a scene object, but it carries a look or effect stack like one and is masked by where nothing else is */
 const SKY={id:'sky',name:'Sky',kind:'sky',vis:true,holder:{visible:true},meta:{}};
-const objById=id=>id==='sky'?SKY:S.objs.find(o=>o.id===id);
-let NW=null,FORM=null,MECH=null,SIG=null; // the .n0world builder, created once the scene API exists
+/* more things that can carry a look besides objects: the lighting (wherever it is bright: lit surfaces and glow) and the ground */
+const LIGHTO={id:'light',name:'Lighting',kind:'light',vis:true,holder:{visible:true},meta:{}},GROUNDO={id:'ground',name:'Ground',kind:'ground',vis:true,holder:{visible:true},meta:{}};
+const PSEUDO=[SKY,LIGHTO,GROUNDO];
+const objById=id=>id==='sky'?SKY:id==='light'?LIGHTO:id==='ground'?GROUNDO:S.objs.find(o=>o.id===id);
+let NW=null,FORM=null,MECH=null,SIG=null,RAG=null; // the .n0world builder, created once the scene API exists
 const SAFE_MODE=/[?&]safe=1/.test(location.search),WORLD_ON=!/[?&]n0world=0/.test(location.search);
-const anyLook=()=>!!SKY.look||S.objs.some(x=>x.look);
+const anyLook=()=>PSEUDO.some(x=>x.look)||S.objs.some(x=>x.look);
 const claymat=new THREE.MeshStandardMaterial({color:0xd8d4cc,roughness:.92,metalness:0});
 const normmat=new THREE.MeshNormalMaterial();
 const depthmat=new THREE.MeshDepthMaterial();
@@ -770,6 +774,7 @@ void main(){
     float n=0.;for(int i=0;i<4;i++){vec2 d=i==0?vec2(uPx.x,0.):i==1?vec2(-uPx.x,0.):i==2?vec2(0.,uPx.y):vec2(0.,-uPx.y);vec4 r=texture(uM,vUv+d);n=max(n,uMA>.5?r.a:r.r);}
     m=max(m,n*.65);
   }
+  else if(uMode>3.5){float l=dot(o3,vec3(.2126,.7152,.0722));m=smoothstep(.42,.82,l);}
   else if(uMode>2.5){
     float z0=lin(texture(uD,vUv).r);
     float e=max(max(abs(lin(texture(uD,vUv+vec2(uPx.x,0.)).r)-z0),abs(lin(texture(uD,vUv-vec2(uPx.x,0.)).r)-z0)),max(abs(lin(texture(uD,vUv+vec2(0.,uPx.y)).r)-z0),abs(lin(texture(uD,vUv-vec2(0.,uPx.y)).r)-z0)));
@@ -783,6 +788,17 @@ const selMat=new THREE.MeshBasicMaterial({color:0xffffff,side:THREE.DoubleSide})
 const skyMat=new THREE.MeshBasicMaterial({color:0xffffff,side:THREE.DoubleSide,depthTest:false,depthWrite:false,fog:false});
 const blkMat=new THREE.MeshBasicMaterial({color:0x000000,side:THREE.DoubleSide});
 /* the sky's mask: white wherever no object is. Everything solid draws black over it, the sky dome (or the empty background) is the white. */
+function renderGroundMask(){
+  S.maskA=0;const gv=grid.visible,sbv=selBox?selBox.visible:false,tv=tcHelper.visible;
+  grid.visible=false;if(selBox)selBox.visible=false;tcHelper.visible=false;
+  const envOld=scene.environment,fogOld=scene.fog;scene.environment=null;scene.fog=null;LGT.skyVis(false);
+  const swaps=[];
+  scene.traverseVisible(n=>{if(!n.isMesh||n.isSplatMesh)return;swaps.push([n,n.material]);const mm=n.userData.maskMat;n.material=n.userData.ground?selMat:(mm?mm.blk:blkMat);});
+  renderer.setRenderTarget(maskRT);renderer.setClearColor(0x000000,0);renderer.clear();renderer.render(scene,camera);
+  swaps.forEach(([n,m])=>{n.material=m;});
+  grid.visible=gv;if(selBox)selBox.visible=sbv;tcHelper.visible=tv;scene.environment=envOld;scene.fog=fogOld;LGT.skyVis(true);
+  return true;
+}
 function renderSkyMask(){
   S.maskA=0;const gv=grid.visible,sbv=selBox?selBox.visible:false,tv=tcHelper.visible;
   grid.visible=false;if(selBox)selBox.visible=false;tcHelper.visible=false;
@@ -802,6 +818,8 @@ function renderSkyMask(){
 function renderSelMask(oo){
   const o=oo||objById(S.fxTarget!=null?S.fxTarget:S.sel);if(!o||!maskRT){if(maskRT){renderer.setRenderTarget(maskRT);renderer.setClearColor(0x000000,0);renderer.clear();}S.maskA=0;return false;}
   if(o===SKY)return renderSkyMask();
+  if(o===LIGHTO){S.maskA=0;renderer.setRenderTarget(maskRT);renderer.setClearColor(0x000000,0);renderer.clear();return true;} // the lighting mask is computed from the picture's brightness in the composite
+  if(o===GROUNDO)return renderGroundMask();
   const isSp=o.kind==='splat'||(o.meta&&o.meta.mode==='splats');S.maskA=isSp?1:0;
   const vis=S.objs.map(x=>x.holder.visible);
   if(isSp)S.objs.forEach(x=>{x.holder.visible=x===o&&x.vis;});
@@ -826,8 +844,8 @@ const cloneP=()=>JSON.parse(JSON.stringify(N0.P));
 let lookRT=[null,null],lookRTkey='';
 /* hardware profiles carry a text readout (REC, timestamps, terminal text). It is off by default; the look itself is untouched. */
 function renderFx(base,t,dt,live){const k=N0.P.ton;if(!S.hwText)N0.P.ton=false;try{return N0.render(base,t,dt,live);}finally{N0.P.ton=k;}}
-function lookObjs(){return [SKY,...S.objs].filter(o=>o.look&&o.vis!==false&&o.holder.visible);}
-function stackObjs(){return [SKY,...S.objs].filter(o=>o.stack&&o.vis!==false&&o.holder.visible);}
+function lookObjs(){return [...PSEUDO,...S.objs].filter(o=>o.look&&o.vis!==false&&o.holder.visible);}
+function stackObjs(){return [...PSEUDO,...S.objs].filter(o=>o.stack&&o.vis!==false&&o.holder.visible);}
 /* Per-object appearance. Every object keeps its own hardware look (CRT engine) or effect stack. Picking an object saves the one you
    were editing back to it and loads the new one's. An object with nothing yet keeps the current controls as a starting point, and the
    first change you make to them gives it its own copy. Nothing is shared by reference. */
@@ -857,10 +875,11 @@ function removeStack(o){if(!o)return;delete o.stack;if(FXE.iw&&FXE.iw.__embedDro
 function addLook(o){if(!o)return;S.lookOff=false;o.look=cloneP();S.apprSnap=apprGet();S.fx=true;S.mask.mode=2;bump();updateLookUI();toast('Look added to '+o.name);}
 function removeLook(o){if(!o)return;delete o.look;S.lookOff=true;bump();updateLookUI();toast('Look removed from '+o.name);}
 let lookUI=null;
-function pickSky(){
-  lookSwitch(S.fxTarget,'sky');S.fxTarget='sky';S.sel=null;S.fx=true;S.mask.mode=2;
+function pickSky(id){
+  id=typeof id==='string'?id:'sky';const po=objById(id);
+  lookSwitch(S.fxTarget,id);S.fxTarget=id;S.sel=null;S.fx=true;S.mask.mode=2;
   if(tc.object)tc.detach();setSelBox();renderObjList&&renderObjList();refreshInspector&&refreshInspector();updateLookUI();bump();
-  toast('Editing the sky. Change the controls, then press Add look.');
+  toast('Editing the '+po.name.toLowerCase()+'. Change the controls, then press Add look.');
 }
 function updateLookUI(){try{paintBadge();}catch(e){}if(!lookUI)return;const st=S.engine==='stack',key=st?'stack':'look',o=objById(S.fxTarget!=null?S.fxTarget:S.sel),n=S.objs.filter(x=>x[key]).length;
   lookUI.name.textContent=o?o.name:'Nothing picked';lookUI.add.textContent=o&&o[key]?(st?'Update effects':'Update look'):(st?'Add effects':'Add look');lookUI.add.disabled=!o;lookUI.rm.textContent=st?'Remove effects':'Remove look';lookUI.rm.hidden=!(o&&o[key]);
@@ -872,7 +891,7 @@ function followPlayer(eo){
   const pl=S.objs.find(x=>x.meta&&x.meta.player);if(!pl||!pl.meta.fxAuto)return;
   const key=apprKey();
   if(eo===pl){if(pl[key]&&pl.meta.fxSnap&&JSON.stringify(pl[key])!==pl.meta.fxSnap)pl.meta.fxAuto=false;return;}
-  const src=eo&&eo!==SKY&&eo[key]?eo:S.objs.find(x=>x!==pl&&x[key]);if(!src)return;
+  const src=eo&&!PSEUDO.includes(eo)&&eo[key]?eo:S.objs.find(x=>x!==pl&&x[key]);if(!src)return;
   pl[key]=key==='look'?JSON.parse(JSON.stringify(src.look)):src.stack;pl.meta.fxSnap=JSON.stringify(pl[key]);
 }
 function drawLooks(cTex,t,dt,live,LO){
@@ -885,7 +904,7 @@ function drawLooks(cTex,t,dt,live,LO){
     renderer.setRenderTarget(null);
     gl.bindVertexArray(G.vao);G.bindRT(dst);if(!dst)gl.viewport(0,0,W,H);p.use();
     G.samp(p,'uO',0,base);G.samp(p,'uF',1,fx);G.samp(p,'uD',2,rtTex(rt.depthTexture));G.samp(p,'uM',3,rtTex(maskRT.texture));
-    p.f('uMode',2);p.f('uAmt',S.mask.amt);p.f('uFocus',0);p.f('uRange',1);p.f('uSoft',.1);p.f('uInv',S.mask.inv?1:0);p.f('uMA',S.maskA||0);p.f('uCamN',camera.near);p.f('uCamF',camera.far);p.v2('uPx',1/curW,1/curH);
+    p.f('uMode',o===LIGHTO?4:2);p.f('uAmt',S.mask.amt);p.f('uFocus',0);p.f('uRange',1);p.f('uSoft',.1);p.f('uInv',S.mask.inv?1:0);p.f('uMA',S.maskA||0);p.f('uCamN',camera.near);p.f('uCamF',camera.far);p.v2('uPx',1/curW,1/curH);
     G.draw();gl.bindVertexArray(null);gl.useProgram(null);renderer.resetState(); // raw GL above leaves state three has cached; the next object's mask render needs it clean
     if(dst)base=dst.tex;
   });
@@ -904,7 +923,7 @@ function drawStackLooks(cTex,t,dt,SO){
     renderer.setRenderTarget(null);
     gl.bindVertexArray(G.vao);G.bindRT(dst);if(!dst)gl.viewport(0,0,W,H);p.use();
     G.samp(p,'uO',0,base);G.samp(p,'uF',1,fx);G.samp(p,'uD',2,rtTex(rt.depthTexture));G.samp(p,'uM',3,rtTex(maskRT.texture));
-    p.f('uMode',2);p.f('uAmt',S.mask.amt);p.f('uFocus',0);p.f('uRange',1);p.f('uSoft',.1);p.f('uInv',S.mask.inv?1:0);p.f('uMA',S.maskA||0);p.f('uCamN',camera.near);p.f('uCamF',camera.far);p.v2('uPx',1/curW,1/curH);
+    p.f('uMode',o===LIGHTO?4:2);p.f('uAmt',S.mask.amt);p.f('uFocus',0);p.f('uRange',1);p.f('uSoft',.1);p.f('uInv',S.mask.inv?1:0);p.f('uMA',S.maskA||0);p.f('uCamN',camera.near);p.f('uCamF',camera.far);p.v2('uPx',1/curW,1/curH);
     G.draw();gl.bindVertexArray(null);gl.useProgram(null);renderer.resetState(); // raw GL above leaves state three has cached; the next object's mask render needs it clean
     if(dst)base=dst.tex;else base=null;
   });
@@ -937,6 +956,7 @@ function frame(ts){
     if(NW)NW.tick(dt);
     if(FORM)FORM.tick(t);
     if(MECH)MECH.tick(dt);
+    if(RAG){if(RAG.active&&!walk.on)RAG.stop('exit');else RAG.tick(dt);}
     if(selBox)selBox.update();
     grid.visible=S.grid&&!S.exporting&&!S.walk;
     if(selBox)selBox.visible=!S.exporting&&S.sel!=null&&!S.walk;
@@ -1969,7 +1989,7 @@ function wireSheet(){
 let suppressTab=false;
 
 /* ---------- tabs ---------- */
-const TABN=[['world','World'],['scene','Scene'],['draw','Draw'],['scan','Scan'],['look','Look'],['export','Export']];
+const TABN=[['world','World'],['scene','Scene'],['draw','Sigil'],['scan','Scan'],['look','Look'],['export','Export']];
 const paneEls={};
 addEventListener('pointerup',e=>{if(e.target.closest&&e.target.closest('#panes'))S.apprTouch=performance.now();},true);addEventListener('input',e=>{if(e.target.closest&&e.target.closest('#panes'))S.apprTouch=performance.now();},true);addEventListener('change',e=>{if(e.target.closest&&e.target.closest('#panes'))S.apprTouch=performance.now();},true);
 function setTab(id){
@@ -2020,7 +2040,7 @@ function buildScenePane(){
   const s1=sec(p,'Objects');
   objListEl=el('div','olist');s1.appendChild(objListEl);
   const grp=(title,open)=>{const d=el('details','acc');if(open)d.open=true;d.innerHTML=`<summary>${title}</summary>`;const inn=el('div','in');inn.classList.add('chips');d.appendChild(inn);s1.appendChild(d);return inn;};
-  const top=el('div','chips');top.style.margin='8px 0';top.append(btn('Import files','pri',()=>$('#file').click()),btn('Draw in 3D','',()=>{setTab('draw');if(!mqDesk.matches)sheet.setIdx(1);}),btn('Sample photo','',()=>addPhoto('fold',sampleCanvas())));s1.appendChild(top);
+  const top=el('div','chips');top.style.margin='8px 0';top.append(btn('Import files','pri',()=>$('#file').click()),btn('Sigil: draw in 3D','',()=>{setTab('draw');if(!mqDesk.matches)sheet.setIdx(1);}),btn('Sample photo','',()=>addPhoto('fold',sampleCanvas())));s1.appendChild(top);
   const gS=grp('Shapes',true);Object.keys(PRIMS).forEach(k=>gS.appendChild(btn('+ '+k,'',()=>addPrimitive(k))));
   const gC=grp('Characters and sound');
   gC.appendChild(btn('+ Human','',async()=>{try{await api.run({cmd:'add',type:'human'});api.run({cmd:'camera',frame:true});}catch(e){toast(e.message||String(e));}}));
@@ -2242,7 +2262,7 @@ function buildLookPane(){
     if(S.mask.mode===1||S.mask.mode===3)sliderRow(mk,'Softness',()=>S.mask.soft,v=>{S.mask.soft=v;bump();},.02,6,.02);
     if(S.mask.mode===2){const bx=el('div','lookbox');const nm=el('div','sub','');const row=el('div','chips');
       const tgtO=()=>objById(S.fxTarget!=null?S.fxTarget:S.sel);const add=btn('Add look','pri',()=>S.engine==='stack'?addStack(tgtO()):addLook(tgtO()));const rm=btn('Remove look','',()=>S.engine==='stack'?removeStack(tgtO()):removeLook(tgtO()));
-      row.append(add,rm);const skyB=btn('Look on the sky','',()=>pickSky());row.appendChild(skyB);const cnt=el('div','note','');bx.append(nm,row,cnt,el('div','note','Tap an object, shape its effects, then tap another and give it different ones. Each object keeps its own. The camera, the character and any object can have effects.'));mk.appendChild(bx);lookUI={name:nm,add,rm,cnt};updateLookUI();}
+      row.append(add,rm);const skyB=btn('Look on the sky','',()=>pickSky('sky')),ltB=btn('Look on the lighting','',()=>pickSky('light')),gdB=btn('Look on the ground','',()=>pickSky('ground'));row.append(skyB,ltB,gdB);const cnt=el('div','note','');bx.append(nm,row,cnt,el('div','note','Tap an object, shape its effects, then tap another and give it different ones. Each object keeps its own. The camera, the character and any object can have effects.'));mk.appendChild(bx);lookUI={name:nm,add,rm,cnt};updateLookUI();}
     if(S.mask.mode>0){const c=el('div','chips');const b=el('button','chip','Invert');b.setAttribute('aria-pressed',S.mask.inv);b.addEventListener('click',()=>{S.mask.inv=!S.mask.inv;b.setAttribute('aria-pressed',S.mask.inv);bump();});c.appendChild(b);
       if(S.mask.mode===1){const f=btn('Focus on target','',()=>{S.mask.focus=controls.getDistance();syncMask();bump();});c.appendChild(f);}mk.appendChild(c);}
   }
@@ -2449,7 +2469,7 @@ async function projectFiles(){
     }else if(o.kind==='mesh'&&PRIMS[o.name]&&o.root.material&&o.root.material.color)items.push({kind:'prim',name:o.name,tr,vis:o.vis,color:o.root.material.color.getHex(),ap:apprOf(o),phys:(m&&m.phys)||null});
     else skipped.push(o.name);
   }
-  const pj={n0ise:'studio',v:1,items,skipped,view:{view:S.view,bg:S.bg,env:S.env,grid:S.grid,fx:S.fx,mask:S.mask},engine:S.engine,light:LGT.state(),sky:{look:SKY.look||null,stack:SKY.stack||null},cam:{p:camera.position.toArray(),t:controls.target.toArray()}};
+  const pj={n0ise:'studio',v:1,items,skipped,view:{view:S.view,bg:S.bg,env:S.env,grid:S.grid,fx:S.fx,mask:S.mask},engine:S.engine,light:LGT.state(),sky:{look:SKY.look||null,stack:SKY.stack||null},pseudo:{light:{look:LIGHTO.look||null,stack:LIGHTO.stack||null},ground:{look:GROUNDO.look||null,stack:GROUNDO.stack||null}},cam:{p:camera.position.toArray(),t:controls.target.toArray()}};
   if(worldSeen&&NW){try{NW.lightsCache=(await api.run({cmd:'scene'})).lights;}catch(e){}pj.world=NW.exportDoc().doc;}
   files['project.json']=new TextEncoder().encode(JSON.stringify(pj));
   return {files,skipped,count:items.length+(worldSeen?1:0)};
@@ -2483,6 +2503,7 @@ async function loadProject(u8){
   if(pj.cam){camera.position.fromArray(pj.cam.p);controls.target.fromArray(pj.cam.t);controls.update();S.needFrame=false;}
   if(pj.light)await LGT.restoreState(pj.light);
   delete SKY.look;delete SKY.stack;if(pj.sky){if(pj.sky.look)SKY.look=pj.sky.look;if(pj.sky.stack)SKY.stack=pj.sky.stack;}
+  [LIGHTO,GROUNDO].forEach(po=>{delete po.look;delete po.stack;const d=pj.pseudo&&pj.pseudo[po.id];if(d){if(d.look)po.look=d.look;if(d.stack)po.stack=d.stack;}});
   applyView();renderObjList&&renderObjList();refreshInspector&&refreshInspector();bump();
   return {count:pj.items.length,skipped:pj.skipped||[]};
 }
@@ -2637,6 +2658,8 @@ async function exportWorldFile(){
 }
 /* ---- FORM: generated objects that keep their recipe ---- */
 FORM=createForms({THREE,S,addGroup,toast,bump,renderObjList:()=>renderObjList&&renderObjList(),setShadowFlags,applyView,DOC,SURF,MAT,uPush:()=>uPush&&uPush(),sliderRow,chipRow,btn,el,sec,selectObj,frameAll,autoPlace,deliver,matPresets:MATPRESETS});
+RAG=createRagdoll({THREE,scene,walk,S,bump,toast});window.__rag=RAG;
+if(NW){NW.ragdoll=RAG;}
 if(NW){MECH=createMechanics({THREE,S,walk,camera,canvas,scene,W:NW,toast,bump,objById});NW.mech=MECH;}
 SIG=createSigil({THREE,S,scene,camera,controls,canvas,registerObject,objById,selectObj,bump,uPush:()=>uPush&&uPush(),toast,el,btn,sec,sliderRow,chipRow,setShadowFlags,loadCanvas,tc,markDirty,applyView});SIG.build(paneEls.draw);window.__setTab=setTab;
 DOC.setFormHooks({snap:o=>FORM.snap(o)||SIG.snap(o),apply:(o,fm)=>fm&&fm.sg!=null?SIG.apply(o,fm):FORM.apply(o,fm)});
@@ -2732,7 +2755,7 @@ function shortcutSheet(){
     const T=(tag,t,st)=>{const e=document.createElement(tag);e.textContent=t;if(st)e.style.cssText=st;return e;};
     const chipSt=on=>'min-height:44px;padding:8px 12px;border-radius:12px;border:1px solid rgba(255,255,255,.25);background:'+(on?'#f2efe9':'rgba(255,255,255,.07)')+';color:'+(on?'#111':'#f2efe9')+';font:inherit;cursor:pointer';
     const playerObj=()=>S.objs.find(x=>x.meta&&x.meta.player);
-    const curObj=()=>{if(QL.target==='player')return playerObj()||null;const o=objById(S.sel!=null?S.sel:S.fxTarget)||(S.objs.length===1?S.objs[0]:null);return o&&o!==SKY?o:null;};
+    const curObj=()=>{if(QL.target==='player')return playerObj()||null;if(QL.target==='sky'||QL.target==='light'||QL.target==='ground')return objById(QL.target);const o=objById(S.sel!=null?S.sel:S.fxTarget)||(S.objs.length===1?S.objs[0]:null);return o&&!PSEUDO.includes(o)?o:null;};
     function apply(id){
       S.fx=true;S.engine='crt';
       if(id==='none'){
@@ -2755,7 +2778,7 @@ function shortcutSheet(){
       pop.appendChild(T('div','Hardware looks from old screens and cameras. Pick what it goes on, then a profile.','opacity:.75;margin-bottom:8px'));
       const row=document.createElement('div');row.style.cssText='display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px';
       const o=curObj();
-      [['selected',(()=>{const so=(()=>{const t=QL.target;QL.target='selected';const r=curObj();QL.target=t;return r;})();return so?'On '+(so.name.length>14?so.name.slice(0,13)+'…':so.name):'On selected object';})()],...(playerObj()&&(()=>{const t=QL.target;QL.target='selected';const r=curObj();QL.target=t;return r!==playerObj();})()?[['player','On the character']]:[]),['scene','Whole scene']].forEach(([v,l])=>{const b=T('button',l,chipSt(QL.target===v));b.type='button';b.addEventListener('click',()=>{QL.target=v;if(v==='scene'){S.mask.mode=0;}else{S.mask.mode=2;}S.fx=true;bump();paint();});row.appendChild(b);});
+      [['selected',(()=>{const so=(()=>{const t=QL.target;QL.target='selected';const r=curObj();QL.target=t;return r;})();return so?'On '+(so.name.length>14?so.name.slice(0,13)+'…':so.name):'On selected object';})()],...(playerObj()&&(()=>{const t=QL.target;QL.target='selected';const r=curObj();QL.target=t;return r!==playerObj();})()?[['player','On the character']]:[]),['sky','Sky'],['light','Lighting'],['ground','Ground'],['scene','Whole scene']].forEach(([v,l])=>{const b=T('button',l,chipSt(QL.target===v));b.type='button';b.addEventListener('click',()=>{QL.target=v;if(v==='scene'){S.mask.mode=0;}else{S.mask.mode=2;}S.fx=true;bump();paint();});row.appendChild(b);});
       pop.appendChild(row);
       const cur=QL.target==='scene'?(S.mask.mode===0&&S.fx?N0.P.profile:'none'):(o&&o.look?o.look.profile:'none');
       const grid=document.createElement('div');grid.style.cssText='display:flex;gap:6px;flex-wrap:wrap';
@@ -2792,10 +2815,11 @@ function shortcutSheet(){
   const info=mk('div','position:absolute;left:50%;top:calc(8% + 6px);transform:translateX(-50%);font:600 12px ui-monospace,monospace;color:#fff;text-shadow:0 1px 3px #000;letter-spacing:.08em');vf.appendChild(info);
   const flash=mk('div','position:fixed;inset:0;z-index:70;background:#fff;opacity:0;pointer-events:none;transition:opacity .35s');
   const strip=mk('div','position:fixed;z-index:61;left:calc(12px + env(safe-area-inset-left));bottom:calc(20px + env(safe-area-inset-bottom));display:none;gap:6px;max-width:55vw;overflow-x:auto');
-  document.body.append(toggle,shut,vf,flash,strip);
+  const rg=mk('button',btnCss+'top:calc(124px + env(safe-area-inset-top));right:calc(12px + env(safe-area-inset-right));display:none','RAGDOLL');rg.type='button';rg.setAttribute('aria-label','Ragdoll: go limp or get up (X)');rg.addEventListener('click',e=>{e.stopPropagation();RAG&&RAG.toggle();});
+  document.body.append(toggle,shut,vf,flash,strip,rg);
   let fov0=null;
   const label=()=>{info.textContent=Math.round(36/Math.tan(THREE.MathUtils.degToRad(camera.fov)/2)*.364)+' mm · '+(PH.roll.length?PH.roll.length+' photo'+(PH.roll.length>1?'s':''):'P takes a photo');};
-  function show(){const w=document.body.dataset.walk;toggle.style.display=w?'block':'none';shut.style.display=w&&PH.on?'block':'none';vf.style.display=w&&PH.on?'block':'none';strip.style.display=w&&PH.roll.length?'flex':'none';if(!w&&PH.on)set(false);}
+  function show(){const w=document.body.dataset.walk;rg.style.display=w?'block':'none';toggle.style.display=w?'block':'none';shut.style.display=w&&PH.on?'block':'none';vf.style.display=w&&PH.on?'block':'none';strip.style.display=w&&PH.roll.length?'flex':'none';if(!w&&PH.on)set(false);}
   function set(on){PH.on=on;toggle.setAttribute('aria-pressed',on);toggle.style.background=on?'#f2efe9':'rgba(20,20,22,.6)';toggle.style.color=on?'#111':'#fff';
     if(on){if(fov0==null)fov0=camera.fov;label();}else if(fov0!=null){camera.fov=fov0;camera.updateProjectionMatrix();fov0=null;}show();bump();}
   toggle.addEventListener('click',e=>{e.stopPropagation();set(!PH.on);});
@@ -2865,7 +2889,7 @@ if(/^#world/.test(location.hash)){setTab('world');worldEd.starter();}
       photo:()=>{close();const f=$('#file');f.accept='image/*';f.onchange=async()=>{await importFiles(f.files);f.value='';f.accept=FILE_ACCEPT;f.onchange=null;};f.click();},
       model:()=>{close();$('#file').click();},
       scan:()=>{close();setTab('scan');},
-      scene:()=>{close();setTab('scene');toast('Empty scene. Add a shape from the Scene tab, or draw in the Draw tab.',4000);}
+      scene:()=>{close();setTab('scene');toast('Empty scene. Add a shape from the Scene tab, or draw in the Sigil tab.',4000);}
     };
     L.querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=>go[b.dataset.go]()));
     addEventListener('keydown',e=>{if(!L.hidden&&e.key==='Escape')close();});
@@ -2909,4 +2933,4 @@ setTimeout(async()=>{const m=location.hash.match(/^#from=(\w+)/);if(!m)return;co
   if(!rec){toast('Nothing to open. Send a picture from the other page again.');return;}
   if(rec.meta&&rec.meta.form&&FORM){try{const j=JSON.parse(await rec.blob.text());await importFormFile(null,j,'local');}catch(e){toast('Couldn’t open the generator: '+(e.message||e),5000);}return;}
   await photoToRelief(new File([rec.blob],'from-'+m[1]+'.png',{type:rec.blob.type||'image/png'}));toast('Opened from '+m[1]);},1400);
-window.__studio={loadPlace,MECH:()=>MECH,FORM:()=>FORM,importFormFile,NW:()=>NW,worldImportSheet,exportWorldFile,validateWorld,addGroup,frame,get maskRT(){return maskRT;},renderSelMask,SKY,pickSky,followPlayer,DOC,LGT,MAT,openMatLab:c=>openMatLab({THREE,RoomEnvironment,el,btn,sliderRow,chipRow,toast,MAT,...c}),undo3,redo3,uPush,UH,apprOf,apprPut,apprWatch,autoPlace,SURF,addPhoto,sampleCanvas,S,N0,selectObj,addLook,removeLook,openInEffects,worldEd,api,walk,aiConnect,zipStore,zipRead,projectFiles,loadProject,saveProject,AUTO,autoStep,fxRandomise,fxEnsure,fxClear,FX3,SG,addViz,AU,buildViz,vizUpdate,enterRest,leaveRest,restTick,setFx,autoDepth,buildDepth,restD,MATTERS,CUT,autoCut,refineMask,applyAlpha,THREE,scene,camera,controls,renderer,importFiles,addPrimitive,sheet,SC,carve,surfaceNets,buildScan,makeRelief,pseudoDepth,photoToRelief,objById,removeObj,bump,setTab,rebuildRelief,applyView,frameAll,exportImage,get rt(){return rt;}};
+window.__studio={LIGHTO,GROUNDO,loadPlace,MECH:()=>MECH,FORM:()=>FORM,importFormFile,NW:()=>NW,worldImportSheet,exportWorldFile,validateWorld,addGroup,frame,get maskRT(){return maskRT;},renderSelMask,SKY,pickSky,followPlayer,DOC,LGT,MAT,openMatLab:c=>openMatLab({THREE,RoomEnvironment,el,btn,sliderRow,chipRow,toast,MAT,...c}),undo3,redo3,uPush,UH,apprOf,apprPut,apprWatch,autoPlace,SURF,addPhoto,sampleCanvas,S,N0,selectObj,addLook,removeLook,openInEffects,worldEd,api,walk,aiConnect,zipStore,zipRead,projectFiles,loadProject,saveProject,AUTO,autoStep,fxRandomise,fxEnsure,fxClear,FX3,SG,addViz,AU,buildViz,vizUpdate,enterRest,leaveRest,restTick,setFx,autoDepth,buildDepth,restD,MATTERS,CUT,autoCut,refineMask,applyAlpha,THREE,scene,camera,controls,renderer,importFiles,addPrimitive,sheet,SC,carve,surfaceNets,buildScan,makeRelief,pseudoDepth,photoToRelief,objById,removeObj,bump,setTab,rebuildRelief,applyView,frameAll,exportImage,get rt(){return rt;}};

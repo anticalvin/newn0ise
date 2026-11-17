@@ -28,6 +28,7 @@ export function createWalk(c){
       st.keys.add(e.code);if(e.code==='Space'){if(!e.repeat)jump();e.preventDefault();}
     }else{st.keys.delete(e.code);if(e.code==='Space')st.cut=true;}
   }
+  let hook=null;function setHook(f){hook=f||null;st.eyeO=null;st.hold=false;} // a ragdoll (or anything else) can take over where the character is
   function kick(a){st.pitch=Math.max(-1.45,Math.min(1.45,st.pitch+a));st.rec=(st.rec||0)+a*.7;} // a shot nudges the view up, then it settles back
   function look(dx,dy){st.yaw-=dx*.0032;st.pitch=Math.max(-1.45,Math.min(1.45,st.pitch-dy*.0032));}
   function onMouse(e){if(st.on&&document.pointerLockElement===canvas)look(e.movementX,e.movementY);}
@@ -66,7 +67,7 @@ export function createWalk(c){
     c.bump();
   }
   function exit(){
-    if(!st.on)return;st.on=false;S.walk=false;if(st.third&&TP.rig)TP.rig.set(0,0,0);if(st.saved&&st.saved.fov){camera.fov=st.saved.fov;camera.updateProjectionMatrix();}st.third=false;delete document.body.dataset.walk;
+    if(!st.on)return;hook=null;st.hold=false;st.eyeO=null;st.on=false;S.walk=false;if(st.third&&TP.rig)TP.rig.set(0,0,0);if(st.saved&&st.saved.fov){camera.fov=st.saved.fov;camera.updateProjectionMatrix();}st.third=false;delete document.body.dataset.walk;
     if(document.pointerLockElement===canvas)document.exitPointerLock();
     removeEventListener('keydown',onKey);removeEventListener('keyup',onKey);document.removeEventListener('mousemove',onMouse);
     canvas.removeEventListener('pointerdown',down);removeEventListener('pointermove',move);removeEventListener('pointerup',up);removeEventListener('pointercancel',up);
@@ -105,13 +106,14 @@ export function createWalk(c){
       }
     }
     if(hitClimb){st.climb=true;st.cdir=fz<0?1:-1;st.ground=false;st.vy=0;}else st.climb=false;
+    if(hook)hook(p,st);
     if(st.third&&TP.obj){
       const sp2=Math.hypot(vx,vz),mv=sp2>.05;
       if(mv){const tgt=Math.atan2(vx,vz)+(c.faceOffset||0);let d=tgt-TP.face;d=Math.atan2(Math.sin(d),Math.cos(d));TP.face+=d*Math.min(1,dt*12);}
       TP.amt+=((mv&&st.ground?Math.min(1,sp2/3):0)-TP.amt)*Math.min(1,dt*10);TP.ph+=sp2*dt*(sp2>4?2.1:2.6)*1.0;
       TP.sy+=(p.y-TP.sy)*(Math.abs(p.y-TP.sy)>.7?1:Math.min(1,dt*20));
-      const h=TP.obj.holder;h.position.set(p.x,TP.sy+Math.abs(Math.sin(TP.ph))*.05*TP.amt,p.z);h.rotation.set(0,TP.face,0);
-      if(TP.rig)TP.rig.set(TP.ph,st.ground?TP.amt:.35,1);
+      const h=TP.obj.holder;if(!st.hold){h.position.set(p.x,TP.sy+Math.abs(Math.sin(TP.ph))*.05*TP.amt,p.z);h.rotation.set(0,TP.face,0);
+      if(TP.rig)TP.rig.set(TP.ph,st.ground?TP.amt:.35,1);}
       st.pitch=Math.max(-1.1,Math.min(.35,st.pitch));const cy=Math.cos(st.pitch),fwd=new THREE.Vector3(-Math.sin(st.yaw)*cy,Math.sin(st.pitch),-Math.cos(st.yaw)*cy);
       /* spring-arm camera: it follows with a little lag, never goes through walls, and pulls out a touch when you sprint */
       const want=new THREE.Vector3(p.x,TP.sy+1.35,p.z);
@@ -123,8 +125,8 @@ export function createWalk(c){
       camera.position.copy(TP.cp).addScaledVector(fwd,-TP.dc);camera.position.y=Math.max(.25,camera.position.y);camera.lookAt(TP.cp);
       const fv=(st.saved&&st.saved.fov||camera.fov)+(sp2>4?TP.amt*6:0),nf=camera.fov+(fv-camera.fov)*Math.min(1,dt*6);if(Math.abs(nf-camera.fov)>.005){camera.fov=nf;camera.updateProjectionMatrix();}
       if(c.onTick)c.onTick(p);
-    }else{camera.position.set(p.x,p.y+EYE,p.z);camera.rotation.set(st.pitch,st.yaw,0);if(c.onTick)c.onTick(p);}
+    }else{camera.position.set(p.x,p.y+EYE,p.z);if(st.eyeO)camera.position.copy(st.eyeO);camera.rotation.set(st.pitch,st.yaw,0);if(c.onTick)c.onTick(p);}
     c.bump();
   }
-  return {enter,exit,tick,get on(){return st.on;},get third(){return st.third;},get pos(){return st.on?st.pos:null;},get yaw(){return st.yaw;},get keys(){return st.keys;},get boxes(){return st.boxes;},get climbing(){return st.climb;},get stick(){return [st.jx,st.jy];},get player(){return TP.obj;},setController(x){controller=x;},kick,place(x,y,z){st.pos.set(x,y,z);},setYaw(y){st.yaw=y;},refreshBoxes};
+  return {enter,exit,tick,get on(){return st.on;},get third(){return st.third;},get pos(){return st.on?st.pos:null;},get yaw(){return st.yaw;},get keys(){return st.keys;},get boxes(){return st.boxes;},get climbing(){return st.climb;},get stick(){return [st.jx,st.jy];},get player(){return TP.obj;},setController(x){controller=x;},kick,setHook,vel(){return new THREE.Vector3(st.cvx,0,st.cvz);},place(x,y,z){st.pos.set(x,y,z);},setYaw(y){st.yaw=y;},refreshBoxes};
 }

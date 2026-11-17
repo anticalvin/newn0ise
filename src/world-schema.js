@@ -42,6 +42,7 @@ export const ACTIONS={
   'toggle-open':{note:'Open or close a door. {target:id, state?:"open"|"closed"}',needs:['target']},
   'move-to':{note:'Slide an object. {target:id, pos:[x,y,z], seconds:1}',needs:['target','pos']},
   'teleport':{note:'Put the character somewhere. {pos:[x,y,z], yaw?:deg}',needs:['pos']},
+  'ragdoll':{note:'The character goes limp and tumbles, then gets up by itself. {push?:metres per second forward (default 3.5), up?:metres per second upward (default 3.2)}',needs:[]},
   'destroy':{note:'Make an object disappear with a thud. {target:id}',needs:['target']},
   'collect':{note:'Pick something up: it disappears and is counted. {target:id}',needs:['target']},
   'set-flag':{note:'Remember something. {flag:"name", value:true|false|number}',needs:['flag']},
@@ -200,6 +201,7 @@ export function validateWorld(input,{builtinReady=READY_TYPES}={}){
       const x={action:a.action};
       if(a.action==='toggle-open'){const t=needTarget(a.target,ap+'.target','target');if(!t)return;const o=byId.get(t);if(!o.prefab||o.prefab!=='door'){R.add('fix',ap,'toggle-open works on doors; "'+t+'" isn’t one. Action skipped.');return;}x.target=t;if(a.state==='open'||a.state==='closed')x.state=a.state;}
       else if(a.action==='move-to'){const t=needTarget(a.target,ap+'.target','target');if(!t)return;const p=vec(a.pos,null);if(!p){R.add('fix',ap+'.pos','move-to needs pos [x,y,z]. Action skipped.');return;}x.target=t;x.pos=p;x.seconds=clampN(a.seconds,.1,60,1);}
+      else if(a.action==='ragdoll'){if(isNum(a.push))x.push=clampN(a.push,-15,15,3.5);if(isNum(a.up))x.up=clampN(a.up,0,12,3.2);}
       else if(a.action==='teleport'){const p=vec(a.pos,null);if(!p){R.add('fix',ap+'.pos','teleport needs pos [x,y,z]. Action skipped.');return;}x.pos=p;if(isNum(a.yaw))x.yaw=clampN(a.yaw,-360,360,0);}
       else if(a.action==='collect'||a.action==='destroy'){const t=needTarget(a.target,ap+'.target','target');if(!t)return;x.target=t;}
       else if(a.action==='set-flag'){if(typeof a.flag!=='string'||!a.flag){R.add('fix',ap,'set-flag needs "flag". Action skipped.');return;}x.flag=clip(a.flag,30);x.value=(typeof a.value==='number'||typeof a.value==='boolean')?a.value:true;flagsSeen.add(x.flag);}
