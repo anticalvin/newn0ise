@@ -1,0 +1,93 @@
+/* n0ise liquid glass. Loaded after tokens.css and each page's own styles on Camera, Effects, 3D and Lab.
+   Neutral glass over the artwork; the one accent colour is picked from the artwork by glass.js (--art), with a neutral fallback.
+   Red is for recording only. Phone is the base layout; at 900px and up the dock becomes a left rail. */
+html:root:root:root{
+  --art:#2f6bff;--glow:rgba(47,107,255,.45);
+  --n-bg:#0b0c0f;--n-panel:#14161b;--n-raise:#1d2027;--n-line:rgba(255,255,255,.12);--n-ink:#f3f4f7;--n-mute:#9aa0ac;
+  --n-acc:var(--art);--n-on-acc:#fff;--n-rec:#ff3b30;
+  --n-rad:14px;
+  --g-fill:rgba(26,28,34,.58);--g-fill2:rgba(255,255,255,.07);--g-edge:rgba(255,255,255,.2);--g-shadow:0 10px 30px rgba(0,0,0,.38);
+  --g-blur:22px;--g-sat:1.6;--g-r:22px;--n-focus:2px solid var(--n-acc);
+  --n-ui:ui-sans-serif,-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,system-ui,sans-serif;
+  --n-mono:var(--n-ui);--mono:var(--n-ui);--lab:var(--n-ui);
+  --bg:var(--n-bg);--panel:var(--g-fill);--raise:var(--g-fill2);--line:var(--n-line);--ink:var(--n-ink);--mute:var(--n-mute);
+  --accent:var(--n-acc);--on-accent:var(--n-on-acc);--stage:#050507;
+  --dockh:68px;
+}
+@media (prefers-color-scheme:light){html:root:root:root:not([data-theme=dark]){
+  --art:#1f55e0;--n-bg:#eef0f4;--n-panel:#fff;--n-raise:#e4e7ee;--n-line:rgba(0,0,0,.12);--n-ink:#0d0f14;--n-mute:#5d6472;--n-on-acc:#fff;
+  --g-fill:rgba(255,255,255,.62);--g-fill2:rgba(0,0,0,.05);--g-edge:rgba(255,255,255,.9);--g-shadow:0 10px 30px rgba(20,24,36,.16);--stage:#0a0a0e}}
+
+/* the shared glass surface */
+.g,.dock,.campro,.ws,header .acts .btn,.menu,#menu{
+  -webkit-backdrop-filter:blur(var(--g-blur)) saturate(var(--g-sat));backdrop-filter:blur(var(--g-blur)) saturate(var(--g-sat))}
+@media (prefers-reduced-transparency:reduce){:root{--g-blur:0px;--g-fill:#1a1c22}.g,.dock,.campro,.ws,header .acts .btn,.menu,#menu{-webkit-backdrop-filter:none;backdrop-filter:none}}
+html.glass-lite{--g-blur:0px;--g-fill:rgba(24,26,32,.92)}
+
+/* type: system UI for controls, display face only for titles, no all-caps mono */
+html body,html body button,html body input,html body select,html body textarea{font-family:var(--n-ui)}
+html body .ws a,html body summary,html body .tab,html body .btn,html body label,html body .chip,html body .pill{text-transform:none;letter-spacing:.005em}
+html body :is(.val,output,.num,.v,kbd,code){font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-variant-numeric:tabular-nums}
+
+/* buttons: capsules, no chamfered corners */
+html body :is(.btn,.pill,.chip,.n-chamfer,.btn.primary,.btn.pri){clip-path:none;border-radius:999px;border:1px solid var(--n-line);background:var(--g-fill2);color:var(--n-ink);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.14);transition:transform .12s cubic-bezier(.2,.8,.2,1),background .15s}
+html body :is(.btn,.pill,.chip):active{transform:scale(.95)}
+html body :is(.btn.primary,.btn.pri,.pill[aria-pressed=true],.chip[aria-pressed=true],.chip.on,.tab[aria-selected=true]){background:var(--n-acc);color:var(--n-on-acc);border-color:transparent;box-shadow:inset 0 1px 0 rgba(255,255,255,.35)}
+html body .btn.rec{color:var(--n-rec);border-color:color-mix(in srgb,var(--n-rec) 45%,transparent)}
+html body .btn.rec[aria-pressed=true]{background:var(--n-rec);color:#fff}
+html body :is(.n-brackets,.rtile,.tile)::before,html body :is(.n-brackets,.rtile,.tile)::after{display:none}
+html body .tab[aria-selected=true]{border-bottom-color:transparent;border-radius:999px;padding-inline:14px}
+html body .tab{border-radius:999px}
+html body body::after{display:none}
+
+/* top bar: glass, over the artwork */
+html body header{background:transparent}
+html body header .acts .btn{border-radius:999px;min-height:40px}
+
+/* the sheet that holds the panels: floating glass with a bright top edge */
+html body .dock{background:var(--g-fill);border:1px solid var(--g-edge);border-bottom:0;border-radius:var(--g-r) var(--g-r) 0 0;margin:8px 8px 0;
+  box-shadow:var(--g-shadow),inset 0 1px 0 var(--g-edge)}
+html body .tabs{border-bottom:0;padding:10px 10px 6px;gap:6px}
+html body .stage{background:var(--stage)}
+html body .stage canvas{border-radius:12px}
+
+/* the dock: four large icons with labels (phone), a left rail from 900px */
+html body .ws{position:relative;z-index:5;flex:none;display:flex;gap:4px;margin:6px 10px 0;padding:4px;height:52px;border:1px solid var(--g-edge);border-radius:26px;
+  background:var(--g-fill);box-shadow:var(--g-shadow),inset 0 1px 0 var(--g-edge)}
+html body .ws a{flex:1;min-height:0;border:0;border-radius:22px;flex-direction:row;gap:7px;font:600 13px/1 var(--n-ui);letter-spacing:0;color:var(--n-mute)}
+html body .ws a::before{content:"";width:20px;height:20px;background:currentColor;-webkit-mask:var(--ic) center/contain no-repeat;mask:var(--ic) center/contain no-repeat}
+html body .ws a[aria-current=page]{background:var(--n-acc);color:var(--n-on-acc);box-shadow:0 0 16px var(--glow,transparent),inset 0 1px 0 rgba(255,255,255,.35)}
+html body .ws a[href*="cam=1"]{--ic:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 8h3l1.5-2h7L17 8h3v11H4z'/%3E%3Ccircle cx='12' cy='13' r='3.5'/%3E%3C/svg%3E")}
+html body .ws a[href^="effects.html"]:not([href*="cam=1"]){--ic:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round'%3E%3Cpath d='M5 7h8M17 7h2M5 17h2M11 17h8M5 12h3M12 12h7'/%3E%3Ccircle cx='15' cy='7' r='2'/%3E%3Ccircle cx='9' cy='17' r='2'/%3E%3Ccircle cx='10' cy='12' r='2'/%3E%3C/svg%3E")}
+html body .ws a[href^="studio"]{--ic:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linejoin='round'%3E%3Cpath d='M12 3l8 4.5v9L12 21l-8-4.5v-9z'/%3E%3Cpath d='M4 7.5l8 4.5 8-4.5M12 12v9'/%3E%3C/svg%3E")}
+html body .ws a[href^="lab"]{--ic:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 3h6M10 3v6l-5 9a2 2 0 0 0 1.8 3h10.4a2 2 0 0 0 1.8-3l-5-9V3'/%3E%3Cpath d='M8 15h8'/%3E%3C/svg%3E")}
+@media (max-width:420px){html body .ws a{flex-direction:column;gap:2px;font-size:11px}html body .ws{height:56px}}
+@media (prefers-reduced-motion:reduce){html body :is(.btn,.pill,.chip){transition:none}html body :is(.btn,.pill,.chip):active{transform:none}}
+
+/* header buttons, tabs and sheets that the page styles set with higher specificity */
+html body header .acts>.btn,html body header .acts>a.btn,html body .bar .btn,html body .bar button{border-radius:999px;background:var(--g-fill2);border:1px solid var(--n-line);color:var(--n-ink);clip-path:none}
+html body header .acts>.btn.primary,html body .bar .btn.primary,html body .bar #bSave{background:var(--n-acc);color:var(--n-on-acc);border-color:transparent}
+html body header .acts>.btn.primary:active{transform:scale(.95)}
+html body .tab,html body .tabs .tab{font:600 13px/1 var(--n-ui);letter-spacing:0;text-transform:none;color:var(--n-mute);border:0;border-radius:999px;min-height:40px}
+html body .tab[aria-selected=true]{background:var(--n-acc);color:var(--n-on-acc)}
+html body #sheet{background:var(--g-fill);-webkit-backdrop-filter:blur(var(--g-blur)) saturate(var(--g-sat));backdrop-filter:blur(var(--g-blur)) saturate(var(--g-sat));
+  border:1px solid var(--g-edge);border-bottom:0;border-radius:var(--g-r) var(--g-r) 0 0;box-shadow:var(--g-shadow),inset 0 1px 0 var(--g-edge)}
+html body .bar{background:transparent;border-bottom:0}
+
+/* effects sheet: floats above the dock instead of under it; radii the page sets with !important */
+@media (max-width:899px),(pointer:coarse){
+  html body[data-sheet] .dock{left:8px;right:8px;border-radius:var(--g-r) var(--g-r) 0 0!important}
+}
+html body :is(.btn,.pill,.chip,.tab){border-radius:999px!important}
+html body :is(.stage,.xp,.toast){border-radius:var(--g-r)!important}
+html body :is(.field,.sw,.cb,.srcmenu){border-radius:12px!important}
+html:root:root body :is(button,summary,label,.rgl,.prl,.fname,.coach b,.rtile span,.hd .btn,.cats button){text-transform:none;letter-spacing:0}
+html:root:root body :is(.itabs,.dtabs,.railtabs,.cats) button{border-bottom:0;border-radius:999px;margin:2px}
+html:root:root body :is(.itabs,.dtabs,.railtabs,.cats) button[aria-selected=true],html:root:root body :is(.itabs,.dtabs,.railtabs,.cats) button[aria-pressed=true]{background:var(--n-acc);color:var(--n-on-acc)}
+html body .toast{background:var(--g-fill);color:var(--n-ink);border:1px solid var(--g-edge);-webkit-backdrop-filter:blur(var(--g-blur)) saturate(var(--g-sat));backdrop-filter:blur(var(--g-blur)) saturate(var(--g-sat));z-index:96}
+@media (pointer:coarse),(max-width:899px){html body header .acts>.btn{min-height:44px}html:root:root body :is(.itabs,.dtabs,.railtabs,.cats) button{min-width:44px;padding-inline:12px}}
+/* CRT glow on whatever is selected or focused */
+html body :is(.btn.primary,.pill[aria-pressed=true],.chip[aria-pressed=true],.tab[aria-selected=true]){box-shadow:0 0 14px var(--glow),inset 0 1px 0 rgba(255,255,255,.35)}
+html body :focus-visible{outline:2px solid var(--n-acc);outline-offset:2px;box-shadow:0 0 12px var(--glow)}
+html body input[type=range]{accent-color:var(--n-acc)}

@@ -8,7 +8,7 @@ export function createGamepad(c){
   let CFG={swap:false,invY:false,rumble:true};try{Object.assign(CFG,JSON.parse(localStorage.getItem('n0.gpcfg')||'{}'));}catch(e){}
   const saveCfg=()=>{try{localStorage.setItem('n0.gpcfg',JSON.stringify(CFG));}catch(e){}};
   const rep={};let sony=false;
-  const st={pad:null,x:innerWidth/2,y:innerHeight/2,show:false,idle:0,down:null,prev:[],slow:false,speed:+(localStorage.getItem('n0.gpspeed')||1),legend:false,lastHot:null,rumble:CFG.rumble};
+  const st={pad:null,x:innerWidth/2,y:innerHeight/2,show:false,idle:0,down:null,prev:[],slow:false,speed:+(localStorage.getItem('n0.gpspeed')||1),legend:false,lastHot:null,rumble:CFG.rumble}; window.__n0gp=st;
   /* the app's own pointer-capture calls would throw for a pointer the browser doesn't know; let them pass quietly for the controller's pointer */
   for(const fn of ['setPointerCapture','releasePointerCapture']){const o=Element.prototype[fn];Element.prototype[fn]=function(id){try{return o.call(this,id);}catch(e){if(id!==GP_ID)throw e;}};}
   const css=document.createElement('style');css.textContent=`#gpcur{position:fixed;left:0;top:0;width:28px;height:28px;margin:-14px 0 0 -14px;border-radius:50%;border:2.5px solid #fff;box-shadow:0 0 0 2px rgba(0,0,0,.65),0 2px 8px rgba(0,0,0,.5);z-index:100000;pointer-events:none;display:none;transition:transform .08s,background .1s}
@@ -16,8 +16,8 @@ export function createGamepad(c){
 #gpcur[data-d=true]{transform:scale(.7);background:rgba(255,90,31,.55)}
 .gp-hot{outline:3px solid #ffd23d!important;outline-offset:1px}
 #gppie{position:fixed;left:50%;top:50%;width:0;height:0;z-index:100002;display:none}
-#gppie .pi{position:absolute;width:92px;height:56px;margin:-28px 0 0 -46px;display:grid;place-items:center;border-radius:18px;background:rgba(14,15,18,.92);border:1px solid rgba(255,255,255,.2);color:#eee;font:800 12px var(--lab,monospace);text-align:center;letter-spacing:.04em;transition:transform .08s}
-#gppie .pi.on{background:#ff5a1f;color:#111;transform:scale(1.14);border-color:#fff}#gppie .pc{position:absolute;width:10px;height:10px;margin:-5px;border-radius:50%;background:#fff;box-shadow:0 0 0 2px rgba(0,0,0,.6)}
+#gppie .pi{position:absolute;width:86px;height:46px;margin:-23px 0 0 -43px;line-height:1.1;display:grid;place-items:center;border-radius:18px;background:rgba(14,15,18,.92);border:1px solid rgba(255,255,255,.2);color:#eee;font:800 12px var(--lab,monospace);text-align:center;letter-spacing:.04em;transition:transform .08s}
+#gppie .pi.on{background:#2f6bff;color:#fff;transform:scale(1.14);border-color:#fff}#gppie .pc{position:absolute;width:10px;height:10px;margin:-5px;border-radius:50%;background:#fff;box-shadow:0 0 0 2px rgba(0,0,0,.6)}
 #gphud{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 66px);transform:translateX(-50%);z-index:100002;display:none;max-width:calc(100vw - 20px);padding:10px 16px;border-radius:16px;background:rgba(14,15,18,.92);border:1px solid rgba(255,255,255,.2);color:#eee;font:700 12px/1.4 var(--lab,monospace);text-align:center}#gphud b{color:#ffd23d}
 #gplegend{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:100001;width:min(360px,calc(100vw - 24px));max-height:calc(100dvh - 24px);overflow-y:auto;padding:16px;border-radius:20px;background:rgba(14,15,18,.94);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border:1px solid rgba(255,255,255,.18);color:#eee;font:600 12px/1.55 var(--lab,ui-monospace,monospace);display:none}
 #gplegend b{display:inline-block;min-width:78px;color:#ffd23d}
@@ -25,14 +25,14 @@ export function createGamepad(c){
 #gplegend .r{display:flex;gap:8px;margin:2px 0}
 #gplegend input[type=range]{width:100%;min-height:36px}
 #gplegend .gpck{align-items:center;min-height:44px}#gplegend .gpck input{width:22px;height:22px}
-#gplegend button{min-height:44px;padding:0 16px;margin-top:10px;border-radius:12px;border:0;background:#ff5a1f;color:#111;font:800 12px var(--lab,monospace);letter-spacing:.06em;text-transform:uppercase}`;document.head.appendChild(css);
+#gplegend button{min-height:44px;padding:0 16px;margin-top:10px;border-radius:12px;border:0;background:#2f6bff;color:#fff;font:800 12px var(--lab,monospace);letter-spacing:.06em;text-transform:uppercase}`;document.head.appendChild(css);
   const cur=document.createElement('div');cur.id='gpcur';cur.setAttribute('aria-hidden','true');document.body.appendChild(cur);
   const lg=document.createElement('div');lg.id='gplegend';lg.setAttribute('role','dialog');lg.setAttribute('aria-label','Controller help');
   const G=()=>sony?{a:'✕',b:'○',x:'□',y:'△',sel:'Create',opt:'Options'}:{a:'A',b:'B',x:'X',y:'Y',sel:'View',opt:'Menu'};
   function renderLegend(){
     const g=G();
     lg.innerHTML='<h4>Controller</h4>'+
-    [['Left stick','Move the cursor (walk, in walk mode)'],[g.a,'Click, hold to drag or draw'],[g.b,'Cancel, close or leave walk'],[g.x,'Undo'],[g.y,'Tap: show or hide panel. Hold: pie menu (grab, rotate, scale, add, sculpt)'],['Right stick','Orbit the view, scroll a panel, or look'],['L2 / R2','Zoom out and in'],['L1 / R1','Previous and next tab'],['D-pad over a panel','Jump between buttons'],['D-pad ◀ ▶ over the scene','Previous and next tool, object, or sculpt brush'],['D-pad ▲ ▼ over the scene','Level up and down, or brush size'],['L3','Slow, precise cursor (run, in walk mode)'],['R3','Cursor to the middle'],[g.sel,'Frame everything'],[g.opt,'This help']]
+    [['Left stick','Move the cursor (walk, in walk mode)'],[g.a,'Click, hold to drag or draw'],[g.b,'Cancel, close or leave walk'],[g.x,'Undo'],[g.y,'Tap: show or hide panel. Hold: pie menu (grab, rotate, scale, add, sculpt)'],['Right stick','Orbit the view, scroll a panel, or look'],['L2 / R2','Zoom out and in'],['L1 / R1','Previous and next tab'],['D-pad over a panel','Jump between buttons'],['D-pad ◀ ▶ over the scene','Previous and next tool, object, or sculpt brush'],['D-pad ▲ ▼ over the scene','Level up and down, or brush size'],['L3','Slow, precise cursor (run, in walk mode)'],['R3','Scale the selected object (over a panel: cursor to the middle)'],[g.sel,'Frame everything'],[g.opt,'This help']]
       .map(([k,v])=>'<div class="r"><b>'+k+'</b><span>'+v+'</span></div>').join('')+
     '<div class="r" style="margin-top:8px"><b>Cursor speed</b><input type="range" id="gpspd" min="0.5" max="2" step="0.1" aria-label="Cursor speed"></div>'+
     '<label class="r gpck"><input type="checkbox" id="gpswap"> Swap sticks (left hand)</label><label class="r gpck"><input type="checkbox" id="gpinv"> Invert look up and down</label><label class="r gpck"><input type="checkbox" id="gprum"> Vibration</label><button type="button" id="gpok">Got it</button>';
@@ -54,26 +54,53 @@ export function createGamepad(c){
   const val=(p,i)=>(p.buttons[i]&&p.buttons[i].value)||0;
   const pt=(t,type,extra)=>{const e=new PointerEvent(type,{pointerId:GP_ID,pointerType:'mouse',isPrimary:true,clientX:st.x,clientY:st.y,button:0,buttons:type==='pointerup'||type==='pointermove'&&!st.down?0:1,bubbles:true,cancelable:true,composed:true,...extra});t.dispatchEvent(e);};
   const mouse=(t,type)=>{try{t.dispatchEvent(new MouseEvent(type,{clientX:st.x,clientY:st.y,button:0,buttons:type==='mouseup'?0:1,bubbles:true,cancelable:true,view:window}));}catch(e){}};
-  const hit=()=>{cur.style.display='none';const t=document.elementFromPoint(st.x,st.y);cur.style.display='block';return t;};
+  /* Page zoom (the big-monitor scale-up, browser zoom) makes screen, layout and hit-test coordinates disagree, so the drawn cursor sat away from where clicks landed.
+     A probe box measures both once: ZR = rect pixels per CSS pixel, and whether elementFromPoint wants rect pixels or CSS pixels. */
+  let ZR=1,HIT_CSS=false;
+  function calibrate(){
+    try{const pr=document.createElement('div');pr.style.cssText='position:fixed;left:100px;top:100px;width:60px;height:60px;opacity:0;pointer-events:auto;z-index:2147483646';document.body.appendChild(pr);
+      const r=pr.getBoundingClientRect();ZR=r.width>0?r.width/60:1;if(!(ZR>.2&&ZR<6))ZR=1;
+      const inRectSpace=document.elementFromPoint(r.left+30,r.top+30)===pr;HIT_CSS=!inRectSpace&&document.elementFromPoint(130,130)===pr;pr.remove();}catch(e){ZR=1;HIT_CSS=false;}
+  }
+  calibrate();addEventListener('resize',calibrate);
+  const place=()=>{cur.style.left=(st.x/ZR)+'px';cur.style.top=(st.y/ZR)+'px';};
+  const inRect=(e,x=st.x,y=st.y,pad=1)=>{const r=e.getBoundingClientRect();return x>=r.left-pad&&x<=r.right+pad&&y>=r.top-pad&&y<=r.bottom+pad;};
+  const hit=()=>{cur.style.display='none';
+    const px=HIT_CSS?st.x/ZR:st.x,py=HIT_CSS?st.y/ZR:st.y;let t=document.elementFromPoint(px,py);
+    if(t&&!inRect(t)){const alt=document.elementsFromPoint(px,py).find(e=>inRect(e));if(alt)t=alt;}
+    cur.style.display='block';return t;};
   const interactive=t=>t&&t.closest&&t.closest('button,a,input,select,textarea,summary,[role=button],[role=tab],.card,.chip,.tab,label');
   function hot(t){const h=interactive(t);if(st.lastHot&&st.lastHot!==h)st.lastHot.classList.remove('gp-hot');if(h&&!(h.tagName==='CANVAS')){h.classList.add('gp-hot');st.lastHot=h;}else st.lastHot=null;}
   function slide(inp){const r=inp.getBoundingClientRect(),f=clamp((st.x-r.left)/Math.max(1,r.width),0,1),mn=+inp.min||0,mx=+inp.max||100,stp=+inp.step||1;let v=mn+(mx-mn)*f;v=Math.round(v/stp)*stp;v=clamp(v,mn,mx);if(+inp.value!==v){inp.value=v;inp.dispatchEvent(new Event('input',{bubbles:true}));}}
   const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
   function scrollable(t){let n=t;while(n&&n!==document.body){const o=getComputedStyle(n).overflowY;if((o==='auto'||o==='scroll')&&n.scrollHeight>n.clientHeight+4)return n;n=n.parentElement;}return null;}
 
+  function nearest(max){
+    let best=null,bd=max*max;
+    document.querySelectorAll('button,a[href],input:not([type=hidden]),select,summary,[role=button],[role=tab],label,.chip,.tab').forEach(n=>{
+      const r=n.getBoundingClientRect();if(r.width<4||r.height<4||r.width>420||r.height>200)return;
+      const dx=Math.max(r.left-st.x,0,st.x-r.right),dy=Math.max(r.top-st.y,0,st.y-r.bottom),d=dx*dx+dy*dy;if(d>=bd)return;
+      const cs=getComputedStyle(n);if(cs.visibility==='hidden'||cs.display==='none'||cs.pointerEvents==='none'||n.disabled)return;
+      const e=document.elementFromPoint(Math.min(Math.max(st.x,r.left+1),r.right-1),Math.min(Math.max(st.y,r.top+1),r.bottom-1));
+      if(e&&(n===e||n.contains(e)||e.contains(n))){bd=d;best=n;}});
+    return best;
+  }
   function press(){
-    const t=hit();if(!t)return;st.down={t,x:st.x,y:st.y,moved:false};cur.dataset.d='true';buzz(25,.1,.2);
+    let t=hit();const hh=st.lastHot;if(hh&&hh.isConnected&&inRect(hh,st.x,st.y,10)&&(!t||!hh.contains(t)))t=hh; /* what is highlighted is what gets clicked */
+    /* click assist: a press that lands just beside a control (the cursor was still drifting into it) goes to the nearest control within 40px */
+    if(!interactive(t)||t.tagName==='CANVAS'){const n=nearest(40);if(n){t=n;const r=n.getBoundingClientRect();st.x=r.left+r.width/2;st.y=r.top+r.height/2;place();hot(n);}}
+    if(!t)return;st.down={t,x:st.x,y:st.y,moved:false};cur.dataset.d='true';buzz(25,.1,.2);
     if(t.matches&&t.matches('input[type=range]')){slide(t);return;}
     pt(t,'pointerdown');mouse(t,'mousedown');
     if(t.matches&&t.matches('input:not([type=range]):not([type=color]):not([type=checkbox]),textarea'))try{t.focus();}catch(e){}
   }
   function release(){
-    const d=st.down;if(!d)return;st.down=null;cur.dataset.d='false';const t=d.t;
+    const d=st.down;if(!d)return;st.down=null;cur.dataset.d='false';let t=d.t;if(!t.isConnected){const n=hit();if(n)t=n;} /* the panel re-drew while the button was held */
     if(t.matches&&t.matches('input[type=range]')){t.dispatchEvent(new Event('change',{bubbles:true}));return;}
     pt(t,'pointerup');mouse(t,'mouseup');
     if(!d.moved&&t.matches&&t.matches('textarea,input:not([type=range]):not([type=color]):not([type=checkbox]):not([type=radio]):not([type=button]):not([type=submit]):not([type=file])')){
       const v=prompt((t.getAttribute('aria-label')||t.placeholder||'Type here')+(sony?'':''),t.value);if(v!=null){t.value=v;t.dispatchEvent(new Event('input',{bubbles:true}));t.dispatchEvent(new Event('change',{bubbles:true}));}return;}
-    if(t.tagName!=='CANVAS'&&!d.moved){try{t.dispatchEvent(new MouseEvent('click',{clientX:st.x,clientY:st.y,button:0,bubbles:true,cancelable:true,view:window}));}catch(e){}buzz(18,.08,.25);}
+    if(t.tagName!=='CANVAS'&&!d.moved){try{(interactive(t)||t).dispatchEvent(new MouseEvent('click',{clientX:st.x,clientY:st.y,button:0,bubbles:true,cancelable:true,view:window}));}catch(e){}buzz(18,.08,.25);}
   }
   function orbit(dt,rx,ry){
     if(!camera||!controls){window.scrollBy(0,ry*dt*900);return;}
@@ -103,7 +130,7 @@ export function createGamepad(c){
       const e=document.elementFromPoint(cx,cy);if(!e||!(n===e||n.contains(e)||e.contains(n)))return;
       const sc=along+perp*2.4;if(sc<bs){bs=sc;best={x:cx,y:cy,n};}
     });
-    if(best){st.x=best.x;st.y=best.y;cur.style.left=st.x+'px';cur.style.top=st.y+'px';hot(best.n);buzz(10,.04,.12);return true;}
+    if(best){st.x=best.x;st.y=best.y;place();hot(best.n);buzz(10,.04,.12);return true;}
     return false;
   }
   const overPanel=()=>{const t=hit();return !!t&&t.tagName!=='CANVAS'&&!t.closest('#walkui');};
@@ -120,7 +147,11 @@ export function createGamepad(c){
   }
   /* ---------- pie menu (hold Y / △) ---------- */
   function openPie(items,sticky){
-    st.pie={items,sel:-1,sticky:!!sticky};pie.innerHTML='';const R=Math.min(112,innerWidth/2-56);
+    /* more than eight items: seven per page plus a "More" tile, so tiles never overlap */
+    if(items.length>8&&!items.paged){const pages=[];for(let i=0;i<items.length;i+=7)pages.push(items.slice(i,i+7));
+      const mk=n=>{const pg=pages[n].slice();if(pages.length>1)pg.push({label:'More ▸',page:true,run:()=>openPie(mk((n+1)%pages.length),true)});pg.paged=true;return pg;};items=mk(0);}
+    st.pie={items,sel:-1,sticky:!!sticky||!!items.paged&&items.some(x=>x.page)&&sticky};pie.innerHTML='';
+    const R=Math.max(96,Math.min(150,Math.min(innerWidth,innerHeight)/2-52));
     items.forEach((it,i)=>{const a=-Math.PI/2+i/items.length*Math.PI*2,d=document.createElement('div');d.className='pi';d.textContent=it.label;d.style.left=Math.cos(a)*R+'px';d.style.top=Math.sin(a)*R+'px';pie.appendChild(d);});
     const c0=document.createElement('div');c0.className='pc';pie.appendChild(c0);pie.style.display='block';cur.style.display='none';buzz(30,.1,.2);
   }
@@ -131,13 +162,16 @@ export function createGamepad(c){
     if(sel!==P.sel){P.sel=sel;[...pie.querySelectorAll('.pi')].forEach((d,i)=>d.classList.toggle('on',i===sel));if(sel>=0)buzz(10,.04,.15);}
   }
   function pieItems(){
-    if(!SC)return null;const o=SC.sel&&SC.sel();const need=f=>()=>{if(!SC.sel()){toast('Pick an object first.');return;}f();};
+    if(!SC)return null;
+    if(SC.empty&&SC.empty()){ /* nothing in the scene yet: start with what you can create */
+      return [{label:'Add ▸',sub:SC.shapes.map(k=>({label:k,run:()=>SC.add(k)}))},{label:'Import',run:()=>SC.import&&SC.import()},{label:'Draw',run:()=>SC.draw&&SC.draw()},{label:'Demo',run:()=>SC.demo&&SC.demo()},{label:'Clay ▸ sculpt',run:()=>SC.sculpt()},{label:'My character',run:()=>SC.character&&SC.character()}];}
+    const o=SC.sel&&SC.sel();const need=f=>()=>{if(!SC.sel()){toast('Pick an object first.');return;}f();};
     return [{label:'Grab',run:need(()=>startMod('grab'))},{label:'Rotate',run:need(()=>startMod('rotate'))},{label:'Scale',run:need(()=>startMod('scale'))},
       {label:'Add ▸',sub:SC.shapes.map(k=>({label:k,run:()=>SC.add(k)}))},{label:'Duplicate',run:need(()=>SC.dup())},{label:'Delete',run:need(()=>SC.del())},
       {label:SC.sculpting()?'Stop sculpt':'Sculpt',run:()=>SC.sculpt()},{label:'Material',run:()=>SC.mat()}];
   }
   /* ---------- Blender-style modal Grab / Rotate / Scale ---------- */
-  const MODT={grab:'<b>Grab</b> · left stick moves, right stick up and down · R1 snaps · L3 fine',rotate:'<b>Rotate</b> · left stick tilts and turns, right stick rolls · R1 snaps to 15°',scale:'<b>Scale</b> · left stick up and down grows or shrinks, right stick stretches height · R1 snaps'};
+  const MODT={grab:'<b>Grab</b> · left stick moves, right stick up and down · R1 snaps · L3 fine',rotate:'<b>Rotate</b> · left stick tilts and turns, right stick rolls · R1 snaps to 15°',scale:'<b>Scale</b> · left stick up/down: whole size · right stick: width and height · R2/L2: depth · R1 snaps · L3 fine'};
   function startMod(mode){
     const o=SC.sel();if(!o)return;const h=o.holder;
     st.mod={mode,o,h,p0:h.position.clone(),r0:h.rotation.clone(),s0:h.scale.clone(),p:h.position.clone(),r:new THREE.Euler().copy(h.rotation),k:1,ky:1};
@@ -156,9 +190,10 @@ export function createGamepad(c){
       m.r.y+=lx*dt*2.2*f;m.r.x+=ly*dt*2.2*f;m.r.z+=rx*dt*2.2*f;const q=Math.PI/12;
       h.rotation.set(snap?Math.round(m.r.x/q)*q:m.r.x,snap?Math.round(m.r.y/q)*q:m.r.y,snap?Math.round(m.r.z/q)*q:m.r.z);
     }else{
-      m.k=Math.max(.02,m.k*(1-ly*dt*1.3*f));m.ky=Math.max(.05,m.ky*(1-ry*dt*1.2*f));
+      const tr=(val(st.pad,7)||0)-(val(st.pad,6)||0); /* R2 deeper, L2 shallower */
+      m.k=Math.max(.02,m.k*(1-ly*dt*1.3*f));m.ky=Math.max(.05,m.ky*(1-ry*dt*1.2*f));m.kx=Math.max(.05,(m.kx||1)*(1+rx*dt*1.2*f));m.kz=Math.max(.05,(m.kz||1)*(1+tr*dt*1.2*f));
       const k=snap?Math.max(.1,Math.round(m.k*10)/10):m.k,ky=snap?Math.max(.1,Math.round(m.ky*10)/10):m.ky;
-      h.scale.set(m.s0.x*k,m.s0.y*k*ky,m.s0.z*k);
+      const sq=v=>snap?Math.max(.1,Math.round(v*10)/10):v;h.scale.set(m.s0.x*k*sq(m.kx||1),m.s0.y*k*ky,m.s0.z*k*sq(m.kz||1));
     }
     bump();
   }
@@ -203,9 +238,9 @@ export function createGamepad(c){
     /* cursor */
     const sp=(st.slow?260:900)*st.speed*Math.max(.6,Math.min(innerWidth,innerHeight)/720);
     const mag=Math.hypot(lx,ly),cv=mag?Math.pow(mag,1.6)/mag:0;
-    if(lx||ly){st.x=clamp(st.x+lx*cv*sp*dt,0,innerWidth-1);st.y=clamp(st.y+ly*cv*sp*dt,0,innerHeight-1);if(st.down)st.down.moved=true;}
+    if(lx||ly){st.x=clamp(st.x+lx*cv*sp*dt,0,innerWidth-1);st.y=clamp(st.y+ly*cv*sp*dt,0,innerHeight-1);if(st.down&&Math.hypot(st.x-st.down.x,st.y-st.down.y)>12)st.down.moved=true;} /* a little stick drift while pressing is still a click */
     if(!st.down&&Math.hypot(lx,ly)<.45)magnet(now);
-    cur.style.left=st.x+'px';cur.style.top=st.y+'px';
+    place();
     const t=st.down?st.down.t:hit();
     if(lx||ly||!st.pad.__hov){if(t&&!st.down)hot(t);}
     if(lx||ly){
@@ -235,7 +270,7 @@ export function createGamepad(c){
     if(edge(8)){const f=document.getElementById('bFrame');f&&f.click();}
     if(edge(9))showLegend(!st.legend);
     if(edge(10)){st.slow=!st.slow;toast(st.slow?'Precise cursor':'Normal cursor',1200);}
-    if(edge(11)){st.x=innerWidth/2;st.y=innerHeight/2;}
+    if(edge(11)){if(SC&&SC.sel&&SC.sel()&&!(overPanel&&overPanel())){startMod('scale');}else{st.x=innerWidth/2;st.y=innerHeight/2;}}
     st.prev=p.buttons.map(x=>x.pressed);
   }
   addEventListener('gamepadconnected',e=>{st.show=true;st.idle=0;cur.style.display='block';sony=/054c|dualsense|dualshock|wireless controller/i.test(e.gamepad.id||'');toast('Controller connected: '+(e.gamepad.id||'').replace(/\s*\(.*$/,'').slice(0,32)+'. Left stick moves the cursor, '+G().a+' clicks. '+G().opt+' shows help.',5500);buzz(60,.2,.4);});

@@ -1,0 +1,74 @@
+{
+ "effects/phone390": {
+  "small": 0,
+  "text": 0,
+  "hscroll": false,
+  "errors": 0
+ },
+ "effects/phone360": {
+  "small": 0,
+  "text": 0,
+  "hscroll": false,
+  "errors": 0
+ },
+ "effects/desktop": {
+  "small": 0,
+  "text": 0,
+  "hscroll": false,
+  "errors": 0
+ },
+ "camera/phone390": {
+  "small": 0,
+  "text": 0,
+  "hscroll": false,
+  "errors": 0
+ },
+ "camera/phone360": {
+  "small": 0,
+  "text": 0,
+  "hscroll": false,
+  "errors": 0
+ },
+ "camera/desktop": {
+  "small": 0,
+  "text": 0,
+  "hscroll": false,
+  "errors": 0
+ },
+ "studio/phone390": {
+  "small": 0,
+  "text": 0,
+  "hscroll": false,
+  "errors": 0
+ },
+ "studio/phone360": {
+  "small": 0,
+  "text": 0,
+  "hscroll": false,
+  "errors": 0
+ },
+ "studio/desktop": {
+  "small": 0,
+  "text": 0,
+  "hscroll": false,
+  "errors": 0
+ },
+ "lab/phone390": {
+  "small": 0,
+  "text": 0,
+  "hscroll": false,
+  "errors": 0
+ },
+ "lab/phone360": {
+  "small": 0,
+  "text": 0,
+  "hscroll": false,
+  "errors": 0
+ },
+ "lab/desktop": {
+  "small": 0,
+  "text": 0,
+  "hscroll": false,
+  "errors": 0
+ }
+}
