@@ -368,7 +368,7 @@ body[data-walk] .restore,body[data-sgs] .restore,body[data-sgs] .bar,body[data-s
   .tabs.dock .tab span{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 }
 .dialog-body .hud{position:static;display:flex;flex-wrap:wrap;gap:6px;transform:none;padding:0;background:none;border:0;max-width:none}
-.dialog-body .hud .chipb,.dialog-body .hud .seg button{min-height:44px}
+.dialog-body .hud .chipb,.dialog-body .hud .seg button{min-height:44px;min-width:44px}
 .dialog-body .hud .seg{display:flex;flex-wrap:wrap;border:0;gap:6px}
 .dialog-body .fxnote{width:100%;color:var(--mute)}
 
