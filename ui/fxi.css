@@ -1,0 +1,220 @@
+/* n0ise Effects: instrument shell (Hardware / Colour / Effects / Fuse).
+   Scoped to the Effects page and never applied in camera mode, so Camera and Studio keep their own look. */
+
+/* ---------- tokens: only inside the dock and the stage footer ---------- */
+body:not([data-cam]) .dock,body:not([data-cam]) .fx-foot{
+  --bg:#111210;--panel:#1b1c19;--raise:#262824;--raise2:#30332e;--line:#ffffff19;--ink:#eeece4;--mute:#a3a59b;--dim:#a3a59b;
+  --accent:#e9e4d8;--on-accent:#191a17;--rad:14px}
+
+/* ---------- layout ---------- */
+.fxleft{flex:1;min-width:0;min-height:0;display:flex;flex-direction:column}
+body[data-cam] .fxleft{display:contents}
+body[data-cam] .fx-foot{display:none}
+body:not([data-cam]) .grab{display:none}
+body:not([data-cam]) .stage{margin:0;border-radius:0;background:radial-gradient(ellipse at 50% 45%,#252521,#111210 67%)}
+body:not([data-cam]) .fxmain{padding:0;gap:0}
+body:not([data-cam]) .dock{flex:none;height:auto;margin:0;border-radius:0;border:0;border-top:1px solid var(--line);background:var(--panel);box-shadow:none;backdrop-filter:none;-webkit-backdrop-filter:none;
+  overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;color:var(--ink);scrollbar-color:#ffffff33 transparent}
+body:not([data-cam]) .dock>*{flex:none}
+body:not([data-cam]) .insp{overflow:visible;padding-bottom:calc(40px + env(safe-area-inset-bottom,0px))}
+body:not([data-cam]) .peek{padding:0;border:0}
+
+@media(min-width:960px) and (min-height:550px){
+  body:not([data-cam]) .fxmain{flex-direction:row}
+  body:not([data-cam]) .dock{width:382px;height:auto;border-top:0;border-left:1px solid var(--line)}
+  body:not([data-cam]) .stage{padding:16px 24px}
+}
+@media(max-width:959px),(max-height:549px){
+  body:not([data-cam]) .fxpage.shell{padding:env(safe-area-inset-top) 0 0;max-width:none;height:100dvh;min-height:0;overflow:hidden;display:grid;grid-template-rows:52px minmax(0,1fr)}
+  body:not([data-cam]) .fxpage .header{height:52px;margin:0;padding:0 max(10px,env(safe-area-inset-right)) 0 max(10px,env(safe-area-inset-left));background:#111210}
+  body:not([data-cam]) .fxpage .portrait{width:100%;max-width:none;height:auto;min-height:0;margin:0;border:0;border-radius:0;box-shadow:none;background:#111210}
+  body:not([data-cam]) .fxpage .viewbar{display:none}
+  body:not([data-cam]) .fxmain{flex-direction:column;padding-top:0}
+  body:not([data-cam]) .fxleft{flex:0 0 clamp(210px,41%,460px)}
+  body:not([data-cam]) .dock{flex:1 1 0;min-height:0;border-radius:18px 18px 0 0;border-top:1px solid var(--line);padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-right)}
+  body:not([data-cam]) .stage{padding:8px 14px}
+  body:not([data-cam]) .insp{padding-bottom:calc(48px + env(safe-area-inset-bottom,0px))}
+}
+@media(orientation:landscape) and (max-height:520px) and (max-width:959px){
+  body:not([data-cam]) .fxmain{flex-direction:row}
+  body:not([data-cam]) .fxleft{flex:1 1 0}
+  body:not([data-cam]) .dock{flex:0 0 min(46%,382px);border-radius:0;border-top:0;border-left:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom)}
+}
+
+/* ---------- stage footer: source, compare, pause, hold ---------- */
+.fx-foot{position:relative;flex:none;display:flex;flex-wrap:wrap;gap:8px;justify-content:center;align-items:center;padding:6px 12px calc(10px + env(safe-area-inset-bottom,0px) * 0);background:#111210}
+@media(max-width:959px){.fx-foot{padding-bottom:8px;background:#111210}}
+.fx-foot .pill,.fx-foot .artbar .pill{display:inline-flex;align-items:center;min-height:36px;padding:0 14px;border:1px solid var(--line);border-radius:99px;background:#1b1c19e8;color:var(--ink);font-size:12px;font-weight:500;backdrop-filter:none;-webkit-backdrop-filter:none}
+.fx-foot .pill:hover{background:#262824}
+.fx-foot .pill[aria-pressed=true]{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+.fx-foot .artbar{position:static;display:flex;gap:8px;flex-wrap:wrap;justify-content:center;max-width:none;pointer-events:auto}
+.fx-foot .artbar:empty{display:none}
+@media(pointer:coarse),(max-width:959px){.fx-foot .pill,.fx-foot .artbar .pill{min-height:44px}}
+.fx-foot .srcmenu{position:absolute;bottom:calc(100% - 2px);left:50%;transform:translateX(-50%);z-index:12;flex-direction:column;min-width:210px;padding:6px;background:#262824;border:1px solid var(--line);border-radius:14px;box-shadow:0 12px 40px #0008}
+.fx-foot .srcmenu:not([hidden]){display:flex}
+.fx-foot .srcmenu button{min-height:44px;padding:0 14px;border:0;border-radius:10px;background:none;color:var(--ink);text-align:left;font:500 13px var(--lab);text-transform:none;letter-spacing:0}
+.fx-foot .srcmenu button:hover{background:#30332e}
+body[data-mpaint] #stage{outline:2px solid #e9e4d8;outline-offset:-6px;cursor:crosshair}
+.info{color:#fff7}
+
+/* ---------- instrument navigation ---------- */
+.itnav{position:sticky;top:0;z-index:6;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px;padding:13px;background:var(--panel);border-bottom:1px solid var(--line)}
+.itab{display:grid;justify-items:center;align-content:center;gap:6px;min-height:58px;padding:10px 4px 9px;border:1px solid transparent;border-radius:14px;background:none;color:var(--mute);font-size:11px;font-weight:500;letter-spacing:0;text-transform:none}
+.itab svg{width:19px;height:19px;stroke-width:1.4}
+.itab[aria-selected=true]{background:var(--raise2);color:var(--ink);border-color:#ffffff20}
+.itab:hover{filter:none;color:var(--ink)}
+@media(max-width:959px){.itnav{padding:8px 10px;gap:4px}.itab{min-height:50px;padding:7px 2px 6px;gap:4px;border-radius:13px}.itab svg{width:17px;height:17px}}
+.itsub{display:none;margin:12px 14px 0;padding:4px;background:#10110f;border-radius:13px;grid-template-columns:1fr 1fr;gap:4px}
+body[data-it=effects] .itsub{display:grid}
+.itsub button{min-height:40px;border:0;border-radius:10px;background:none;color:var(--mute);font-size:12px;font-weight:500}
+.itsub button[aria-pressed=true]{background:var(--raise2);color:var(--ink)}
+body[data-dt=hw] #peek,body[data-dt=hw] #strip,body[data-dt=col] #peek,body[data-dt=col] #strip{display:none}
+
+/* ---------- shared pieces ---------- */
+.dock .fx-head{margin:20px 14px 0}
+.dock .fx-head h2{font-size:25px;letter-spacing:-1px;font-weight:550;margin:4px 0 5px;color:var(--ink)}
+.dock .fx-head .sub{color:var(--mute);font-size:12px;line-height:1.55;margin:0 0 6px}
+.dock .fx-sec{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:22px 14px 11px}
+.dock .fx-sec b{font-size:13px;font-weight:550}
+.dock .fx-sec span{font-size:11px;color:var(--mute)}
+.dock .fx-note{margin:14px;padding:13px;border:1px solid var(--line);border-radius:13px;background:#ffffff07;color:var(--mute);font-size:11px;line-height:1.6}
+.dock .fx-chips{display:flex;flex-wrap:wrap;gap:7px;margin:0 14px}
+.dock .fx-acts{display:flex;flex-wrap:wrap;gap:7px;margin:12px 14px}
+.dock .fx-acts button,.dock .fx-add,.dock .fx-back,.dock .fslot-acts button,.dock .fmore .fx-acts button{min-height:40px;padding:0 14px;border:1px solid var(--line);border-radius:99px;background:#ffffff09;color:var(--ink);font-size:11.5px;font-weight:500;text-transform:none;letter-spacing:0}
+.dock .fx-acts button:hover,.dock .fx-add:hover,.dock .fx-back:hover,.dock .fslot-acts button:hover{background:#ffffff17;filter:none}
+.dock .fx-acts button.primary,.dock .fx-add,.dock [aria-pressed=true].fx-acts button,.dock .fslot-acts button[aria-pressed=true]{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+.dock .fx-acts button[aria-pressed=true]{background:var(--accent);color:var(--on-accent)}
+.dock .fx-add{margin:12px 0 12px 0}
+.dock .fx-acts .fx-add{margin:0}
+.dock .fx-back{margin:12px 14px 0;display:inline-flex;align-items:center}
+.dock button:disabled{opacity:.35}
+.dock .fx-link{background:none;border:0;color:var(--mute);text-decoration:underline;min-height:44px;padding:0 6px;font-size:11px}
+.dock .fx-quick{margin-top:4px}
+.dock .fx-quick .ir{padding:0 14px}
+.dock .chip{min-height:36px;padding:0 13px;border:1px solid var(--line);border-radius:99px;background:var(--raise);color:var(--ink);font-size:11.5px;font-weight:500}
+.dock .chip[aria-pressed=true]{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+.dock .chip.act{background:none}
+@media(pointer:coarse),(max-width:959px){.dock .chip{min-height:44px}}
+.dock .fcost{font:500 11px var(--lab);letter-spacing:.08em;color:var(--mute);margin-left:auto;align-self:center}
+.dock .cl{padding:6px 14px 0;color:var(--mute);font-size:11px}
+.dock .pe{padding:4px 14px 8px}
+.dock .pe button,.dock .pe .sl{border-radius:12px;border-color:var(--line);background:var(--raise)}
+.dock .pe button{min-height:40px;padding:0 12px;font-size:11.5px;font-weight:500}
+.dock .fmore{margin:14px 0 0;border-top:1px solid var(--line)}
+.dock .fmore>summary{list-style:none;cursor:pointer;min-height:48px;display:flex;align-items:center;justify-content:space-between;padding:0 14px;font:600 11px var(--lab);text-transform:uppercase;letter-spacing:.14em;color:var(--mute)}
+.dock .fmore>summary::-webkit-details-marker{display:none}
+.dock .fmore>summary::after{content:"+";font-size:15px}.dock .fmore[open]>summary::after{content:"−"}
+.dock .fmore[open]>summary{color:var(--ink)}
+
+/* sliders: thin line, round thumb, in the inspector only */
+.dock .ir{padding:0 14px;min-height:44px;grid-template-columns:104px 1fr 52px}
+.dock .ir .l{font:500 12px var(--lab);color:var(--ink)}
+.dock .ir .v{font:500 12px var(--lab);color:var(--mute);border-bottom:1px solid transparent;background:none}
+.dock .ir .v:focus{color:var(--ink);border-bottom-color:var(--accent)}
+.dock .ir select,.dock .ir .hx{border-radius:12px;border:1px solid var(--line);background:var(--raise);min-height:40px;font-size:12px;padding:0 10px}
+.dock input[type=range]{height:44px}
+.dock input[type=range]::-webkit-slider-runnable-track{height:3px;border-radius:9px;background:linear-gradient(90deg,var(--accent) var(--p,50%),#ffffff38 var(--p,50%))}
+.dock input[type=range]::-webkit-slider-thumb{width:16px;height:16px;margin-top:-6.5px;border-radius:50%;background:var(--accent);border:3px solid #383a34;box-shadow:0 0 0 1px #ffffff38}
+.dock input[type=range]::-moz-range-track{height:3px;border-radius:9px;background:#ffffff38}
+.dock input[type=range]::-moz-range-progress{height:3px;border-radius:9px;background:var(--accent)}
+.dock input[type=range]::-moz-range-thumb{width:12px;height:12px;border-radius:50%;background:var(--accent);border:3px solid #383a34}
+.dock .scrub{height:44px;padding:0 14px}
+.dock .scrub input[type=range]::-webkit-slider-runnable-track{height:3px;background:linear-gradient(90deg,var(--accent) var(--p,50%),#ffffff38 var(--p,50%))}
+.dock .scrub input[type=range]::-webkit-slider-thumb{width:16px;height:16px;margin-top:-6.5px;border-radius:50%;background:var(--accent);border:3px solid #383a34}
+.dock .scrub .sl{font:500 12px var(--lab);color:var(--ink);letter-spacing:0;width:104px}
+.dock .scrub .sv{font:500 12px var(--lab);color:var(--mute)}
+.dock .acc{border-top:1px solid var(--line)}
+.dock .acc>summary{padding:0 14px;min-height:48px}
+
+/* peek: effect name, hero controls, effect cards */
+.dock .fxname{padding:18px 14px 6px}
+.dock .fxname b{font:550 22px var(--lab);letter-spacing:-.6px}
+.dock .moderow{padding:6px 14px 6px;gap:8px}
+.dock .moderow .btn{min-height:44px;border-radius:99px;font:500 11.5px var(--lab);text-transform:none;letter-spacing:0;background:#ffffff09;min-width:0}
+.dock .railtabs{padding:6px 14px 0;gap:6px}
+.dock .railtabs button{min-height:36px;padding:0 12px;border:1px solid var(--line);border-radius:99px;background:none;font:500 11px var(--lab);letter-spacing:0;text-transform:none;color:var(--mute)}
+.dock .railtabs button[aria-pressed=true]{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+@media(max-width:959px),(pointer:coarse){.dock .railtabs button{min-height:44px}.itsub button{min-height:44px}}
+.dock .rail{padding:10px 14px 14px;gap:16px}
+.dock .rgl{font:500 11px var(--lab);letter-spacing:1.5px;color:var(--mute);margin:2px 0 8px}
+.dock .rgt{grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:9px}
+.dock .rtile{border-radius:15px;border:1px solid var(--line);background:var(--raise);padding:6px;overflow:hidden}
+.dock .rtile canvas.rt{border-radius:9px}
+.dock .rtile span{font:550 11px var(--lab);text-transform:none;letter-spacing:0;padding:8px 3px 3px}
+.dock .rtile[aria-pressed=true]{border-color:var(--accent);background:#393b35;box-shadow:none}
+.dock .rtile[aria-pressed=true] span{color:var(--ink)}
+
+/* stack strip and layer banner */
+.dock .strip{padding:12px 14px;gap:8px;border-bottom:1px solid var(--line)}
+.dock .ly{width:calc(50% - 4px);border-radius:14px;padding:8px;min-height:56px;background:var(--raise);border:1px solid var(--line)}
+.dock .ly canvas{border-radius:8px;height:34px}
+.dock .ly[aria-current=true]{border-color:#e8e3d3;background:#343630;box-shadow:none}
+.dock .ly span{font:550 12px var(--lab)}
+.dock .add{border-radius:14px;min-height:44px;width:auto;padding:0 14px;font:500 12px var(--lab);border:1px dashed #ffffff33}
+.dock .strip .btn{border-radius:99px;min-height:40px;font-size:11px}
+.dock .ban{margin:16px 14px 6px;min-height:0;background:none;color:var(--ink);align-items:center;gap:10px}
+.dock .ban .no{padding:0;background:none;color:var(--mute);font:500 11px var(--lab)}
+.dock .ban .nm{padding:0;font:550 22px var(--lab);letter-spacing:-.6px}
+.dock .ban::after{content:"";order:3;width:9px;height:9px;border-radius:50%;background:var(--idc,#ccc);margin-left:auto}
+.dock .hd{padding:6px 14px}
+.dock .hd .btn{border-radius:99px;min-height:40px;font-size:11px;text-transform:none;letter-spacing:0;background:#ffffff09;border:1px solid var(--line)}
+.dock .itabs{position:static;margin:8px 14px;padding:4px;background:#10110f;border:0;border-radius:13px;gap:4px}
+.dock .itabs button{min-height:40px;border:0;border-radius:10px;font:500 12px var(--lab);text-transform:none;letter-spacing:0;color:var(--mute)}
+.dock .itabs button[aria-selected=true]{background:var(--raise2);color:var(--ink)}
+.dock .gal{padding:8px 14px}
+.dock .gal .tile{border-radius:14px;border:1px solid var(--line);background:var(--raise)}
+.dock .gq{border-radius:12px;margin:0 0 10px}
+
+/* ---------- Hardware ---------- */
+.fx-current{display:flex;align-items:center;gap:9px;margin:10px 14px 0;min-height:44px}
+.fx-curname{font-size:15px;font-weight:550;letter-spacing:-.3px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fx-tag{border:1px solid #ffffff2a;border-radius:99px;padding:4px 9px;font-size:11px;color:var(--mute);white-space:nowrap}
+.fx-tag.changed{color:var(--ink);border-color:#e9e4d866}
+.fx-cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin:0 14px}
+.fx-card{background:var(--raise);border:1px solid var(--line);border-radius:15px;text-align:left;padding:8px;min-width:0;color:var(--ink)}
+.fx-card:hover{filter:none;background:#2b2d28}
+.fx-card[aria-pressed=true]{border-color:var(--accent);background:#393b35}
+.fx-thumb{height:88px;border-radius:9px;overflow:hidden;background:#080909;position:relative}
+.fx-thumb canvas{display:block;width:100%;height:100%;object-fit:cover}
+.fx-thumb canvas:not([data-ok]){opacity:.0}
+.fx-card b{display:block;font-size:12px;font-weight:550;margin:10px 3px 2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fx-card small{display:block;font-size:11px;color:var(--mute);margin:0 3px 4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media(max-width:959px){.fx-thumb{height:78px}}
+
+/* ---------- Colour ---------- */
+.fx-grad{height:78px;margin:0 14px;border:1px solid #ffffff2b;border-radius:13px;position:relative}
+.fx-stop{position:absolute;bottom:-8px;left:calc(var(--f,0) * (100% - 16px));width:16px;height:16px;border-radius:50%;background:var(--c,#fff);border:3px solid #252621;box-shadow:0 0 0 1px #ffffffa0;pointer-events:none}
+.fx-swatches{display:flex;gap:6px;margin:22px 14px 10px}
+.fx-sw{flex:1;min-width:0;height:44px;border-radius:10px;border:1px solid #ffffff24;padding:0}
+.fx-sw[aria-pressed=true]{outline:2px solid var(--accent);outline-offset:2px}
+.fx-stopedit{display:flex;align-items:center;gap:8px;margin:6px 14px}
+.fx-stopedit .l{font-size:12px;min-width:52px}
+.fx-stopedit input[type=color]{width:48px;height:44px;border:1px solid var(--line);border-radius:12px;padding:2px;background:var(--raise)}
+.fx-stopedit .hx{flex:1;min-width:0;min-height:44px;border-radius:12px;border:1px solid var(--line);background:var(--raise);color:var(--ink);padding:0 10px;font:500 12px ui-monospace,Menlo,monospace}
+
+/* ---------- Fuse ---------- */
+.dock .fbar{padding:0;border:0}
+.fslots{margin:0 14px}
+.fslot{border:1px solid var(--line);border-radius:14px;background:var(--raise);padding:10px;margin:0 0 8px}
+.fslot.selected{border-color:#e8e3d3;background:#343630}
+.fslot.off .fslot-pick{opacity:.5}
+.fslot-main{display:flex;align-items:center;gap:6px}
+.fslot-pick{flex:1;min-width:0;display:flex;align-items:center;gap:11px;min-height:56px;padding:0;text-align:left;color:var(--ink);background:none;border:0}
+.fslot-pick canvas{width:52px;height:52px;flex:none;border-radius:10px;border:1px solid #ffffff1b;background:#080909}
+.fslot-name{flex:1;min-width:0;font-size:13px;font-weight:550;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fslot-name::first-letter{text-transform:uppercase}
+.fslot-name small::first-letter{text-transform:none}
+.fslot-name small{display:block;color:var(--mute);font-size:11px;font-weight:400;margin-top:5px}
+.fslot-pw{position:relative;flex:none;width:44px;height:44px;border:0;background:none}
+.fslot-pw::after{content:"";position:absolute;left:7px;top:7px;width:30px;height:30px;border-radius:50%;border:1px solid var(--line);background:#ffffff0c}
+.fslot-pw[aria-pressed=true]::after{background:var(--accent);border-color:var(--accent)}
+.fslot-pw[aria-pressed=false]::after{opacity:.5}
+.fslot-acts{display:flex;flex-wrap:wrap;gap:7px;margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
+.fslot-acts button{min-height:40px}
+.fpick{margin:8px 0 0;max-height:none;padding:0 0 6px;border-top:1px solid var(--line)}
+.fmask{margin:12px 0 0;border-top:1px solid var(--line)}
+.fmask .ir{padding:0 14px}
+
+/* ---------- focus and motion (keyboard and controller) ---------- */
+body:not([data-cam]) .dock :is(button,input,select,summary,[tabindex]):focus-visible,body:not([data-cam]) .fx-foot :is(button):focus-visible{outline:2px solid #ded6c4;outline-offset:2px;border-radius:12px}
+@media(prefers-reduced-motion:reduce){.dock *,.fx-foot *{transition:none!important;animation:none!important}}
