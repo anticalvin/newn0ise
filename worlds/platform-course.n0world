@@ -1,0 +1,307 @@
+{
+ "format": "n0ise-world",
+ "version": 1,
+ "scene": {
+  "name": "Platform course",
+  "environment": {
+   "timeOfDay": 10,
+   "shadows": true,
+   "ground": {
+    "color": "#4d5d46",
+    "size": 120
+   },
+   "fog": {
+    "color": "#aab8c6",
+    "near": 20,
+    "far": 90
+   }
+  }
+ },
+ "materials": {
+  "rock": {
+   "color": "#6f7a68",
+   "roughness": 0.95
+  },
+  "gold": {
+   "color": "#e6b84a",
+   "roughness": 0.3,
+   "metalness": 0.8,
+   "emissive": "#553300",
+   "emissiveIntensity": 0.4
+  }
+ },
+ "instances": [
+  {
+   "id": "start",
+   "prefab": "spawn",
+   "pos": [
+    0,
+    0,
+    0
+   ],
+   "params": {
+    "yaw": 0
+   }
+  },
+  {
+   "id": "steps",
+   "prefab": "stairs",
+   "pos": [
+    0,
+    0,
+    -1
+   ],
+   "params": {
+    "steps": 3,
+    "rise": 0.2,
+    "run": 0.4,
+    "width": 1.6,
+    "material": "rock"
+   }
+  },
+  {
+   "id": "p1",
+   "prefab": "platform",
+   "pos": [
+    0,
+    0.6,
+    -3
+   ],
+   "params": {
+    "width": 2,
+    "depth": 2,
+    "thickness": 0.3,
+    "material": "rock"
+   }
+  },
+  {
+   "id": "p2",
+   "prefab": "platform",
+   "pos": [
+    2.5,
+    1.2,
+    -5
+   ],
+   "params": {
+    "width": 2,
+    "depth": 2,
+    "thickness": 0.3,
+    "material": "rock"
+   }
+  },
+  {
+   "id": "p3",
+   "prefab": "platform",
+   "pos": [
+    5,
+    1.8,
+    -7
+   ],
+   "params": {
+    "width": 2,
+    "depth": 2,
+    "thickness": 0.3,
+    "material": "rock"
+   }
+  },
+  {
+   "id": "p4",
+   "prefab": "platform",
+   "pos": [
+    7.5,
+    2.4,
+    -9.5
+   ],
+   "params": {
+    "width": 2,
+    "depth": 2,
+    "thickness": 0.3,
+    "material": "rock"
+   }
+  },
+  {
+   "id": "coin1",
+   "type": "sphere",
+   "dims": [
+    0.4,
+    0.4,
+    0.4
+   ],
+   "pos": [
+    0,
+    1.75,
+    -3
+   ],
+   "material": "gold"
+  },
+  {
+   "id": "coin2",
+   "type": "sphere",
+   "dims": [
+    0.4,
+    0.4,
+    0.4
+   ],
+   "pos": [
+    2.5,
+    2.35,
+    -5
+   ],
+   "material": "gold"
+  },
+  {
+   "id": "coin3",
+   "type": "sphere",
+   "dims": [
+    0.4,
+    0.4,
+    0.4
+   ],
+   "pos": [
+    5,
+    2.95,
+    -7
+   ],
+   "material": "gold"
+  },
+  {
+   "id": "coin4",
+   "type": "sphere",
+   "dims": [
+    0.4,
+    0.4,
+    0.4
+   ],
+   "pos": [
+    7.5,
+    3.5500000000000003,
+    -9.5
+   ],
+   "material": "gold"
+  },
+  {
+   "id": "goal",
+   "prefab": "zone",
+   "pos": [
+    7.5,
+    2.7,
+    -9.5
+   ],
+   "params": {
+    "size": [
+     2,
+     2,
+     2
+    ]
+   }
+  }
+ ],
+ "lights": [
+  {
+   "id": "sun",
+   "type": "dir",
+   "pos": [
+    6,
+    10,
+    4
+   ],
+   "intensity": 2.2
+  }
+ ],
+ "rules": [
+  {
+   "id": "c1",
+   "when": {
+    "trigger": "object-touch",
+    "target": "coin1"
+   },
+   "then": [
+    {
+     "action": "collect",
+     "target": "coin1"
+    },
+    {
+     "action": "set-flag",
+     "flag": "coin1",
+     "value": true
+    }
+   ]
+  },
+  {
+   "id": "c2",
+   "when": {
+    "trigger": "object-touch",
+    "target": "coin2"
+   },
+   "then": [
+    {
+     "action": "collect",
+     "target": "coin2"
+    },
+    {
+     "action": "set-flag",
+     "flag": "coin2",
+     "value": true
+    }
+   ]
+  },
+  {
+   "id": "c3",
+   "when": {
+    "trigger": "object-touch",
+    "target": "coin3"
+   },
+   "then": [
+    {
+     "action": "collect",
+     "target": "coin3"
+    },
+    {
+     "action": "set-flag",
+     "flag": "coin3",
+     "value": true
+    }
+   ]
+  },
+  {
+   "id": "c4",
+   "when": {
+    "trigger": "object-touch",
+    "target": "coin4"
+   },
+   "then": [
+    {
+     "action": "collect",
+     "target": "coin4"
+    },
+    {
+     "action": "set-flag",
+     "flag": "coin4",
+     "value": true
+    }
+   ]
+  },
+  {
+   "id": "win",
+   "when": {
+    "trigger": "player-enter",
+    "target": "goal"
+   },
+   "if": {
+    "flag": "coin4",
+    "equals": true
+   },
+   "then": [
+    {
+     "action": "show-message",
+     "text": "You collected the last coin. Well done!",
+     "seconds": 4
+    },
+    {
+     "action": "play-sound",
+     "sound": "chime"
+    }
+   ]
+  }
+ ]
+}

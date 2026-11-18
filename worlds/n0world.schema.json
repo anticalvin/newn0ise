@@ -1,0 +1,343 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "title": "n0ise world (.n0world) version 1",
+ "type": "object",
+ "required": [
+  "format",
+  "version"
+ ],
+ "description": "Loose by design: the app validates, repairs and reports. This file documents the shape for editors and AI tools. Limits: {\"json\":1048576,\"zip\":12582912,\"asset\":2097152,\"instances\":500,\"meshes\":3000,\"rules\":64,\"actionsPerRule\":8,\"actionsPerSecond\":20,\"lights\":16,\"materials\":64,\"depth\":4,\"coord\":1000,\"name\":60,\"text\":140,\"cameras\":8,\"looks\":16,\"openings\":12}",
+ "properties": {
+  "format": {
+   "const": "n0ise-world"
+  },
+  "version": {
+   "const": 1
+  },
+  "scene": {
+   "type": "object",
+   "properties": {
+    "name": {
+     "type": "string",
+     "maxLength": 60
+    },
+    "environment": {
+     "type": "object",
+     "properties": {
+      "timeOfDay": {
+       "type": "number",
+       "minimum": 0,
+       "maximum": 24
+      },
+      "sky": {
+       "enum": [
+        "day",
+        "dusk",
+        "night",
+        "overcast",
+        "none"
+       ]
+      },
+      "bg": {
+       "type": "string",
+       "pattern": "^#[0-9a-fA-F]{6}$"
+      },
+      "fog": {
+       "oneOf": [
+        {
+         "const": false
+        },
+        {
+         "type": "object",
+         "properties": {
+          "color": {
+           "type": "string"
+          },
+          "near": {
+           "type": "number"
+          },
+          "far": {
+           "type": "number"
+          }
+         }
+        }
+       ]
+      },
+      "ground": {
+       "oneOf": [
+        {
+         "type": "boolean"
+        },
+        {
+         "type": "object",
+         "properties": {
+          "color": {
+           "type": "string"
+          },
+          "size": {
+           "type": "number"
+          }
+         }
+        }
+       ]
+      },
+      "shadows": {
+       "type": "boolean"
+      },
+      "sun": {
+       "type": "object",
+       "properties": {
+        "intensity": {
+         "type": "number"
+        },
+        "color": {
+         "type": "string"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "materials": {
+   "type": "object",
+   "maxProperties": 64,
+   "additionalProperties": {
+    "type": "object",
+    "properties": {
+     "color": {
+      "type": "string"
+     },
+     "roughness": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+     },
+     "metalness": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+     },
+     "emissive": {
+      "type": "string"
+     },
+     "emissiveIntensity": {
+      "type": "number"
+     },
+     "opacity": {
+      "type": "number"
+     },
+     "pattern": {
+      "type": "object",
+      "properties": {
+       "type": {
+        "enum": [
+         "checker",
+         "stripes",
+         "noise"
+        ]
+       },
+       "color2": {
+        "type": "string"
+       },
+       "scale": {
+        "type": "number"
+       }
+      }
+     }
+    }
+   }
+  },
+  "prefabs": {
+   "type": "object",
+   "description": "Named parameter presets: {name:{prefab,params}}"
+  },
+  "instances": {
+   "type": "array",
+   "maxItems": 500,
+   "items": {
+    "type": "object",
+    "required": [
+     "id"
+    ],
+    "properties": {
+     "id": {
+      "type": "string"
+     },
+     "name": {
+      "type": "string"
+     },
+     "type": {
+      "enum": [
+       "cube",
+       "sphere",
+       "torus",
+       "knot",
+       "plane",
+       "cylinder",
+       "cone",
+       "capsule",
+       "human",
+       "wall",
+       "floor",
+       "platform",
+       "pillar",
+       "crate",
+       "ball"
+      ]
+     },
+     "prefab": {
+      "enum": [
+       "door",
+       "platform",
+       "stairs",
+       "spawn",
+       "room",
+       "group",
+       "ladder",
+       "vehicle",
+       "target",
+       "zone"
+      ]
+     },
+     "params": {
+      "type": "object"
+     },
+     "pos": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "minItems": 3,
+      "maxItems": 3
+     },
+     "rot": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "minItems": 3,
+      "maxItems": 3
+     },
+     "dims": {
+      "type": "array",
+      "items": {
+       "type": "number"
+      },
+      "minItems": 3,
+      "maxItems": 3
+     },
+     "scale": {},
+     "material": {
+      "type": "string"
+     },
+     "color": {
+      "type": "string"
+     },
+     "phys": {
+      "type": "object",
+      "properties": {
+       "type": {
+        "enum": [
+         "static",
+         "dynamic",
+         "kinematic",
+         "none"
+        ]
+       }
+      }
+     },
+     "parent": {
+      "type": "string"
+     },
+     "visible": {
+      "type": "boolean"
+     }
+    }
+   }
+  },
+  "lights": {
+   "type": "array",
+   "maxItems": 16
+  },
+  "cameras": {
+   "type": "array",
+   "maxItems": 8
+  },
+  "rules": {
+   "type": "array",
+   "maxItems": 64,
+   "items": {
+    "type": "object",
+    "required": [
+     "when",
+     "then"
+    ],
+    "properties": {
+     "when": {
+      "type": "object",
+      "properties": {
+       "trigger": {
+        "enum": [
+         "player-enter",
+         "player-interact",
+         "timer",
+         "object-touch",
+         "object-shot"
+        ]
+       }
+      }
+     },
+     "if": {
+      "type": "object"
+     },
+     "then": {
+      "type": "array",
+      "maxItems": 8,
+      "items": {
+       "type": "object",
+       "properties": {
+        "action": {
+         "enum": [
+          "toggle-open",
+          "move-to",
+          "teleport",
+          "destroy",
+          "collect",
+          "set-flag",
+          "show-message",
+          "play-sound"
+         ]
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "looks": {
+   "type": "array",
+   "maxItems": 16,
+   "items": {
+    "type": "object",
+    "required": [
+     "target",
+     "profile"
+    ],
+    "properties": {
+     "target": {
+      "type": "string",
+      "description": "\"scene\", \"object:<id>\" or \"material:<name>\""
+     },
+     "profile": {
+      "type": "string"
+     }
+    }
+   }
+  },
+  "assets": {
+   "type": "object",
+   "description": "Reserved. Not used in version 1."
+  }
+ }
+}

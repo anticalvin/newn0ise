@@ -16,7 +16,7 @@ export function createWorldEditor(c){
   let pane=null,detailsEl=null,syncs=[],playBtn=null;
   const own=o=>o&&o.meta&&o.meta.asset&&o.meta.uid;
   /* ---- undo: snapshots of the placed objects ---- */
-  const snapshot=()=>S.objs.filter(own).map(o=>{return{uid:o.meta.uid,asset:o.meta.asset,name:o.name,pos:o.holder.position.toArray(),q:o.holder.quaternion.toArray(),scale:o.holder.scale.toArray(),color:colorOf(o),phys:o.meta.phys||null,vis:o.vis,url:o.meta.url||null};});
+  const snapshot=()=>S.objs.filter(own).map(o=>{return{uid:o.meta.uid,asset:o.meta.asset,name:o.name,pos:o.holder.position.toArray(),q:o.holder.quaternion.toArray(),scale:o.holder.scale.toArray(),color:colorOf(o),phys:o.meta.phys||null,vis:o.vis,url:o.meta.url||null,ap:c.doc?c.doc.appearance(o):null};});
   function colorOf(o){let col=null;o.holder.traverse(n=>{if(!col&&n.isMesh&&n.material&&n.material.color&&!n.userData.noView)col='#'+n.material.color.getHexString();});return col;}
   const push=()=>{ed.undo.push(snapshot());if(ed.undo.length>60)ed.undo.shift();ed.redo.length=0;};
   async function restore(state){
@@ -26,7 +26,7 @@ export function createWorldEditor(c){
       let o=cur.get(s.uid);
       if(!o){const r=await api.run({cmd:'add',type:s.asset,name:s.name,pos:s.pos});o=S.objs.find(x=>x.id===r.id);if(!o)continue;o.meta.uid=s.uid;}
       const h=o.holder;h.position.fromArray(s.pos);h.quaternion.fromArray(s.q);h.scale.fromArray(s.scale);o.vis=s.vis;h.visible=s.vis;
-      if(s.color)await api.run({cmd:'set',id:o.id,color:s.color});if(s.phys)o.meta.phys={...s.phys};
+      if(s.color)await api.run({cmd:'set',id:o.id,color:s.color});if(s.phys)o.meta.phys={...s.phys};if(s.ap&&c.doc)c.doc.putAppearance(o,s.ap);
     }
     sim.invalidate();renderObjList&&renderObjList();bump();renderDetails();
   }
@@ -42,10 +42,9 @@ export function createWorldEditor(c){
   const sn=v=>ed.snap?Math.round(v*2)/2:v;
   async function place(key){
     push();const p=groundPoint();p.x=sn(p.x);p.z=sn(p.z);
-    const boxes=S.objs.filter(o=>o.vis).map(o=>new THREE.Box3().setFromObject(o.holder));
-    for(let i=0;i<10&&boxes.some(b=>!b.isEmpty()&&p.x>b.min.x-.3&&p.x<b.max.x+.3&&p.z>b.min.z-.3&&p.z<b.max.z+.3);i++)p.x+=1.4;
     const drop=sim.playing||key==='crate'||key==='ball';
-    const r=await api.run({cmd:'add',type:key==='goal'?'pillar':key,pos:[p.x,drop?1.5:0,p.z]});
+    const r=await api.run({cmd:'add',type:key==='goal'?'pillar':key,near:[p.x,p.z]});
+    if(drop){const g=S.objs.find(x=>x.id===r.id);if(g){g.holder.position.y+=1.5;g.holder.updateMatrixWorld(true);}}
     if(key==='goal'){const g=S.objs.find(x=>x.id===r.id);if(g){g.meta.goal=true;g.name='Goal';api.run({cmd:'set',id:g.id,color:'#e6c15a',phys:{type:'none'}});}}
     const o=S.objs.find(x=>x.id===r.id);if(o){o.meta.uid=++ed.uid+1000;selectObj(o.id);setGizmo('translate');}
     renderObjList&&renderObjList();sim.invalidate();renderDetails();
@@ -55,7 +54,8 @@ export function createWorldEditor(c){
   /* ---- time of day ---- */
   const lerpC=(a,b,t)=>{const A=new THREE.Color(a),B=new THREE.Color(b);return '#'+A.lerp(B,Math.max(0,Math.min(1,t))).getHexString();};
   function applyTime(h){
-    ed.tod=h;const el0=Math.sin((h-6)/12*Math.PI),day=Math.max(0,el0),az=(h-12)/12*Math.PI*.9;
+    ed.tod=h;if(c.lighting&&c.lighting.on){c.lighting.setHour(h);return;}
+    const el0=Math.sin((h-6)/12*Math.PI),day=Math.max(0,el0),az=(h-12)/12*Math.PI*.9;
     const R=14,sunPos=[Math.sin(az)*R*Math.max(.25,Math.cos(Math.asin(Math.max(-1,Math.min(1,el0)))*.9)),Math.max(1.5,R*day),Math.cos(az)*R*.6+4];
     const bg=day<.12?lerpC('#0b1220','#e4986b',day/.12):lerpC('#e4986b','#9fb4c8',(day-.12)/.4);
     api.run({cmd:'environment',bg,envIntensity:.12+.55*Math.min(1,day*1.6),sun:{intensity:.15+2.3*Math.min(1,day*1.4),pos:sunPos,color:lerpC('#ff9a5a','#fff4e0',day*2.2)},fog:S.worldFog?{color:bg,near:12,far:S.worldFog}:null});
@@ -75,7 +75,7 @@ export function createWorldEditor(c){
     const dims=()=>{const b=new THREE.Box3().setFromObject(h);return b.getSize(new THREE.Vector3());};
     const dm=['x','y','z'].map((k,i)=>num(()=>dims()[k],v=>{const d=dims().toArray();d[i]=Math.max(.05,v);api.run({cmd:'set',id:o.id,dims:d,pos:h.position.toArray(),rot:[h.rotation.x*57.2958,h.rotation.y*57.2958,h.rotation.z*57.2958]});sim.invalidate();},.1));
     const dr=el('div','chips');dr.style.display='grid';dr.style.gridTemplateColumns='repeat(3,1fr)';dm.forEach(i=>dr.appendChild(i));s.appendChild(field('Size m',dr));
-    const col=document.createElement('input');col.type='color';col.value=colorOf(o)||'#cccccc';col.style.cssText='width:100%;height:44px;background:none;border:1px solid var(--line,#333)';col.addEventListener('change',()=>{push();api.run({cmd:'set',id:o.id,color:col.value});});s.appendChild(field('Colour',col));
+    const col=document.createElement('input');col.type='color';col.value=colorOf(o)||'#cccccc';col.style.cssText='width:100%;height:44px;background:none;border:1px solid var(--line,#333)';col.addEventListener('change',()=>{push();if(!(c.recolour&&c.recolour(o,col.value)))api.run({cmd:'set',id:o.id,color:col.value});});s.appendChild(field('Colour',col));
     const ph=o.meta.phys||{type:'none'};const pc=el('div','chips');
     [['none','None'],['static','Solid'],['dynamic','Falls']].forEach(([v,l])=>{const b=el('button','chip',l);b.setAttribute('aria-pressed',(ph.type||'none')===v);b.addEventListener('click',()=>{push();api.run({cmd:'set',id:o.id,phys:{type:v}});pc.querySelectorAll('.chip').forEach(x=>x.setAttribute('aria-pressed',x===b));});pc.appendChild(b);});s.appendChild(field('Physics',pc));
     const bn=document.createElement('input');bn.type='range';bn.min=0;bn.max=1;bn.step=.05;bn.value=ph.bounce??.25;bn.addEventListener('input',()=>api.run({cmd:'set',id:o.id,phys:{bounce:+bn.value}}));s.appendChild(field('Bounce',bn));
@@ -107,7 +107,8 @@ export function createWorldEditor(c){
     const grid=el('div','wgrid');LIB.forEach(([k,l])=>{const b=el('button','wtile');b.innerHTML=svg(k)+`<span>${l}</span>`;b.addEventListener('click',()=>place(k));grid.appendChild(b);});pl.appendChild(grid);
     detailsEl=el('div');p.appendChild(detailsEl);
     const w=sec(p,'World');
-    const tod=document.createElement('input');tod.type='range';tod.min=0;tod.max=24;tod.step=.1;tod.value=ed.tod;tod.addEventListener('input',()=>applyTime(+tod.value));w.appendChild(field('Time of day',tod));
+    const tod=document.createElement('input');tod.type='range';tod.min=0;tod.max=24;tod.step=.1;tod.value=ed.tod;tod.addEventListener('input',()=>applyTime(+tod.value));const sk=el('div','chips');[['Sunrise',6.6,0],['Midday',12,0],['Golden hour',17.6,0],['Dusk',19.4,25],['Night',23,0],['Misty',9,22]].forEach(([l,h,f])=>sk.appendChild(btn(l,'',()=>{S.worldFog=f;fg.value=f;tod.value=h;applyTime(h);})));w.appendChild(sk);
+    w.appendChild(field('Time of day',tod));
     const fg=document.createElement('input');fg.type='range';fg.min=0;fg.max=120;fg.step=5;fg.value=0;fg.addEventListener('input',()=>{S.worldFog=+fg.value||0;applyTime(ed.tod);});w.appendChild(field('Fog distance',fg));
     const tg=el('div','chips');
     const chip=(l,on,fn)=>{const b=el('button','chip',l);b.setAttribute('aria-pressed',on);b.addEventListener('click',()=>{on=!on;b.setAttribute('aria-pressed',on);fn(on);});tg.appendChild(b);};
@@ -126,5 +127,5 @@ export function createWorldEditor(c){
     if((e.metaKey||e.ctrlKey)&&e.key==='z'){e.preventDefault();e.shiftKey?doRedo():doUndo();}
     else if(e.key==='Delete'||e.key==='Backspace'){const o=objById(S.sel);if(o){push();removeObj(o.id);renderDetails();}}
     else if(e.key==='w')setGizmo('translate');else if(e.key==='e')setGizmo('rotate');else if(e.key==='r')setGizmo('scale');});
-  return {build,starter,place,undo:doUndo,redo:doRedo,ed};
+  return {build,starter,level:levelStarter,place,undo:doUndo,redo:doRedo,ed};
 }

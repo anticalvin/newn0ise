@@ -75,7 +75,7 @@ export function createApi(c){
     if(a.name)o.name=a.name;
     o.meta=o.meta||{};o.meta.uid=++uidc;o.meta.asset=a.asset||(prim||'file').toLowerCase();if(a.phys)setPhys(o,a.phys);
     if(prim&&a.size==null&&!a.dims&&!a.scale)a.size=1;
-    place(o,{...a,pos:a.pos||[0,0,0]});paint(o,a);
+    place(o,{...a,pos:a.pos});if(!a.pos&&c.autoPlace)c.autoPlace(o,a.near);paint(o,a);
     if(S.shadows)setShadowFlags(o.holder);
     renderObjList&&renderObjList();bump();return o;
   }
@@ -92,10 +92,11 @@ export function createApi(c){
     const L=lights.get(a.id);if(!L)throw new Error('No light "'+a.id+'".');
     if(op==='delete'){scene.remove(L);if(L.target)scene.remove(L.target);lights.delete(a.id);bump();return{deleted:a.id};}
     if(a.color)L.color.set(a.color);if(a.intensity!=null)L.intensity=a.intensity;if(a.pos)L.position.set(...v3(a.pos));if(a.target&&L.target)L.target.position.set(...v3(a.target));
+    if(a.angle!=null&&L.isSpotLight)L.angle=a.angle*Math.PI/180;if(a.shadow!=null&&L.shadow){L.castShadow=!!a.shadow;if(L.castShadow)L.shadow.mapSize.set(1024,1024);}
     bump();return{id:a.id};
   }
   function ensureGround(on,color,size){
-    if(!groundMesh){groundMesh=new THREE.Mesh(new THREE.PlaneGeometry(1,1).rotateX(-Math.PI/2),new THREE.MeshStandardMaterial({color:'#8a8a86',roughness:.95,metalness:0}));groundMesh.userData.noView=true;groundMesh.receiveShadow=true;groundMesh.position.y=-.002;scene.add(groundMesh);}
+    if(!groundMesh){groundMesh=new THREE.Mesh(new THREE.PlaneGeometry(1,1).rotateX(-Math.PI/2),new THREE.MeshStandardMaterial({color:'#8a8a86',roughness:.95,metalness:0}));groundMesh.userData.noView=true;groundMesh.userData.ground=true;groundMesh.receiveShadow=true;groundMesh.position.y=-.002;scene.add(groundMesh);}
     groundMesh.visible=!!on;if(color)groundMesh.material.color.set(color);if(size)groundMesh.scale.set(size,1,size);
   }
   function envCmd(a){
@@ -156,6 +157,7 @@ export function createApi(c){
     set:'{id|name, newName, pos, rot, dims, scale, size, color, metalness, roughness, emissive, opacity, visible} → object info.',
     delete:'{id|name} → removes the object.',
     duplicate:'{id|name, pos?, name?} → copy of a primitive.',
+    boolean:'{op:"union"|"subtract"|"intersect", a:id|name, b:id|name, keep?:true} → a new solid made from two closed solids (Manifold). The originals are hidden unless keep is true. Fails with a plain reason for shapes with gaps.',
     select:'{id|name} → selects it (shows its gizmo).',
     light:'{op:"add|set|delete|clear", type:"point|spot|dir", id, pos, target, color, intensity, angle}',
     environment:'{bg, envIntensity, sun:{intensity,pos,color}, ground:true|{color,size}, fog:{color,near,far}|null, grid, shadows}',
@@ -178,10 +180,13 @@ export function createApi(c){
       case 'scene':return sceneInfo();
       case 'add':{const o=await addObject({...a});return info(o);}
       case 'set':{const o=ref(a);if(a.phys)setPhys(o,a.phys);if(a.newName)o.name=a.newName;place(o,a);paint(o,a);if(a.visible!=null){o.vis=!!a.visible;o.holder.visible=o.vis;}renderObjList&&renderObjList();refreshInspector&&refreshInspector(true);bump();return info(o);}
+      case 'boolean':{const bl=c.bool;if(!bl)throw new Error('Boolean modelling isn’t available here.');const A=ref({id:typeof a.a==='number'?a.a:null,name:typeof a.a==='string'?a.a:null}),B=ref({id:typeof a.b==='number'?a.b:null,name:typeof a.b==='string'?a.b:null});
+        const op=a.op==='difference'?'subtract':a.op==='intersection'?'intersect':a.op;if(!['union','subtract','intersect'].includes(op))throw new Error('op must be union, subtract or intersect.');
+        const r=await bl.run(op,A.id,B.id,!!a.keep);if(!r)throw new Error('Those shapes couldn’t be combined. They need to be closed solids that overlap (for subtract and intersect).');return {id:r.id,name:r.name,op};}
       case 'delete':{const o=ref(a);const i=info(o);removeObj(o.id);return{deleted:i.name};}
-      case 'duplicate':{const o=ref(a);const prim=Object.keys(PRIMS).find(k=>k===o.name||o.name.startsWith(k));if(!prim)throw new Error('Only shapes can be duplicated. Add the file again instead.');
+      case 'duplicate':{const o=ref(a);const prim=Object.keys(PRIMS).find(k=>o.meta&&o.meta.asset===k.toLowerCase())||Object.keys(PRIMS).find(k=>k===o.name||o.name.startsWith(k));if(!prim)throw new Error('Only shapes can be duplicated. Add the file again instead.');
         const n=addPrimitive(prim);n.holder.scale.copy(o.holder.scale);n.holder.rotation.copy(o.holder.rotation);n.holder.position.copy(o.holder.position).x+=1;if(a.pos)n.holder.position.set(...v3(a.pos));if(a.name)n.name=a.name;
-        let col=null;o.holder.traverse(m=>{if(!col&&m.isMesh&&m.material&&m.material.color)col='#'+m.material.color.getHexString();});if(col)paint(n,{color:col});renderObjList&&renderObjList();bump();return info(n);}
+        let col=null;o.holder.traverse(m=>{if(!col&&m.isMesh&&m.material&&m.material.color)col='#'+m.material.color.getHexString();});if(col)paint(n,{color:col});if(c.doc)c.doc.copyAppearance(o,n);renderObjList&&renderObjList();bump();return info(n);}
       case 'select':{const o=ref(a);c.selectObj(o.id);return info(o);}
       case 'light':return lightCmd(a);
       case 'environment':return envCmd(a);

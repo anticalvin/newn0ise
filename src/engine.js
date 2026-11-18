@@ -631,8 +631,8 @@ R('beam','Electronics','sati','Saturation drift',0,100,0);
 R('beam','Geometry','curv','Curvature',-50,100,25);
 R('beam','Geometry','corner','Corner radius',0,100,25);
 R('beam','Geometry','over','Overscan',0,20,3);
-R('beam','Geometry','convs','Misconvergence',0,100,10);
-R('beam','Geometry','conve','Edge convergence',0,100,20);
+R('beam','Geometry','convs','Misconvergence',0,100,0);
+R('beam','Geometry','conve','Edge convergence',0,100,0);
 R('beam','Geometry','cdrift','Circuit drift',0,100,0);
 R('beam','Geometry','aging','Hardware aging',0,100,20);
 
@@ -752,7 +752,7 @@ const PROFILES=[
 ];
 
 /* ---------- state ---------- */
-const BASE={pal:'src',custom:['#000000','#ff3d6e','#3df5ff','#ffffff'],txt:'n0ise\n> signal acquired\n> ',profile:'studio'};
+const BASE={pal:'src',custom:['#000000','#e8d1b6','#3df5ff','#ffffff'],txt:'n0ise\n> signal acquired\n> ',profile:'studio'};
 CT.forEach(c=>BASE[c.k]=c.d);
 BASE.stg=['clean','live','direct','studio'];
 const P=JSON.parse(JSON.stringify(BASE));
@@ -1480,7 +1480,7 @@ function renderFrame(t,dt,OUT){
     sA.f('uPer',Math.max(2.2,E.cper*k));
     sA.f('uSL',Math.max(.35,(.3+E.lbw/100*3.2+gen*1.5)*k));
     sA.f('uSC',Math.max(.6,(1.2+E.cbw/100*3.5)*k));
-    sA.f('uYC',+E.cmode===1?1:E.ycs/100);sA.f('uSnr',E.snr/100*(1+gen*.8));sA.f('uCoh',E.coh/100);sA.f('uSnow',E.snow/100);
+    sA.f('uYC',+E.cmode===1?1:E.ycs/100);sA.f('uSnr',E.snr/100*(1+gen*.8)*(window.__noiseK??1));sA.f('uCoh',E.coh/100);sA.f('uSnow',E.snow/100*(window.__noiseK??1));
     sA.f('uGhost',E.ghost/100);sA.f('uGD',E.gdel*k);sA.f('uJit',E.jit/100*12*k);sA.f('uDrift',E.drift/100*10*k);
     sA.f('uTrk',E.trk/100);sA.f('uTJ',E.tjit/100);sA.f('uRG',E.rgho/100);sA.f('uGS',E.gspr*k);sA.f('uGDec',E.gdec/100);sA.f('uHsw',E.hsw/100);sA.f('uDrop',E.drop/100);sA.f('uClip',E.clip/100);
     sA.f('uCsat',E.csat/100*(1-gen*.35));sA.f('uPhase',E.phs*Math.PI/180);

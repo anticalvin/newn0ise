@@ -1,0 +1,1543 @@
+{
+ "format": "n0ise-world",
+ "version": 1,
+ "scene": {
+  "name": "Night Station",
+  "environment": {
+   "timeOfDay": 23.5,
+   "sky": "night",
+   "shadows": true,
+   "ground": {
+    "color": "#15171b",
+    "size": 200
+   },
+   "fog": {
+    "color": "#111b30",
+    "near": 8,
+    "far": 90
+   }
+  }
+ },
+ "materials": {
+  "asphalt": {
+   "color": "#202226",
+   "roughness": 0.92
+  },
+  "stripe": {
+   "color": "#d9d2b4",
+   "roughness": 0.8,
+   "emissive": "#d9d2b4",
+   "emissiveIntensity": 0.08
+  },
+  "concrete": {
+   "color": "#7d8086",
+   "roughness": 0.95,
+   "pattern": {
+    "type": "checker",
+    "color2": "#74777d",
+    "scale": 10
+   }
+  },
+  "shopwall": {
+   "color": "#aeb6a8",
+   "roughness": 0.85
+  },
+  "shopfloor": {
+   "color": "#8d9a8c",
+   "roughness": 0.35,
+   "pattern": {
+    "type": "checker",
+    "color2": "#c2c7bb",
+    "scale": 14
+   }
+  },
+  "canopy": {
+   "color": "#d7d9d6",
+   "roughness": 0.6
+  },
+  "post": {
+   "color": "#8c9096",
+   "roughness": 0.5,
+   "metalness": 0.5
+  },
+  "tube": {
+   "color": "#f4f8ff",
+   "roughness": 0.4,
+   "emissive": "#dff0ff",
+   "emissiveIntensity": 2.4
+  },
+  "warm": {
+   "color": "#fff1d6",
+   "roughness": 0.4,
+   "emissive": "#ffd9a0",
+   "emissiveIntensity": 2.0
+  },
+  "pump": {
+   "color": "#b83a33",
+   "roughness": 0.4,
+   "metalness": 0.2
+  },
+  "pumpgrey": {
+   "color": "#c9ccce",
+   "roughness": 0.45,
+   "metalness": 0.3
+  },
+  "lcd": {
+   "color": "#0b2a1c",
+   "roughness": 0.3,
+   "emissive": "#7dffb0",
+   "emissiveIntensity": 1.4
+  },
+  "sign": {
+   "color": "#1f4a3a",
+   "roughness": 0.5,
+   "emissive": "#8be8bd",
+   "emissiveIntensity": 1.5
+  },
+  "signred": {
+   "color": "#5a1a18",
+   "roughness": 0.5,
+   "emissive": "#ff6b5a",
+   "emissiveIntensity": 1.3
+  },
+  "counter": {
+   "color": "#c8c0b0",
+   "roughness": 0.5
+  },
+  "shelf": {
+   "color": "#9aa0a6",
+   "roughness": 0.6,
+   "metalness": 0.2
+  },
+  "crtbody": {
+   "color": "#2a2c30",
+   "roughness": 0.5
+  },
+  "crtscreen": {
+   "color": "#10201c",
+   "roughness": 0.15,
+   "emissive": "#9be8d0",
+   "emissiveIntensity": 1.8,
+   "pattern": {
+    "type": "stripes",
+    "color2": "#1a3a30",
+    "scale": 28
+   }
+  },
+  "fridge": {
+   "color": "#d8e4ea",
+   "roughness": 0.3,
+   "metalness": 0.3,
+   "emissive": "#bfe6ff",
+   "emissiveIntensity": 0.55
+  },
+  "carbody": {
+   "color": "#2c4a55",
+   "roughness": 0.28,
+   "metalness": 0.5
+  },
+  "lamp": {
+   "color": "#ffcf94",
+   "roughness": 0.4,
+   "emissive": "#ffb35c",
+   "emissiveIntensity": 3
+  },
+  "pole": {
+   "color": "#3b3e44",
+   "roughness": 0.6,
+   "metalness": 0.4
+  },
+  "snackA": {
+   "color": "#d94a3a",
+   "roughness": 0.6
+  },
+  "snackB": {
+   "color": "#e6b73c",
+   "roughness": 0.6
+  },
+  "snackC": {
+   "color": "#3a78c9",
+   "roughness": 0.6
+  },
+  "snackD": {
+   "color": "#5aa65a",
+   "roughness": 0.6
+  },
+  "pistol": {
+   "color": "#2b2d31",
+   "roughness": 0.35,
+   "metalness": 0.6,
+   "emissive": "#ffb35c",
+   "emissiveIntensity": 0.5
+  },
+  "bullseye": {
+   "color": "#d4552b",
+   "roughness": 0.6,
+   "emissive": "#d4552b",
+   "emissiveIntensity": 0.25
+  },
+  "door": {
+   "color": "#7da39a",
+   "roughness": 0.3,
+   "metalness": 0.2
+  },
+  "doorframe": {
+   "color": "#4a4e54",
+   "roughness": 0.5
+  }
+ },
+ "instances": [
+  {
+   "id": "start",
+   "pos": [
+    0,
+    0,
+    17
+   ],
+   "prefab": "spawn",
+   "params": {
+    "yaw": 0,
+    "weapon": false,
+    "firstPerson": true
+   }
+  },
+  {
+   "id": "road",
+   "pos": [
+    0,
+    0,
+    14
+   ],
+   "prefab": "platform",
+   "params": {
+    "width": 60,
+    "depth": 8,
+    "thickness": 0.05,
+    "material": "asphalt"
+   }
+  },
+  {
+   "id": "dash-8",
+   "pos": [
+    -25.6,
+    0,
+    14
+   ],
+   "prefab": "platform",
+   "params": {
+    "width": 2.4,
+    "depth": 0.2,
+    "thickness": 0.06,
+    "material": "stripe"
+   }
+  },
+  {
+   "id": "dash-7",
+   "pos": [
+    -22.400000000000002,
+    0,
+    14
+   ],
+   "prefab": "platform",
+   "params": {
+    "width": 2.4,
+    "depth": 0.2,
+    "thickness": 0.06,
+    "material": "stripe"
+   }
+  },
+  {
+   "id": "dash-6",
+   "pos": [
+    -19.200000000000003,
+    0,
+    14
+   ],
+   "prefab": "platform",
+   "params": {
+    "width": 2.4,
+    "depth": 0.2,
+    "thickness": 0.06,
+    "material": "stripe"
+   }
+  },
+  {
+   "id": "dash-5",
+   "pos": [
+    -16.0,
+    0,
+    14
+   ],
+   "prefab": "platform",
+   "params": {
+    "width": 2.4,
+    "depth": 0.2,
+    "thickness": 0.06,
+    "material": "stripe"
+   }
+  },
+  {
+   "id": "dash-4",
+   "pos": [
+    -12.8,
+    0,
+    14
+   ],
+   "prefab": "platform",
+   "params": {
+    "width": 2.4,
+    "depth": 0.2,
+    "thickness": 0.06,
+    "material": "stripe"
+   }
+  },
+  {
+   "id": "dash-3",
+   "pos": [
+    -9.600000000000001,
+    0,
+    14
+   ],
+   "prefab": "platform",
+   "params": {
+    "width": 2.4,
+    "depth": 0.2,
+    "thickness": 0.06,
+    "material": "stripe"
+   }
+  },
+  {
+   "id": "dash-2",
+   "pos": [
+    -6.4,
+    0,
+    14
+   ],
+   "prefab": "platform",
+   "params": {
+    "width": 2.4,
+    "depth": 0.2,
+    "thickness": 0.06,
+    "material": "stripe"
+   }
+  },
+  {
+   "id": "dash-1",
+   "pos": [
+    -3.2,
+    0,
+    14
+   ],
+   "prefab": "platform",
+   "params": {
+    "width": 2.4,
+    "depth": 0.2,
+    "thickness": 0.06,
+    "material": "stripe"
+   }
+  },
+  {
+   "id": "dash0",
+   "pos": [
+    0.0,
+    0,
+    14
+   ],
+   "prefab": "platform",
+   "params": {
+    "width": 2.4,
+    "depth": 0.2,
+    "thickness": 0.06,
+    "material": "stripe"
+   }
+  },
+  {
+   "id": "dash1",
+   "pos": [
+    3.2,
+    0,
+    14
+   ],
+   "prefab": "platform",
+   "params": {
+    "width": 2.4,
+    "depth": 0.2,
+    "thickness": 0.06,
+    "material": "stripe"
+   }
+  },
+  {
+   "id": "dash2",
+   "pos": [
+    6.4,
+    0,
+    14
+   ],
+   "prefab": "platform",
+   "params": {
+    "width": 2.4,
+    "depth": 0.2,
+    "thickness": 0.06,
+    "material": "stripe"
+   }
+  },
+  {
+   "id": "dash3",
+   "pos": [
+    9.600000000000001,
+    0,
+    14
+   ],
+   "prefab": "platform",
+   "params": {
+    "width": 2.4,
+    "depth": 0.2,
+    "thickness": 0.06,
+    "material": "stripe"
+   }
+  },
+  {
+   "id": "dash4",
+   "pos": [
+    12.8,
+    0,
+    14
+   ],
+   "prefab": "platform",
+   "params": {
+    "width": 2.4,
+    "depth": 0.2,
+    "thickness": 0.06,
+    "material": "stripe"
+   }
+  },
+  {
+   "id": "dash5",
+   "pos": [
+    16.0,
+    0,
+    14
+   ],
+   "prefab": "platform",
+   "params": {
+    "width": 2.4,
+    "depth": 0.2,
+    "thickness": 0.06,
+    "material": "stripe"
+   }
+  },
+  {
+   "id": "dash6",
+   "pos": [
+    19.200000000000003,
+    0,
+    14
+   ],
+   "prefab": "platform",
+   "params": {
+    "width": 2.4,
+    "depth": 0.2,
+    "thickness": 0.06,
+    "material": "stripe"
+   }
+  },
+  {
+   "id": "dash7",
+   "pos": [
+    22.400000000000002,
+    0,
+    14
+   ],
+   "prefab": "platform",
+   "params": {
+    "width": 2.4,
+    "depth": 0.2,
+    "thickness": 0.06,
+    "material": "stripe"
+   }
+  },
+  {
+   "id": "dash8",
+   "pos": [
+    25.6,
+    0,
+    14
+   ],
+   "prefab": "platform",
+   "params": {
+    "width": 2.4,
+    "depth": 0.2,
+    "thickness": 0.06,
+    "material": "stripe"
+   }
+  },
+  {
+   "id": "forecourt",
+   "pos": [
+    0,
+    0,
+    3
+   ],
+   "prefab": "platform",
+   "params": {
+    "width": 30,
+    "depth": 16,
+    "thickness": 0.12,
+    "material": "concrete"
+   }
+  },
+  {
+   "id": "shop",
+   "pos": [
+    0,
+    0,
+    -8
+   ],
+   "prefab": "room",
+   "params": {
+    "width": 12,
+    "depth": 8,
+    "height": 3.2,
+    "wall": 0.2,
+    "floor": true,
+    "ceiling": true,
+    "material": "shopwall",
+    "floorMaterial": "shopfloor",
+    "openings": [
+     {
+      "wall": "s",
+      "offset": 0,
+      "width": 1.5,
+      "height": 2.2
+     }
+    ]
+   }
+  },
+  {
+   "id": "shopdoor",
+   "pos": [
+    0,
+    0,
+    -3.9
+   ],
+   "prefab": "door",
+   "params": {
+    "width": 1.5,
+    "height": 2.2,
+    "material": "door",
+    "frameMaterial": "doorframe"
+   },
+   "name": "Shop door"
+  },
+  {
+   "id": "sign",
+   "pos": [
+    0,
+    3.35,
+    -3.95
+   ],
+   "type": "cube",
+   "dims": [
+    5,
+    0.8,
+    0.2
+   ],
+   "material": "sign"
+  },
+  {
+   "id": "signred",
+   "pos": [
+    -4.2,
+    3.35,
+    -3.95
+   ],
+   "type": "cube",
+   "dims": [
+    1,
+    0.8,
+    0.2
+   ],
+   "material": "signred"
+  },
+  {
+   "id": "canopy",
+   "pos": [
+    0,
+    3.8,
+    5
+   ],
+   "prefab": "platform",
+   "params": {
+    "width": 16,
+    "depth": 8,
+    "thickness": 0.3,
+    "material": "canopy"
+   }
+  },
+  {
+   "id": "post0",
+   "pos": [
+    -7.4,
+    0,
+    1.2
+   ],
+   "type": "cube",
+   "dims": [
+    0.4,
+    3.8,
+    0.4
+   ],
+   "material": "post"
+  },
+  {
+   "id": "post1",
+   "pos": [
+    7.4,
+    0,
+    1.2
+   ],
+   "type": "cube",
+   "dims": [
+    0.4,
+    3.8,
+    0.4
+   ],
+   "material": "post"
+  },
+  {
+   "id": "post2",
+   "pos": [
+    -7.4,
+    0,
+    8.8
+   ],
+   "type": "cube",
+   "dims": [
+    0.4,
+    3.8,
+    0.4
+   ],
+   "material": "post"
+  },
+  {
+   "id": "post3",
+   "pos": [
+    7.4,
+    0,
+    8.8
+   ],
+   "type": "cube",
+   "dims": [
+    0.4,
+    3.8,
+    0.4
+   ],
+   "material": "post"
+  },
+  {
+   "id": "canopylight1",
+   "pos": [
+    -4,
+    3.66,
+    5
+   ],
+   "type": "cube",
+   "dims": [
+    0.5,
+    0.06,
+    5.5
+   ],
+   "material": "tube"
+  },
+  {
+   "id": "canopylight2",
+   "pos": [
+    4,
+    3.66,
+    5
+   ],
+   "type": "cube",
+   "dims": [
+    0.5,
+    0.06,
+    5.5
+   ],
+   "material": "tube"
+  },
+  {
+   "id": "pump0",
+   "pos": [
+    -5,
+    0,
+    5
+   ],
+   "type": "cube",
+   "dims": [
+    0.6,
+    1.5,
+    0.9
+   ],
+   "material": "pump"
+  },
+  {
+   "id": "pumplcd0",
+   "pos": [
+    -5,
+    1.0,
+    5.47
+   ],
+   "type": "cube",
+   "dims": [
+    0.36,
+    0.22,
+    0.04
+   ],
+   "material": "lcd"
+  },
+  {
+   "id": "island0",
+   "pos": [
+    -5,
+    0,
+    5
+   ],
+   "type": "cube",
+   "dims": [
+    1.1,
+    0.18,
+    2.2
+   ],
+   "material": "concrete"
+  },
+  {
+   "id": "pump1",
+   "pos": [
+    -2,
+    0,
+    5
+   ],
+   "type": "cube",
+   "dims": [
+    0.6,
+    1.5,
+    0.9
+   ],
+   "material": "pumpgrey"
+  },
+  {
+   "id": "pumplcd1",
+   "pos": [
+    -2,
+    1.0,
+    5.47
+   ],
+   "type": "cube",
+   "dims": [
+    0.36,
+    0.22,
+    0.04
+   ],
+   "material": "lcd"
+  },
+  {
+   "id": "island1",
+   "pos": [
+    -2,
+    0,
+    5
+   ],
+   "type": "cube",
+   "dims": [
+    1.1,
+    0.18,
+    2.2
+   ],
+   "material": "concrete"
+  },
+  {
+   "id": "pump2",
+   "pos": [
+    2,
+    0,
+    5
+   ],
+   "type": "cube",
+   "dims": [
+    0.6,
+    1.5,
+    0.9
+   ],
+   "material": "pump"
+  },
+  {
+   "id": "pumplcd2",
+   "pos": [
+    2,
+    1.0,
+    5.47
+   ],
+   "type": "cube",
+   "dims": [
+    0.36,
+    0.22,
+    0.04
+   ],
+   "material": "lcd"
+  },
+  {
+   "id": "island2",
+   "pos": [
+    2,
+    0,
+    5
+   ],
+   "type": "cube",
+   "dims": [
+    1.1,
+    0.18,
+    2.2
+   ],
+   "material": "concrete"
+  },
+  {
+   "id": "pump3",
+   "pos": [
+    5,
+    0,
+    5
+   ],
+   "type": "cube",
+   "dims": [
+    0.6,
+    1.5,
+    0.9
+   ],
+   "material": "pumpgrey"
+  },
+  {
+   "id": "pumplcd3",
+   "pos": [
+    5,
+    1.0,
+    5.47
+   ],
+   "type": "cube",
+   "dims": [
+    0.36,
+    0.22,
+    0.04
+   ],
+   "material": "lcd"
+  },
+  {
+   "id": "island3",
+   "pos": [
+    5,
+    0,
+    5
+   ],
+   "type": "cube",
+   "dims": [
+    1.1,
+    0.18,
+    2.2
+   ],
+   "material": "concrete"
+  },
+  {
+   "id": "car",
+   "pos": [
+    11,
+    0,
+    8.5
+   ],
+   "prefab": "vehicle",
+   "params": {
+    "length": 4.0,
+    "width": 1.8,
+    "height": 1.35,
+    "speed": 20,
+    "material": "carbody"
+   },
+   "rot": [
+    0,
+    35,
+    0
+   ]
+  },
+  {
+   "id": "lamppole",
+   "pos": [
+    -13,
+    0,
+    10
+   ],
+   "type": "cylinder",
+   "dims": [
+    0.18,
+    6,
+    0.18
+   ],
+   "material": "pole"
+  },
+  {
+   "id": "lamparm",
+   "pos": [
+    -12.4,
+    6,
+    10
+   ],
+   "type": "cube",
+   "dims": [
+    1.4,
+    0.12,
+    0.12
+   ],
+   "material": "pole"
+  },
+  {
+   "id": "lamphead",
+   "pos": [
+    -11.8,
+    5.9,
+    10
+   ],
+   "type": "cube",
+   "dims": [
+    0.5,
+    0.1,
+    0.3
+   ],
+   "material": "lamp"
+  },
+  {
+   "id": "counter",
+   "pos": [
+    3.4,
+    0,
+    -5.4
+   ],
+   "type": "cube",
+   "dims": [
+    3.6,
+    1.05,
+    0.7
+   ],
+   "material": "counter"
+  },
+  {
+   "id": "register",
+   "pos": [
+    4.6,
+    1.05,
+    -5.4
+   ],
+   "type": "cube",
+   "dims": [
+    0.45,
+    0.3,
+    0.38
+   ],
+   "material": "crtbody"
+  },
+  {
+   "id": "tvcab",
+   "pos": [
+    2.2,
+    1.05,
+    -5.45
+   ],
+   "type": "cube",
+   "dims": [
+    0.7,
+    0.55,
+    0.6
+   ],
+   "material": "crtbody"
+  },
+  {
+   "id": "tvscreen",
+   "pos": [
+    2.2,
+    1.08,
+    -5.12
+   ],
+   "type": "cube",
+   "dims": [
+    0.5,
+    0.38,
+    0.03
+   ],
+   "material": "crtscreen",
+   "name": "TV"
+  },
+  {
+   "id": "pistol_pickup",
+   "pos": [
+    3.3,
+    1.05,
+    -5.15
+   ],
+   "type": "cube",
+   "dims": [
+    0.32,
+    0.12,
+    0.18
+   ],
+   "material": "pistol",
+   "name": "Demo pistol"
+  },
+  {
+   "id": "shelf0",
+   "pos": [
+    -4,
+    0,
+    -11.5
+   ],
+   "type": "cube",
+   "dims": [
+    3,
+    1.9,
+    0.5
+   ],
+   "material": "shelf"
+  },
+  {
+   "id": "shelf1",
+   "pos": [
+    0,
+    0,
+    -11.5
+   ],
+   "type": "cube",
+   "dims": [
+    3,
+    1.9,
+    0.5
+   ],
+   "material": "shelf"
+  },
+  {
+   "id": "shelf2",
+   "pos": [
+    4,
+    0,
+    -11.5
+   ],
+   "type": "cube",
+   "dims": [
+    3,
+    1.9,
+    0.5
+   ],
+   "material": "shelf"
+  },
+  {
+   "id": "aisle1",
+   "pos": [
+    -3,
+    0,
+    -8.4
+   ],
+   "type": "cube",
+   "dims": [
+    0.5,
+    1.5,
+    3.4
+   ],
+   "material": "shelf"
+  },
+  {
+   "id": "aisle2",
+   "pos": [
+    0,
+    0,
+    -8.4
+   ],
+   "type": "cube",
+   "dims": [
+    0.5,
+    1.5,
+    3.4
+   ],
+   "material": "shelf"
+  },
+  {
+   "id": "fridge",
+   "pos": [
+    -5.4,
+    0,
+    -6.2
+   ],
+   "type": "cube",
+   "dims": [
+    0.7,
+    2.0,
+    2.6
+   ],
+   "material": "fridge"
+  },
+  {
+   "id": "goods0",
+   "pos": [
+    -5,
+    1.9,
+    -11.5
+   ],
+   "type": "cube",
+   "dims": [
+    0.5,
+    0.32,
+    0.3
+   ],
+   "material": "snackA"
+  },
+  {
+   "id": "goods1",
+   "pos": [
+    -4,
+    1.9,
+    -11.5
+   ],
+   "type": "cube",
+   "dims": [
+    0.5,
+    0.32,
+    0.3
+   ],
+   "material": "snackB"
+  },
+  {
+   "id": "goods2",
+   "pos": [
+    -3,
+    1.9,
+    -11.5
+   ],
+   "type": "cube",
+   "dims": [
+    0.5,
+    0.32,
+    0.3
+   ],
+   "material": "snackC"
+  },
+  {
+   "id": "goods3",
+   "pos": [
+    -1,
+    1.9,
+    -11.5
+   ],
+   "type": "cube",
+   "dims": [
+    0.5,
+    0.32,
+    0.3
+   ],
+   "material": "snackD"
+  },
+  {
+   "id": "goods4",
+   "pos": [
+    0,
+    1.9,
+    -11.5
+   ],
+   "type": "cube",
+   "dims": [
+    0.5,
+    0.32,
+    0.3
+   ],
+   "material": "snackA"
+  },
+  {
+   "id": "goods5",
+   "pos": [
+    1,
+    1.9,
+    -11.5
+   ],
+   "type": "cube",
+   "dims": [
+    0.5,
+    0.32,
+    0.3
+   ],
+   "material": "snackB"
+  },
+  {
+   "id": "goods6",
+   "pos": [
+    3,
+    1.9,
+    -11.5
+   ],
+   "type": "cube",
+   "dims": [
+    0.5,
+    0.32,
+    0.3
+   ],
+   "material": "snackC"
+  },
+  {
+   "id": "goods7",
+   "pos": [
+    4,
+    1.9,
+    -11.5
+   ],
+   "type": "cube",
+   "dims": [
+    0.5,
+    0.32,
+    0.3
+   ],
+   "material": "snackD"
+  },
+  {
+   "id": "goods8",
+   "pos": [
+    5,
+    1.9,
+    -11.5
+   ],
+   "type": "cube",
+   "dims": [
+    0.5,
+    0.32,
+    0.3
+   ],
+   "material": "snackA"
+  },
+  {
+   "id": "aislegoods0",
+   "pos": [
+    -3,
+    1.5,
+    -9.6
+   ],
+   "type": "cube",
+   "dims": [
+    0.4,
+    0.3,
+    0.5
+   ],
+   "material": "snackA"
+  },
+  {
+   "id": "aislegoods1",
+   "pos": [
+    -3,
+    1.5,
+    -8.799999999999999
+   ],
+   "type": "cube",
+   "dims": [
+    0.4,
+    0.3,
+    0.5
+   ],
+   "material": "snackB"
+  },
+  {
+   "id": "aislegoods2",
+   "pos": [
+    -3,
+    1.5,
+    -8.0
+   ],
+   "type": "cube",
+   "dims": [
+    0.4,
+    0.3,
+    0.5
+   ],
+   "material": "snackC"
+  },
+  {
+   "id": "aislegoods3",
+   "pos": [
+    -3,
+    1.5,
+    -7.199999999999999
+   ],
+   "type": "cube",
+   "dims": [
+    0.4,
+    0.3,
+    0.5
+   ],
+   "material": "snackD"
+  },
+  {
+   "id": "ceil1",
+   "pos": [
+    -2.5,
+    3.05,
+    -8
+   ],
+   "type": "cube",
+   "dims": [
+    0.3,
+    0.06,
+    3
+   ],
+   "material": "tube"
+  },
+  {
+   "id": "ceil2",
+   "pos": [
+    2.5,
+    3.05,
+    -8
+   ],
+   "type": "cube",
+   "dims": [
+    0.3,
+    0.06,
+    3
+   ],
+   "material": "tube"
+  },
+  {
+   "id": "t1",
+   "pos": [
+    -10,
+    0,
+    3
+   ],
+   "prefab": "target",
+   "params": {
+    "size": 1.2,
+    "hp": 2,
+    "material": "bullseye"
+   }
+  },
+  {
+   "id": "t2",
+   "pos": [
+    12,
+    0,
+    -2
+   ],
+   "prefab": "target",
+   "params": {
+    "size": 1.2,
+    "hp": 2,
+    "material": "bullseye"
+   }
+  },
+  {
+   "id": "t3",
+   "pos": [
+    0,
+    1.9,
+    -11.5
+   ],
+   "prefab": "target",
+   "params": {
+    "size": 0.6,
+    "hp": 1,
+    "material": "bullseye"
+   }
+  },
+  {
+   "id": "t4",
+   "pos": [
+    -8,
+    0,
+    -9
+   ],
+   "prefab": "target",
+   "params": {
+    "size": 1.0,
+    "hp": 2,
+    "material": "bullseye"
+   }
+  }
+ ],
+ "lights": [
+  {
+   "id": "shop1",
+   "type": "point",
+   "pos": [
+    -2.5,
+    2.9,
+    -8
+   ],
+   "color": "#ffe2b8",
+   "intensity": 40,
+   "shadow": false
+  },
+  {
+   "id": "shop2",
+   "type": "point",
+   "pos": [
+    2.5,
+    2.9,
+    -8
+   ],
+   "color": "#ffe2b8",
+   "intensity": 40,
+   "shadow": false
+  },
+  {
+   "id": "tvglow",
+   "type": "point",
+   "pos": [
+    2.2,
+    1.6,
+    -4.4
+   ],
+   "color": "#8fe6cf",
+   "intensity": 10,
+   "shadow": false
+  },
+  {
+   "id": "canopy1",
+   "type": "spot",
+   "pos": [
+    -4,
+    3.6,
+    5
+   ],
+   "target": [
+    -4,
+    0,
+    5
+   ],
+   "color": "#d8ecff",
+   "intensity": 150,
+   "angle": 60,
+   "shadow": true
+  },
+  {
+   "id": "canopy2",
+   "type": "spot",
+   "pos": [
+    4,
+    3.6,
+    5
+   ],
+   "target": [
+    4,
+    0,
+    5
+   ],
+   "color": "#d8ecff",
+   "intensity": 150,
+   "angle": 60,
+   "shadow": false
+  },
+  {
+   "id": "sodium",
+   "type": "point",
+   "pos": [
+    -11.8,
+    5.7,
+    10
+   ],
+   "color": "#ffb35c",
+   "intensity": 260,
+   "shadow": false
+  },
+  {
+   "id": "moon",
+   "type": "dir",
+   "pos": [
+    -18,
+    30,
+    12
+   ],
+   "target": [
+    0,
+    0,
+    0
+   ],
+   "color": "#7b92c4",
+   "intensity": 1.4,
+   "shadow": false
+  },
+  {
+   "id": "signglow",
+   "type": "point",
+   "pos": [
+    0,
+    3.2,
+    -1.5
+   ],
+   "color": "#8be8bd",
+   "intensity": 6,
+   "shadow": false
+  }
+ ],
+ "rules": [
+  {
+   "id": "hello",
+   "when": {
+    "trigger": "timer",
+    "after": 1
+   },
+   "then": [
+    {
+     "action": "show-message",
+     "text": "Night Station. Walk to the shop, press E at the counter to take the pistol, then click or F to shoot.",
+     "seconds": 8
+    }
+   ]
+  },
+  {
+   "id": "door",
+   "when": {
+    "trigger": "player-interact",
+    "target": "shopdoor"
+   },
+   "then": [
+    {
+     "action": "toggle-open",
+     "target": "shopdoor"
+    },
+    {
+     "action": "play-sound",
+     "sound": "click"
+    }
+   ]
+  },
+  {
+   "id": "take",
+   "when": {
+    "trigger": "player-interact",
+    "target": "pistol_pickup"
+   },
+   "then": [
+    {
+     "action": "collect",
+     "target": "pistol_pickup"
+    },
+    {
+     "action": "set-flag",
+     "flag": "armed",
+     "value": true
+    },
+    {
+     "action": "show-message",
+     "text": "You have the demo pistol. Click or F to fire.",
+     "seconds": 5
+    },
+    {
+     "action": "play-sound",
+     "sound": "chime"
+    }
+   ]
+  }
+ ],
+ "looks": [
+  {
+   "target": "object:tvscreen",
+   "profile": "crt"
+  }
+ ]
+}

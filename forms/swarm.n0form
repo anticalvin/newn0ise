@@ -1,0 +1,65 @@
+{
+ "n0form": 1,
+ "id": "n0ise.swarm",
+ "name": "Swarm",
+ "version": "1.0.0",
+ "apiVersion": 1,
+ "author": "n0ise",
+ "licence": "CC0-1.0",
+ "description": "Thousands of instances in a flowing shape.",
+ "seed": 11,
+ "params": [
+  {
+   "k": "count",
+   "label": "Count",
+   "min": 10,
+   "max": 20000,
+   "def": 3000,
+   "step": 10
+  },
+  {
+   "k": "radius",
+   "label": "Radius",
+   "min": 0.5,
+   "max": 6,
+   "def": 2.2,
+   "step": 0.1
+  },
+  {
+   "k": "size",
+   "label": "Size",
+   "min": 0.01,
+   "max": 0.3,
+   "def": 0.06,
+   "step": 0.005
+  },
+  {
+   "k": "flow",
+   "label": "Flow",
+   "min": 0.1,
+   "max": 3,
+   "def": 0.9,
+   "step": 0.05
+  },
+  {
+   "k": "shape",
+   "label": "Shape",
+   "t": "c",
+   "opts": [
+    "Cubes",
+    "Spheres",
+    "Cones"
+   ],
+   "def": 1
+  }
+ ],
+ "code": "export default function create({ geometry, params, rand, math }) {\n  const { count, radius, size, flow, shape } = params;\n  const r = rand.fork(\"swarm\");\n  const items = [];\n  for (let i = 0; i < count; i++) {\n    const a = r() * Math.PI * 2, b = Math.acos(2 * r() - 1), rr = radius * Math.cbrt(r());\n    const x = rr * Math.sin(b) * Math.cos(a), y = rr * Math.cos(b) * 0.6 + radius * 0.8, z = rr * Math.sin(b) * Math.sin(a);\n    const n = math.noise(x * flow, y * flow, z * flow);\n    const hue = Math.floor(math.remap(n, -1, 1, 30, 200));\n    items.push({ pos: [x + n * 0.4, y, z], rot: [n * 180, a * 57, 0], scale: size * (0.5 + r()), color: \"#\" + [0.9, 0.55, 0.3].map((v, k) => Math.floor(255 * math.clamp(v + n * (k ? -0.3 : 0.2), 0, 1)).toString(16).padStart(2, \"0\")).join(\"\") });\n  }\n  const g = geometry.group(\"Swarm\");\n  g.instances({ shape: [\"box\", \"sphere\", \"cone\"][shape], dims: [1, 1, 1], items, segments: 8, material: \"swarm\" });\n  return g;\n}",
+ "defaults": {
+  "materials": {
+   "swarm": {
+    "color": "#ffffff",
+    "roughness": 0.5
+   }
+  }
+ }
+}

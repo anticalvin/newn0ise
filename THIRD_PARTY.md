@@ -1,7 +1,7 @@
 # Third-party components (studio.html)
 
 Everything loads in the visitor's browser from a CDN or model host and runs locally; no image is uploaded.
-Nothing here is vendored. Versions are pinned and each is more than two weeks old. Licences were checked on the model cards / package metadata on 2026-11-13.
+Nothing here is vendored except the Lab code editor, which is bundled into `assets/labeditor.js` so there is a single copy of its core. Versions are pinned and each is more than two weeks old. Licences were checked on the model cards / package metadata on 2026-11-13.
 
 ## Runtime libraries
 | Component | Version | Licence | Source |
@@ -9,6 +9,7 @@ Nothing here is vendored. Versions are pinned and each is more than two weeks ol
 | three.js | 0.187.0 | MIT | jsDelivr |
 | @sparkjsdev/spark | 2.4.0 | MIT | jsDelivr |
 | @huggingface/transformers | 4.3.2 | Apache-2.0 | jsDelivr (`dist/transformers.min.js`) |
+| CodeMirror 6 (`codemirror` 6.0.2, `@codemirror/view` 6.43.15, `@codemirror/state` 6.7.6, `lang-javascript` 6.2.5, `theme-one-dark` 6.1.3) | see left | MIT | bundled by esbuild into `assets/labeditor.js` (Lab code editor; the one vendored piece) |
 | onnxruntime-web | 1.22.0 (released 2025-05-09) | MIT | jsDelivr |
 
 ## Models (downloaded on first use, then cached by the browser)
@@ -54,3 +55,27 @@ Model files are fetched once, kept with the Cache API (`n0ise-models-v1`) with v
 | Rapier (`@dimforge/rapier3d-compat`) | 0.14.0 (jsDelivr, pinned) | Apache-2.0 | Rigid-body physics in `src/sim.js`, loaded at runtime when Play is first pressed |
 | `@modelcontextprotocol/sdk`, `ws`, `zod` | 1.12.1, 8.18.2, 3.25.30 | MIT | `tools/mcp` bridge only; not shipped to the browser |
 | `assets/models/human.glb` | n/a | **Not stated. Supplied by the project owner; confirm the licence before launch.** | The "Human" object in the World tab |
+| Poly Haven textures, HDRIs and models (`api.polyhaven.com`, `dl.polyhaven.org`) | n/a, fetched on demand, nothing bundled | CC0 1.0 | Material tab in 3D: photographed PBR texture sets and environment lighting; Build tab: furniture and props (`src/phmodels.js`); authors are shown in the panel |
+| `RGBELoader`, `RoomEnvironment` (three.js examples) | 0.187.0 (jsDelivr, pinned) | MIT | Material tab environments |
+| `three-gpu-pathtracer` | 0.0.27 (jsDelivr, pinned) | MIT | Path-traced preview in the Material tab, loaded only when switched on |
+| `three-mesh-bvh` | 0.9.17 (jsDelivr, pinned) | MIT | Needed by the path tracer, same lazy loading |
+
+## Character, Sculpt and pen (this batch)
+No new dependencies. The Character page and Sculpt are our own code on three.js (MIT) with GLTFExporter from the same pinned three examples. We looked at M3-org Character Studio (MIT, VRM and trait packs) and chose not to bundle it: it needs large downloaded asset packs.
+
+## MakeHuman core assets (Character creator 2.0)
+- Source: https://github.com/makehumancommunity/makehuman at commit a8bc2d54ff0ac92e78ff71431b1023eda42bf482 (`makehuman/data`).
+- Used: base mesh, skeleton, skin weights, modifier list, morph targets. Licence: **CC0 1.0** for assets (their LICENSE.md, section C).
+- Not used: any MakeHuman program code (AGPL-3.0). `jontechlabs/makehuman-web` (AGPL-3.0) and `kblood/CharacterCreator` (GPL-3.0) were studied only.
+- Packed by our own `tools/pack-human.mjs` into `assets/human/`.
+
+## MakeHuman CC0 asset packs (hair, clothes, skins, brows, lashes)
+- Packs: `makehuman_system_assets_cc0.zip` and `suits05_cc0.zip` from https://static.makehumancommunity.org/assets/assetpacks.html (each `.mhclo` header states: released as CC0 in September 2020).
+- Not included: CC-BY packs (they would need attribution per author) such as suits03 and suits04.
+- Packed by our `tools/pack-assets.py` (textures resized, hair and brows greyscaled so a tint colours them) into `assets/human/a/`.
+- Balaclava, beanie, mask, headband, scarf and glasses are our own procedural shapes.
+
+## Manifold, glTF Transform, three-mesh-bvh (modelling and assets)
+- manifold-3d 3.5.5, Apache-2.0, https://github.com/elalish/manifold , loaded on demand from jsDelivr (Combine shapes).
+- @gltf-transform/core and /functions 4.5.1, MIT, https://github.com/donmccurdy/glTF-Transform , loaded on demand (smaller GLB export).
+- three-mesh-bvh 0.9.17, MIT, already used by the path tracer; now also accelerates picking on heavy meshes.
