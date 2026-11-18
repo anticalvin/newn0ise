@@ -242,7 +242,7 @@ export function createSigil(c){
     for(const c of cs){_sv.copy(c).project(camera);if(_sv.z>1||_sv.z<-1)continue;const x=r.left+(_sv.x+1)/2*r.width,y=r.top+(1-_sv.y)/2*r.height,d=Math.hypot(x-e.clientX,y-e.clientY);if(d<bd){bd=d;best={p:c,x,y};}}
     return best;
   }
-  const snapEl=document.createElement('div');snapEl.style.cssText='position:fixed;z-index:31;pointer-events:none;width:20px;height:20px;margin:-10px 0 0 -10px;border:2px solid #ff5a1f;border-radius:50%;box-shadow:0 0 0 2px rgba(0,0,0,.5);display:none';document.body.appendChild(snapEl);
+  const snapEl=document.createElement('div');snapEl.style.cssText='position:fixed;z-index:31;pointer-events:none;width:20px;height:20px;margin:-10px 0 0 -10px;border:2px solid #e9dfcb;border-radius:50%;box-shadow:0 0 0 2px rgba(0,0,0,.5);display:none';document.body.appendChild(snapEl);
   function hit(e,o,plane,lastD,extra){
     const h=hit0(e,o,plane,lastD);
     if(!h)return h;
@@ -429,7 +429,7 @@ export function createSigil(c){
     const b=el('div');b.style.cssText='position:relative;margin:0 0 12px;border:1px solid var(--n-line,#2a2927);border-radius:3px;overflow:hidden;background:#0a0a0a';
     const cv=document.createElement('canvas');cv.width=120;cv.height=40;cv.style.cssText='display:block;width:100%;height:72px;image-rendering:pixelated;opacity:.9';cv.setAttribute('aria-hidden','true');
     const lab=document.createElement('div');lab.style.cssText='position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;padding:0 14px;pointer-events:none;mix-blend-mode:normal';
-    lab.innerHTML='<div style="font:600 9px var(--n-mono,ui-monospace,monospace);letter-spacing:.2em;color:#cfc9bd;text-shadow:0 1px 2px #000">N0ISE / SPATIAL FORM</div><div style="font:800 26px/1 var(--n-display,Syne,system-ui);letter-spacing:-.04em;color:#f2efe8;text-shadow:0 2px 6px #000">sigil<span style="color:#ff5a1f">.</span><span style="font:600 10px var(--n-mono,monospace);letter-spacing:.18em;margin-left:8px;color:#ff9b6b">02</span></div>';
+    lab.innerHTML='<div style="font:600 9px var(--n-mono,ui-monospace,monospace);letter-spacing:.2em;color:#cfc9bd;text-shadow:0 1px 2px #000">N0ISE / SPATIAL FORM</div><div style="font:800 26px/1 var(--n-display,Syne,system-ui);letter-spacing:-.04em;color:#f2efe8;text-shadow:0 2px 6px #000">sigil<span style="color:#e9dfcb">.</span><span style="font:600 10px var(--n-mono,monospace);letter-spacing:.18em;margin-left:8px;color:#ff9b6b">02</span></div>';
     b.append(cv,lab);parent.appendChild(b);
     const g=cv.getContext('2d'),img=g.createImageData(120,40);let t=0,seed=7;const rnd=()=>{seed=(seed*1664525+1013904223)>>>0;return seed/4294967296;};
     function draw(){

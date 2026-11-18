@@ -13,9 +13,9 @@
   "three/addons/":"https://cdn.jsdelivr.net/npm/three@0.187.0/examples/jsm/"
 }}
 </script>
-<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="ui/ui.css">
 <style>
-:root{--lab:ui-monospace,Menlo,Consolas,monospace;--disp:system-ui,-apple-system,'Segoe UI',sans-serif;--fg:#f2efe8;--bgc:rgba(18,18,20,.78);--ln:rgba(255,255,255,.16);--ac:#2f6bff}
+:root{--lab:ui-monospace,Menlo,Consolas,monospace;--disp:system-ui,-apple-system,'Segoe UI',sans-serif;--fg:#f2efe8;--bgc:rgba(18,18,20,.78);--ln:rgba(255,255,255,.16);--ac:#e9dfcb}
 html[data-t=l]{--fg:#111;--bgc:rgba(255,255,255,.8);--ln:rgba(0,0,0,.16)}
 *{box-sizing:border-box}html,body{margin:0;height:100%;overflow:hidden;background:#0b0b0c;color:var(--fg);font:600 12px var(--lab)}
 html[data-t=l] body{background:#f2f0ec}
@@ -48,9 +48,9 @@ h3{margin:10px 0 2px;font:800 12px var(--lab);letter-spacing:.1em;text-transform
 .chip{min-height:44px;padding:0 14px;border-radius:14px;border:1px solid var(--ln);background:transparent}.chip[aria-pressed=true]{background:var(--fg);color:#111}html[data-t=d] .chip[aria-pressed=true]{background:#f2efe8}html[data-t=l] .chip[aria-pressed=true]{background:#111;color:#f2f0ec}
 #ft{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 66px);transform:translateX(-50%);z-index:9;padding:10px 16px;border-radius:16px;max-width:calc(100vw - 24px)}
 :focus-visible{outline:3px solid var(--ac);outline-offset:2px}
-@media (min-width:860px){#panel{left:auto;right:16px;top:70px;bottom:16px;width:400px;max-height:none!important}#fhandle{display:none}#panel[data-lvl="0"] #fp,#panel[data-lvl="0"] #facts{display:flex}}
+@media (min-width:860px){#panel{left:auto;right:16px;top:70px;bottom:16px;width:400px;max-height:none}#fhandle{display:none}#panel[data-lvl="0"] #fp,#panel[data-lvl="0"] #facts{display:flex}}
 @media (max-width:520px){#top h1{display:none}#top{justify-content:space-between}}
-@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+@media (prefers-reduced-motion:reduce){:root *{transition:none}}
 </style>
 </head>
 <body>
@@ -74,6 +74,6 @@ h3{margin:10px 0 2px;font:800 12px var(--lab);letter-spacing:.1em;text-transform
 </div>
 <div id="fload" class="glass" role="status">Loading the character…</div>
 <div id="ft" class="glass" role="status" hidden></div>
-<script type="module" src="assets/figure.js?v=d7e7029b"></script>
+<script type="module" src="assets/figure.js?v=c7dfef64"></script>
 </body>
 </html>

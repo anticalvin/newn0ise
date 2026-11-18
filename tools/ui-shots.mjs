@@ -15,7 +15,7 @@ const root=fileURLToPath(new URL('..',import.meta.url));
 const MIME={'.html':'text/html','.js':'text/javascript','.mjs':'text/javascript','.css':'text/css','.json':'application/json','.svg':'image/svg+xml','.png':'image/png','.webp':'image/webp','.jpg':'image/jpeg','.wasm':'application/wasm','.webmanifest':'application/manifest+json'};
 const chrome=[process.env.CHROME,'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome','/Applications/Chromium.app/Contents/MacOS/Chromium','/usr/bin/google-chrome','/usr/bin/chromium'].find(p=>p&&existsSync(p));
 if(!chrome){console.error('ui-check: no Chrome found. Set CHROME=/path/to/chrome.');process.exit(1);}
-const PAGES=[['home','/index.html'],['camera','/effects.html?cam=1'],['effects','/effects.html'],['3d','/studio.html'],['world','/studio.html','document.querySelector("#bWalk")&&document.querySelector("#bWalk").click()'],['lab','/lab.html']];
+const PAGES=[['home','/index.html'],['camera','/effects.html?cam=1'],['effects','/effects.html'],['3d','/studio.html'],['3d-scene','/studio.html','(()=>{const b=document.querySelector("#launch .skip");if(b)b.click();})()'],['world','/studio.html','document.querySelector("#bWalk")&&document.querySelector("#bWalk").click()'],['lab','/lab.html']];
 const VIEWS=[['phone',390,844,true],['tablet',820,1180,true],['desktop',1440,900,false]];
 const OUT=process.argv[2]||'docs/ui/before';
 /* node tools/ui-shots.mjs <outdir> [ref] [name,name]  (ref = the demo, docs/ui/n0ise-ui-reference.html; names filter the pages) */
