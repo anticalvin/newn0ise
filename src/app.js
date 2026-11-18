@@ -3688,6 +3688,7 @@ function phoneShell(){
   const open=e=>{try{dlg.showModal();}catch(x){}};
   ['menubtn','menubtn2'].forEach(id=>{const b=document.getElementById(id);if(b)b.addEventListener('click',open);});
   dlg.addEventListener('click',e=>{if(e.target===dlg||(e.target.closest&&e.target.closest('.dialog-body button:not([data-keep])')))dlg.close();});
+  const sl=document.getElementById('studio-link');if(sl)sl.addEventListener('click',e=>{e.preventDefault();toast('Coming soon',2400);});
   const tb=document.getElementById('tipbtn');if(tb)tb.addEventListener('click',()=>toast(GESTURE_TIP,5000));
   /* undo, redo and Save sit in the header on desktop and in this menu on phones: the same buttons move, so state and handlers stay */
   const mq=matchMedia('(min-width:960px) and (min-height:550px)'),dg=document.getElementById('deskglobal'),slot=document.getElementById('globalslot');
