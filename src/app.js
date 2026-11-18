@@ -2611,22 +2611,34 @@ function buildUI(){
 
 /* sheet / panel tabs: Effects (pick a look), Fuse (build a camera-style blend), Layers (edit the stack) */
 const n0wipe=()=>{try{const b=document.body;b.classList.remove("n-wipe");void b.offsetWidth;b.classList.add('n-wipe');setTimeout(()=>b.classList.remove('n-wipe'),220);}catch(e){}};
+const IT_OF={hw:'hardware',col:'colour',fx:'effects',layers:'effects',fuse:'fuse'};
+const IS={fstep:1,hwAdv:false,sub:'fx'};
 function setDock(v,quiet){if(!quiet)n0wipe();
   if(v==='fuse'){
     let ix=STACK.layers.findIndex(l=>l.module==='fuse');
     if(ix<0){STACK.layers.push(mkLayer('fuse'));ix=STACK.layers.length-1;}
     STACK.sel=ix;INS.gallery=false;INS.tab='look';
   }
-  document.body.dataset.dt=v;lsSet('n0ise.dock',v);
-  document.querySelectorAll('.dtabs button').forEach(b=>b.setAttribute('aria-selected',b.dataset.v===v));
+  if(v==='hw'){const ix=STACK.layers.findIndex(l=>l.module==='crtlab');if(ix>=0){STACK.sel=ix;INS.gallery=false;}IS.hwAdv=false;}
+  if(v==='fx'||v==='layers')IS.sub=v;
+  if(v!=='fuse'&&ST.mpaint){ST.mpaint=false;document.body.removeAttribute('data-mpaint');}
+  document.body.dataset.dt=v;document.body.dataset.it=IT_OF[v]||'effects';lsSet('n0ise.dock',v);
+  document.querySelectorAll('.itnav [data-it]').forEach(b=>{const on=b.dataset.it===IT_OF[v];b.setAttribute('aria-selected',on);b.tabIndex=on?0:-1;});
+  document.querySelectorAll('.itsub [data-v]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.v===v));
   if(!quiet){buzz(6);renderInspector();}
   const d=$i('dock');if(d)d.scrollTop=0;
 }
 function buildDockTabs(){
-  const dock=$i('dock');if(!dock||dock.querySelector('.dtabs'))return;
-  const nav=el('nav','dtabs');nav.setAttribute('role','tablist');
-  [['fx','Effects'],['fuse','Fuse'],['layers','Stack']].forEach(([v,n])=>{const b=el('button','',n);b.dataset.v=v;b.setAttribute('role','tab');b.addEventListener('click',()=>setDock(v));nav.appendChild(b);});
-  const g=$i('grab');g?g.after(nav):dock.prepend(nav);
+  const dock=$i('dock');if(!dock||dock.querySelector('.itnav'))return;
+  const nav=el('nav','itnav');nav.setAttribute('role','tablist');nav.setAttribute('aria-label','Instruments');
+  const IC={hardware:'<svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="12" rx="2.5"/><path d="M8 20h8M12 17v3"/></svg>',colour:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5v17"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17" fill="currentColor" stroke="none"/></svg>',effects:'<svg viewBox="0 0 24 24"><path d="m12 4 8 4-8 4-8-4 8-4Z"/><path d="m4 12 8 4 8-4M4 16l8 4 8-4"/></svg>',fuse:'<svg viewBox="0 0 24 24"><circle cx="9" cy="12" r="5.5"/><circle cx="15" cy="12" r="5.5"/></svg>'};
+  [['hardware','Hardware','hw'],['colour','Colour','col'],['effects','Effects',null],['fuse','Fuse','fuse']].forEach(([it,n,v])=>{
+    const b=el('button','itab',IC[it]+'<span>'+n+'</span>');b.dataset.it=it;b.setAttribute('role','tab');b.setAttribute('aria-label',n);
+    b.addEventListener('click',()=>setDock(v||IS.sub));nav.appendChild(b);});
+  nav.addEventListener('keydown',e=>{if(e.key!=='ArrowRight'&&e.key!=='ArrowLeft')return;const bs=[...nav.children],i=bs.indexOf(document.activeElement);if(i<0)return;const n=bs[(i+(e.key==='ArrowRight'?1:bs.length-1))%bs.length];n.focus();n.click();e.preventDefault();});
+  const sub=el('div','itsub');sub.setAttribute('role','group');sub.setAttribute('aria-label','Effects view');
+  [['fx','Browse'],['layers','Stack']].forEach(([v,n])=>{const b=el('button','',n);b.dataset.v=v;b.addEventListener('click',()=>setDock(v));sub.appendChild(b);});
+  const g=$i('grab');if(g)g.after(nav,sub);else dock.prepend(nav,sub);
   const v=lsGet('n0ise.dock','fx');setDock(v==='fuse'?'layers':v,true);
 }
 
@@ -3697,7 +3709,8 @@ function phoneShell(){
   const art=document.getElementById('artbar'),pic=document.getElementById('picslot');
   const place=()=>{['undo','redo','save'].forEach(id=>{const o=document.getElementById(id);if(o)(mq.matches?dg:slot).appendChild(o);});
     /* the picture tools sit on the art on desktop and in the menu on phones (same buttons, so state and handlers stay) */
-    ['cmpbtn','reset','textoff','stillbtn','tlbtn','power','shuffle','paint','toolplace','tunereset'].forEach(id=>{const o=document.getElementById(id);if(o)(mq.matches&&art?art:pic).appendChild(o);});};
+    ['cmpbtn','stillbtn'].forEach(id=>{const o=document.getElementById(id);if(o&&art)art.appendChild(o);});
+    ['reset','textoff','tlbtn','power','shuffle','paint','toolplace','tunereset'].forEach(id=>{const o=document.getElementById(id);if(o)(mq.matches&&art?art:pic).appendChild(o);});};
   place();mq.addEventListener('change',place);
 }
 function renderStrip(){
@@ -3799,48 +3812,78 @@ function colorRow(host,l){
 }
 const recolors=o=>!!(o&&(o.pal&&o.pal!=='src'));
 /* Fuse bar: up to 4 steps as chips with a power dot (tap = on/off, hold = solo), tap name = pick effect */
+const thumbCopy=(id,w=104,h=104)=>{const c=document.createElement('canvas');c.width=w;c.height=h;try{const t=cachedThumb(id),g=c.getContext('2d');const k=Math.max(w/t.width,h/t.height),dw=t.width*k,dh=t.height*k;g.drawImage(t,(w-dw)/2,(h-dh)/2,dw,dh);}catch(e){}return c;};
 function fuseBar(host,l){
   const V=l.params,bar=el('div','fbar');
-  const row=el('div','fchips');
-  for(let s=1;s<=4;s++){
-    const f=CAMFX[+V['f'+s]-1],c=el('div','fchip'+(f?'':' empty')+(f&&!V['on'+s]?' off':''));
-    const dot=el('button','fdot');dot.setAttribute('aria-label','Step '+s+' power');dot.setAttribute('aria-pressed',!!(f&&V['on'+s]));
+  const filled=[1,2,3,4].filter(s=>CAMFX[+V['f'+s]-1]),empty=[1,2,3,4].filter(s=>!CAMFX[+V['f'+s]-1]);
+  if(!CAMFX[+V['f'+IS.fstep]-1])IS.fstep=filled[0]||1;
+  bar.appendChild(el('div','fx-sec','<b>Fusion chain</b><span>'+filled.length+' / 4 steps</span>'));
+  const row=el('div','fslots');row.setAttribute('role','list');
+  const rerender=()=>{snap();renderInspector();};
+  filled.forEach(s=>{
+    const f=CAMFX[+V['f'+s]-1],on=!!V['on'+s],sel=s===IS.fstep;
+    const c=el('div','fslot'+(sel?' selected':'')+(on?'':' off'));c.setAttribute('role','listitem');
+    const main=el('div','fslot-main');
+    const pick=el('button','fslot-pick');pick.type='button';pick.setAttribute('aria-pressed',sel);pick.setAttribute('aria-label','Step '+s+': '+f.label+(on?'':' (off)')+'. Select');
+    pick.append(thumbCopy('fuse:'+f.id),el('span','fslot-name',esc0(f.label)+'<small>Step '+s+' · '+(([...(FUSE_BLENDS[+V['bl'+s]]||'normal')].map((ch,i)=>i?ch:ch.toUpperCase()).join('')))+' · '+Math.round(+V['mx'+s])+'%</small>'));
+    pick.addEventListener('click',()=>{IS.fstep=s;buzz(5);renderInspector();});
+    const dot=el('button','fslot-pw');dot.type='button';dot.setAttribute('aria-label','Step '+s+' power');dot.setAttribute('aria-pressed',on);dot.title='Tap: on or off. Hold: solo.';
     let hold=0,solo=false;
-    dot.addEventListener('pointerdown',()=>{solo=false;hold=setTimeout(()=>{solo=true;for(let k=1;k<=4;k++)V['on'+k]=k===s&&!!CAMFX[+V['f'+k]-1];if(navigator.vibrate)try{navigator.vibrate(12);}catch(e){}renderInspector();},450);});
-    dot.addEventListener('pointerup',()=>{clearTimeout(hold);if(solo||!f)return;V['on'+s]=!V['on'+s];renderInspector();});
-    dot.addEventListener('pointerleave',()=>clearTimeout(hold));
-    const nm=el('button','fname',f?f.label:'Add effect');nm.addEventListener('click',()=>{FUSEPICK=FUSEPICK===s?0:s;renderInspector();});
-    c.append(dot,nm);
-    if(f&&s>1){const up=el('button','fx','‹');up.setAttribute('aria-label','Move step '+s+' earlier');up.addEventListener('click',()=>{fuseSwap(l,s,s-1);renderInspector();});c.appendChild(up);}
-    if(f&&s>1){const x=el('button','fx','×');x.setAttribute('aria-label','Remove step '+s);x.addEventListener('click',()=>{fuseSet(l,s,null);renderInspector();});c.appendChild(x);}
-    row.appendChild(c);}
+    dot.addEventListener('pointerdown',()=>{solo=false;hold=setTimeout(()=>{solo=true;for(let k=1;k<=4;k++)V['on'+k]=k===s&&!!CAMFX[+V['f'+k]-1];buzz(12);rerender();},450);});
+    dot.addEventListener('pointerup',()=>{clearTimeout(hold);if(solo)return;V['on'+s]=!V['on'+s];buzz(6);rerender();});
+    dot.addEventListener('pointerleave',()=>clearTimeout(hold));dot.addEventListener('pointercancel',()=>clearTimeout(hold));
+    dot.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();V['on'+s]=!V['on'+s];rerender();}});
+    main.append(pick,dot);c.appendChild(main);
+    if(sel){
+      const ac=el('div','fslot-acts');
+      const mk=(t,lab,fn,dis)=>{const b=el('button','',t);b.type='button';b.setAttribute('aria-label',lab);if(dis)b.disabled=true;b.addEventListener('click',fn);ac.appendChild(b);return b;};
+      const soloed=filled.every(k=>!!V['on'+k]===(k===s));
+      const sb=mk('Solo','Solo step '+s,()=>{for(let k=1;k<=4;k++)V['on'+k]=soloed?!!CAMFX[+V['f'+k]-1]:(k===s&&!!CAMFX[+V['f'+k]-1]);rerender();});sb.setAttribute('aria-pressed',soloed&&filled.length>1);
+      mk('Look…','Change the look of step '+s,()=>{FUSEPICK=FUSEPICK===s?0:s;renderInspector();});
+      mk('‹ Earlier','Move step '+s+' earlier',()=>{fuseSwap(l,s,s-1);IS.fstep=s-1;rerender();},s===1);
+      mk('Later ›','Move step '+s+' later',()=>{fuseSwap(l,s,s+1);IS.fstep=s+1;rerender();},s===4);
+      mk('Remove','Remove step '+s,()=>{fuseSet(l,s,null);rerender();},filled.length<2);
+      c.appendChild(ac);
+    }
+    row.appendChild(c);});
   bar.appendChild(row);
-  const cost=fuseCost(V),meter=el('span','fcost','Cost '+'●'.repeat(Math.min(cost,9))+'○'.repeat(Math.max(0,9-cost)));
-  const act=el('div','pe');
-  const fb=el('button','','Fuse');fb.title='Random compatible pair';fb.addEventListener('click',()=>{toast(fuseRandomPair(l));renderInspector();});
-  const rs=el('button','','Reset');rs.addEventListener('click',()=>{Object.assign(l.params,MODULES.fuse.defaults());renderInspector();});
-  const sv=el('button','','Save');sv.title='Save this recipe';sv.addEventListener('click',()=>{const n=prompt('Name this recipe',fuseName(l));if(n===null)return;toast(saveRecipe(l,n.trim()||fuseName(l))?'Recipe saved':'This browser won’t store recipes');renderInspector();});
-  const ed=el('button','','Write effect');ed.title='Write your own effect in GLSL';ed.addEventListener('click',openEditor);
-  const sh=el('button','','Share');sh.addEventListener('click',()=>fuseShare(l));
-  act.append(fb,sv,sh,ed,rs,meter);bar.appendChild(act);
-  if([1,2,3,4].some(s=>+V['f'+s]&&+V['mk'+s]===4)||ST.mpaint){
-    const mp=el('div','pe'),tg=el('button','',ST.mpaint?'Done painting':'Paint mask');tg.addEventListener('click',()=>{ST.mpaint=!ST.mpaint;renderInspector();});mp.appendChild(tg);
-    if(ST.mpaint){const er=el('button','',MASKB.erase?'Erasing':'Painting');er.setAttribute('aria-pressed',MASKB.erase);er.addEventListener('click',()=>{MASKB.erase=!MASKB.erase;renderInspector();});
-      const cl=el('button','','Clear');cl.addEventListener('click',()=>maskFill(0));const fl=el('button','','Fill');fl.addEventListener('click',()=>maskFill(1));const iv=el('button','','Invert');iv.addEventListener('click',maskInvert);mp.append(er,cl,fl,iv);}
-    bar.appendChild(mp);
-    if(ST.mpaint){const w=el('div','');rowRange(w,'Brush size',()=>MASKB.size,v=>MASKB.size=v,2,60,1);rowRange(w,'Feather',()=>MASKB.feather,v=>MASKB.feather=v,0,100,1);bar.appendChild(w);}
-  }
-  const rc=loadRecipes();if(rc.length){bar.appendChild(el('div','cl','Mine'));const w=el('div','pe');
-    rc.slice().reverse().forEach(r=>{const b=el('button','',r.name);b.addEventListener('click',()=>{Object.assign(l.params,r.p);renderInspector();});
-      const x=el('button','','×');x.setAttribute('aria-label','Delete '+r.name);x.addEventListener('click',()=>{localStorage.setItem(RECIPES_KEY,JSON.stringify(loadRecipes().filter(q=>q.id!==r.id)));renderInspector();});w.append(b,x);});bar.appendChild(w);}
-  if(cost>=9&&matchMedia('(pointer:coarse)').matches)bar.appendChild(el('div','cl','Heavy on a phone. Switch a step off if it stutters.'));
-  if(FUSEPICK){const pk=el('div','fpick');
+  const add=el('button','fx-add','+ Add look');add.type='button';add.disabled=!empty.length;add.addEventListener('click',()=>{FUSEPICK=FUSEPICK&&!filled.includes(FUSEPICK)?0:empty[0];renderInspector();});
+  const cost=fuseCost(V),meter=el('span','fcost','Cost '+'●'.repeat(Math.min(cost,9))+'○'.repeat(Math.max(0,9-cost)));meter.title='How heavy this chain is for the device';
+  const top=el('div','fx-acts');top.append(add,meter);bar.appendChild(top);
+  if(cost>=9&&matchMedia('(pointer:coarse)').matches)bar.appendChild(el('div','fx-note','Heavy on a phone. Switch a step off if it stutters.'));
+  if(FUSEPICK){const pk=el('div','fpick');pk.appendChild(el('div','fx-sec','<b>'+(CAMFX[+V['f'+FUSEPICK]-1]?'Change look':'Add look')+'</b><span>Step '+FUSEPICK+'</span>'));
     UFAM_ORDER.concat(['Mine']).filter(n=>n!=='Mix'&&(n!=='Face'||FUSEFACE)).forEach(n=>{const fs=CAMFX.filter(f=>f.cat!=='draft'&&camFam(f)===n).sort((a,b)=>a.label.localeCompare(b.label));if(!fs.length)return;pk.appendChild(el('div','cl',n));const w=el('div','pe');
-      fs.forEach(f=>{const b=el('button','',f.label);b.addEventListener('click',()=>{fuseSet(l,FUSEPICK,f.id);FUSEPICK=0;renderInspector();});w.appendChild(b);});pk.appendChild(w);});
-    {const fb=el('button','chip act',FUSEFACE?'Hide face effects':'Face effects…');fb.addEventListener('click',()=>{FUSEFACE=!FUSEFACE;renderInspector();});const fw=el('div','pe');fw.appendChild(fb);pk.appendChild(fw);}
+      fs.forEach(f=>{const b=el('button','',esc0(f.label));b.type='button';b.addEventListener('click',()=>{fuseSet(l,FUSEPICK,f.id);IS.fstep=FUSEPICK;FUSEPICK=0;rerender();});w.appendChild(b);});pk.appendChild(w);});
+    {const fb=el('button','chip act',FUSEFACE?'Hide face effects':'Face effects…');fb.type='button';fb.addEventListener('click',()=>{FUSEFACE=!FUSEFACE;renderInspector();});const fw=el('div','pe');fw.appendChild(fb);pk.appendChild(fw);}
+    const cx=el('button','chip act','Cancel');cx.type='button';cx.addEventListener('click',()=>{FUSEPICK=0;renderInspector();});const cw=el('div','pe');cw.appendChild(cx);pk.appendChild(cw);
     bar.appendChild(pk);}
+  /* mask tool */
+  if([1,2,3,4].some(s=>+V['f'+s]&&+V['mk'+s]===4)||ST.mpaint){
+    const mp=el('div','fmask');mp.appendChild(el('div','fx-sec','<b>Painted mask</b><span>'+(ST.mpaint?'Painting on the picture':'Steps set to Painted')+'</span>'));
+    const w=el('div','fx-acts'),tg=el('button',ST.mpaint?'primary':'',ST.mpaint?'Done painting':'Paint mask');tg.type='button';tg.addEventListener('click',()=>{ST.mpaint=!ST.mpaint;document.body.toggleAttribute('data-mpaint',ST.mpaint);renderInspector();});w.appendChild(tg);
+    if(ST.mpaint){const er=el('button','',MASKB.erase?'Erasing':'Painting');er.type='button';er.setAttribute('aria-pressed',MASKB.erase);er.addEventListener('click',()=>{MASKB.erase=!MASKB.erase;renderInspector();});
+      const cl=el('button','','Clear');cl.type='button';cl.addEventListener('click',()=>maskFill(0));const fl=el('button','','Fill');fl.type='button';fl.addEventListener('click',()=>maskFill(1));const iv=el('button','','Invert');iv.type='button';iv.addEventListener('click',maskInvert);w.append(er,cl,fl,iv);}
+    mp.appendChild(w);
+    if(ST.mpaint){rowRange(mp,'Brush size',()=>MASKB.size,v=>MASKB.size=v,2,60,1);rowRange(mp,'Feather',()=>MASKB.feather,v=>MASKB.feather=v,0,100,1);}
+    bar.appendChild(mp);}
+  /* More: recipes, sharing, custom effects, reset */
+  const mo=document.createElement('details');mo.className='fmore';mo.open=!!IS.fmore;mo.addEventListener('toggle',()=>{IS.fmore=mo.open;});
+  mo.appendChild(el('summary','','More'));
+  const act=el('div','fx-acts');
+  const mk=(t,tt,fn)=>{const b=el('button','',t);b.type='button';b.title=tt;b.addEventListener('click',fn);act.appendChild(b);};
+  mk('Random pair','Random compatible pair',()=>{toast(fuseRandomPair(l));rerender();});
+  mk('Save recipe','Save this recipe',()=>{const n=prompt('Name this recipe',fuseName(l));if(n===null)return;toast(saveRecipe(l,n.trim()||fuseName(l))?'Recipe saved':'This browser won’t store recipes');renderInspector();});
+  mk('Share','Copy a link to this recipe',()=>fuseShare(l));
+  mk('Write effect','Write your own effect in GLSL',openEditor);
+  mk('Reset','Reset Fuse',()=>{Object.assign(l.params,MODULES.fuse.defaults());rerender();});
+  mo.appendChild(act);
+  const rc=loadRecipes();if(rc.length){mo.appendChild(el('div','cl','Saved recipes'));const w=el('div','pe');
+    rc.slice().reverse().forEach(r=>{const b=el('button','',esc0(r.name));b.type='button';b.addEventListener('click',()=>{Object.assign(l.params,r.p);rerender();});
+      const x=el('button','','×');x.type='button';x.setAttribute('aria-label','Delete '+r.name);x.addEventListener('click',()=>{localStorage.setItem(RECIPES_KEY,JSON.stringify(loadRecipes().filter(q=>q.id!==r.id)));renderInspector();});w.append(b,x);});mo.appendChild(w);}
+  bar.appendChild(mo);
   host.appendChild(bar);
 }
+const esc0=t=>String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 let FUSEPICK=0,FUSEFACE=false;
 function renderInspector(){PAINTS.clear();
   const h=$i('insp'),st=h?h.scrollTop:0,g0=INS.gallery,m0=layer().module;
@@ -3850,11 +3893,15 @@ function renderInspector(){PAINTS.clear();
 function renderInspector0(){
   renderStrip();renderPeek();
   let host=$i('insp');host.innerHTML='';
+  const dt0=document.body.dataset.dt;
+  if(dt0==='col'){renderColour(host);return;}
+  if(dt0==='hw'&&!IS.hwAdv){renderHardware(host);return;}
+  if(dt0==='hw'&&IS.hwAdv){const bk=el('button','fx-back','‹ Hardware');bk.type='button';bk.addEventListener('click',()=>{IS.hwAdv=false;renderInspector();});host.appendChild(bk);}
   if(INS.gallery){renderGallery(host);return;}
   const l=layer(),m=MODULES[l.module],ix=STACK.sel;
   /* banner */
   const col=IDENT[l.module]||'#ccc',dark=parseInt(col.slice(1,3),16)*.3+parseInt(col.slice(3,5),16)*.59+parseInt(col.slice(5,7),16)*.11<140;
-  const ban=el('div','ban');ban.style.background=col;ban.style.color=dark?'#fff':'#111';
+  const ban=el('div','ban');ban.style.setProperty('--idc',col);
   ban.append(el('div','no',String(ix+1).padStart(2,'0')),el('div','nm',m.name));host.appendChild(ban);
   const TABS3=[['look','Look'],['place','Apply'],['motion','Move'],['layer','Layer']];
   if(!TABS3.some(t=>t[0]===INS.tab))INS.tab='look';
@@ -3921,18 +3968,142 @@ function renderInspector0(){
   }else{
     if(isTool&&depth==='play'){const p0=m.params[0];if(p0){const mb=el('div','mainctl');rowParam(mb,p0,l.params,null);host.appendChild(mb);}host.appendChild(tx('div','cl','Drag on the picture to change '+(m.params.slice(0,2).map(p=>p.label).join(' and '))+'. Open Shape for every control, Build to see how it works.'));outer.appendChild(PG[INS.tab]);return;}
     if(isTool&&depth==='build'){howSection(host,l,m);outer.appendChild(PG[INS.tab]);return;}
-    const heroKeys=(m.schema.hero||[]).filter(k=>m.params.some(p=>p.k===k&&p.t==='r')).slice(0,3);
+    const heroKeys=l.module==='fuse'?[]:(m.schema.hero||[]).filter(k=>m.params.some(p=>p.k===k&&p.t==='r')).slice(0,3);
     if(m.presets&&m.presets.length){const pr=el('div','chips');m.presets.forEach(ps=>{const b=el('button','chip',ps.name);b.addEventListener('click',()=>{Object.assign(l.params,ps.v);snap();renderInspector();buzz(8);});pr.appendChild(b);});host.appendChild(pr);}
     if(heroKeys.length>=2){const mb=el('div','mainctl');heroKeys.forEach(k=>rowParam(mb,m.params.find(x=>x.k===k),l.params,null));host.appendChild(mb);}
     m.schema.sections.forEach((sec,i)=>{
+      if(l.module==='fuse'&&/^Step \d$/.test(sec.label)&&sec.label!=='Step '+IS.fstep)return;
       const rest=sec.keys.filter(k=>heroKeys.length<2||!heroKeys.includes(k));if(!rest.length)return;
-      const a=accordion(heroKeys.length>=2?'More · '+sec.label:sec.label,heroKeys.length<2&&i<1);
+      const a=accordion(heroKeys.length>=2?'More · '+sec.label:(l.module==='fuse'&&/^Step/.test(sec.label)?'Selected step · '+sec.label.slice(5):sec.label),heroKeys.length<2&&(i<1||l.module==='fuse'&&/^Step/.test(sec.label)));
       rest.forEach(k=>{const p=m.params.find(x=>x.k===k);if(m.colorBound&&l.params.orig&&(p.t==='pal'||p.t==='color'||m.hideOnOrig.includes(k)))return;if(p.t==='pal')palEditor(a.b,p,l.params,null);else rowParam(a.b,p,l.params,null);});
       host.appendChild(a.d);});
   }
   howSection(PG.layer,l,m);
   recipeSection(PG.layer);
   outer.appendChild(PG[INS.tab]);
+}
+/* ===== Hardware and Colour instruments =====
+   Two views over state that already exists: Hardware drives the CRT Lab profile and its controls (P, PROFILES, CTL); Colour drives the
+   selected layer's colour treatment (layer.color). Nothing here has a state of its own except which stop is selected. */
+const fxHead=(h,sub)=>{const d=el('div','fx-head');d.append(el('h2','',h),el('p','sub',sub));return d;};
+const fxSec=(b,r)=>el('div','fx-sec','<b>'+esc0(b)+'</b><span>'+esc0(r||'')+'</span>');
+const cloneP=()=>JSON.parse(JSON.stringify(P));
+function restoreP(bak){for(const k of Object.keys(P))if(!(k in bak))delete P[k];Object.assign(P,bak);}
+function withProfile(id,fn){const bak=cloneP();try{applyProfile(id,true);return fn();}finally{restoreP(bak);}}
+function hwState(){
+  const keys=CT.map(c=>c.k),pr=PROFILES.find(q=>q[0]===P.profile);
+  if(pr){const ref=withProfile(pr[0],()=>JSON.stringify(keys.map(k=>P[k])));return{id:pr[0],name:pr[1],modified:ref!==JSON.stringify(keys.map(k=>P[k]))};}
+  const lk=loadLooks().find(x=>x.id===P.profile);return{id:P.profile,name:lk?'★ '+lk.name:'Custom',modified:!lk};
+}
+/* Profile thumbnails are real engine output: one profile at a time, after the live frame is drawn, then the live look is restored in the same
+   frame so nothing flashes. They are cached per source and only made while the Hardware tab is open and the frame rate is healthy. */
+const HWT={m:new Map(),q:[],ver:-2,tick:0,hooked:false};
+function hwThumbEl(id){
+  if(HWT.ver!==SRC.ver){HWT.m.clear();HWT.q=[];HWT.ver=SRC.ver;}
+  let c=HWT.m.get(id);
+  if(!c){c=document.createElement('canvas');c.width=176;c.height=132;HWT.m.set(id,c);HWT.q.push(id);
+    if(!HWT.hooked){HWT.hooked=true;FRAME_HOOKS.push(hwTick);}}
+  return c;
+}
+function hwTick(t){
+  if(!HWT.q.length||document.body.dataset.dt!=='hw'||IS.hwAdv||V.fps<18||(++HWT.tick&1))return;
+  const bak=cloneP(),draw=dt=>{idleApply(t);try{renderStack(t,dt);}finally{idleRestore();}};
+  /* Two profiles per tick. The profile's own frame memory (afterglow, burn-in, frame blend) is switched off so none of it is left in the
+     buffers; the frame is drawn at a few time steps and the brightest is kept (a frame can land on a dropout); the live look is drawn
+     twice afterwards to settle the buffers before the compositor sees the frame. */
+  const px=g=>{const d=g.getImageData(0,0,176,132).data;let s=0;for(let i=0;i<d.length;i+=17)s+=d[i]+d[i+1]+d[i+2];return s;};
+  try{
+    for(let n=0;n<2&&HWT.q.length;n++){
+      const id=HWT.q.shift(),c=HWT.m.get(id);if(!c)continue;
+      const g=c.getContext('2d'),tmp=HWT.tmp||(HWT.tmp=document.createElement('canvas'));tmp.width=176;tmp.height=132;const tg=tmp.getContext('2d');
+      let best=-1;
+      for(const dt of [.016,.5,1]){
+        try{
+          applyProfile(id,true);P.after=0;P.burn=0;P.fblend=0;draw(dt);
+          if(Math.abs(canvas.width/canvas.height-SRC.w/SRC.h)>.08)continue;
+          const k=Math.max(176/canvas.width,132/canvas.height),dw=canvas.width*k,dh=canvas.height*k;
+          tg.clearRect(0,0,176,132);tg.drawImage(canvas,(176-dw)/2,(132-dh)/2,dw,dh);
+          const sc=px(tg);if(sc>best){best=sc;g.clearRect(0,0,176,132);g.drawImage(tmp,0,0);}
+        }catch(e){}
+      }
+      if(best<0&&(c._try=(c._try||0)+1)<5)HWT.q.push(id);else c.dataset.ok='1';
+    }
+  }finally{restoreP(bak);try{draw(.016);draw(.016);}catch(e){}}
+}
+function renderHardware(host){
+  const l=layer();
+  host.appendChild(fxHead('Hardware','Choose a physical character, then tune its signal.'));
+  if(l.module!=='crtlab'){
+    const n=el('div','fx-note','There is no CRT Lab layer in this composition. Hardware profiles live on that layer.');host.appendChild(n);
+    const b=el('button','fx-add','+ Add CRT Lab');b.type='button';b.addEventListener('click',()=>{STACK.layers.unshift(mkLayer('crtlab'));STACK.sel=0;snap();renderInspector();});host.appendChild(b);return;
+  }
+  const st0=hwState(),cur=el('div','fx-current');host.appendChild(cur);
+  const grid=el('div','fx-cards');
+  const cards=[];
+  PROFILES.forEach(p=>{
+    const b=el('button','fx-card');b.type='button';b.dataset.p=p[0];
+    const th=el('div','fx-thumb');th.appendChild(hwThumbEl(p[0]));
+    b.append(th,el('b','',esc0(p[1])),el('small','',p[0]==='studio'?'Reference':p[0]==='none'?'Bypass':recolors(p[2])?'Sets a colour palette':'Hardware character'));
+    b.addEventListener('click',()=>{applyProfile(p[0]);snap();refreshUI();buzz(8);upd();});
+    cards.push(b);grid.appendChild(b);});
+  const looks=loadLooks();
+  const upd=()=>{const st=hwState();
+    cur.innerHTML='';const nm=el('span','fx-curname',esc0(st.name));cur.appendChild(nm);
+    cur.appendChild(el('span','fx-tag'+(st.modified?' changed':''),st.modified?'Modified':'Preset'));
+    if(st.modified&&PROFILES.some(q=>q[0]===st.id)){const rv=el('button','fx-link','Revert');rv.type='button';rv.addEventListener('click',()=>{applyProfile(st.id);snap();refreshUI();buzz(8);upd();});cur.appendChild(rv);}
+    cards.forEach(b=>b.setAttribute('aria-pressed',b.dataset.p===st.id));
+    host.querySelectorAll('.fx-look').forEach(b=>b.setAttribute('aria-pressed',b.dataset.v===st.id));};
+  host.appendChild(fxSec('Profiles',PROFILES.length+' presets'));host.appendChild(grid);
+  if(looks.length){host.appendChild(fxSec('Saved looks',String(looks.length)));const w=el('div','fx-chips');
+    looks.forEach(k=>{const b=el('button','chip fx-look','★ '+esc0(k.name));b.type='button';b.dataset.v=k.id;
+      b.addEventListener('click',()=>{if(k.j){try{applyRecipe(k.j);P.profile=k.id;}catch(e){toast(String(e.message||e));}}else{Object.assign(P,JSON.parse(JSON.stringify(k.p)));P.profile=k.id;}snap();refreshUI();upd();});w.appendChild(b);});host.appendChild(w);}
+  host.appendChild(fxSec('Quick adjustments','CRT Lab'));
+  const qa=el('div','fx-quick');
+  (MODULES.crtlab.schema.hero||[]).forEach(k=>{const c=CTL[k];if(c&&c.t==='r')rowRange(qa,c.l,()=>P[k],v=>{P[k]=v;},c.min,c.max,c.step,c.d);});
+  qa.addEventListener('change',()=>{snap();refreshUI();upd();});host.appendChild(qa);
+  host.appendChild(fxSec('All CRT parameters',TABS.length+' sections'));
+  const nav=el('div','fx-chips');
+  TABS.forEach(([tid,tn])=>{const b=el('button','chip act',esc0(tn)+' →');b.type='button';
+    b.addEventListener('click',()=>{TABS.forEach(([,n])=>{ACC_OPEN['crtlab|'+n]=n===tn;});IS.hwAdv=true;refreshUI();renderInspector();const d=$i('dock');if(d)d.scrollTop=0;});nav.appendChild(b);});
+  host.appendChild(nav);
+  host.appendChild(el('p','fx-note','Preview thumbnails are rendered by the CRT Lab itself from your current picture.'));
+  upd();
+}
+function renderColour(host){
+  const l=layer(),col=l.color||(l.color=JSON.parse(JSON.stringify(LAYER_DEFAULTS.color)));
+  host.appendChild(fxHead('Colour','How this layer’s tones are mapped to colour. Separate from the effect itself.'));
+  if(STACK.layers.length>1){host.appendChild(fxSec('Layer','Selected'));const w=el('div','fx-chips');
+    STACK.layers.forEach((x,i)=>{const b=el('button','chip',String(i+1).padStart(2,'0')+' '+esc0(MODULES[x.module]?MODULES[x.module].name:x.module));b.type='button';b.setAttribute('aria-pressed',i===STACK.sel);b.addEventListener('click',()=>{STACK.sel=i;INS.gallery=false;renderInspector();});w.appendChild(b);});host.appendChild(w);}
+  host.appendChild(fxSec('Treatment',esc0(MODULES[l.module]?MODULES[l.module].name:'')));
+  const modes=el('div','fx-chips');
+  COLOR_MODES.forEach(m=>{const b=el('button','chip',COLOR_LABEL[m]);b.type='button';b.setAttribute('aria-pressed',col.mode===m);
+    b.addEventListener('click',()=>{col.mode=m;snap();buzz(6);renderInspector();});modes.appendChild(b);});host.appendChild(modes);
+  if(col.mode==='original'){host.appendChild(el('p','fx-note','Original keeps the effect’s own colours. Pick Mono, Duotone, Gradient or Palette to recolour this layer.'));return;}
+  const a=el('div','fx-quick');rowRange(a,'Amount',()=>col.amt,v=>col.amt=v,0,100,1,100);a.addEventListener('change',()=>snap());host.appendChild(a);
+  if(col.mode==='mono'){host.appendChild(el('p','fx-note','Mono maps the picture to tones of one colour. No stops to edit.'));return;}
+  const pal=col.pal;if(!(IS.stop>=0&&IS.stop<pal.length))IS.stop=0;
+  host.appendChild(fxSec(col.mode==='gradient'?'Gradient':col.mode==='duotone'?'Duotone':'Palette',pal.length+' stops'));
+  const bar=el('div','fx-grad'),css=col.mode==='palette'?pal.map((c,i)=>c+' '+(i/pal.length*100)+'% '+((i+1)/pal.length*100)+'%').join(','):pal.join(',');
+  bar.style.background='linear-gradient(90deg,'+css+')';bar.setAttribute('role','img');bar.setAttribute('aria-label','Colour preview, '+pal.length+' stops');
+  const stopEls=pal.map((c,i)=>{const s=el('span','fx-stop');s.style.setProperty('--f',pal.length>1?i/(pal.length-1):0);s.style.setProperty('--c',c);s.setAttribute('aria-hidden','true');bar.appendChild(s);return s;});host.appendChild(bar);
+  const sw=el('div','fx-swatches');
+  pal.forEach((c,i)=>{const b=el('button','fx-sw');b.type='button';b.style.background=c;b.setAttribute('aria-label','Stop '+(i+1)+' '+c);b.setAttribute('aria-pressed',i===IS.stop);b.addEventListener('click',()=>{IS.stop=i;renderInspector();});sw.appendChild(b);});host.appendChild(sw);
+  const ed=el('div','fx-stopedit'),ci=document.createElement('input');ci.type='color';ci.value=pal[IS.stop];ci.setAttribute('aria-label','Selected stop colour');
+  const hx=document.createElement('input');hx.className='hx';hx.value=pal[IS.stop];hx.setAttribute('aria-label','Hex colour');hx.maxLength=7;
+  const paint=c=>{bar.style.background='linear-gradient(90deg,'+(col.mode==='palette'?col.pal.map((q,i)=>q+' '+(i/col.pal.length*100)+'% '+((i+1)/col.pal.length*100)+'%').join(','):col.pal.join(','))+')';sw.children[IS.stop].style.background=c;stopEls[IS.stop].style.setProperty('--c',c);};
+  ci.addEventListener('input',()=>{hx.value=ci.value;col.pal[IS.stop]=ci.value;paint(ci.value);});ci.addEventListener('change',()=>snap());
+  hx.addEventListener('change',()=>{if(/^#[0-9a-f]{6}$/i.test(hx.value)){ci.value=hx.value;col.pal[IS.stop]=hx.value;paint(hx.value);snap();}});
+  ed.append(el('span','l','Stop '+(IS.stop+1)),ci,hx);host.appendChild(ed);
+  const ac=el('div','fx-acts');
+  const mk=(t,fn,dis)=>{const b=el('button','',t);b.type='button';if(dis)b.disabled=true;b.addEventListener('click',fn);ac.appendChild(b);return b;};
+  mk('Reverse',()=>{col.pal=col.pal.slice().reverse();IS.stop=col.pal.length-1-IS.stop;snap();renderInspector();});
+  mk('Extract from image',()=>{const c=extractColors(col.mode==='duotone'?2:Math.max(2,Math.min(col.pal.length,6)));if(c){col.pal=c;snap();renderInspector();}else toast('Can’t read colors from this source');});
+  mk('+ Stop',()=>{if(col.pal.length<16){col.pal.push(col.pal[col.pal.length-1]);IS.stop=col.pal.length-1;snap();renderInspector();}},pal.length>=16);
+  mk('Remove stop',()=>{if(col.pal.length>2){col.pal.splice(IS.stop,1);IS.stop=Math.max(0,IS.stop-1);snap();renderInspector();}},pal.length<=2);
+  mk('Fewer colours',()=>{col.pal=palDepth(col.pal,Math.max(2,col.pal.length-1));snap();renderInspector();},pal.length<=2);
+  host.appendChild(ac);
+  const dt=document.createElement('details');dt.className='fmore';dt.appendChild(el('summary','','Palette library'));const pb=el('div','');palEditor(pb,{k:'pal'},col,()=>{});pb.addEventListener('change',()=>snap());dt.appendChild(pb);dt.addEventListener('toggle',()=>{if(!dt.open)renderInspector();});host.appendChild(dt);
+  host.appendChild(el('p','fx-note','Stops are spread evenly across the tones, as the renderer does. Recolour maps tones; a spatial gradient overlay is a different tool and is not part of this panel.'));
 }
 /* ---- WP4: mobile quality of life ---- */
 const buzz=(ms=8)=>{try{navigator.vibrate&&navigator.vibrate(ms);}catch(e){}};
@@ -4135,7 +4306,7 @@ function renderPeek(){
     else if(l.module==='crtlab'){const pr=PROFILES.filter(q=>q[0]!=='none').find(q=>q[0]===P.profile);mb.textContent='Preset: '+(pr?pr[1]:'1')+' ›';}
     else mb.textContent='Variation '+(l.seed+1)+' of 4 ›';mb.title='Tap to try the next variation of this effect';};
   label();mb.addEventListener('click',()=>{const n=cycleMode(l);label();toast(n);if(navigator.vibrate)try{navigator.vibrate(6);}catch(e){}});
-  const more=el('button','btn','More controls');more.type='button';more.addEventListener('click',()=>{if(SHEET.apply)SHEET.apply(2);});
+  const more=el('button','btn','More controls');more.type='button';more.addEventListener('click',()=>setDock('layers'));
   row.append(mb,more);host.insertBefore(row,host.querySelector('.railwrap'));
   /* rail: kept between renders. A selection only moves the highlight; the list is rebuilt only when its contents change. */
   const curId=effectId(l),sig=[SRC.ver,Object.keys(MODULES).length,CAMFX.length,JSON.stringify(lsGet('n0ise.fav',[])),JSON.stringify(lsGet('n0ise.recent',[])),loadRecipes().map(r=>r.id).join()].join('|');
@@ -4218,8 +4389,8 @@ function wireSheet(){
   if(vv){vv.addEventListener('resize',kb);vv.addEventListener('scroll',kb);}
   dock.addEventListener('focusin',e=>{if(/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)&&SHEET.s<2)apply(2);setTimeout(()=>{try{e.target.scrollIntoView({block:'center',behavior:'smooth'});}catch(_){}},250);});
   const upd=()=>{if(mqS.matches&&mqL.matches)document.body.dataset.side='1';else delete document.body.dataset.side;
-    if(mqS.matches&&!mqL.matches){document.body.dataset.sheet='1';apply(SHEET.s,false);}
-    else{delete document.body.dataset.sheet;dock.style.removeProperty('--ty');dock.style.removeProperty('--sheet');app.style.removeProperty('--stagepad');}};
+    /* phones use a fixed split (picture above, instrument below, its own scroll), not a draggable sheet */
+    delete document.body.dataset.sheet;dock.style.removeProperty('--ty');dock.style.removeProperty('--sheet');app.style.removeProperty('--stagepad');};
   mqS.addEventListener('change',upd);mqL.addEventListener('change',upd);addEventListener('resize',upd);upd();
   /* art-only toggle and source menu */
   const close=$i('artonly');if(close)close.addEventListener('click',()=>apply(SHEET.s===0?1:0));
