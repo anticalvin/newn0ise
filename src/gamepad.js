@@ -26,6 +26,7 @@ html body .gp-hot{outline:3px solid #f2e5cd;outline-offset:2px;box-shadow:0 0 0 
 #gplegend input[type=range]{width:100%;min-height:36px}
 #gplegend .gpck{align-items:center;min-height:44px}#gplegend .gpck input{width:22px;height:22px}
 #gplegend button{min-height:44px;padding:0 16px;margin-top:10px;border-radius:12px;border:0;background:#e9dfcb;color:#fff;font:800 12px var(--lab,monospace);letter-spacing:.06em;text-transform:uppercase}`;document.head.appendChild(css);
+  addEventListener('pagehide',()=>{st.leaving=true;});addEventListener('beforeunload',()=>{st.leaving=true;});
   const cur=document.createElement('div');cur.id='gpcur';cur.setAttribute('aria-hidden','true');document.body.appendChild(cur);
   const lg=document.createElement('div');lg.id='gplegend';lg.setAttribute('role','dialog');lg.setAttribute('aria-label','Controller help');
   const G=()=>sony?{a:'✕',b:'○',x:'□',y:'△',sel:'Create',opt:'Options'}:{a:'A',b:'B',x:'X',y:'Y',sel:'View',opt:'Menu'};
@@ -88,7 +89,7 @@ html body .gp-hot{outline:3px solid #f2e5cd;outline-offset:2px;box-shadow:0 0 0 
   function press(){
     let t=hit();const hh=st.lastHot;if(hh&&hh.isConnected&&inRect(hh,st.x,st.y,10)&&(!t||!hh.contains(t)))t=hh; /* what is highlighted is what gets clicked */
     /* click assist: a press that lands just beside a control (the cursor was still drifting into it) goes to the nearest control within 40px */
-    if(!interactive(t)||t.tagName==='CANVAS'){const n=nearest(40);if(n){t=n;const r=n.getBoundingClientRect();st.x=r.left+r.width/2;st.y=r.top+r.height/2;place();hot(n);}}
+    if(t&&!interactive(t)&&!t.closest('#stage,canvas,#empty,#walkui')){const n=nearest(40);if(n){t=n;const r=n.getBoundingClientRect();st.x=r.left+r.width/2;st.y=r.top+r.height/2;place();hot(n);}}
     if(!t)return;st.down={t,x:st.x,y:st.y,moved:false};cur.dataset.d='true';buzz(25,.1,.2);
     if(t.matches&&t.matches('input[type=range]')){slide(t);return;}
     pt(t,'pointerdown');mouse(t,'mousedown');
@@ -100,7 +101,9 @@ html body .gp-hot{outline:3px solid #f2e5cd;outline-offset:2px;box-shadow:0 0 0 
     pt(t,'pointerup');mouse(t,'mouseup');
     if(!d.moved&&t.matches&&t.matches('textarea,input:not([type=range]):not([type=color]):not([type=checkbox]):not([type=radio]):not([type=button]):not([type=submit]):not([type=file])')){
       const v=prompt((t.getAttribute('aria-label')||t.placeholder||'Type here')+(sony?'':''),t.value);if(v!=null){t.value=v;t.dispatchEvent(new Event('input',{bubbles:true}));t.dispatchEvent(new Event('change',{bubbles:true}));}return;}
-    if(t.tagName!=='CANVAS'&&!d.moved){try{(interactive(t)||t).dispatchEvent(new MouseEvent('click',{clientX:st.x,clientY:st.y,button:0,bubbles:true,cancelable:true,view:window}));}catch(e){}buzz(18,.08,.25);}
+    if(t.tagName!=='CANVAS'&&!d.moved){try{const tgt=interactive(t)||t,go=tgt.dispatchEvent(new MouseEvent('click',{clientX:st.x,clientY:st.y,button:0,bubbles:true,cancelable:true,view:window})),a=tgt.closest&&tgt.closest('a[href]');
+      /* some browsers ignore a script-made click on a link: follow it ourselves unless the page handled it or is already leaving */
+      if(a&&go&&!/^(#|javascript:)/.test(a.getAttribute('href')||'#')){setTimeout(()=>{if(!st.leaving){if(a.target==='_blank')window.open(a.href,'_blank','noopener');else location.href=a.href;}},60);}}catch(e){}buzz(18,.08,.25);}
   }
   function orbit(dt,rx,ry){
     if(!camera||!controls){window.scrollBy(0,ry*dt*900);return;}

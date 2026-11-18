@@ -91,7 +91,7 @@
 </dialog>
 <template id="globalbtns"><button class="desk-btn icon" id="bUndo" type="button" title="Undo (Ctrl+Z)" aria-label="Undo"><svg viewBox="0 0 24 24"><path d="m8 4-5 5 5 5M3 9h10a6 6 0 0 1 0 12h-3"/></svg></button><button class="desk-btn icon" id="bRedo" type="button" title="Redo (Ctrl+Shift+Z)" aria-label="Redo"><svg viewBox="0 0 24 24" style="transform:scaleX(-1)"><path d="m8 4-5 5 5 5M3 9h10a6 6 0 0 1 0 12h-3"/></svg></button><button class="desk-btn" id="bSave" type="button" title="Save the project to a file">Save</button></template>
 <script>document.getElementById('globalslot').append(document.getElementById('globalbtns').content);</script>
-<script type="module" src="assets/studio.js?v=e2d98d70"></script>
+<script type="module" src="assets/studio.js?v=cbcc80e4"></script>
 <script type="module">
 const dlg=document.getElementById('dialog');
 document.getElementById('menubtn').addEventListener('click',()=>dlg.showModal());
@@ -101,8 +101,36 @@ const mq=matchMedia('(min-width:960px) and (min-height:550px)'),dg=document.getE
 const place=()=>{['bUndo','bRedo','bSave'].forEach(id=>{const o=document.getElementById(id);if(o)(mq.matches?dg:slot).appendChild(o);});};
 place();mq.addEventListener('change',place);
 const hudBL=document.getElementById('hudBL');
-const placeView=()=>['bFrame','bGrid','bWalk','bSpin'].forEach(id=>{const o=document.getElementById(id);if(!o)return;if(mq.matches){o.classList.remove('pill');hudBL.appendChild(o);}else{o.classList.add('pill');vs.appendChild(o);}});
-const vh=document.getElementById('viewh');const pv=()=>{placeView();vh.hidden=vs.hidden=mq.matches;};pv();mq.addEventListener('change',pv);
+/* View controls: on phones one View menu owns them (shading modes, light, material, look, FX, frame, grid, walk, spin); from 900px they sit on the stage as before.
+   The same elements move, so the 3D engine's handlers and state are untouched. */
+const mqE=matchMedia('(min-width:900px)'),hudTL=document.querySelector('.hud.tl'),hudTR=document.querySelector('.hud.tr'),marks=new Map();
+[hudTL,hudTR].forEach(h=>{if(!h)return;const m=document.createComment('hud');h.parentNode.insertBefore(m,h);marks.set(h,m);});
+const placeView=()=>{
+  ['bFrame','bGrid','bWalk','bSpin'].forEach(id=>{const o=document.getElementById(id);if(!o)return;if(mqE.matches){o.classList.remove('pill');hudBL.appendChild(o);}else{o.classList.add('pill');vs.appendChild(o);}});
+  [hudTL,hudTR].forEach(h=>{if(!h)return;if(mqE.matches)marks.get(h).after(h);else vs.prepend(h);});
+  const vh=document.getElementById('viewh');vh.hidden=vs.hidden=mqE.matches;
+};
+placeView();mqE.addEventListener('change',placeView);
+/* the phone Tools chip becomes the View button (its old handler toggled four stacked strips over the model) */
+{const tb=document.getElementById('bTools');if(tb){const nb=tb.cloneNode(true);nb.textContent='View';nb.removeAttribute('aria-controls');nb.setAttribute('aria-haspopup','dialog');nb.setAttribute('aria-expanded','false');tb.replaceWith(nb);nb.addEventListener('click',()=>dlg.showModal());}}
+/* active discipline: one attribute the stylesheet reads, so each discipline owns its own tool row */
+const tabsEl=document.getElementById('tabs');let lastTab='';
+const spawnChar=()=>{const empty=document.getElementById('empty'),hasModel=!empty||empty.hidden||getComputedStyle(empty).display==='none';
+  if(!hasModel)return;if([...document.querySelectorAll('.orow')].some(r=>/human|character/i.test(r.textContent)))return;
+  const find=re=>[...document.querySelectorAll('#panes button')].find(x=>re.test(x.textContent.trim()));
+  const mine=find(/my character/i);if(mine){mine.click();/* nobody has made a character yet: use the stock figure instead of showing an error */setTimeout(()=>{const t=document.querySelector('.toast');if(t&&/no character yet/i.test(t.textContent)){t.hidden=true;const h=find(/^\+ Human/i);h&&h.click();}},450);}else{const h=find(/^\+ Human/i);h&&h.click();}};
+/* smaller sheet in landscape; Build opens at the partial height so its tool strip and the model both fit */
+{const sh=window.__sheet;if(sh&&!sh.__n0){sh.__n0=1;const orig=sh.snaps.bind(sh);sh.snaps=()=>{const a=orig();if(matchMedia('(max-height:520px)').matches&&!mqE.matches){const H=innerHeight;return[a[0],Math.round(H*.28),Math.round(H*.42),Math.round(H*.42)];}return a;};}}
+const onTab=()=>{const sel=tabsEl.querySelector('[aria-selected=true]');const k=sel?sel.id.replace('tab_',''):'';document.body.dataset.tab=k;if(k==='build'&&lastTab!=='build'){setTimeout(spawnChar,700);const sh=window.__sheet;if(sh&&!mqE.matches)sh.setIdx(1);}lastTab=k;};
+new MutationObserver(onTab).observe(tabsEl,{attributes:true,subtree:true,attributeFilter:['aria-selected']});onTab();
+/* sheet height, for anything that must sit above it */
+const rootEl=document.documentElement;
+const rafCover=()=>{const sh=window.__sheet;if(sh)rootEl.style.setProperty('--cover',Math.round(sh.coverPx())+'px');
+  const d=tabsEl.classList.contains('dock')?tabsEl.offsetHeight:0;rootEl.style.setProperty('--objb',d?(d+10)+'px':'');requestAnimationFrame(rafCover);};rafCover();
+/* the "restore your last session" prompt becomes a slim bar between the header and the viewport, not a layer on top of it */
+const app=document.querySelector('.app'),mainEl=document.querySelector('.main');
+const tuck=n=>{if(n&&n.classList&&n.classList.contains('restore')&&n.parentNode!==app)app.insertBefore(n,mainEl);};
+tuck(document.querySelector('.restore'));new MutationObserver(ms=>ms.forEach(m=>m.addedNodes.forEach(tuck))).observe(document.body,{childList:true});
 </script>
 </body>
 </html>

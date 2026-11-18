@@ -2800,7 +2800,7 @@ async function dupObj(o){
   }catch(e){toast(String(e.message||e),4000);}
 }
 const bar=document.createElement('div');bar.id='objbar';bar.hidden=true;bar.setAttribute('role','toolbar');bar.setAttribute('aria-label','Selected object');
-bar.style.cssText='position:fixed;left:50%;transform:translateX(-50%);bottom:var(--objb,calc(54px + env(safe-area-inset-bottom)));z-index:48;display:flex;gap:4px;align-items:center;max-width:calc(100vw - 16px);overflow-x:auto;padding:5px;border-radius:16px;background:rgba(18,18,20,.74);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border:1px solid rgba(255,255,255,.16);box-shadow:inset 0 1px 0 rgba(255,255,255,.2),0 10px 30px rgba(0,0,0,.45);color:#f2efe9;font:12px/1 system-ui,sans-serif;white-space:nowrap';
+bar.style.cssText='position:fixed;left:50%;transform:translateX(-50%);bottom:var(--objb,calc(54px + env(safe-area-inset-bottom)));z-index:48;gap:4px;align-items:center;max-width:calc(100vw - 16px);overflow-x:auto;padding:5px;border-radius:16px;background:rgba(18,18,20,.74);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border:1px solid rgba(255,255,255,.16);box-shadow:inset 0 1px 0 rgba(255,255,255,.2),0 10px 30px rgba(0,0,0,.45);color:#f2efe9;font:12px/1 system-ui,sans-serif;white-space:nowrap';
 document.body.appendChild(bar);
 function paintBar(){
   const o=objById(S.sel);bar.hidden=!o||S.walk||S.exporting||S.tab==='draw';if(bar.hidden)return;
