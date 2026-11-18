@@ -4,8 +4,8 @@ const StudioDocument = (() => {
   const sizes = {landscape:[1920,1080], portrait:[1080,1920], square:[1440,1440]};
   const ratios = {landscape:'16:9', portrait:'9:16', square:'1:1'};
   const labels = {chrome:'Chrome form', crt:'CRT effect', background:'Background', shape:'Shape',
-    brush:'Brush stroke', image:'Image', text:'Text', path:'Path', scene:'Metallic torus'};
-  const blends = ['source-over','screen','multiply','lighter'];
+    brush:'Brush stroke', image:'Image', text:'Text', path:'Path', scene:'Metallic torus',gradient:'Gradient'};
+  const blends = ['source-over','screen','multiply','lighter','destination-out'];
   const graph = () => ({
     nodes:[{id:'source',type:'source',x:35,y:55},{id:'output',type:'output',x:450,y:55}],
     edges:[{from:'source',to:'output'}]
@@ -68,7 +68,7 @@ const StudioDocument = (() => {
       }
       ids.add(item.id);
       const l = layer(item.type,{
-        id:item.id,name:String(item.name || labels[item.type]).slice(0,120),visible:item.visible !== false,
+        id:item.id,name:String(item.name || labels[item.type]).slice(0,120),visible:item.visible !== false,locked:item.locked === true,
         x:number(item.x,0,-1e6,1e6),y:number(item.y,0,-1e6,1e6),rotation:number(item.rotation,0,-36000,36000),
         opacity:number(item.opacity,100,0,100),scale:number(item.scale,100,1,2000),
         blend:blends.includes(item.blend) ? item.blend : 'source-over'
@@ -104,6 +104,17 @@ const StudioDocument = (() => {
         l.shape = ['rectangle','ellipse','triangle'].includes(item.shape) ? item.shape : 'rectangle';
         l.width = number(item.width,240,1,8192);
         l.height = number(item.height,240,1,8192);
+      }
+      if (l.type === 'gradient') {
+        const rawGradient = item.gradient && typeof item.gradient === 'object' ? item.gradient : {};
+        const point = (value,fallback) => Array.isArray(value) && value.length === 2 && value.every(Number.isFinite)
+          ? value.map(n => clamp(n,-8192,8192)) : fallback;
+        l.gradient = {
+          kind:rawGradient.kind === 'radial' ? 'radial' : 'linear',
+          from:point(rawGradient.from,[-dimensions(project)[0]/2,0]),
+          to:point(rawGradient.to,[dimensions(project)[0]/2,0]),
+          start:color(rawGradient.start,'#e9e5db'),end:color(rawGradient.end,'#101112')
+        };
       }
       if (l.type === 'text') {
         l.text = String(item.text ?? 'Type here').slice(0,2000);

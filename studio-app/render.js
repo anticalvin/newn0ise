@@ -89,12 +89,22 @@ const StudioRender = (() => {
     for (let i=0;i<650;i++) ctx.fillRect(Math.sin(i*17.1)*w*.48,Math.cos(i*12.2)*h*.48,3,3);
   }
 
-  function drawProcedural(ctx,type,w,h,scale) {
+  function drawProcedural(ctx,type,w,h,scale,layer) {
     if (type === 'background') {
       const g = ctx.createRadialGradient(0,0,20,0,0,Math.max(w,h)*.7);
       g.addColorStop(0,'#494a4b');
       g.addColorStop(.6,'#1d1e20');
       g.addColorStop(1,'#090a0b');
+      ctx.fillStyle = g;
+      ctx.fillRect(-w/2,-h/2,w,h);
+    } else if (type === 'gradient') {
+      const value = layer.gradient ?? {kind:'linear',from:[-w/2,0],to:[w/2,0],start:'#e9e5db',end:'#101112'};
+      const from = value.from ?? [-w/2,0], to = value.to ?? [w/2,0];
+      const g = value.kind === 'radial'
+        ? ctx.createRadialGradient(from[0],from[1],0,to[0],to[1],Math.max(1,Math.hypot(to[0]-from[0],to[1]-from[1])))
+        : ctx.createLinearGradient(from[0],from[1],to[0],to[1]);
+      g.addColorStop(0,value.start ?? '#e9e5db');
+      g.addColorStop(1,value.end ?? '#101112');
       ctx.fillStyle = g;
       ctx.fillRect(-w/2,-h/2,w,h);
     } else if (type === 'chrome') {
@@ -137,7 +147,7 @@ const StudioRender = (() => {
     if (projected) {
       projected.object.globalCompositeOperation = composite ? l.blend : 'source-over';
       projected.object.render(ctx);
-    } else drawProcedural(ctx,l.type,w,h,scale);
+    } else drawProcedural(ctx,l.type,w,h,scale,l);
     ctx.restore();
   }
 
@@ -201,9 +211,40 @@ const StudioRender = (() => {
     }
     return gpu?.end() ?? [];
   }
+  function toSVG(doc,gpu,preview) {
+    const [w,h] = dimensions(doc);
+    const root = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="isolation:isolate">`;
+    const image = surface => `<image width="${w}" height="${h}" href="${surface.toDataURL('image/png')}"/>`;
+    // The legacy whole-composition CRT reads the finished stack.
+    if (pipeline(doc.graph)?.some(node => node.amount > 0) ||
+      doc.layers.some(l => l.visible && l.blend === 'destination-out')) return root+image(preview)+'</svg>';
+    const surface = document.createElement('canvas');
+    const blends = {screen:'screen',multiply:'multiply',lighter:'plus-lighter'};
+    const fragments = [];
+    for (const l of [...doc.layers].reverse()) {
+      if (!l.visible || !l.opacity) continue;
+      const vector = ['shape','text','path','brush'].includes(l.type) &&
+        !l.chain?.nodes.some(n => n.type === 'effect');
+      let markup;
+      if (vector) {
+        const p = center(l,w,h);
+        const transform = `translate(${p.x} ${p.y}) rotate(${l.rotation}) scale(${l.scale/100})`;
+        markup = `<g transform="${transform}">${project(l).object.toSVG()}</g>`;
+      } else {
+        draw(surface,{...doc,layers:[{...l,opacity:100,blend:'source-over'}]},gpu);
+        markup = image(surface);
+      }
+      const style = Object.hasOwn(blends,l.blend) ? ` style="mix-blend-mode:${blends[l.blend]}"` : '';
+      fragments.push(`<g opacity="${l.opacity/100}"${style}>${markup}</g>`);
+    }
+    return root+fragments.join('')+'</svg>';
+  }
+
   const rasterKeys = new WeakMap();
   function rasterSignature(layer,projection) {
-    const transform = [layer.x,layer.y,layer.scale,layer.rotation].join(':');
+    const transform = JSON.stringify([layer.x,layer.y,layer.scale,layer.rotation,layer.gradient,layer.fill,
+      layer.stroke,layer.strokeWidth,layer.width,layer.height,layer.shape,layer.text,layer.fontSize,
+      layer.points,layer.crop]);
     const key = rasterKeys.get(layer);
     if (key && key.transform === transform && key.projection === projection) return key;
     const next = {projection,transform};
@@ -219,6 +260,7 @@ const StudioRender = (() => {
 
   function inside(l,p,w,h,tolerance) {
     if (!l.visible || !l.opacity || l.type === 'crt' || l.type === 'background') return false;
+    if (l.type === 'gradient') return p.x >= 0 && p.x <= w && p.y >= 0 && p.y <= h;
     const q = local(l,p,w,h);
     if (l.type === 'scene') return Math.hypot(q.x,q.y) <= Math.min(w,h)*.39;
     if (l.type === 'chrome') {
@@ -266,5 +308,5 @@ const StudioRender = (() => {
       top:Math.min(...p.map(a => a.y)),bottom:Math.max(...p.map(a => a.y))};
   }
 
-  return {draw,prepare,image,inside,bounds,corners,local,dimensions,center,transform,radians,pathData};
+  return {draw,toSVG,prepare,image,inside,bounds,corners,local,dimensions,center,transform,radians,pathData};
 })();

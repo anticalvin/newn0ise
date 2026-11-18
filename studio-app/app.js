@@ -4,7 +4,8 @@
   const $ = id => document.getElementById(id);
   const all = selector => [...document.querySelectorAll(selector)];
   const {sizes,dimensions,ratioName,validSize,create,layer,normalize,clamp,copy,history} = StudioDocument;
-  const R = StudioRender, S = StudioSnap, G = StudioGraph;
+  const R = StudioRender, S = StudioSnap, G = StudioGraph, V = StudioVector;
+  const contextMenu = studioContextMenu($('studioContext'));
   let runtimeModule;
   try { runtimeModule = await import('./runtime.mjs'); } catch (e) {
     console.error('Studio renderer could not load',e);
@@ -17,6 +18,7 @@
   let doc = create(preset()), selection = [];
   let textEdit = null, launchMode = 'new', launchTicket = 0;
   let view = 'canvas', tool = 'select', rail = 'layers', sheet = 'canvas', shape = 'rectangle';
+  let paintColor = '#e9e5db';
   let dirty = false, opening = 0, revision = 0, space = false, grid = false, snapping = true, angular = false;
   let pan = {x:0,y:0}, zoom = 1, fitted = true, frame = 0, gesture = null, pen = [], hover = null;
   let guides = [], draft = null, editAnchors = false, toastTimer = 0, contextKey = '';
@@ -52,9 +54,9 @@
     $('spatialTab').hidden = !(l?.type === 'scene' && gpu?.supportedAsset(l.asset));
   }
   function compatible(l) {
-    return !!gpu && selection.length === 1 && l?.visible && (l.type !== 'scene' || gpu.supportedAsset(l.asset));
+    return !!gpu && selection.length === 1 && l?.visible && !l.locked && (l.type !== 'scene' || gpu.supportedAsset(l.asset));
   }
-  const visibleSelection = () => selected().filter(l => l.visible);
+  const visibleSelection = () => selected().filter(l => l.visible && !l.locked);
   const dims = () => dimensions(doc);
   const round = n => Math.round(n*100)/100;
   const midpoint = (a,b) => ({x:(a.x+b.x)/2,y:(a.y+b.y)/2});
@@ -130,7 +132,7 @@
     list.replaceChildren();
     $('railtitle').textContent = rail.toUpperCase();
     stateButtons('[data-rail]',rail,'rail');
-    const glyphs = {scene:'◉',shape:'□',image:'▧',brush:'✎',path:'◇',text:'T',crt:'≋'};
+    const glyphs = {scene:'◉',shape:'□',image:'▧',brush:'✎',path:'◇',text:'T',crt:'≋',gradient:'◒'};
     function row(name,type,activate,id) {
       const box = document.createElement('div');
       box.className = 'layer';
@@ -190,7 +192,15 @@
         eye.setAttribute('aria-label',eye.title);
         eye.dataset.action = l.id+':visibility';
         eye.onclick = () => change(() => { l.visible = !l.visible; });
-        box.append(eye);
+        const lock = document.createElement('button');
+        lock.className = 'eye layer-lock';
+        lock.textContent = l.locked ? '▣' : '□';
+        lock.title = `${l.locked ? 'Unlock' : 'Lock'} ${l.name}`;
+        lock.setAttribute('aria-label',lock.title);
+        lock.setAttribute('aria-pressed',String(l.locked));
+        lock.dataset.action = l.id+':lock';
+        lock.onclick = () => change(() => { l.locked = !l.locked; });
+        box.append(lock,eye);
       }
     }
     list.scrollTop = scrollTop;
@@ -230,9 +240,11 @@
   }
   function remove() {
     if (!selection.length) return;
+    if (selected().every(l => l.locked)) { notice('Unlock the selected layer before deleting it.'); return; }
     change(() => {
-      doc.layers = doc.layers.filter(l => !selection.includes(l.id));
-      selection = [];
+      const removable = selected().filter(l => !l.locked).map(l => l.id);
+      doc.layers = doc.layers.filter(l => !removable.includes(l.id));
+      selection = selection.filter(id => !removable.includes(id));
     });
   }
   function toggleId(ids,id) { return ids.includes(id) ? ids.filter(x => x !== id) : [...ids,id]; }
@@ -248,10 +260,11 @@
     const [w,h] = dims();
     const size = Math.min(w,h)*.24;
     const defaults = {
-      shape:{shape,width:size,height:size,fill:'#d5d0c5',stroke:'#e9e5db',strokeWidth:0},
-      text:{text:'Type here',font:'sans-serif',fontSize:Math.round(size*.38),fill:'#e9e5db'},
-      path:{points:[],closed:false,fill:'#d5d0c5',stroke:'#e9e5db',strokeWidth:4},
-      brush:{points:[],stroke:'#e9e5db',strokeWidth:Math.max(4,w*.007)}
+      shape:{shape,width:size,height:size,fill:paintColor,stroke:paintColor,strokeWidth:0},
+      text:{text:'Type here',font:'sans-serif',fontSize:Math.round(size*.38),fill:paintColor},
+      path:{points:[],closed:false,fill:paintColor,stroke:paintColor,strokeWidth:4},
+      brush:{points:[],stroke:paintColor,strokeWidth:Math.max(4,w*.007)},
+      gradient:{gradient:{kind:'linear',from:[-w/2,0],to:[w/2,0],start:paintColor,end:'#101112'}}
     };
     return layer(type,{...defaults[type],...props});
   }
@@ -308,7 +321,7 @@
     const l = !effect && !edge && values.length === 1 ? active : null;
     $('selectedName').textContent = effect ? effect.name : edge ? 'Connection' :
       values.length > 1 ? `${values.length} layers selected` : active?.name ?? 'Nothing selected';
-    $('layerProperties').classList.toggle('hidden',!l || view === 'spatial');
+    $('layerProperties').classList.toggle('hidden',!l || l.locked || view === 'spatial');
     if (l) {
       for (const [id,key] of [['opacity','opacity'],['blend','blend'],['posX','x'],['posY','y'],['scale','scale'],['rotation','rotation']]) {
         inInspector($(id),typeof l[key] === 'number' ? round(l[key]) : l[key]);
@@ -316,13 +329,17 @@
       $('opacityLabel').textContent = l.opacity+'%';
     }
     const key = view+':'+(node ? node.id+':'+JSON.stringify(node.params) : edge ? 'edge:'+edge.to :
-      l ? [l.id,l.asset?.transform?.rotation,l.chain?.nodes.map(n => n.id),editAnchors].join(':') : selection.join(','));
+      l ? [l.id,l.locked,l.asset?.transform?.rotation,l.chain?.nodes.map(n => n.id),editAnchors].join(':') : selection.join(','));
     if (contextKey === key) return;
     contextKey = key;
     const context = $('context');
     const previousDetails = context.querySelector('details');
     const showAdvanced = previousDetails?.dataset.node === node?.id && previousDetails?.open;
     context.replaceChildren();
+    if (l?.locked && !node && !edge) {
+      context.append(action('Unlock layer',() => change(() => { l.locked = false; })));
+      return;
+    }
     if (edge || node?.type === 'effect') {
       const back = action('Back to layer',() => { graph.clear(); syncInspector(); });
       context.append(back);
@@ -343,6 +360,9 @@
           (p.hero ? context : advanced).append(control);
         }
         if (advanced.childElementCount > 1) context.append(advanced);
+        context.append(action(node.params.disabled ? 'Enable effect' : 'Bypass effect',() => {
+          change(() => { node.params.disabled = !node.params.disabled; });
+        }));
       } else if (node?.type === 'effect') {
         const label = document.createElement('span');
         label.className = 'muted compact';
@@ -379,6 +399,12 @@
         context.append(action('Return to Canvas',() => setView('canvas')));
       }
     }
+    if (l.type === 'gradient') {
+      context.append(field('Type','select',l.gradient.kind,v => { l.gradient.kind = v; },
+        {choices:[['linear','Linear'],['radial','Radial']]}));
+      context.append(field('Start color','color',l.gradient.start,v => { l.gradient.start = v; }),
+        field('End color','color',l.gradient.end,v => { l.gradient.end = v; }));
+    }
     if (view !== 'spatial' && l.chain) {
       for (const effect of l.chain.nodes.filter(n => n.type === 'effect')) {
         context.append(action(effects.get(effect.params.effect)?.name ?? 'Unavailable effect',() => graph.choose({node:effect.id})));
@@ -394,13 +420,8 @@
       if (l.type === 'shape' || l.closed) context.append(prop('Fill','fill','color'));
       context.append(prop('Stroke','stroke','color'),prop('Stroke width','strokeWidth','number',{min:l.closed || l.type === 'shape' ? 0 : 1,max:200}));
     }
-    if (l.type === 'path') context.append(action(editAnchors ? 'Done editing anchors' : 'Edit anchors',() => {
-      setTool('select');
-      editAnchors = !editAnchors;
-      contextKey = '';
-      syncInspector();
-      drawOverlay();
-    }));
+    if (l.type === 'shape') context.append(action('Convert to editable path',() => pathFromShape(l)));
+    if (l.type === 'path') context.append(action(editAnchors ? 'Done editing anchors' : 'Edit anchors',toggleAnchors));
     if (l.type === 'image' && l.crop) context.append(action('Reset crop',() => {
       contextKey = '';
       change(() => { delete l.crop; });
@@ -527,7 +548,9 @@
       } else if (axis === 'x') line(at,from,at,to,'guide');
       else line(from,at,to,at,'guide');
     }
-    if (draft) svg(draft.points ? 'polygon' : 'rect',{...draft,class:'draft'});
+    if (draft?.line) svg('line',{x1:draft.x1,y1:draft.y1,x2:draft.x2,y2:draft.y2,class:'draft'});
+    else if (draft?.path) svg('path',{d:draft.path,class:'draft'});
+    else if (draft) svg(draft.points ? 'polygon' : 'rect',{...draft,class:'draft'});
     if (pen.length) {
       const tail = hover && gesture?.kind !== 'pen' ? [[hover.x,hover.y,0,0]] : [];
       svg('path',{d:R.pathData({points:[...pen,...tail]}),class:'draft'});
@@ -544,6 +567,11 @@
     tool = next;
     stage.dataset.tool = tool;
     stateButtons('[data-tool]',tool,'tool');
+    const picker = document.querySelector('[data-tool="picker"]');
+    if (picker) {
+      picker.style.setProperty('--paint-color',paintColor);
+      picker.title = `Eyedropper · current ${paintColor}`;
+    }
     drawOverlay();
   }
   function setView(next) {
@@ -591,12 +619,58 @@
     const [a,b] = [...pointers.values()];
     return {center:midpoint(a,b),distance:Math.max(1,Math.hypot(a.x-b.x,a.y-b.y))};
   }
+  function inPolygon(p,points) {
+    let inside = false;
+    for (let i=0,j=points.length-1;i<points.length;j=i++) {
+      const a = points[i], b = points[j];
+      if ((a.y>p.y)!==(b.y>p.y) && p.x<(b.x-a.x)*(p.y-a.y)/(b.y-a.y)+a.x) inside = !inside;
+    }
+    return inside;
+  }
+  function pickColor(p) {
+    const [w,h] = dims(), x = Math.round(p.x), y = Math.round(p.y);
+    if (x < 0 || y < 0 || x >= w || y >= h) return;
+    const [r,g,b] = canvas.getContext('2d').getImageData(x,y,1,1).data;
+    paintColor = '#'+[r,g,b].map(n => n.toString(16).padStart(2,'0')).join('');
+    setTool('select');
+    notice(`Picked ${paintColor}`);
+  }
   function snapshotTransforms(layers) {
     return layers.map(l => ({l,x:l.x,y:l.y,scale:l.scale,rotation:l.rotation}));
   }
   function boxFor(layers) {
     const [w,h] = dims();
     return S.union(layers.map(l => R.bounds(l,w,h)));
+  }
+
+  function toggleAnchors() {
+    if (view === 'graph' || view === 'spatial') setView('canvas');
+    setTool('select');
+    editAnchors = !editAnchors;
+    contextKey = '';
+    syncInspector();
+    drawOverlay();
+  }
+  function pathFromShape(l) {
+    change(() => {
+      Object.assign(l,{type:'path',closed:true,points:V.outline(l.shape,l.width,l.height)});
+      delete l.shape;
+      delete l.width;
+      delete l.height;
+      contextKey = '';
+    });
+    if (!editAnchors) toggleAnchors();
+  }
+  function placeShape(props = {}) {
+    const l = build('shape',props);
+    if (['rectangle','ellipse','triangle'].includes(shape)) {
+      change(() => insert([l]));
+      return;
+    }
+    const points = V.outline(shape,l.width,l.height);
+    const line = shape === 'line';
+    add('path',{name:V.shapes[shape],x:l.x,y:l.y,rotation:l.rotation,points,closed:!line,
+      fill:l.fill,stroke:l.stroke,strokeWidth:line ? 6 : 0});
   }
 
   function penFinish(closed = false) {
@@ -626,21 +700,41 @@
     }
     if (g.kind === 'marquee' && g.moved) {
       const [w,h] = dims(), b = rectangle(g.p,g.now);
-      const ids = doc.layers.filter(l => l.visible && l.opacity && !['background','crt'].includes(l.type)).filter(l => {
+      const ids = doc.layers.filter(l => l.visible && !l.locked && l.opacity && !['background','crt'].includes(l.type)).filter(l => {
         const bounds = R.bounds(l,w,h);
         return bounds.left <= b.x+b.width && bounds.right >= b.x &&
           bounds.top <= b.y+b.height && bounds.bottom >= b.y;
       }).map(l => l.id);
       select([...new Set([...g.base,...ids])]);
     }
+    if (g.kind === 'gradient') {
+      const [w,h] = dims(), end = g.now ?? {x:g.p.x+Math.min(w*.55,500),y:g.p.y};
+      add('gradient',{gradient:{kind:'linear',from:[g.p.x-w/2,g.p.y-h/2],
+        to:[end.x-w/2,end.y-h/2],start:paintColor,end:'#101112'}});
+      setTool('select');
+    }
+    if (g.kind === 'lasso') {
+      const [w,h] = dims();
+      if (g.points.length >= 3) {
+        const ids = doc.layers.filter(l => l.visible && !l.locked && l.opacity && !['background','crt'].includes(l.type)).filter(l => {
+          const b = R.bounds(l,w,h);
+          return inPolygon({x:(b.left+b.right)/2,y:(b.top+b.bottom)/2},g.points);
+        }).map(l => l.id);
+        select([...new Set([...g.base,...ids])]);
+      }
+      setTool('select');
+    }
     if (g.kind === 'shape' && g.moved) {
       const [w,h] = dims(), b = rectangle(g.p,g.now);
       const point = {x:b.x+b.width/2-w/2,y:b.y+b.height/2-h/2};
-      add('shape',{...point,width:Math.max(2,b.width),height:Math.max(2,b.height)});
+      if (shape === 'line') {
+        const dx = g.now.x-g.p.x, dy = g.now.y-g.p.y;
+        placeShape({...point,width:Math.max(2,Math.hypot(dx,dy)),rotation:Math.atan2(dy,dx)*180/Math.PI});
+      } else placeShape({...point,width:Math.max(2,b.width),height:Math.max(2,b.height)});
       setTool('select');
     } else if (g.kind === 'shape') {
       const [w,h] = dims();
-      add('shape',{x:g.p.x-w/2,y:g.p.y-h/2});
+      placeShape({x:g.p.x-w/2,y:g.p.y-h/2});
       setTool('select');
     }
     if (g.kind === 'crop' && g.moved && g.crop?.[2] > 0 && g.crop?.[3] > 0) {
@@ -652,9 +746,10 @@
       const [w,h] = dims(), l = g.l;
       const bounds = S.union(l.points.map(([x,y]) => ({left:x,right:x,top:y,bottom:y})));
       const cx = (bounds.left+bounds.right)/2, cy = (bounds.top+bounds.bottom)/2;
-      l.x = cx-w/2;
-      l.y = cy-h/2;
-      l.points = l.points.map(([x,y]) => [x-cx,y-cy]);
+      const outline = V.stroke(l.points,g.pressure,l.strokeWidth);
+      Object.assign(l,{x:cx-w/2,y:cy-h/2,type:'path',name:g.eraser ? 'Eraser stroke' : 'Vector stroke',
+        closed:true,fill:l.stroke,strokeWidth:0,
+        points:outline.map(([x,y,dx,dy]) => [x-cx,y-cy,dx,dy])});
     }
     const changed = !g.items || g.items.some(({l,x,y,scale,rotation}) =>
       l.x !== x || l.y !== y || l.scale !== scale || l.rotation !== rotation);
@@ -699,13 +794,13 @@
       const origin = rotate ? p : corners[Number(handle)];
       gesture = {...base,kind:rotate ? 'rotate' : 'scale',pivot,origin,items:snapshotTransforms(layers),before:capture()};
     } else if (tool === 'select') {
-      const hit = doc.layers.find(l => R.inside(l,p,w,h,5/zoom));
+      const hit = inside ? doc.layers.find(l => !l.locked && R.inside(l,p,w,h,5/zoom)) : null;
       const inGroup = layers.length > 1 && (() => {
         const b = boxFor(layers);
         return p.x >= b.left && p.x <= b.right && p.y >= b.top && p.y <= b.bottom;
       })();
       if (hit && multi) { select(toggleId(selection,hit.id)); return; }
-      if (hit || inGroup) {
+      if (hit || (inside && inGroup)) {
         if (hit && !selection.includes(hit.id)) select([hit.id]);
         const moving = visibleSelection();
         const targets = doc.layers.filter(l => l.visible && l.opacity && !selection.includes(l.id) &&
@@ -717,11 +812,18 @@
         gesture = {...base,kind:'marquee',base:keep};
       }
     } else if (!inside) return;
-    else if (tool === 'brush') {
+    else if (tool === 'lasso') {
+      gesture = {...base,kind:'lasso',points:[p],base:multi ? [...selection] : []};
+    } else if (tool === 'picker') {
+      pickColor(p);
+      return;
+    } else if (tool === 'brush' || tool === 'eraser') {
       const before = capture();
-      const l = build('brush',{points:[[p.x,p.y]],x:-w/2,y:-h/2});
+      const l = build('brush',{points:[[p.x,p.y]],x:-w/2,y:-h/2,
+        ...(tool === 'eraser' ? {name:'Eraser stroke',blend:'destination-out'} : {})});
       insert([l]);
-      gesture = {...base,kind:'brush',before,l,edited:true};
+      const pressure = e.pointerType === 'pen' ? [e.pressure] : undefined;
+      gesture = {...base,kind:'brush',before,l,pressure,edited:true,eraser:tool === 'eraser'};
       schedule();
     } else if (tool === 'pen') {
       if (pen.length > 2 && Math.hypot(p.x-pen[0][0],p.y-pen[0][1])*zoom <= 11) {
@@ -743,6 +845,7 @@
       if (active?.type !== 'image') { notice('Select an image to crop it.'); return; }
       gesture = {...base,kind:'crop',l:active};
     } else if (tool === 'shape') gesture = {...base,kind:'shape'};
+    else if (tool === 'gradient') gesture = {...base,kind:'gradient'};
     if (gesture) {
       e.preventDefault();
       stage.setPointerCapture(e.pointerId);
@@ -875,6 +978,15 @@
           scale:round(item.scale*factor),rotation:round(item.rotation+angle)});
       }
       update();
+    } else if (g.kind === 'lasso') {
+      const last = g.points.at(-1);
+      if (Math.hypot(p.x-last.x,p.y-last.y)*zoom >= 2) g.points.push(p);
+      draft = {path:'M '+g.points.map(point => `${point.x} ${point.y}`).join(' L ')};
+      drawOverlay();
+    } else if (g.kind === 'gradient') {
+      g.now = p;
+      draft = {line:true,x1:g.p.x,y1:g.p.y,x2:p.x,y2:p.y};
+      drawOverlay();
     } else if (g.kind === 'marquee' || g.kind === 'shape') {
       g.now = p;
       draft = rectangle(g.p,p);
@@ -886,6 +998,7 @@
       const last = g.l.points.at(-1);
       if (Math.hypot(p.x-last[0],p.y-last[1])*zoom < 1.5) return;
       g.l.points.push([p.x,p.y]);
+      g.pressure?.push(e.pressure);
       schedule();
     } else if (g.kind === 'pen') {
       const last = pen.at(-1);
@@ -1005,6 +1118,48 @@
     dialog.showModal();
   }
 
+  function duplicateLayers() {
+    const clones = selected().map(l => ({...copy(l),id:StudioDocument.id(),
+      name:(l.name+' copy').slice(0,120),x:l.x+16,y:l.y+16}));
+    if (clones.length) change(() => insert(clones));
+  }
+  document.addEventListener('contextmenu',e => {
+    if (launcher.open || $('modal').open || gesture || e.target.closest('input,textarea,select,a,#textEdit') ||
+      !e.target.closest('#workspace')) return;
+    const onStage = stage.contains(e.target), row = e.target.closest('[data-layer-id]');
+    if (!onStage && !row) return;
+    if (view === 'spatial' && onStage) return;
+    e.preventDefault();
+    const point = onStage ? position(e.clientX,e.clientY) : null;
+    const [w,h] = dims();
+    const hit = row ? doc.layers.find(l => l.id === row.dataset.layerId) :
+      point && doc.layers.find(l => R.inside(l,point,w,h,5/zoom));
+    if (hit && !selection.includes(hit.id)) select([hit.id]);
+    const actions = [];
+    if (hit) {
+      if (hit.locked) actions.push(['Unlock layer',() => change(() => { hit.locked = false; })]);
+      else {
+        if (hit.type === 'text') actions.push(['Edit text',() => startTextEdit(hit)]);
+        if (hit.type === 'path' && selection.length === 1) actions.push(['Edit anchors',toggleAnchors]);
+        if (hit.type === 'shape' && selection.length === 1) actions.push(['Convert to path',() => pathFromShape(hit)]);
+      }
+      actions.push(['Duplicate',duplicateLayers],['Delete',remove],['Deselect',() => select([])]);
+    } else {
+      actions.push(['Text',() => setTool('text')],['Vector shapes',shapePicker],['Freehand',() => setTool('brush')],
+        ['Lasso selection',() => setTool('lasso')],
+        ['Eraser',() => setTool('eraser')],['Gradient fill',() => setTool('gradient')],
+        ['Eyedropper',() => setTool('picker')],['Import image…',() => $('imageFile').click()]);
+      if (selection.length) actions.push(['Deselect',() => select([])]);
+    }
+    const rect = e.target.getBoundingClientRect();
+    contextMenu.show(e.clientX || rect.left,e.clientY || rect.bottom,actions);
+  });
+  document.addEventListener('pointerdown',e => {
+    if (e.button !== 0 || !selection.length || launcher.open || $('modal').open ||
+      e.target.closest('button,a,input,select,textarea,label,summary,#studioContext,#graph,#artboard,#textEdit,.panel-handle')) return;
+    if (e.target.closest('.top,.documentbar,#workspace')) select([]);
+  },true);
+
   function openAdd() {
     if (view === 'graph' || view === 'spatial') setView('canvas');
     menu('Add to composition',[
@@ -1014,16 +1169,13 @@
       ['Chrome form',() => add('chrome')],
       ['CRT effect',() => add('crt')],
       ['Background',() => add('background')],
+      ['Gradient fill',() => setTool('gradient')],
       ['Centered shape',() => add('shape')],
       ['Text',() => { setTool('text'); notice('Tap the artboard to place text.'); }]
     ]);
   }
   function shapePicker() {
-    menu('Shape',[
-      ['Rectangle',() => chooseShape('rectangle')],
-      ['Ellipse',() => chooseShape('ellipse')],
-      ['Triangle',() => chooseShape('triangle')]
-    ]);
+    menu('Vector shapes',Object.entries(V.shapes).map(([id,name]) => [name,() => chooseShape(id)]));
   }
   function chooseShape(next) {
     shape = next;
@@ -1045,20 +1197,58 @@
     dirty = false;
     notice('Project downloaded.');
   }
-  function exportImage() {
-    if (gesture || view === 'spatial') return;
+  function renderExport() {
+    finishTextEdit();
     if (frame) {
       cancelAnimationFrame(frame);
       frame = 0;
       renderComposition();
     }
+  }
+  function exportPNG() {
+    renderExport();
+    return new Promise((resolve,reject) => canvas.toBlob(blob => {
+      if (blob) resolve(blob);
+      else reject(Error('PNG export failed.'));
+    },'image/png'));
+  }
+  async function downloadPNG() {
     const title = doc.name;
-    // Only artwork is in this full-resolution surface. Guides use the SVG overlay.
-    canvas.toBlob(blob => {
-      if (!blob) { notice('PNG export failed.'); return; }
-      download(blob,'png',title);
+    try {
+      download(await exportPNG(),'png',title);
       notice('PNG downloaded.');
-    },'image/png');
+    } catch (e) { notice(e.message); }
+  }
+  function downloadSVG() {
+    renderExport();
+    try {
+      const markup = R.toSVG(doc,gpu,canvas);
+      download(new Blob([markup],{type:'image/svg+xml'}),'svg');
+      notice('SVG downloaded.');
+    } catch { notice('SVG export failed.'); }
+  }
+  async function sendArtwork(destination) {
+    const tab = window.open('about:blank','_blank');
+    if (!tab) { notice('Allow pop-ups to open the exported image in another tool.'); return; }
+    tab.opener = null;
+    try {
+      const [blob,handoff] = await Promise.all([exportPNG(),import('../src/handoff.js')]);
+      await handoff.put(blob,{from:'studio',name:doc.name,to:destination});
+      tab.location.replace(new URL((destination === 'effects' ? 'effects.html' : 'studio.html')+'#from=studio',location.href));
+    } catch {
+      tab.close();
+      notice('Could not send the artwork. Download a PNG to open it in the other tool.');
+    }
+  }
+  function exportOptions() {
+    if (gesture || view === 'spatial') return;
+    menu('Export artwork',[
+      ['Download PNG',downloadPNG],
+      ['Download SVG',downloadSVG],
+      ['Save editable project',save],
+      ['Open in Effects',() => sendArtwork('effects')],
+      ['Open in 3D as relief',() => sendArtwork('3d')]
+    ]);
   }
   function useDocument(next) {
     opening++;
@@ -1268,13 +1458,13 @@
     ['Keyboard and gestures',() => {
       $('modaltitle').textContent = 'Keyboard and gestures';
       const help = document.createElement('p');
-      help.textContent = 'V Select · B Brush · P Pen · T Text · R Shape · C Crop. Shift-click adds or removes layers. Drag empty space to select several. Space-drag or use two fingers to pan. Scroll or pinch to zoom. Hold Alt to bypass snapping, or Shift for 15° rotation steps. Arrow keys nudge 1 px and Shift nudges 10 px. Press 0 to fit.';
+      help.textContent = 'V Select · L Lasso · B Brush · E Eraser · P Pen · T Text · R Shape · C Crop · G Gradient · I Eyedropper. Shift-click adds or removes layers. Drag empty space to select several. Space-drag or use two fingers to pan. Scroll or pinch to zoom. Hold Alt to bypass snapping, or Shift for 15° rotation steps. Arrow keys nudge 1 px and Shift nudges 10 px. Press 0 to fit.';
       $('modalcontent').replaceChildren(help);
       $('modal').showModal();
     }]
   ]);
   $('modalcancel').onclick = () => $('modal').close();
-  $('export').onclick = exportImage;
+  $('export').onclick = exportOptions;
   $('fit').onclick = fit;
   $('addLayer').onclick = openAdd;
   $('moveUp').onclick = () => reorder(-1);
@@ -1418,14 +1608,15 @@
       else if (view !== 'graph') remove();
     } else if (arrows[e.key] && view !== 'graph' && view !== 'spatial' && !graph.selection && selection.length) {
       e.preventDefault();
-      const layers = selected();
+      const layers = selected().filter(l => !l.locked);
+      if (!layers.length) return;
       nudgeBefore ??= capture();
       const delta = e.shiftKey ? 10 : 1, [x,y] = arrows[e.key];
       for (const l of layers) { l.x += x*delta; l.y += y*delta; }
       syncInspector();
       schedule();
     } else if (view !== 'graph') {
-      const shortcut = {v:'select',b:'brush',p:'pen',t:'text',r:'shape',c:'crop'}[key];
+      const shortcut = {v:'select',l:'lasso',b:'brush',e:'eraser',p:'pen',t:'text',r:'shape',c:'crop',g:'gradient',i:'picker'}[key];
       if (shortcut) setTool(shortcut);
     }
   });
@@ -1444,9 +1635,34 @@
     e.preventDefault();
     e.returnValue = true;
   });
+  async function openLabStill() {
+    const handoff = await import('../src/handoff.js');
+    const record = await handoff.take();
+    if (record?.meta?.from !== 'lab' || record.blob?.type !== 'image/png') throw Error('No Lab still was available.');
+    const src = await readData(record.blob);
+    const image = await R.image(src).ready;
+    const factor = Math.min(1,4096/Math.max(image.naturalWidth,image.naturalHeight),
+      Math.sqrt(8388608/(image.naturalWidth*image.naturalHeight)));
+    const size = [image.naturalWidth,image.naturalHeight].map(n => Math.max(64,Math.floor(n*factor)));
+    const next = create('custom',false,size);
+    next.name = 'Lab still';
+    next.layers = [layer('image',{name:'Lab still',src,width:size[0],height:size[1]})];
+    useDocument(next);
+    select([next.layers[0].id]);
+    dirty = true;
+    notice('Lab still opened.');
+  }
+
   setTool('select');
   setSheet('canvas');
   setView('canvas');
   sync();
-  openLauncher();
+  if (location.hash === '#from=lab') {
+    window.history.replaceState(null,'',location.pathname+location.search);
+    try { await openLabStill(); }
+    catch {
+      openLauncher();
+      $('launchStatus').textContent = 'No Lab still could be opened. You can upload a PNG instead.';
+    }
+  } else openLauncher();
 })();

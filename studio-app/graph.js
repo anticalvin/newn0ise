@@ -59,7 +59,8 @@ function studioGraph(svg, api) {
         'data-node':n.id,tabindex:0,role:'button','aria-label':name(n),transform:`translate(${n.x} ${n.y})`},group);
       item('rect',{width:130,height:54,rx:10},node);
       item('text',{x:13,y:23},node,name(n));
-      item('text',{x:13,y:41,class:'sub'},node,n.version === 1 ? subtitles[n.type] ?? 'Adapter unavailable' : 'Version unavailable');
+      const subtitle = n.type === 'effect' && n.params.disabled ? 'Bypassed · n0ise Effects' : subtitles[n.type];
+      item('text',{x:13,y:41,class:'sub'},node,n.version === 1 ? subtitle ?? 'Adapter unavailable' : 'Version unavailable');
       for (const port of ['in','out']) {
         if (port === 'in' ? !schema[n.type]?.inputs.input : !schema[n.type]?.outputs.frame) continue;
         item('circle',{cx:port === 'in' ? 0 : 130,cy:27,r:7,class:'port'+(pending === n.id && port === 'out' ? ' pending' : ''),
@@ -108,8 +109,15 @@ function studioGraph(svg, api) {
     const before = api.capture();
     if (selection?.edge) g.edges = g.edges.filter(e => e.to !== selection.edge);
     else if (g.nodes.some(n => n.id === selection?.node && !['source','output','upload'].includes(n.id))) {
-      g.nodes = g.nodes.filter(n => n.id !== selection.node);
-      g.edges = g.edges.filter(e => e.to !== selection.node && e.from !== selection.node);
+      const target = g.nodes.find(n => n.id === selection.node);
+      const incoming = g.edges.find(e => e.to === target.id);
+      const outgoing = g.edges.find(e => e.from === target.id);
+      g.nodes = g.nodes.filter(n => n.id !== target.id);
+      g.edges = g.edges.filter(e => e.to !== target.id && e.from !== target.id);
+      if (target.type === 'effect' && incoming && outgoing) {
+        const error = connect(g,incoming.from,outgoing.to,incoming.out,outgoing.in);
+        if (error) api.notice(error);
+      }
     } else return false;
     selection = null;
     api.finish(before);

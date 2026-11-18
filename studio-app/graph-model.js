@@ -113,9 +113,7 @@ const StudioGraph = (() => {
     return [...ordered.values()];
   }
   function insertEffect(g, id, effect, params) {
-    if (g.nodes.filter(n => n.type === 'effect').length >= 6) {
-      throw Error('This layer already has six effect slots. Remove a node to add another.');
-    }
+    if (g.nodes.length >= 64) throw Error('This layer graph has reached its 64-node limit.');
     const output = g.nodes.find(n => n.id === 'output');
     const predecessor = g.edges.find(e => e.to === output.id);
     const left = g.nodes.find(n => n.id === predecessor?.from)?.x;
