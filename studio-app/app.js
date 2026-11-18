@@ -12,10 +12,16 @@
   }
   const effects = runtimeModule?.effects ?? new Map();
   const mobile = matchMedia('(max-width:680px)');
-  const preset = () => mobile.matches ? 'portrait' : 'landscape';
+  const preset = () => mobile.matches ? 'custom' : 'landscape';
+  function screenCanvasSize() {
+    const density = Math.max(1,window.devicePixelRatio || 1);
+    const width = Math.round((window.screen?.width || innerWidth)*density);
+    const height = Math.round((window.screen?.height || innerHeight)*density);
+    return aspectCanvasSize(width,height);
+  }
   const stage = $('stagebody'), board = $('artboard'), overlay = $('overlay'), canvas = $('preview');
   const stack = history();
-  let doc = create(preset()), selection = [];
+  let doc = create(preset(),false,mobile.matches ? screenCanvasSize() : undefined), selection = [];
   let textEdit = null, inlineText = null, launchMode = 'new', launchTicket = 0;
   let view = 'canvas', tool = 'select', rail = 'layers', sheet = 'canvas', shape = 'rectangle';
   let paintColor = '#e9e5db';
@@ -763,10 +769,11 @@
     if (textEdit) { finishTextEdit(); return; }
     stage.focus({preventScroll:true});
     if (e.pointerType === 'touch') {
+      e.preventDefault();
       pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
       if (pointers.size === 2) {
         endGesture(true);
-        stage.setPointerCapture(e.pointerId);
+        try { stage.setPointerCapture(e.pointerId); } catch {}
         const pair = touchPair();
         gesture = {kind:'pinch',...pair,z:zoom};
         e.preventDefault();
@@ -852,9 +859,9 @@
     else if (tool === 'gradient') gesture = {...base,kind:'gradient'};
     if (gesture) {
       e.preventDefault();
-      stage.setPointerCapture(e.pointerId);
+      try { stage.setPointerCapture(e.pointerId); } catch {}
     }
-  });
+  },{passive:false});
 
   function startTextEdit(l,before) {
     if (textEdit) finishTextEdit();
@@ -1323,7 +1330,7 @@
     $('launchCreate').firstChild.textContent = mode === 'resize' ? 'Resize canvas ' : 'Blank canvas ';
     launcher.classList.toggle('resize-only',mode === 'resize');
     $('launchRatio').value = mode === 'resize' ? 'custom' : preset();
-    const [w,h] = mode === 'resize' ? dims() : [1600,1200];
+    const [w,h] = mode === 'resize' ? dims() : preset() === 'custom' ? screenCanvasSize() : [1600,1200];
     $('launchWidth').value = w;
     $('launchHeight').value = h;
     launchLayout();
@@ -1609,6 +1616,16 @@
     button.title = title;
     button.setAttribute('aria-label',title.replace(/\s\([^)]*\)$/,''));
     toolstrip.insertBefore(button,toolstrip.querySelector('[data-tool="add"]'));
+  }
+
+  const homeUrl = new URL('./index.html',location.href).href;
+  for (const brand of all('a.brand')) {
+    brand.href = homeUrl;
+    brand.addEventListener('click',e => {
+      if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      e.preventDefault();
+      location.assign(homeUrl);
+    },true);
   }
 
   for (const b of all('[data-view]')) b.onclick = () => setView(b.dataset.view);

@@ -125,13 +125,14 @@ button:disabled { opacity:.35; cursor:default; }
 #selectedName { overflow-wrap:anywhere; }
 .stage { border-radius:13px; }
 .stagehead,.stagefoot { flex:none; }
-.stagebody { touch-action:none; user-select:none; }
+.stagebody { touch-action:none; user-select:none; -webkit-user-select:none; overscroll-behavior:contain; }
 .stagebody[data-tool=brush],.stagebody[data-tool=eraser],.stagebody[data-tool=gradient],.stagebody[data-tool=lasso],.stagebody[data-tool=picker],.stagebody[data-tool=shape],.stagebody[data-tool=pen],.stagebody[data-tool=crop] { cursor:crosshair; }
 .stagebody[data-tool=text] { cursor:text; }
 .stagebody[data-pan=true] { cursor:grab; }
 .stagebody[data-drag=true] { cursor:grabbing; }
 .artboard,.artboard.square,.artboard.landscape { position:absolute; left:50%; top:50%; max-width:none; max-height:none; aspect-ratio:auto; width:0; height:0; border:0; overflow:visible; outline:1px solid #5e5d59; }
 .artboard canvas { position:absolute; inset:0; }
+.artboard canvas { touch-action:none; -webkit-tap-highlight-color:transparent; }
 #overlay { position:absolute; width:100%; height:100%; overflow:visible; inset:0; pointer-events:none; }
 #overlay .grid { fill:none; stroke:#f1eee824; stroke-width:1; vector-effect:non-scaling-stroke; }
 #overlay .outline,#overlay .guide,#overlay .draft { fill:none; stroke:#e8e1d5; stroke-width:1; vector-effect:non-scaling-stroke; }
