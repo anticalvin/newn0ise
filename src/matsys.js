@@ -26,7 +26,7 @@ export const PRESETS=[
   ['Brushed steel',P({base:{p:'const',a:'#b9bcc2'},metal:{p:'const',a:1},rough:{p:'stripes',a:.22,b:.5,sc:9,con:2},bump:{p:'stripes',a:0,b:.25,sc:30,con:1}})],
   ['Marble',P({base:{p:'marble',a:'#f3f0ea',b:'#4b4752',sc:.7,det:5,dis:.15},rough:{p:'const',a:.18}})],
   ['Wood',P({base:{p:'wood',a:'#8f5d2c',b:'#4c2b12',sc:.8,dis:.1},rough:{p:'const',a:.55},bump:{p:'wood',a:0,b:.3,sc:.8}})],
-  ['Lava',P({base:{p:'cracks',a:'#17100e',b:'#ff5a1f',sc:1.2,dis:.2},emit:{p:'cracks',a:'#000000',b:'#ff6a20',sc:1.2,dis:.2},ek:2.2,rough:{p:'const',a:.9},bump:{p:'noise',a:0,b:1,sc:2,det:5}})],
+  ['Lava',P({base:{p:'cracks',a:'#17100e',b:'#e9dfcb',sc:1.2,dis:.2},emit:{p:'cracks',a:'#000000',b:'#ff6a20',sc:1.2,dis:.2},ek:2.2,rough:{p:'const',a:.9},bump:{p:'noise',a:0,b:1,sc:2,det:5}})],
   ['Concrete',P({base:{p:'noise',a:'#6f6d69',b:'#a5a29b',sc:3,det:6},rough:{p:'const',a:.92},bump:{p:'noise',a:0,b:1,sc:6,det:6}})],
   ['Rubber',P({base:{p:'const',a:'#1b1b1e'},rough:{p:'const',a:.85},metal:{p:'const',a:0}})],
   ['Tinted glass',P({base:{p:'const',a:'#bfe6ff'},rough:{p:'const',a:.04},alpha:{p:'const',a:.35}})],

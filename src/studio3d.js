@@ -3130,7 +3130,7 @@ if(/^#world/.test(location.hash)){S._wsChosen=true;setTab('world');worldEd.start
     else if(/^#(world|from=|look=)/.test(q))L.hidden=true;
     else{L.hidden=false;
       const cv=L.querySelector('canvas'),g=cv.getContext('2d'),reduce=matchMedia('(prefers-reduced-motion:reduce)').matches;
-      const acc=getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()||'#ff5a1f';
+      const acc=getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()||'#e9dfcb';
       const V=[];for(const x of[-1,1])for(const y of[-1,1])for(const z of[-1,1])V.push([x,y,z]);
       const draw=t=>{const dpr=Math.min(2,devicePixelRatio||1),W=cv.width=innerWidth*dpr,H=cv.height=innerHeight*dpr;g.clearRect(0,0,W,H);
         const hz=H*.58;g.lineWidth=1*dpr;g.strokeStyle='rgba(242,239,232,.14)';

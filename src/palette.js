@@ -6,7 +6,7 @@ const CSS=`.kp{position:fixed;inset:0;z-index:60;background:#05050acc;-webkit-ba
 .kp input{flex:none;height:52px;padding:0 16px;border:0;border-bottom:1px solid var(--line,#2a2927);background:none;color:var(--ink,#f2efe8);font:500 16px var(--mono,ui-monospace,monospace);outline:0}
 .kp ul{list-style:none;margin:0;padding:4px;overflow:auto;overscroll-behavior:contain}
 .kp li{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:44px;padding:0 12px;border-radius:var(--rad,3px);cursor:pointer}
-.kp li[aria-selected=true]{background:var(--accent,#ff5a1f);color:var(--on-accent,#0a0a0a)}
+.kp li[aria-selected=true]{background:var(--accent,#e9dfcb);color:var(--on-accent,#0a0a0a)}
 .kp li b{font-weight:700}.kp li span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .kp li i{flex:none;font-style:normal;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;opacity:.65}
 .kp p{flex:none;margin:0;padding:8px 16px;border-top:1px solid var(--line,#2a2927);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--mute,#8d8a82)}

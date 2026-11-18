@@ -14,10 +14,10 @@ export function createGamepad(c){
   const css=document.createElement('style');css.textContent=`#gpcur{position:fixed;left:0;top:0;width:28px;height:28px;margin:-14px 0 0 -14px;border-radius:50%;border:2.5px solid #fff;box-shadow:0 0 0 2px rgba(0,0,0,.65),0 2px 8px rgba(0,0,0,.5);z-index:100000;pointer-events:none;display:none;transition:transform .08s,background .1s}
 #gpcur::after{content:"";position:absolute;left:50%;top:50%;width:6px;height:6px;margin:-3px;border-radius:50%;background:#fff;box-shadow:0 0 0 1.5px rgba(0,0,0,.65)}
 #gpcur[data-d=true]{transform:scale(.7);background:rgba(255,90,31,.55)}
-.gp-hot{outline:3px solid #ffd23d!important;outline-offset:1px}
+html body .gp-hot{outline:3px solid #f2e5cd;outline-offset:2px;box-shadow:0 0 0 5px #0007}
 #gppie{position:fixed;left:50%;top:50%;width:0;height:0;z-index:100002;display:none}
 #gppie .pi{position:absolute;width:86px;height:46px;margin:-23px 0 0 -43px;line-height:1.1;display:grid;place-items:center;border-radius:18px;background:rgba(14,15,18,.92);border:1px solid rgba(255,255,255,.2);color:#eee;font:800 12px var(--lab,monospace);text-align:center;letter-spacing:.04em;transition:transform .08s}
-#gppie .pi.on{background:#2f6bff;color:#fff;transform:scale(1.14);border-color:#fff}#gppie .pc{position:absolute;width:10px;height:10px;margin:-5px;border-radius:50%;background:#fff;box-shadow:0 0 0 2px rgba(0,0,0,.6)}
+#gppie .pi.on{background:#e9dfcb;color:#fff;transform:scale(1.14);border-color:#fff}#gppie .pc{position:absolute;width:10px;height:10px;margin:-5px;border-radius:50%;background:#fff;box-shadow:0 0 0 2px rgba(0,0,0,.6)}
 #gphud{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 66px);transform:translateX(-50%);z-index:100002;display:none;max-width:calc(100vw - 20px);padding:10px 16px;border-radius:16px;background:rgba(14,15,18,.92);border:1px solid rgba(255,255,255,.2);color:#eee;font:700 12px/1.4 var(--lab,monospace);text-align:center}#gphud b{color:#ffd23d}
 #gplegend{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:100001;width:min(360px,calc(100vw - 24px));max-height:calc(100dvh - 24px);overflow-y:auto;padding:16px;border-radius:20px;background:rgba(14,15,18,.94);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border:1px solid rgba(255,255,255,.18);color:#eee;font:600 12px/1.55 var(--lab,ui-monospace,monospace);display:none}
 #gplegend b{display:inline-block;min-width:78px;color:#ffd23d}
@@ -25,14 +25,14 @@ export function createGamepad(c){
 #gplegend .r{display:flex;gap:8px;margin:2px 0}
 #gplegend input[type=range]{width:100%;min-height:36px}
 #gplegend .gpck{align-items:center;min-height:44px}#gplegend .gpck input{width:22px;height:22px}
-#gplegend button{min-height:44px;padding:0 16px;margin-top:10px;border-radius:12px;border:0;background:#2f6bff;color:#fff;font:800 12px var(--lab,monospace);letter-spacing:.06em;text-transform:uppercase}`;document.head.appendChild(css);
+#gplegend button{min-height:44px;padding:0 16px;margin-top:10px;border-radius:12px;border:0;background:#e9dfcb;color:#fff;font:800 12px var(--lab,monospace);letter-spacing:.06em;text-transform:uppercase}`;document.head.appendChild(css);
   const cur=document.createElement('div');cur.id='gpcur';cur.setAttribute('aria-hidden','true');document.body.appendChild(cur);
   const lg=document.createElement('div');lg.id='gplegend';lg.setAttribute('role','dialog');lg.setAttribute('aria-label','Controller help');
   const G=()=>sony?{a:'✕',b:'○',x:'□',y:'△',sel:'Create',opt:'Options'}:{a:'A',b:'B',x:'X',y:'Y',sel:'View',opt:'Menu'};
   function renderLegend(){
     const g=G();
     lg.innerHTML='<h4>Controller</h4>'+
-    [['Left stick','Move the cursor (walk, in walk mode)'],[g.a,'Click, hold to drag or draw'],[g.b,'Cancel, close or leave walk'],[g.x,'Undo'],[g.y,'Tap: show or hide panel. Hold: pie menu (grab, rotate, scale, add, sculpt)'],['Right stick','Orbit the view, scroll a panel, or look'],['L2 / R2','Zoom out and in'],['L1 / R1','Previous and next tab'],['D-pad over a panel','Jump between buttons'],['D-pad ◀ ▶ over the scene','Previous and next tool, object, or sculpt brush'],['D-pad ▲ ▼ over the scene','Level up and down, or brush size'],['L3','Slow, precise cursor (run, in walk mode)'],['R3','Scale the selected object (over a panel: cursor to the middle)'],[g.sel,'Frame everything'],[g.opt,'This help']]
+    [['Left stick','Move the cursor (walk, in walk mode)'],[g.a,'Click, hold to drag or draw'],[g.b,'Back: close a menu, cancel, or leave walk'],[g.x,'Undo'],[g.y,'Tap: show or hide panel. Hold: pie menu (grab, rotate, scale, add, sculpt)'],['Right stick','Orbit the view, scroll a panel, or look'],['L2 / R2','Previous and next workspace (over the 3D scene: zoom out and in). In the camera: R2 is the shutter, L2 opens the roll'],['D-pad ◀ ▶ in the camera','Previous and next look'],['L1 / R1','Previous and next tab'],['D-pad over a panel','Jump between buttons; on a slider, left and right change the value'],['D-pad ◀ ▶ over the scene','Previous and next tool, object, or sculpt brush'],['D-pad ▲ ▼ over the scene','Level up and down, or brush size'],['L3','Slow, precise cursor (run, in walk mode)'],['R3','Scale the selected object (over a panel: cursor to the middle)'],[g.sel,'Frame everything'],[g.opt,'This help']]
       .map(([k,v])=>'<div class="r"><b>'+k+'</b><span>'+v+'</span></div>').join('')+
     '<div class="r" style="margin-top:8px"><b>Cursor speed</b><input type="range" id="gpspd" min="0.5" max="2" step="0.1" aria-label="Cursor speed"></div>'+
     '<label class="r gpck"><input type="checkbox" id="gpswap"> Swap sticks (left hand)</label><label class="r gpck"><input type="checkbox" id="gpinv"> Invert look up and down</label><label class="r gpck"><input type="checkbox" id="gprum"> Vibration</label><button type="button" id="gpok">Got it</button>';
@@ -116,8 +116,13 @@ export function createGamepad(c){
     const f=new THREE.Vector3();camera.getWorldDirection(f);f.y=0;if(f.lengthSq()<1e-4)f.set(0,0,-1);f.normalize();const r=new THREE.Vector3(-f.z,0,f.x),d=camera.position.distanceTo(controls.target)*.9,mv=f.multiplyScalar(-dz*dt*d).add(r.multiplyScalar(dx*dt*d));
     camera.position.add(mv);controls.target.add(mv);controls.update();bump();
   }
-  const tabs=()=>[...document.querySelectorAll('.tabs .tab')];
-  const stepTab=d=>{const t=tabs();if(!t.length)return;let i=t.findIndex(b=>b.getAttribute('aria-selected')==='true');i=(i+d+t.length)%t.length;t[i].click();t[i].scrollIntoView&&t[i].scrollIntoView({inline:'center',block:'nearest'});buzz(15,.05,.2);};
+  const visible=e=>{const r=e.getBoundingClientRect();return r.width>1&&r.height>1;};
+  const camOn=()=>!!document.body.dataset.cam&&!!document.getElementById('camui');
+  const tabs=()=>camOn()?[...document.querySelectorAll('#camui .modes button,#camui [data-m]')].filter(visible):[...document.querySelectorAll('.tabs .tab,[role=tablist]:not(.nav) [role=tab],#lab-actions [data-drawer]')].filter(visible);
+  const wsLinks=()=>[...document.querySelectorAll('.header .nav a')];
+  const stepTab=d=>{const t=tabs();if(!t.length)return;let i=t.findIndex(b=>b.getAttribute('aria-selected')==='true'||b.getAttribute('aria-expanded')==='true'||(camOn()&&b.getAttribute('aria-pressed')==='true'));i=i<0?(d>0?0:t.length-1):(i+d+t.length)%t.length;t[i].click();t[i].scrollIntoView&&t[i].scrollIntoView({inline:'center',block:'nearest'});buzz(15,.05,.2);};
+  const tapEl=el=>{if(!el)return;const r=el.getBoundingClientRect();st.x=r.left+r.width/2;st.y=r.top+r.height/2;place();pt(el,'pointerdown');mouse(el,'mousedown');setTimeout(()=>{pt(el,'pointerup');mouse(el,'mouseup');el.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true,view:window}));},90);buzz(25,.1,.2);};
+  const stepWs=d=>{const l=wsLinks();if(!l.length)return;let i=l.findIndex(a=>a.getAttribute('aria-current')==='page');i=(i+d+l.length)%l.length;buzz(20,.1,.2);toast(l[i].textContent.trim(),900);location.href=l[i].href;};
   const key=(k,mod)=>{document.body.dispatchEvent(new KeyboardEvent('keydown',{key:k,bubbles:true,cancelable:true,...mod}));};
   /* D-pad over a panel jumps to the nearest button in that direction, so menus work without steering the cursor */
   function navDir(dx,dy){
@@ -235,6 +240,7 @@ export function createGamepad(c){
     if(active){st.idle=0;if(!st.show){st.show=true;cur.style.display='block';}}else st.idle+=dt;
     if(st.show&&st.idle>8&&!st.down){st.show=false;cur.style.display='none';if(st.lastHot){st.lastHot.classList.remove('gp-hot');st.lastHot=null;}}
     if(!st.show){st.prev=p.buttons.map(x=>x.pressed);return;}
+    {const od=document.querySelector('dialog[open]'),host=od||document.body;if(cur.parentNode!==host)host.appendChild(cur);if(pie.parentNode!==host)host.appendChild(pie);}
     /* cursor */
     const sp=(st.slow?260:900)*st.speed*Math.max(.6,Math.min(innerWidth,innerHeight)/720);
     const mag=Math.hypot(lx,ly),cv=mag?Math.pow(mag,1.6)/mag:0;
@@ -250,20 +256,25 @@ export function createGamepad(c){
     /* right stick: orbit, or scroll the panel under the cursor */
     if(rx||ry){const sc=scrollable(t);if(sc&&(sc.closest('#panes,.sheet,#sheet,#pane_mat,#pane_build,.pane')||sc!==document.scrollingElement)&&t&&t.tagName!=='CANVAS'){sc.scrollTop+=ry*dt*1100;}else orbit(dt,rx,ry);}
     /* triggers */
-    const lt=val(p,6),rt=val(p,7);if(rt>.08)zoom(dt,-rt);if(lt>.08)zoom(dt,lt);
+    const lt=val(p,6),rt=val(p,7),onCanvas=!!(SC&&t&&t.tagName==='CANVAS');
+    if(camOn()){if(rt>.85&&!(st.rtp>.85))tapEl(document.getElementById('shutter'));if(lt>.85&&!(st.ltp>.85)){const rb=document.getElementById('camroll');rb&&rb.click();}}
+    else if(onCanvas||!wsLinks().length){if(rt>.08)zoom(dt,-rt);if(lt>.08)zoom(dt,lt);}
+    else{if(rt>.85&&!(st.rtp>.85))stepWs(1);if(lt>.85&&!(st.ltp>.85))stepWs(-1);}
+    st.ltp=lt;st.rtp=rt;
     /* buttons */
     for(let i=0;i<18;i++)if(edge(i)){(st.log=st.log||[]).push(i);if(st.log.length>20)st.log.shift();}
     if(edge(0))press();if(!b(0)&&pb(0))release();
-    if(edge(1)){if(st.legend)showLegend(false);else key('Escape');buzz(15,.05,.2);}
+    if(edge(1)){const dlg=document.querySelector('dialog[open]');if(dlg)dlg.close();else if(st.legend)showLegend(false);else key('Escape');buzz(15,.05,.2);}
     if(edge(2)){if(undo)undo();else key('z',{ctrlKey:true});buzz(20,.1,.2);}
     if(edge(3)){st.yHeld=true;st.yt=0;}
     if(st.yHeld){st.yt+=dt;
       if(b(3)&&st.yt>.35&&SC&&!st.legend){const it=pieItems();if(it)openPie(it);}
       else if(!b(3)){st.yHeld=false;const idx=sheet&&sheet.idx;if(sheet&&idx!=null)sheet.setIdx(idx>0?0:2);buzz(15,.05,.2);}}
     if(edge(4))stepTab(-1);if(edge(5))stepTab(1);
+    if(camOn()){if(edgeR(14,b(14),dt))document.dispatchEvent(new CustomEvent('n0:cam',{detail:{act:'step',d:-1}}));if(edgeR(15,b(15),dt))document.dispatchEvent(new CustomEvent('n0:cam',{detail:{act:'step',d:1}}));}
     const pnl=(b(12)||b(13)||b(14)||b(15))?overPanel():false;
-    if(!pnl&&!st.legend){if(edgeR(14,b(14),dt)){cycle&&cycle(-1);buzz(12,.04,.15);}if(edgeR(15,b(15),dt)){cycle&&cycle(1);buzz(12,.04,.15);}}
-    if(pnl||st.legend){const d=[[12,0,-1],[13,0,1],[14,-1,0],[15,1,0]];for(const [i,dx,dy] of d)if(edgeR(i,b(i),dt)){if(!navDir(dx,dy)&&dy){const sc=scrollable(hit());if(sc)sc.scrollTop+=dy*220;}}}
+    if(!pnl&&!st.legend&&!camOn()){if(edgeR(14,b(14),dt)){cycle&&cycle(-1);buzz(12,.04,.15);}if(edgeR(15,b(15),dt)){cycle&&cycle(1);buzz(12,.04,.15);}}
+    if(pnl||st.legend){const d=[[12,0,-1],[13,0,1],[14,-1,0],[15,1,0]];for(const [i,dx,dy] of d)if(edgeR(i,b(i),dt)){if(camOn()&&dx)continue;const hh=st.lastHot;if(dx&&hh&&hh.matches&&hh.matches('input[type=range]')){const stp=+hh.step||1,mn=+hh.min||0,mx=isNaN(+hh.max)||hh.max===''?100:+hh.max;hh.value=Math.min(mx,Math.max(mn,+hh.value+dx*stp*Math.max(1,Math.round((mx-mn)/40/stp))));hh.dispatchEvent(new Event('input',{bubbles:true}));hh.dispatchEvent(new Event('change',{bubbles:true}));buzz(6,.03,.1);continue;}if(!navDir(dx,dy)&&dy){const sc=scrollable(hit());if(sc)sc.scrollTop+=dy*220;}}}
     else{rep[12]=rep[13]=0;
       if(edgeR(12,b(12),dt)){const used=vert&&vert(1);if(!used){const sc=scrollable(hit());if(sc)sc.scrollTop-=220;}}
       if(edgeR(13,b(13),dt)){const used=vert&&vert(-1);if(!used){const sc=scrollable(hit());if(sc)sc.scrollTop+=220;}}}

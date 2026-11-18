@@ -6,7 +6,7 @@ import {PEN} from './pen.js';
 import {RECIPES,recipeMP} from './matstudio.js';
 import {RoomEnvironment} from 'three/addons/environments/RoomEnvironment.js';
 
-const PALETTE=['#ffffff','#dfe6ee','#8a8f98','#1a1a1c','#000000','#ff5a1f','#ff3b58','#f0a030','#ffd84a','#4fe39a','#2fb6a7','#3fa7ff','#5a55ff','#b06bff','#ff7ac8','#e8dcc2'];
+const PALETTE=['#ffffff','#dfe6ee','#8a8f98','#1a1a1c','#000000','#e9dfcb','#ff3b58','#f0a030','#ffd84a','#4fe39a','#2fb6a7','#3fa7ff','#5a55ff','#b06bff','#ff7ac8','#e8dcc2'];
 const LSK='n0ise.sigil.umats',LSR='n0ise.sigil.recent',LSH='n0ise.sigil.hint';
 const lsGet=(k,d)=>{try{const v=JSON.parse(localStorage.getItem(k));return v==null?d:v;}catch(e){return d;}};
 const lsSet=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v));return true;}catch(e){return false;}};

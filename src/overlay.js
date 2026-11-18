@@ -46,7 +46,7 @@ export function createOverlays(ED,c){
   /* ---- lane ---- */
   function lanedraw(){
     if(!lane||!host||host.closest('[hidden]'))return;const w=lane.clientWidth|0,h=lane.clientHeight|0;if(!w)return;if(lane.width!==w)lane.width=w;if(lane.height!==h)lane.height=h;
-    const g=lane.getContext('2d'),acc=getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()||'#ff5a1f';g.clearRect(0,0,w,h);
+    const g=lane.getContext('2d'),acc=getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()||'#e9dfcb';g.clearRect(0,0,w,h);
     OV.items.forEach((o,i)=>{const x0=t2x(o.at,w),x1=t2x(o.at+o.len,w);g.fillStyle=i===OV.sel?'#3a2a22':'#25221f';g.beginPath();g.roundRect(x0,3,Math.max(4,x1-x0-1),h-6,3);g.fill();
       if(i===OV.sel){g.strokeStyle=acc;g.lineWidth=2;g.stroke();g.fillStyle=acc;g.fillRect(x1-7,3,6,h-6);}
       g.fillStyle='#f2efe8';g.font='10px monospace';g.save();g.beginPath();g.rect(x0,0,x1-x0,h);g.clip();g.fillText((o.vid?'▶ ':'▣ ')+o.name,x0+6,h/2+3);g.restore();});

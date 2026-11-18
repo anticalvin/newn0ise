@@ -752,7 +752,7 @@ const PROFILES=[
 ];
 
 /* ---------- state ---------- */
-const BASE={pal:'src',custom:['#000000','#ff3d6e','#3df5ff','#ffffff'],txt:'n0ise\n> signal acquired\n> ',profile:'studio'};
+const BASE={pal:'src',custom:['#000000','#e8d1b6','#3df5ff','#ffffff'],txt:'n0ise\n> signal acquired\n> ',profile:'studio'};
 CT.forEach(c=>BASE[c.k]=c.d);
 BASE.stg=['clean','live','direct','studio'];
 const P=JSON.parse(JSON.stringify(BASE));

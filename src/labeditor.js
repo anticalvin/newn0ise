@@ -25,13 +25,13 @@ const errField=StateField.define({
 export function createEditor(parent,{doc,onRun,onChange}){
   let trap=true;
   const theme=EditorView.theme({
-    '&':{height:'100%',backgroundColor:'#101213',fontSize:'12.5px'},
+    '&':{height:'100%',backgroundColor:'#121316',fontSize:'12.5px'},
     '.cm-scroller':{fontFamily:'ui-monospace,SFMono-Regular,Consolas,monospace',lineHeight:'1.7',overflow:'auto'},
-    '.cm-gutters':{backgroundColor:'#101213',borderRight:'1px solid #1d2020',color:'#5b6360'},
-    '.cm-activeLine,.cm-activeLineGutter':{backgroundColor:'rgba(213,255,112,.05)'},
-    '&.cm-focused':{outline:'2px solid rgba(213,255,112,.55)',outlineOffset:'-2px'},
+    '.cm-gutters':{backgroundColor:'#121316',borderRight:'1px solid #1d2020',color:'#5b6360'},
+    '.cm-activeLine,.cm-activeLineGutter':{backgroundColor:'rgba(232,209,182,.06)'},
+    '&.cm-focused':{outline:'2px solid rgba(233,223,203,.6)',outlineOffset:'-2px'},
     '.cm-errline':{backgroundColor:'rgba(255,90,60,.2)',boxShadow:'inset 3px 0 0 #ff5a3c'},
-    '.cm-content':{caretColor:'#d5ff70'},
+    '.cm-content':{caretColor:'#e8d1b6'},
     '.cm-tooltip':{maxWidth:'90vw'}
   },{dark:true});
   const view=new EditorView({parent,state:EditorState.create({doc,extensions:[

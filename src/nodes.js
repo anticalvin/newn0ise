@@ -49,12 +49,12 @@ export function createNodes(c){
     const p=portPos(key,out),on=NV.link&&NV.link.from===key&&out;
     const g=mk('g',{'data-port':out?'out':'in','data-key':key,role:'button',tabindex:0,'aria-label':(out?'Output of ':'Input of ')+key},gz);
     mk('circle',{cx:p.x,cy:p.y,r:22/NV.zoom,fill:'transparent'},g);   // 44 px hit area at any zoom
-    mk('circle',{cx:p.x,cy:p.y,r:7,fill:on?'#ff5a1f':'#12110f',stroke:on?'#ff5a1f':'#cfc9bd','stroke-width':2},g);
+    mk('circle',{cx:p.x,cy:p.y,r:7,fill:on?'#e9dfcb':'#12110f',stroke:on?'#e9dfcb':'#cfc9bd','stroke-width':2},g);
   }
   function node(key,title,sub,color,sel,off){
     const p=NV.pos[key];
     const g=mk('g',{'data-node':key,role:'button',tabindex:0,'aria-label':title+(sub?', '+sub:''),opacity:off?.5:1},gz);
-    mk('rect',{x:p.x,y:p.y,width:W,height:H,rx:10,fill:'#1b1917',stroke:sel?'#ff5a1f':'#3a3733','stroke-width':sel?3:1.5},g);
+    mk('rect',{x:p.x,y:p.y,width:W,height:H,rx:10,fill:'#1b1917',stroke:sel?'#e9dfcb':'#3a3733','stroke-width':sel?3:1.5},g);
     mk('rect',{x:p.x,y:p.y,width:7,height:H,rx:3,fill:color||'#888'},g);
     const t=mk('text',{x:p.x+18,y:p.y+24,fill:'#f2efe8','font-size':15,'font-weight':700,'font-family':'ui-sans-serif,system-ui'},g);t.textContent=title.length>17?title.slice(0,16)+'…':title;
     const s=mk('text',{x:p.x+18,y:p.y+43,fill:'#9a958c','font-size':11,'font-family':'ui-monospace,monospace'},g);s.textContent=sub;

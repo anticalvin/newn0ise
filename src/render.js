@@ -10,10 +10,10 @@ export async function openRender(c){
   const cv=document.createElement('canvas');cv.style.cssText='flex:1;min-height:0;width:100%;object-fit:contain;background:#000';
   const bar=document.createElement('div');bar.style.cssText='padding:8px 10px calc(10px + env(safe-area-inset-bottom,0px));display:flex;flex-wrap:wrap;gap:6px;align-items:center;background:#16171b;border-top:1px solid #2b2b2f';
   ov.append(cv,bar);document.body.appendChild(ov);
-  const mkb=(t,fn,pri)=>{const b=document.createElement('button');b.type='button';b.textContent=t;b.style.cssText='min-height:44px;padding:0 14px;border-radius:12px;border:1px solid '+(pri?'#ff5a1f':'#3a3d46')+';background:'+(pri?'#ff5a1f':'#202228')+';color:'+(pri?'#111':'inherit')+';font:inherit;letter-spacing:.04em;text-transform:uppercase';b.addEventListener('click',fn);return b;};
+  const mkb=(t,fn,pri)=>{const b=document.createElement('button');b.type='button';b.textContent=t;b.style.cssText='min-height:44px;padding:0 14px;border-radius:12px;border:1px solid '+(pri?'#e9dfcb':'#3a3d46')+';background:'+(pri?'#e9dfcb':'#202228')+';color:'+(pri?'#111':'inherit')+';font:inherit;letter-spacing:.04em;text-transform:uppercase';b.addEventListener('click',fn);return b;};
   const info=document.createElement('span');info.style.cssText='flex:1 1 140px;color:#9a9ca6';
   const opt={q:300,w:(aspect()||1.5)<1?720:1280,blur:0,exp:1,bounces:6};
-  const row=(label,vals,key)=>{const w=document.createElement('div');w.style.cssText='display:flex;gap:4px;align-items:center';w.append(label+' ');vals.forEach(([v,l])=>{const b=mkb(l,()=>{opt[key]=v;[...w.querySelectorAll('button')].forEach(x=>x.style.borderColor=x===b?'#ff5a1f':'#3a3d46');if(key==='q')return;start();});b.style.minHeight='36px';b.style.padding='0 10px';if(opt[key]===v)b.style.borderColor='#ff5a1f';w.appendChild(b);});return w;};
+  const row=(label,vals,key)=>{const w=document.createElement('div');w.style.cssText='display:flex;gap:4px;align-items:center';w.append(label+' ');vals.forEach(([v,l])=>{const b=mkb(l,()=>{opt[key]=v;[...w.querySelectorAll('button')].forEach(x=>x.style.borderColor=x===b?'#e9dfcb':'#3a3d46');if(key==='q')return;start();});b.style.minHeight='36px';b.style.padding='0 10px';if(opt[key]===v)b.style.borderColor='#e9dfcb';w.appendChild(b);});return w;};
   let rn=null,pt=null,proxy=null,run=0,raf=0,pcam=null;
   /* a clean copy of the scene: real materials only, no helpers, gizmos, sky shaders or splats */
   function buildProxy(skin){

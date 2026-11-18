@@ -390,7 +390,7 @@ export function createBuild(c){
   const css=document.createElement('style');css.textContent=`#bdtb{position:fixed;left:50%;transform:translateX(-50%);z-index:47;display:flex;gap:2px;align-items:stretch;max-width:calc(100vw - 12px);overflow-x:auto;padding:5px;border-radius:20px;background:rgba(18,18,20,.78);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border:1px solid rgba(255,255,255,.14);box-shadow:0 8px 28px rgba(0,0,0,.45);scrollbar-width:none}
 #bdtb::-webkit-scrollbar{display:none}
 #bdtb button{flex:none;min-width:52px;min-height:52px;padding:4px 2px;border:0;border-radius:14px;background:transparent;color:#e8e9ed;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font:700 9px var(--lab,monospace);letter-spacing:.04em;text-transform:uppercase}
-#bdtb button[aria-pressed=true]{background:var(--accent,#ff5a1f);color:#111}
+#bdtb button[aria-pressed=true]{background:var(--accent,#e9dfcb);color:#111}
 #bdtb i{width:1px;margin:8px 3px;background:rgba(255,255,255,.18);flex:none}
 .bd-nav{display:flex;gap:6px;overflow-x:auto;padding:2px 2px 8px;scrollbar-width:none;position:sticky;top:0;z-index:2;background:var(--panel,#16171b)}.bd-nav::-webkit-scrollbar{display:none}
 .bd-nav button{flex:1 0 auto;min-height:44px;padding:0 16px;border-radius:999px;border:1px solid var(--line);background:var(--raise);color:inherit;font:700 11px var(--lab,monospace);letter-spacing:.06em;text-transform:uppercase}
