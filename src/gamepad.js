@@ -32,7 +32,7 @@ html body .gp-hot{outline:3px solid #f2e5cd;outline-offset:2px;box-shadow:0 0 0 
   function renderLegend(){
     const g=G();
     lg.innerHTML='<h4>Controller</h4>'+
-    [['Left stick','Move the cursor (walk, in walk mode)'],[g.a,'Click, hold to drag or draw'],[g.b,'Back: close a menu, cancel, or leave walk'],[g.x,'Undo'],[g.y,'Tap: show or hide panel. Hold: pie menu (grab, rotate, scale, add, sculpt)'],['Right stick','Orbit the view, scroll a panel, or look'],['L2 / R2','Previous and next workspace (over the 3D scene: zoom out and in)'],['L1 / R1','Previous and next tab'],['D-pad over a panel','Jump between buttons; on a slider, left and right change the value'],['D-pad ◀ ▶ over the scene','Previous and next tool, object, or sculpt brush'],['D-pad ▲ ▼ over the scene','Level up and down, or brush size'],['L3','Slow, precise cursor (run, in walk mode)'],['R3','Scale the selected object (over a panel: cursor to the middle)'],[g.sel,'Frame everything'],[g.opt,'This help']]
+    [['Left stick','Move the cursor (walk, in walk mode)'],[g.a,'Click, hold to drag or draw'],[g.b,'Back: close a menu, cancel, or leave walk'],[g.x,'Undo'],[g.y,'Tap: show or hide panel. Hold: pie menu (grab, rotate, scale, add, sculpt)'],['Right stick','Orbit the view, scroll a panel, or look'],['L2 / R2','Previous and next workspace (over the 3D scene: zoom out and in). In the camera: R2 is the shutter, L2 opens the roll'],['D-pad ◀ ▶ in the camera','Previous and next look'],['L1 / R1','Previous and next tab'],['D-pad over a panel','Jump between buttons; on a slider, left and right change the value'],['D-pad ◀ ▶ over the scene','Previous and next tool, object, or sculpt brush'],['D-pad ▲ ▼ over the scene','Level up and down, or brush size'],['L3','Slow, precise cursor (run, in walk mode)'],['R3','Scale the selected object (over a panel: cursor to the middle)'],[g.sel,'Frame everything'],[g.opt,'This help']]
       .map(([k,v])=>'<div class="r"><b>'+k+'</b><span>'+v+'</span></div>').join('')+
     '<div class="r" style="margin-top:8px"><b>Cursor speed</b><input type="range" id="gpspd" min="0.5" max="2" step="0.1" aria-label="Cursor speed"></div>'+
     '<label class="r gpck"><input type="checkbox" id="gpswap"> Swap sticks (left hand)</label><label class="r gpck"><input type="checkbox" id="gpinv"> Invert look up and down</label><label class="r gpck"><input type="checkbox" id="gprum"> Vibration</label><button type="button" id="gpok">Got it</button>';
@@ -117,9 +117,11 @@ html body .gp-hot{outline:3px solid #f2e5cd;outline-offset:2px;box-shadow:0 0 0 
     camera.position.add(mv);controls.target.add(mv);controls.update();bump();
   }
   const visible=e=>{const r=e.getBoundingClientRect();return r.width>1&&r.height>1;};
-  const tabs=()=>[...document.querySelectorAll('.tabs .tab,[role=tablist]:not(.nav) [role=tab],#lab-actions [data-drawer]')].filter(visible);
+  const camOn=()=>!!document.body.dataset.cam&&!!document.getElementById('camui');
+  const tabs=()=>camOn()?[...document.querySelectorAll('#camui .modes button,#camui [data-m]')].filter(visible):[...document.querySelectorAll('.tabs .tab,[role=tablist]:not(.nav) [role=tab],#lab-actions [data-drawer]')].filter(visible);
   const wsLinks=()=>[...document.querySelectorAll('.header .nav a')];
-  const stepTab=d=>{const t=tabs();if(!t.length)return;let i=t.findIndex(b=>b.getAttribute('aria-selected')==='true'||b.getAttribute('aria-expanded')==='true');i=i<0?(d>0?0:t.length-1):(i+d+t.length)%t.length;t[i].click();t[i].scrollIntoView&&t[i].scrollIntoView({inline:'center',block:'nearest'});buzz(15,.05,.2);};
+  const stepTab=d=>{const t=tabs();if(!t.length)return;let i=t.findIndex(b=>b.getAttribute('aria-selected')==='true'||b.getAttribute('aria-expanded')==='true'||(camOn()&&b.getAttribute('aria-pressed')==='true'));i=i<0?(d>0?0:t.length-1):(i+d+t.length)%t.length;t[i].click();t[i].scrollIntoView&&t[i].scrollIntoView({inline:'center',block:'nearest'});buzz(15,.05,.2);};
+  const tapEl=el=>{if(!el)return;const r=el.getBoundingClientRect();st.x=r.left+r.width/2;st.y=r.top+r.height/2;place();pt(el,'pointerdown');mouse(el,'mousedown');setTimeout(()=>{pt(el,'pointerup');mouse(el,'mouseup');el.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true,view:window}));},90);buzz(25,.1,.2);};
   const stepWs=d=>{const l=wsLinks();if(!l.length)return;let i=l.findIndex(a=>a.getAttribute('aria-current')==='page');i=(i+d+l.length)%l.length;buzz(20,.1,.2);toast(l[i].textContent.trim(),900);location.href=l[i].href;};
   const key=(k,mod)=>{document.body.dispatchEvent(new KeyboardEvent('keydown',{key:k,bubbles:true,cancelable:true,...mod}));};
   /* D-pad over a panel jumps to the nearest button in that direction, so menus work without steering the cursor */
@@ -255,7 +257,8 @@ html body .gp-hot{outline:3px solid #f2e5cd;outline-offset:2px;box-shadow:0 0 0 
     if(rx||ry){const sc=scrollable(t);if(sc&&(sc.closest('#panes,.sheet,#sheet,#pane_mat,#pane_build,.pane')||sc!==document.scrollingElement)&&t&&t.tagName!=='CANVAS'){sc.scrollTop+=ry*dt*1100;}else orbit(dt,rx,ry);}
     /* triggers */
     const lt=val(p,6),rt=val(p,7),onCanvas=!!(SC&&t&&t.tagName==='CANVAS');
-    if(onCanvas||!wsLinks().length){if(rt>.08)zoom(dt,-rt);if(lt>.08)zoom(dt,lt);}
+    if(camOn()){if(rt>.85&&!(st.rtp>.85))tapEl(document.getElementById('shutter'));if(lt>.85&&!(st.ltp>.85)){const rb=document.getElementById('camroll');rb&&rb.click();}}
+    else if(onCanvas||!wsLinks().length){if(rt>.08)zoom(dt,-rt);if(lt>.08)zoom(dt,lt);}
     else{if(rt>.85&&!(st.rtp>.85))stepWs(1);if(lt>.85&&!(st.ltp>.85))stepWs(-1);}
     st.ltp=lt;st.rtp=rt;
     /* buttons */
@@ -268,9 +271,10 @@ html body .gp-hot{outline:3px solid #f2e5cd;outline-offset:2px;box-shadow:0 0 0 
       if(b(3)&&st.yt>.35&&SC&&!st.legend){const it=pieItems();if(it)openPie(it);}
       else if(!b(3)){st.yHeld=false;const idx=sheet&&sheet.idx;if(sheet&&idx!=null)sheet.setIdx(idx>0?0:2);buzz(15,.05,.2);}}
     if(edge(4))stepTab(-1);if(edge(5))stepTab(1);
+    if(camOn()){if(edgeR(14,b(14),dt))document.dispatchEvent(new CustomEvent('n0:cam',{detail:{act:'step',d:-1}}));if(edgeR(15,b(15),dt))document.dispatchEvent(new CustomEvent('n0:cam',{detail:{act:'step',d:1}}));}
     const pnl=(b(12)||b(13)||b(14)||b(15))?overPanel():false;
-    if(!pnl&&!st.legend){if(edgeR(14,b(14),dt)){cycle&&cycle(-1);buzz(12,.04,.15);}if(edgeR(15,b(15),dt)){cycle&&cycle(1);buzz(12,.04,.15);}}
-    if(pnl||st.legend){const d=[[12,0,-1],[13,0,1],[14,-1,0],[15,1,0]];for(const [i,dx,dy] of d)if(edgeR(i,b(i),dt)){const hh=st.lastHot;if(dx&&hh&&hh.matches&&hh.matches('input[type=range]')){const stp=+hh.step||1,mn=+hh.min||0,mx=isNaN(+hh.max)||hh.max===''?100:+hh.max;hh.value=Math.min(mx,Math.max(mn,+hh.value+dx*stp*Math.max(1,Math.round((mx-mn)/40/stp))));hh.dispatchEvent(new Event('input',{bubbles:true}));hh.dispatchEvent(new Event('change',{bubbles:true}));buzz(6,.03,.1);continue;}if(!navDir(dx,dy)&&dy){const sc=scrollable(hit());if(sc)sc.scrollTop+=dy*220;}}}
+    if(!pnl&&!st.legend&&!camOn()){if(edgeR(14,b(14),dt)){cycle&&cycle(-1);buzz(12,.04,.15);}if(edgeR(15,b(15),dt)){cycle&&cycle(1);buzz(12,.04,.15);}}
+    if(pnl||st.legend){const d=[[12,0,-1],[13,0,1],[14,-1,0],[15,1,0]];for(const [i,dx,dy] of d)if(edgeR(i,b(i),dt)){if(camOn()&&dx)continue;const hh=st.lastHot;if(dx&&hh&&hh.matches&&hh.matches('input[type=range]')){const stp=+hh.step||1,mn=+hh.min||0,mx=isNaN(+hh.max)||hh.max===''?100:+hh.max;hh.value=Math.min(mx,Math.max(mn,+hh.value+dx*stp*Math.max(1,Math.round((mx-mn)/40/stp))));hh.dispatchEvent(new Event('input',{bubbles:true}));hh.dispatchEvent(new Event('change',{bubbles:true}));buzz(6,.03,.1);continue;}if(!navDir(dx,dy)&&dy){const sc=scrollable(hit());if(sc)sc.scrollTop+=dy*220;}}}
     else{rep[12]=rep[13]=0;
       if(edgeR(12,b(12),dt)){const used=vert&&vert(1);if(!used){const sc=scrollable(hit());if(sc)sc.scrollTop-=220;}}
       if(edgeR(13,b(13),dt)){const used=vert&&vert(-1);if(!used){const sc=scrollable(hit());if(sc)sc.scrollTop+=220;}}}

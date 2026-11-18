@@ -94,7 +94,6 @@ select.field{width:auto;margin:0}
   .float.bl{flex-wrap:wrap;max-width:62%}
   .float.tr{flex-wrap:wrap;justify-content:flex-end}
   body[data-sheet] .float.tr,body[data-side] .float.tr{max-width:calc(100% - 178px)}
-  #find{display:none}
   .float.br{right:6px}
   .pill{padding:7px 10px;font-size:11.5px}
   .pane{padding-bottom:calc(18px + env(safe-area-inset-bottom,0px))}
@@ -171,7 +170,6 @@ body[data-sheet] .chipb,body[data-side] .chipb{display:block;position:absolute;t
 body[data-sheet] #srcchip,body[data-side] #srcchip{left:96px}
 body[data-sheet] .srcmenu:not([hidden]),body[data-side] .srcmenu:not([hidden]){display:flex;flex-direction:column;position:absolute;top:60px;left:96px;z-index:6;background:var(--panel);border:1px solid var(--line)}
 .srcmenu button{min-height:44px;min-width:140px;text-align:left;padding:0 14px;border:0;border-bottom:1px solid var(--line);background:none;color:var(--ink);font:600 11px var(--lab);text-transform:uppercase;letter-spacing:.08em}
-body[data-sheet] #open,body[data-sheet] #cam,body[data-sheet] #rec,body[data-side] #open,body[data-side] #cam,body[data-side] #rec{display:none}
 body[data-sheet] .fxmain{padding-bottom:var(--stagepad,196px)}
 body[data-sheet] .stage{margin-bottom:0}
 body[data-sheet] .dock{position:fixed;left:0;right:0;bottom:var(--kb,0px);height:var(--sheet,86vh);margin:0;border-radius:31px 31px 0 0;z-index:15;
@@ -651,3 +649,13 @@ html[data-boot=cam],html[data-boot=cam] body{background:#0a0a0a}html[data-boot=c
 .stage .pill{border-radius:18px;min-height:44px;display:inline-flex;align-items:center}
 @media(max-width:959px){.fxmain{padding-top:54px}}
 body[data-sheet] .dock{background:radial-gradient(ellipse at 73% 0,#eaddca4a,transparent 48%),linear-gradient(166deg,#4d473eb5,#181614e8 67%);backdrop-filter:blur(17px);border-top:1px solid #fff5}
+
+.dialog-body .desk-btn{min-height:44px;min-width:44px;padding:0 14px;border-radius:18px;font-size:13px}
+
+.artbar{position:absolute;z-index:3;display:none;gap:6px;flex-wrap:wrap;pointer-events:none}
+.artbar>*{pointer-events:auto}
+@media(min-width:960px) and (min-height:550px){
+  .artbar{display:flex;left:12px;bottom:12px;max-width:calc(100% - 200px)}
+  .artbar .pill{min-height:32px;padding:0 12px;font-size:12px;border-radius:16px;background:#232322c9;border:1px solid #e7dfd02a;backdrop-filter:blur(14px)}
+  .artbar .pill[aria-pressed=true]{background:#d9cbb644;border-color:#e9dbc855}
+}

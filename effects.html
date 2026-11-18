@@ -32,6 +32,7 @@
       
       
       <div class="float br"><button class="pill" id="hold">Hold for original</button></div>
+      <div class="artbar" id="artbar" role="toolbar" aria-label="Picture tools"></div>
       <div class="err" id="err" hidden></div>
     </div>
     <section class="dock" id="dock">
@@ -49,12 +50,12 @@
   <div class="dialog-head"><h2 id="dialog-title">Effects</h2><form method="dialog"><button class="ghost" aria-label="Close dialog"><svg><use href="#i-close"/></svg></button></form></div>
   <div class="dialog-body" id="dialog-body">
     <h3>Project</h3><div class="segment" id="globalslot"><button class="pill" id="open">Open</button><button class="pill" id="find" title="Find any effect, look or action (Ctrl or Cmd + K)" aria-keyshortcuts="Control+K Meta+K">Find</button><button class="pill" id="plugins">Plugins</button><button class="pill" id="cam">Camera</button><button class="pill rec" id="rec" aria-pressed="false">Record</button></div>
-    <h3>On the picture</h3><div class="segment"><button class="pill" id="cmpbtn" aria-pressed="false">Compare</button><button class="pill" id="reset">Reset</button><button class="pill" id="textoff" hidden>Remove text</button><button class="pill" id="stillbtn" aria-pressed="false" title="Freeze the look exactly as it is">Pause</button><button class="pill" id="tlbtn" title="Deliberate motion: keyframes and modulation. The look also drifts on its own (Alive) unless you pause it.">Animate</button><button class="pill" id="power" aria-pressed="true">Power</button><button class="pill" id="shuffle">Shuffle</button><button class="pill" id="paint" aria-pressed="false">Beam paint</button><button class="pill" id="toolplace" aria-pressed="false" title="Place: drag moves the layer, scroll resizes it. Off, dragging tunes the look.">Place</button><button class="pill" id="tunereset" hidden>Reset tune</button></div>
+    <h3>On the picture</h3><div class="segment" id="picslot"><button class="pill" id="cmpbtn" aria-pressed="false">Compare</button><button class="pill" id="reset">Reset</button><button class="pill" id="textoff" hidden>Remove text</button><button class="pill" id="stillbtn" aria-pressed="false" title="Freeze the look exactly as it is">Pause</button><button class="pill" id="tlbtn" title="Deliberate motion: keyframes and modulation. The look also drifts on its own (Alive) unless you pause it.">Animate</button><button class="pill" id="power" aria-pressed="true">Power</button><button class="pill" id="shuffle">Shuffle</button><button class="pill" id="paint" aria-pressed="false">Beam paint</button><button class="pill" id="toolplace" aria-pressed="false" title="Place: drag moves the layer, scroll resizes it. Off, dragging tunes the look.">Place</button><button class="pill" id="tunereset" hidden>Reset tune</button></div>
     <h3>Help</h3><div class="segment"><button class="pill" type="button" id="tipbtn">Gesture tips</button><a class="pill" href="index.html">Home</a></div>
   </div>
 </dialog>
 <template id="globalbtns"><button class="desk-btn icon" id="undo" title="Undo" aria-label="Undo"><svg viewBox="0 0 24 24"><path d="m8 4-5 5 5 5M3 9h10a6 6 0 0 1 0 12h-3"/></svg></button><button class="desk-btn icon" id="redo" title="Redo" aria-label="Redo"><svg viewBox="0 0 24 24" style="transform:scaleX(-1)"><path d="m8 4-5 5 5 5M3 9h10a6 6 0 0 1 0 12h-3"/></svg></button><button class="desk-btn" id="save">Save</button></template>
 <script>document.getElementById('globalslot').append(document.getElementById('globalbtns').content);</script>
-<script type="module" src="assets/index.js?v=a7cc0586"></script>
+<script type="module" src="assets/index.js?v=15f31401"></script>
 </body>
 </html>

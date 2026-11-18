@@ -2,7 +2,7 @@
 
 Rules (from the brief): global actions (Save, Import, Export, Undo/Redo, workspace switching) go in the `⋯` menu. 3D modes go in a Modes sheet. Shading and view options go in one View popover. Inspector rows become collapsible sections. Lab features go under Params, Presets and Export. Nothing is hidden with `display:none`; when unsure it goes under "More".
 
-Status: **Lab is ported (this commit)**. Camera, Effects and 3D are mapped below and ported in later commits. Static ids come from the old markup (`git show 20acf9e:effects.html`, `:studio.html`); dynamic panels are listed by the module that builds them.
+Status: all four pages are ported. The mapping below is checked by `tools/feature-audit.mjs` (it lists every control reachable on each page, old checkout against new) and `tools/menu-test.mjs` (every control in the ⋯ menus is visible and big enough). Static ids come from the old markup (`git show 20acf9e:effects.html`, `:studio.html`); dynamic panels are listed by the module that builds them.
 
 ## Lab (done)
 
@@ -62,3 +62,12 @@ Status: **Lab is ported (this commit)**. Camera, Effects and 3D are mapped below
 | Effects link (`bLab`) | Top nav |
 | Object list, transforms, material, physics, boolean, optimize | Hierarchy dock (left) and collapsible Inspector sections (right) |
 | FX done (`fxdone`), Back (`wsback`) | Sheet header |
+
+## Where things ended up (after the port)
+
+- **Effects, phone:** Open, Find, Plugins, Camera, Record, Undo, Redo, Save and the picture tools (Compare, Reset, Pause, Animate, Power, Shuffle, Beam paint, Place, Reset tune, Remove text) are in the `⋯` menu. Source and Hold for original stay on the art.
+- **Effects, desktop:** Undo, Redo and Save are in the header; the picture tools sit on the art in a glass bar; Open, Find, Plugins, Camera and Record are in `⋯`.
+- **Camera:** the camera screen keeps its own controls (shutter, looks, modes, Pro, roll, shoot view). Only the palette changed.
+- **3D, phone:** Undo, Redo, Save, Import, Export and the view buttons (Frame, Grid, Walk, Spin) are in `⋯`. **3D, desktop:** Undo, Redo and Save in the header; the view buttons stay on the stage; Import and Export in `⋯`.
+- **Deliberately removed:** the skin switcher (Lab, parchment, utility), as the brief asked.
+- **Renamed:** the old header "3D" button (`studiobtn`) is the 3D tab in the nav; "Gesture tips" is `tipbtn`.

@@ -11,7 +11,7 @@ import {extname,join,normalize} from 'node:path';
 import {spawn} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {tmpdir} from 'node:os';
-const root=fileURLToPath(new URL('..',import.meta.url));
+const root=process.env.ROOT||fileURLToPath(new URL('..',import.meta.url));
 const MIME={'.html':'text/html','.js':'text/javascript','.mjs':'text/javascript','.css':'text/css','.json':'application/json','.svg':'image/svg+xml','.png':'image/png','.webp':'image/webp','.jpg':'image/jpeg','.wasm':'application/wasm','.webmanifest':'application/manifest+json'};
 const chrome=[process.env.CHROME,'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome','/Applications/Chromium.app/Contents/MacOS/Chromium','/usr/bin/google-chrome','/usr/bin/chromium'].find(p=>p&&existsSync(p));
 if(!chrome){console.error('ui-check: no Chrome found. Set CHROME=/path/to/chrome.');process.exit(1);}
@@ -26,7 +26,7 @@ const update=process.argv.includes('--update');
 const srv=createServer(async(q,r)=>{try{const p=normalize(decodeURIComponent(q.url.split('?')[0])).replace(/^(\.\.[/\\])+/,'');const f=join(root,p.endsWith('/')?p+'index.html':p);const b=await readFile(f);r.writeHead(200,{'content-type':MIME[extname(f)]||'application/octet-stream'});r.end(b);}catch(e){r.writeHead(404);r.end('nf');}});
 await new Promise(ok=>srv.listen(0,'127.0.0.1',ok));const base='http://127.0.0.1:'+srv.address().port;
 const prof=mkdtempSync(join(tmpdir(),'n0ui-'));
-const proc=spawn(chrome,['--headless=new','--no-sandbox','--use-angle=swiftshader','--enable-unsafe-swiftshader','--ignore-gpu-blocklist','--remote-debugging-port=0','--user-data-dir='+prof,'--hide-scrollbars','--mute-audio','about:blank'],{stdio:'ignore'});
+const proc=spawn(chrome,['--headless=new','--no-sandbox','--use-angle=swiftshader','--enable-unsafe-swiftshader','--ignore-gpu-blocklist','--remote-debugging-port=0','--user-data-dir='+prof,'--hide-scrollbars','--mute-audio','--use-fake-device-for-media-stream','--use-fake-ui-for-media-stream','about:blank'],{stdio:'ignore'});
 let port=0;for(let i=0;i<80&&!port;i++){await new Promise(r=>setTimeout(r,250));try{port=+readFileSync(join(prof,'DevToolsActivePort'),'utf8').split('\n')[0];}catch(e){}}
 if(!port){console.error('ui-check: Chrome did not start.');proc.kill();process.exit(1);}
 const tab=await (await fetch(`http://127.0.0.1:${port}/json/new?about:blank`,{method:'PUT'})).json();
@@ -52,7 +52,7 @@ for(const [pn,path,act] of PAGES)for(const [vn,w,h,mobile] of VIEWS){
   await send('Emulation.setDeviceMetricsOverride',{width:w,height:h,deviceScaleFactor:1,mobile});
   await send('Emulation.setTouchEmulationEnabled',{enabled:mobile});
   await send('Emulation.setEmulatedMedia',{features:[{name:'pointer',value:mobile?'coarse':'fine'}]}).catch(()=>{});
-  await send('Page.navigate',{url:base+path});await sleep(4500);
+  await send('Page.navigate',{url:base+path});await sleep(4500);if(pn==='camera')await sleep(8000);
   if(act){await send('Runtime.evaluate',{expression:act});await sleep(2500);}
   const shot=await send('Page.captureScreenshot',{format:'png'});await writeFile(join(root,OUT,`${pn}-${vn}.png`),Buffer.from(shot.data,'base64'));console.log(pn,vn);
 }

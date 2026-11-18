@@ -2896,6 +2896,7 @@ const camVis=i=>{const c=CAMS[i];return camCat==='All'||(camCat==='★'?camFavs.
 function setCamCat(n){camCat=n;lsSet('n0ise.camcat',n);const st=$('#camstrip');if(!st)return;
   [...st.children].forEach((b,i)=>{b.hidden=!camVis(i);});$('#camcats').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.c===n));
   if(!camVis(camIx)){const f=CAMS.findIndex((c,i)=>camVis(i));if(f>=0)applyCam(f);else toast('No favourites yet. Tap the star on a camera.');}else paintCamUI();}
+document.addEventListener('n0:cam',e=>{const d=e.detail||{};if(!CAMMODE)return;if(d.act==='step')camStep(d.d>0?1:-1);});
 function camStep(d){let i=camIx;for(let k=0;k<CAMS.length;k++){i=(i+d+CAMS.length)%CAMS.length;if(camVis(i))break;}applyCam(i);}
 function camFavToggle(){const id=CAMS[camIx].id,k=camFavs.indexOf(id);if(k<0)camFavs.push(id);else camFavs.splice(k,1);lsSet('n0ise.camfavs',camFavs);paintCamUI();if(camCat==='★')setCamCat('★');}
 /* frame shape: follows the way you hold the phone (a 3:4 camera becomes 4:3 when you turn it), unless you lock a shape */
@@ -3692,7 +3693,10 @@ function phoneShell(){
   const tb=document.getElementById('tipbtn');if(tb)tb.addEventListener('click',()=>toast(GESTURE_TIP,5000));
   /* undo, redo and Save sit in the header on desktop and in this menu on phones: the same buttons move, so state and handlers stay */
   const mq=matchMedia('(min-width:960px) and (min-height:550px)'),dg=document.getElementById('deskglobal'),slot=document.getElementById('globalslot');
-  const place=()=>{['undo','redo','save'].forEach(id=>{const o=document.getElementById(id);if(o)(mq.matches?dg:slot).appendChild(o);});};
+  const art=document.getElementById('artbar'),pic=document.getElementById('picslot');
+  const place=()=>{['undo','redo','save'].forEach(id=>{const o=document.getElementById(id);if(o)(mq.matches?dg:slot).appendChild(o);});
+    /* the picture tools sit on the art on desktop and in the menu on phones (same buttons, so state and handlers stay) */
+    ['cmpbtn','reset','textoff','stillbtn','tlbtn','power','shuffle','paint','toolplace','tunereset'].forEach(id=>{const o=document.getElementById(id);if(o)(mq.matches&&art?art:pic).appendChild(o);});};
   place();mq.addEventListener('change',place);
 }
 function renderStrip(){

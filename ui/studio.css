@@ -345,3 +345,7 @@ body[data-walk] .restore,body[data-sgs] .restore,body[data-sgs] .bar,body[data-s
 .empty b{font-weight:650}.empty{text-transform:none;letter-spacing:0}
 .ctx{padding:2px 14px;color:var(--mute);font-size:12px;min-height:0}
 #sheet{background:radial-gradient(ellipse at 73% 0,#eaddca3a,transparent 48%),linear-gradient(166deg,#4d473eb5,#181614e8 67%);backdrop-filter:blur(17px)}
+
+.hud:empty{display:none}
+
+.dialog-body .desk-btn{min-height:44px;min-width:44px;padding:0 14px;border-radius:18px;font-size:13px}
