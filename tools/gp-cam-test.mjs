@@ -70,6 +70,8 @@ const k0=[...document.querySelectorAll('#camui [data-m]')].findIndex(b=>b.getAtt
 pad.buttons[5]={pressed:true,value:1};await fr(4);pad.buttons[5]={pressed:false,value:0};await fr(6);
 const k1=[...document.querySelectorAll('#camui [data-m]')].findIndex(b=>b.getAttribute('aria-pressed')==='true');ok('RB changes the capture mode ('+k0+' to '+k1+')',k1===k0+1);
 pad.buttons[7]={pressed:true,value:1};await fr(5);pad.buttons[7]={pressed:false,value:0};await fr(5);ok('RT presses the shutter',downs>0);
+const asp=q('#camasp');const a0=asp.textContent;asp.click();await sl(600);const a1=asp.textContent;ok('aspect button changes the frame ('+a0+' to '+a1+')',a1!==a0);
+for(let i=0;i<12&&asp.textContent!=='Full';i++){asp.click();await sl(250);}ok('aspect cycle returns to Full',asp.textContent==='Full');
 ok('still on the camera page',location.search.includes('cam=1'));
 return R.join('\\n');})()`;
 console.log('-- camera phone');
