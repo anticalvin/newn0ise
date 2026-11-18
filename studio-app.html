@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,interactive-widget=resizes-visual">
+  <title>n0ise / studio</title>
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="studio-app/style.css">
+  <script defer src="studio-app/vendor/fabric.js"></script>
+  <script defer src="studio-app/graph-model.js"></script>
+  <script defer src="studio-app/document.js"></script>
+  <script defer src="studio-app/snapping.js"></script>
+  <script defer src="studio-app/render.js"></script>
+  <script defer src="studio-app/graph.js"></script>
+  <script defer src="studio-app/layer-drag.js"></script>
+  <script defer src="studio-app/app.js"></script>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="brand">n0ise <small>/ studio</small></div>
+    <div class="topright">
+      <button class="iconbtn" id="undo" aria-label="Undo" title="Undo (Ctrl/⌘ Z)">↶</button>
+      <button class="iconbtn" id="redo" aria-label="Redo" title="Redo (Ctrl/⌘ Shift Z)">↷</button>
+      <button class="iconbtn" id="toggleLayers" aria-label="Toggle layers" title="Toggle layers">☷</button>
+      <button class="iconbtn" id="toggleInspector" aria-label="Toggle inspector" title="Toggle inspector">▤</button>
+      <button class="iconbtn" id="menu" aria-label="Studio menu" title="Studio menu">···</button>
+    </div>
+  </header>
+  <div class="documentbar">
+    <input class="docname" id="docname" aria-label="Document name" value="Untitled 01" maxlength="120">
+    <div class="seg" id="viewtabs" role="group" aria-label="Workspace view">
+      <button data-view="canvas">Canvas</button><button data-view="split">Split</button><button data-view="graph">Graph</button><button data-view="spatial" id="spatialTab" hidden>Spatial</button>
+    </div>
+    <button class="softbtn compact" id="export">Export ↗</button>
+  </div>
+  <main class="workspace" id="workspace">
+    <aside class="pane" id="left" aria-label="Layers and assets">
+      <div class="panehead"><span id="railtitle">LAYERS</span><button id="addLayer" aria-label="Add layer" title="Add layer">＋</button></div>
+      <div class="railTabs"><button data-rail="layers">Layers</button><button data-rail="assets">Assets</button></div>
+      <div class="list" id="layerlist"></div>
+      <div class="footerrail">
+        <button class="softbtn" id="moveUp" aria-label="Move layers up" title="Move layers up">↑</button>
+        <button class="softbtn" id="moveDown" aria-label="Move layers down" title="Move layers down">↓</button>
+        <button class="softbtn" id="removeLayer" aria-label="Delete layers" title="Delete layers">⌫</button>
+      </div>
+      <div class="panel-handle" data-resize="left" role="separator" aria-label="Resize layers" aria-orientation="vertical" tabindex="0"></div>
+    </aside>
+    <section class="stage viewcanvas" id="stage" aria-label="Composition">
+      <div class="stagehead"><span>ARTBOARD 01</span><span><span id="dimension"></span><button id="fit" aria-label="Zoom to fit" title="Zoom to fit (0)">FIT</button></span></div>
+      <div class="stagebody" id="stagebody" tabindex="0" aria-label="Artwork workspace">
+        <div class="artboard" id="artboard">
+          <canvas id="preview" aria-label="Composition preview"></canvas>
+          <canvas id="spatialCanvas" class="hidden" aria-label="3D rotation workspace"></canvas>
+          <svg id="overlay" aria-hidden="true"></svg>
+        </div>
+        <div class="text-edit hidden" id="textEdit">
+          <textarea id="textInput" aria-label="Type on canvas" maxlength="2000" rows="2" placeholder="Type here…"></textarea>
+          <button class="softbtn" id="textDone">Done</button>
+        </div>
+        <div class="toolstrip" id="tools" role="group" aria-label="Editing tools">
+          <button class="tool" data-tool="select" aria-label="Select" title="Select (V)">↖</button>
+          <button class="tool" data-tool="brush" aria-label="Brush" title="Brush (B)">✎</button>
+          <button class="tool" data-tool="pen" aria-label="Pen" title="Pen (P)">♢</button>
+          <button class="tool" data-tool="text" aria-label="Text" title="Text (T)">T</button>
+          <button class="tool" data-tool="shape" aria-label="Shape" title="Shape (R)">□</button>
+          <button class="tool" data-tool="crop" aria-label="Crop" title="Crop image (C)">⌗</button>
+          <button class="tool hidden" id="effectTool" aria-label="Add effect" title="Add effect">≋</button>
+          <button class="tool" data-tool="add" aria-label="Add" title="Add to composition">＋</button>
+        </div>
+      </div>
+      <div class="graph" id="graph">
+        <div class="graphhead"><span id="graphTitle">GRAPH / COMPOSITION</span></div>
+        <div class="graphActions"><button class="softbtn compact" id="graphAdd">＋ Effect</button><button class="softbtn compact" id="graphFit">Fit</button></div>
+        <svg id="graphsvg" aria-label="Composition graph"></svg>
+      </div>
+      <div class="stagefoot"><span id="stageStatus">LIVE COMPOSITION</span><span id="stagefoot"></span></div>
+    </section>
+    <aside class="pane" id="right" aria-label="Inspector">
+      <div class="panehead"><span>INSPECTOR</span><span aria-hidden="true">☷</span></div>
+      <div class="inspector-scroll">
+        <div class="inspectorGroup">
+          <label><span class="fieldlabel">Document</span><select class="field" id="ratio"><option value="landscape">Landscape · 16:9</option><option value="portrait">Portrait · 9:16</option><option value="square">Square · 1:1</option><option value="custom">Custom…</option></select><button class="softbtn compact hidden" type="button" id="resizeCustom">Edit dimensions</button></label>
+        </div>
+        <div class="inspectorGroup">
+          <strong id="selectedName"></strong>
+          <div id="context" class="inspectorGroup"></div>
+          <div id="layerProperties" class="inspectorGroup">
+            <label><span class="fieldlabel">Opacity <span id="opacityLabel"></span></span><input class="slider" id="opacity" type="range" min="0" max="100"></label>
+            <label><span class="fieldlabel">Blend</span><select class="field" id="blend"><option value="source-over">Normal</option><option value="screen">Screen</option><option value="multiply">Multiply</option><option value="lighter">Add</option></select></label>
+            <div class="rule"></div>
+            <div class="fieldrow">
+              <label><span class="fieldlabel">X</span><input class="field" id="posX" type="number" step="any"></label>
+              <label><span class="fieldlabel">Y</span><input class="field" id="posY" type="number" step="any"></label>
+              <label><span class="fieldlabel">Scale %</span><input class="field" id="scale" type="number" min="1" max="2000" step="any"></label>
+              <label><span class="fieldlabel">Rotation °</span><input class="field" id="rotation" type="number" step="any"></label>
+            </div>
+            <button class="softbtn" id="resetTransform">Reset transform</button>
+          </div>
+        </div>
+      </div>
+      <div class="panel-handle" data-resize="right" role="separator" aria-label="Resize inspector" aria-orientation="vertical" tabindex="0"></div>
+    </aside>
+  </main>
+  <nav class="mobilebar" aria-label="Mobile panels"><button data-mobile="left">Layers</button><button data-mobile="canvas">Canvas</button><button data-mobile="right">Inspector</button></nav>
+</div>
+<dialog class="launch" id="launcher" aria-labelledby="launchTitle">
+  <div class="launch-controls">
+    <header class="launch-head">
+      <div class="brand">n0ise <small>/ studio</small></div>
+      <button class="iconbtn" id="launchClose" aria-label="Close start screen" title="Close start screen">×</button>
+    </header>
+    <h1 id="launchTitle">Make something.</h1>
+    <form id="launchForm">
+      <label for="launchRatio" class="fieldlabel">Canvas size</label>
+      <select class="field" id="launchRatio">
+        <option value="landscape">Landscape · 1920 × 1080</option>
+        <option value="portrait">Portrait · 1080 × 1920</option>
+        <option value="square">Square · 1440 × 1440</option>
+        <option value="custom">Custom dimensions</option>
+      </select>
+      <div class="fieldrow hidden" id="launchCustom">
+        <label><span class="fieldlabel">Width (px)</span><input class="field" id="launchWidth" type="number" value="1600" min="64" max="4096" step="1"></label>
+        <label><span class="fieldlabel">Height (px)</span><input class="field" id="launchHeight" type="number" value="1200" min="64" max="4096" step="1"></label>
+      </div>
+      <p id="launchStatus" role="status"></p>
+      <button class="primary launch-create" id="launchCreate">Blank canvas <span aria-hidden="true">↗</span></button>
+      <button class="softbtn launch-upload" type="button" id="launchUpload">Upload image or project <span aria-hidden="true">↑</span></button>
+    </form>
+  </div>
+  <button class="launch-demo" id="launchDemo" type="button">
+    <img src="studio-app/torus-preview.webp" alt="">
+    <span>Open demo <span aria-hidden="true">↗</span></span>
+  </button>
+</dialog>
+<input type="file" id="launchFile" hidden accept=".json,application/json,image/png,image/jpeg,image/webp,image/gif,image/avif,image/bmp">
+<dialog class="modal" id="modal" aria-labelledby="modaltitle">
+  <h2 id="modaltitle"></h2><div id="modalcontent"></div>
+  <div class="modalactions"><button class="softbtn" id="modalcancel">Close</button></div>
+</dialog>
+<input type="file" id="openFile" hidden accept=".json,application/json">
+<input type="file" id="imageFile" hidden multiple accept="image/png,image/jpeg,image/webp,image/gif,image/avif,image/bmp">
+<div class="toast hidden" id="toast" role="status"></div>
+</body>
+</html>

@@ -115,7 +115,6 @@ const warm=()=>{if(warm.d)return;warm.d=1;const pf=h=>{const l=document.createEl
 document.querySelectorAll('.door').forEach(d=>{['pointerenter','pointerdown','touchstart'].forEach(ev=>d.addEventListener(ev,warm,{passive:true,once:true}));
   d.addEventListener('click',e=>{if(!document.startViewTransition||e.metaKey||e.ctrlKey||e.shiftKey||e.button)return;e.preventDefault();const h=d.href;document.startViewTransition(()=>{location.href=h;});});});
 if('serviceWorker' in navigator&&location.protocol!=='file:')navigator.serviceWorker.register('sw.js').catch(()=>{});
-document.getElementById('studio-link').addEventListener('click',e=>{e.preventDefault();const t=document.createElement('div');t.className='toast';t.setAttribute('role','status');t.textContent='Coming soon';document.body.append(t);setTimeout(()=>t.remove(),2400);});
 </script>
 <script type="module" src="assets/gp.js?v=df9571ec"></script>
 </body>
