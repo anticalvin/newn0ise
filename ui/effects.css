@@ -659,3 +659,28 @@ body[data-sheet] .dock{background:radial-gradient(ellipse at 73% 0,#eaddca4a,tra
   .artbar .pill{min-height:32px;padding:0 12px;font-size:12px;border-radius:16px;background:#232322c9;border:1px solid #e7dfd02a;backdrop-filter:blur(14px)}
   .artbar .pill[aria-pressed=true]{background:#d9cbb644;border-color:#e9dbc855}
 }
+
+/* ============ Camera: the demo's full-screen camera. The picture fills the screen; controls are glass over it ============ */
+body[data-cam] .fxpage .portrait{position:fixed;inset:0;width:100%;max-width:none;height:auto;margin:0;border:0;border-radius:0;box-shadow:none;z-index:10;background:#0c0b0b}
+body[data-cam] .viewbar{display:none}
+body[data-cam] #stage{padding:0}
+html body .camui.ios .camtop{background:linear-gradient(#080808cf,transparent);height:calc(64px + env(safe-area-inset-top,0px))}
+html body .camui.ios .cambot{background:linear-gradient(0deg,#050505ec 45%,#05050580 78%,transparent);gap:8px;padding-top:28px}
+/* capture modes: plain labels with a dot under the active one */
+html body .camui .cammode{gap:28px;padding:0 16px;justify-content:center}
+html body .camui .cammode button{position:relative;min-width:44px;min-height:44px;border:0;background:none;color:#d2cbc1;font:500 13px var(--lab);letter-spacing:.06em;text-transform:uppercase;border-radius:0}
+html body .camui .cammode button[aria-pressed=true]{background:none;color:#fff;font-weight:650}
+html body .camui .cammode button[aria-pressed=true]::after{content:"";position:absolute;left:calc(50% - 2px);bottom:4px;width:4px;height:4px;border-radius:50%;background:#f1e8dd}
+/* capture row: roll thumbnail, big shutter, next-camera button */
+html body .camui .camrow{display:grid;grid-template-columns:1fr 1.2fr 1fr;justify-items:center;align-items:center;padding:0 24px}
+html body .camui .camrow .camroll{width:58px;height:58px;min-height:58px;border-radius:16px;border:1px solid #eee6db4d;background:#2a2926;overflow:hidden}
+html body .camui .camrow .camswap{width:58px;height:58px;min-height:58px;border-radius:50%;border:1px solid #ffffff18;background:linear-gradient(155deg,#e4dcd733,#d2c6b819 65%,#d7c8b62d);backdrop-filter:blur(15px);color:#ede8df;font:500 12px var(--lab);text-transform:none;letter-spacing:0}
+html body .camui .shutter{width:83px;height:83px;border:3px solid #e5ded0a6;background:#15131169;padding:0}
+html body .camui .shutter::after{inset:4px;background:#e8dfd2}
+@media (max-width:420px){html body .camui .shutter{width:73px;height:73px}}
+/* the Looks | Pro switch and the strength slider: glass cards */
+html body .camui .camdrawer,html body .camui .camdp{backdrop-filter:blur(15px)}
+html body .camui .camdt button{border-radius:18px}
+html body .camui .camfr .clens button{background:#ffffff12;border:1px solid #ffffff12;color:#ede8df;border-radius:50%}
+body[data-cam] #stage{margin:0;border-radius:0}
+body[data-cam] .artbar{display:none}

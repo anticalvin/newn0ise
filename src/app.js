@@ -2901,7 +2901,8 @@ function camStep(d){let i=camIx;for(let k=0;k<CAMS.length;k++){i=(i+d+CAMS.lengt
 function camFavToggle(){const id=CAMS[camIx].id,k=camFavs.indexOf(id);if(k<0)camFavs.push(id);else camFavs.splice(k,1);lsSet('n0ise.camfavs',camFavs);paintCamUI();if(camCat==='★')setCamCat('★');}
 /* frame shape: follows the way you hold the phone (a 3:4 camera becomes 4:3 when you turn it), unless you lock a shape */
 let camAspLock=lsGet('n0ise.camasplock','')||'';
-const camAsp=a=>{if(camAspLock)return camAspLock;const m=/^(\d+):(\d+)$/.exec(a);if(!m)return a;const w=+m[1],h=+m[2];return innerWidth>innerHeight*1.05&&w<h?h+':'+w:a;};
+const camScreen=()=>Math.max(1,Math.round(innerWidth))+':'+Math.max(1,Math.round(innerHeight));
+const camAsp=a=>{if(camAspLock)return camAspLock;if(matchMedia('(max-width:899px)').matches)return camScreen();const m=/^(\d+):(\d+)$/.exec(a);if(!m)return a;const w=+m[1],h=+m[2];return innerWidth>innerHeight*1.05&&w<h?h+':'+w:a;};
 function camAspSet(v){camAspLock=v||'';lsSet('n0ise.camasplock',camAspLock);if(!camAspLock)P.aspect=camAsp(CAMS[camIx].aspect);V.sizeKey='';paintCamUI();}
 const camRecent=[];
 function camAutoStep(){const vis=CAMS.map((c,i)=>i).filter(camVis);if(vis.length<2)return;const avoid=camRecent.slice(-Math.min(8,vis.length-1));
@@ -2942,7 +2943,7 @@ function paintCamUI(){
   {const d=$('#camduo');if(d)d.hidden=!CAMS[camIx].duo;}
   const c=CAMS[camIx];{const f=$('#camfav');if(f){const on=camFavs.includes(c.id);f.textContent=on?'★':'☆';f.setAttribute('aria-pressed',on);}}
   {const ls=$('#camlooks span');if(ls)ls.textContent='Looks · '+c.name;}
-  $('#camname').textContent=c.name;$('#camsub').textContent=c.sub;const a=$('#camasp');if(a)a.textContent=P.aspect==='src'?'Full':P.aspect;
+  $('#camname').textContent=c.name;$('#camsub').textContent=c.sub;const a=$('#camasp');if(a)a.textContent=P.aspect===camScreen()?'Full':P.aspect==='src'?'Source':P.aspect;
   {const bt=$('.cambot'),app=document.querySelector('.app');if(bt&&app){app.style.setProperty('--stagepad','0px');app.style.setProperty('--campad',bt.offsetHeight+'px');document.documentElement.style.setProperty('--campad',bt.offsetHeight+'px');V.sizeKey='';ST.freeze=0;}}
   drawCamOv();
 }
@@ -3091,7 +3092,7 @@ function buildCamUI(){
   const top=el('div','camtop');
   top.append(btn('camx','✕','Close camera',()=>{if(camRecorder.busy)camRecorder.stop('closed');{const v=document.createElement('div');v.style.cssText='position:fixed;inset:0;background:#0a0a0a;z-index:99999';document.body.appendChild(v);}location.assign('index.html');}),btn('camflip','Flip','Flip camera',async()=>{await startCam(true);setPM(camFacing==='user');readCaps();applyCam(camIx,true);applyPro();}),
     btn('camflashb','Flash','Flash',()=>{setFlash(PRO.flash==='off'?'on':PRO.flash==='on'?(proCaps.torch?'torch':'off'):'off');}),
-    btn('camasp','3:4','Frame shape',e=>{const o=['3:4','4:5','1:1','3:2','4:3','16:9','21:9','9:16','src'],i=(o.indexOf(P.aspect)+1)%o.length;P.aspect=o[i];if(camAspLock)camAspLock=o[i],lsSet('n0ise.camasplock',o[i]);V.sizeKey='';paintCamUI();}),
+    btn('camasp','3:4','Frame shape',e=>{const sc=camScreen(),o=['screen','3:4','4:5','1:1','3:2','4:3','16:9','21:9','9:16','src'],i=(o.indexOf(P.aspect===sc?'screen':P.aspect)+1)%o.length,v=o[i]==='screen'?sc:o[i];P.aspect=v;if(camAspLock)camAspLock=v,lsSet('n0ise.camasplock',v);V.sizeKey='';paintCamUI();}),
     btn('campb','Pro','Pro controls',e=>{const on=u.classList.toggle('pro');u.classList.remove('more');e.currentTarget.setAttribute('aria-pressed',on);if(on)renderPro();}),
     btn('cammore','More','More controls',e=>{const on=u.classList.toggle('more');u.classList.remove('pro');$('#campb').setAttribute('aria-pressed',false);e.currentTarget.setAttribute('aria-pressed',on);}));
   const more=el('div','cammoregrid');

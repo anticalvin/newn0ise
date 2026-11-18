@@ -6,7 +6,8 @@ button{cursor:pointer;border:0;background:none;padding:0}
 button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible,canvas:focus-visible{outline:2px solid #e9dfcb;outline-offset:3px}
 button:hover{filter:brightness(1.15)}
 button:disabled{opacity:.34;cursor:default}
-html [hidden]:not(#_){display:none}
+/* the one !important in the UI: scripts set inline display on elements they also hide with [hidden] */
+[hidden]{display:none!important}
 svg{width:20px;height:20px;display:inline-block;vertical-align:middle;fill:none;stroke:currentColor;stroke-width:1.55;stroke-linecap:round;stroke-linejoin:round}
 .shell{max-width:970px;margin:auto;padding:env(safe-area-inset-top) max(24px,env(safe-area-inset-right)) max(25px,env(safe-area-inset-bottom)) max(24px,env(safe-area-inset-left))}
 .header{height:73px;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:10px;border-bottom:1px solid var(--line);margin-bottom:19px}
@@ -418,3 +419,5 @@ select.pill option{background:#262421;color:var(--ink)}
 
 @media(min-width:960px) and (min-height:550px){.lab .widebar .ghost{--s:32px}}
 @media(min-width:960px) and (min-height:550px){.desk-project .wordmark{min-height:32px}}
+
+.toast{pointer-events:none}

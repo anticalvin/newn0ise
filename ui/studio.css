@@ -349,3 +349,79 @@ body[data-walk] .restore,body[data-sgs] .restore,body[data-sgs] .bar,body[data-s
 .hud:empty{display:none}
 
 .dialog-body .desk-btn{min-height:44px;min-width:44px;padding:0 14px;border-radius:18px;font-size:13px}
+
+.dialog-body .hud{position:static;display:flex;flex-wrap:wrap;gap:6px;transform:none;padding:0;background:none;border:0;max-width:none}
+.dialog-body .hud .chipb,.dialog-body .hud .seg button{min-height:44px;min-width:44px}
+.dialog-body .hud .seg{display:flex;flex-wrap:wrap;border:0;gap:6px}
+.dialog-body .fxnote{width:100%;color:var(--mute)}
+
+.app>.restore{position:static;margin:0 8px 6px;flex:none;border-radius:14px}
+.app>.restore .btn{min-height:44px}
+@media (max-width:899px){
+  html body #bdtb{transform:translateX(-50%) translateY(calc(64px - var(--cover,0px)))}  /* sits just above the sheet: the engine adds 62px for the object bar, which Build hides */
+  html body #empty{bottom:var(--cover,0px)}
+}
+
+#objbar{display:flex}
+
+/* landscape phones: slimmer header, so the viewport keeps room */
+@media (max-width:959px) and (max-height:520px){
+  .header{height:48px;margin-bottom:4px}
+  .shell{padding-bottom:0}
+  .header .wordmark{min-height:44px;font-size:18px}
+}
+
+/* object tool row: inside the scene card (all sizes) */
+#objbar{display:flex;position:absolute;left:50%;transform:translateX(-50%);bottom:12px;z-index:48}
+.widebar,.inspector-head,.scene-expand{display:none}
+@media (max-width:959px){.widebar{display:flex}}
+
+/* ============ Phones: the demo's 3D layout. Scene card on top, modes as tiles, the active mode's controls below, all in one scrolling column ============ */
+@media (max-width:899px){
+  html,body{overflow:auto}
+  .app{position:relative;inset:auto;display:flex;flex-direction:column;min-height:100dvh;height:auto;padding-bottom:calc(16px + env(safe-area-inset-bottom,0px))}
+  .app>.main,#sheet{display:contents}
+  .app>.header{order:0}.app>.ctx{order:1;display:block;min-height:0}.widebar{order:2}.app>.restore{order:3}
+  .widebar{align-items:center;justify-content:space-between;padding:0 6px 0 12px;min-height:44px}
+  .widebar .wordmark{font-size:16px;transform:none;min-width:44px}
+  .widebar .actions{display:flex;align-items:center;gap:4px}
+  #stage{order:4;flex:none;height:clamp(280px,46dvh,440px);margin:0 9px;border-radius:15px;background:#0b0b0c}
+  #stage.expanded{position:fixed;inset:calc(env(safe-area-inset-top,0px) + 8px) 8px calc(env(safe-area-inset-bottom,0px) + 8px);height:auto;margin:0;z-index:30;box-shadow:0 0 0 100vmax #101010}
+  .scene-expand{display:grid;position:absolute;top:4px;right:4px;z-index:5;color:#a39f99}
+  #grab{display:none}
+  .tabs.dock{order:5;display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin:10px 9px 0;padding:0;border:0;background:none;overflow:visible}
+  .tabs.dock .tab{display:grid;place-items:center;align-content:center;gap:3px;min-height:56px;padding:4px 2px;border-radius:12px;background:#11111080;border:1px solid transparent;color:#d6d0c7;font-size:12px;letter-spacing:0}
+  .tabs.dock .tab svg{display:block;width:17px;height:17px}
+  .tabs.dock .tab[aria-selected=true]{border-color:#ede4d353;background:#d2c4af22;color:#fff}
+  .tabs.dock .tab[aria-selected=true] svg{color:inherit}
+  html body #bdtb{order:6;position:static;transform:none;display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:2px;width:auto;max-width:none;margin:10px 9px 0;padding:4px;overflow:visible;border-radius:14px}
+  html body #bdtb button{min-width:0;min-height:52px}
+  html body #bdtb i{display:none}
+  .inspector-head{order:7;display:flex;width:auto;margin:6px 9px 0;padding:13px 4px 10px;border-top:1px solid #ffffff0e;justify-content:space-between;align-items:center;text-align:left;min-height:44px}
+  .inspector-head strong{display:block;font-size:14px;font-weight:625}
+  .inspector-head small{display:block;margin-top:4px;color:#b8b4ad;font-size:12px}
+  .inspector-head[aria-expanded=true] svg{transform:rotate(180deg)}
+  .panes{order:8;flex:none;overflow:visible;padding-bottom:0}
+  .panes.collapsed{display:none}
+  #bTools{top:8px;left:8px}
+}
+/* landscape phones: a taller scene; the controls follow below in the same column */
+@media (max-width:899px) and (orientation:landscape) and (max-height:520px){
+  #stage{height:max(200px,calc(100dvh - 140px))}
+  .tabs.dock{grid-template-columns:repeat(8,1fr)}
+  .tabs.dock .tab span{font-size:11px}
+}
+html body[data-tab=build] #objbar,html body[data-tab=draw] #objbar,html body[data-tab=world] #objbar,html body[data-tab=scan] #objbar,html body[data-tab=export] #objbar{display:none}
+#objbar{flex-wrap:wrap;justify-content:center;width:max-content;max-width:calc(100% - 16px)}
+#objbar button,#objbar .chip{flex:0 0 auto;min-width:44px;min-height:44px;padding:0 10px}
+@media (max-width:899px){.app>.ctx{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);margin:0;padding:0}}
+
+/* phone object tools: round icon buttons, as in the demo's scene card */
+@media (max-width:899px){
+  #objbar{gap:8px;padding:0;background:none;border:0;backdrop-filter:none;flex-wrap:nowrap;overflow:visible}
+  #objbar .round{--s:44px}
+  #objbar .round::before{background:#2d2d2f;border-color:#ffffff12}
+  #objbar .round[aria-pressed=true]::before{background:#494641;border-color:#e9e0d36b}
+  #objbar .round svg{width:17px;height:17px}
+}
+@media (max-width:899px){#objbar>button:not(.round),#objbar>i{display:none}}

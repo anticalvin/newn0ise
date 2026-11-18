@@ -23,6 +23,8 @@
 <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1" fill="currentColor"/><circle cx="12" cy="12" r="1" fill="currentColor"/><circle cx="19" cy="12" r="1" fill="currentColor"/></symbol>
 <symbol id="i-cube" viewBox="0 0 24 24"><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9L12 3Zm0 9 8-4.5M12 12 4 7.5M12 12v9"/></symbol>
 <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+<symbol id="i-expand" viewBox="0 0 24 24"><path d="M13 5h6v6M5 13v6h6"/></symbol>
+<symbol id="i-chevron" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
 </defs></svg>
 <div class="app shell studiopage">
 <header class="header">
@@ -33,9 +35,11 @@
   <div class="header-end"><a class="round" id="studio-link" href="studio-app.html" aria-label="Studio" title="Studio"><svg><use href="#i-cube"/></svg></a><button class="round" type="button" id="menubtn" aria-label="Workspace menu" aria-haspopup="dialog"><svg><use href="#i-more"/></svg></button></div>
 </header>
 <div class="ctx" id="ctx" role="status" aria-live="polite"></div>
+<div class="widebar" id="widebar"><span class="wordmark">3d.</span><div class="actions" id="widebarActs"></div></div>
 <div class="main">
     <div id="stage">
       <canvas id="gl" tabindex="0"></canvas>
+      <button class="ghost scene-expand" type="button" id="expand" aria-label="Expand the scene" aria-pressed="false"><svg><use href="#i-expand"/></svg></button>
       <button class="chipb" id="bTools" type="button" aria-expanded="false" aria-controls="hudBL">Tools</button>
       <div class="hud tl"><div class="seg" id="viewSeg"></div></div>
       <div class="hud tr"><span id="fxnote" class="fxnote" aria-live="polite"></span><button class="chipb" id="bLight" title="Brighten dark scenes">Light</button><button class="chipb" id="bMat" title="Open the Material tab">Material</button><button class="chipb" id="bFx" title="Effects on the whole picture" aria-pressed="true">FX</button></div>
@@ -48,6 +52,7 @@
     <section id="sheet" aria-label="Controls">
       <div data-ui-allow="drag handle; the whole sheet header also drags" class="grab" id="grab" role="button" tabindex="0" aria-label="Resize panel"></div>
       <nav class="tabs" id="tabs" role="tablist"></nav>
+      <button class="inspector-head" type="button" id="insphead" aria-expanded="true" aria-controls="panes"><span><strong id="insname">Scene</strong><small id="insstate"></small></span><svg><use href="#i-chevron"/></svg></button>
       <div class="panes" id="panes"></div>
     </section>
   </div>
@@ -85,24 +90,70 @@
   <div class="dialog-head"><h2 id="dialog-title">3D</h2><form method="dialog"><button class="ghost" aria-label="Close dialog"><svg><use href="#i-close"/></svg></button></form></div>
   <div class="dialog-body" id="dialog-body">
     <h3>Project</h3><div class="segment" id="globalslot"><button class="pill" id="bImport" type="button">Import</button><button class="pill" id="bExport" type="button">Export</button></div>
+    <h3 id="objh" hidden>Selected object</h3><div class="segment" id="objslot"></div>
     <h3 id="viewh">View</h3><div class="segment" id="viewslot"></div>
     <h3>Help</h3><div class="segment"><a class="pill" href="index.html">Home</a></div>
   </div>
 </dialog>
 <template id="globalbtns"><button class="desk-btn icon" id="bUndo" type="button" title="Undo (Ctrl+Z)" aria-label="Undo"><svg viewBox="0 0 24 24"><path d="m8 4-5 5 5 5M3 9h10a6 6 0 0 1 0 12h-3"/></svg></button><button class="desk-btn icon" id="bRedo" type="button" title="Redo (Ctrl+Shift+Z)" aria-label="Redo"><svg viewBox="0 0 24 24" style="transform:scaleX(-1)"><path d="m8 4-5 5 5 5M3 9h10a6 6 0 0 1 0 12h-3"/></svg></button><button class="desk-btn" id="bSave" type="button" title="Save the project to a file">Save</button></template>
 <script>document.getElementById('globalslot').append(document.getElementById('globalbtns').content);</script>
-<script type="module" src="assets/studio.js?v=e2d98d70"></script>
+<script type="module" src="assets/studio.js?v=3300eb1e"></script>
 <script type="module">
 const dlg=document.getElementById('dialog');
 document.getElementById('menubtn').addEventListener('click',()=>dlg.showModal());
 dlg.addEventListener('click',e=>{if(e.target===dlg||(e.target.closest&&e.target.closest('.dialog-body button,.dialog-body a')))dlg.close();});
 document.getElementById('studio-link').addEventListener('click',e=>{e.preventDefault();const t=document.createElement('div');t.className='toast';t.setAttribute('role','status');t.textContent='Coming soon';document.body.append(t);setTimeout(()=>t.remove(),2400);});
 const mq=matchMedia('(min-width:960px) and (min-height:550px)'),dg=document.getElementById('deskglobal'),slot=document.getElementById('globalslot'),vs=document.getElementById('viewslot');
-const place=()=>{['bUndo','bRedo','bSave'].forEach(id=>{const o=document.getElementById(id);if(o)(mq.matches?dg:slot).appendChild(o);});};
+const wbActs=document.getElementById('widebarActs');
+const place=()=>{
+  ['bUndo','bRedo'].forEach(id=>{const o=document.getElementById(id);if(!o)return;if(mq.matches){o.classList.remove('ghost');o.classList.add('desk-btn','icon');dg.appendChild(o);}else{o.classList.remove('desk-btn','icon');o.classList.add('ghost');wbActs.appendChild(o);}});
+  const sv=document.getElementById('bSave');if(sv)(mq.matches?dg:slot).appendChild(sv);};
 place();mq.addEventListener('change',place);
 const hudBL=document.getElementById('hudBL');
-const placeView=()=>['bFrame','bGrid','bWalk','bSpin'].forEach(id=>{const o=document.getElementById(id);if(!o)return;if(mq.matches){o.classList.remove('pill');hudBL.appendChild(o);}else{o.classList.add('pill');vs.appendChild(o);}});
-const vh=document.getElementById('viewh');const pv=()=>{placeView();vh.hidden=vs.hidden=mq.matches;};pv();mq.addEventListener('change',pv);
+/* View controls: on phones one View menu owns them (shading modes, light, material, look, FX, frame, grid, walk, spin); from 900px they sit on the stage as before.
+   The same elements move, so the 3D engine's handlers and state are untouched. */
+const mqE=matchMedia('(min-width:900px)'),hudTL=document.querySelector('.hud.tl'),hudTR=document.querySelector('.hud.tr'),marks=new Map();
+[hudTL,hudTR].forEach(h=>{if(!h)return;const m=document.createComment('hud');h.parentNode.insertBefore(m,h);marks.set(h,m);});
+const placeView=()=>{
+  ['bFrame','bGrid','bWalk','bSpin'].forEach(id=>{const o=document.getElementById(id);if(!o)return;if(mqE.matches){o.classList.remove('pill');hudBL.appendChild(o);}else{o.classList.add('pill');vs.appendChild(o);}});
+  [hudTL,hudTR].forEach(h=>{if(!h)return;if(mqE.matches)marks.get(h).after(h);else vs.prepend(h);});
+  const vh=document.getElementById('viewh');vh.hidden=vs.hidden=mqE.matches;
+};
+placeView();mqE.addEventListener('change',placeView);
+/* the phone Tools chip becomes the View button (its old handler toggled four stacked strips over the model) */
+{const tb=document.getElementById('bTools');if(tb){const nb=tb.cloneNode(true);nb.textContent='View';nb.removeAttribute('aria-controls');nb.setAttribute('aria-haspopup','dialog');nb.setAttribute('aria-expanded','false');tb.replaceWith(nb);nb.addEventListener('click',()=>dlg.showModal());}}
+/* active discipline: one attribute the stylesheet reads, so each discipline owns its own tool row */
+const tabsEl=document.getElementById('tabs');let lastTab='';
+const spawnChar=()=>{const empty=document.getElementById('empty'),hasModel=!empty||empty.hidden||getComputedStyle(empty).display==='none';
+  if(!hasModel)return;if([...document.querySelectorAll('.orow')].some(r=>/human|character/i.test(r.textContent)))return;
+  const find=re=>[...document.querySelectorAll('#panes button')].find(x=>re.test(x.textContent.trim()));
+  const mine=find(/my character/i);if(mine){mine.click();/* nobody has made a character yet: use the stock figure instead of showing an error */setTimeout(()=>{const t=document.querySelector('.toast');if(t&&/no character yet/i.test(t.textContent)){t.hidden=true;const h=find(/^\+ Human/i);h&&h.click();}},450);}else{const h=find(/^\+ Human/i);h&&h.click();}};
+/* smaller sheet in landscape; Build opens at the partial height so its tool strip and the model both fit */
+{const sh=window.__sheet;if(sh&&!sh.__n0){sh.__n0=1;const orig=sh.snaps.bind(sh);sh.snaps=()=>{const a=orig();if(matchMedia('(max-height:520px)').matches&&!mqE.matches){const H=innerHeight;return[a[0],Math.round(H*.28),Math.round(H*.42),Math.round(H*.42)];}return a;};}}
+{const bd=document.getElementById('bdtb');const move=()=>{const t=document.getElementById('bdtb');if(!t)return;const pn=document.getElementById('panes');if(!mqE.matches&&t.parentNode!==pn.parentNode)pn.parentNode.insertBefore(t,document.getElementById('insphead'));else if(mqE.matches&&t.parentNode!==document.body)document.body.appendChild(t);};
+  move();mqE.addEventListener('change',move);new MutationObserver(move).observe(document.body,{childList:true});}
+const onTab=()=>{const sel=tabsEl.querySelector('[aria-selected=true]');const k=sel?sel.id.replace('tab_',''):'';document.body.dataset.tab=k;if(k==='build'&&lastTab!=='build'){setTimeout(spawnChar,700);const sh=window.__sheet;if(sh&&!mqE.matches)sh.setIdx(1);}lastTab=k;};
+new MutationObserver(onTab).observe(tabsEl,{attributes:true,subtree:true,attributeFilter:['aria-selected']});onTab();
+/* sheet height, for anything that must sit above it */
+const rootEl=document.documentElement;
+/* phones: the sheet no longer covers the scene (it is a panel below it), so nothing needs lifting */
+{const sh=window.__sheet;if(sh)sh.coverPx=()=>0;}
+/* the object tool row lives inside the scene card */
+{const st=document.getElementById('stage'),ob=document.getElementById('objbar');if(st&&ob)st.appendChild(ob);}
+{const st=document.getElementById('stage'),ex=document.getElementById('expand');
+ if(ex){ex.addEventListener('click',()=>{const on=!st.classList.contains('expanded');st.classList.toggle('expanded',on);ex.setAttribute('aria-pressed',String(on));ex.setAttribute('aria-label',on?'Shrink the scene':'Expand the scene');document.body.toggleAttribute('data-expanded',on);});
+  addEventListener('keydown',e=>{if(e.key==='Escape'&&st.classList.contains('expanded'))ex.click();});}}
+{const ih=document.getElementById('insphead'),pn=document.getElementById('panes'),nm=document.getElementById('insname'),stt=document.getElementById('insstate'),cx=document.getElementById('ctx');
+ ih.addEventListener('click',()=>{const open=ih.getAttribute('aria-expanded')!=='true';ih.setAttribute('aria-expanded',String(open));pn.classList.toggle('collapsed',!open);});
+ const sync=()=>{const sel=tabsEl.querySelector('[aria-selected=true]');nm.textContent=sel?(sel.textContent||'').trim():'Scene';stt.textContent=(cx.textContent||'').replace(/\s+/g,' ').trim();};
+ new MutationObserver(sync).observe(cx,{childList:true,characterData:true,subtree:true});new MutationObserver(sync).observe(tabsEl,{attributes:true,subtree:true,attributeFilter:['aria-selected']});sync();}
+
+const rafCover=()=>{const sh=window.__sheet;if(sh)rootEl.style.setProperty('--cover',Math.round(sh.coverPx())+'px');
+  const d=tabsEl.classList.contains('dock')?tabsEl.offsetHeight:0;rootEl.style.setProperty('--objb',d?(d+10)+'px':'');requestAnimationFrame(rafCover);};rafCover();
+/* the "restore your last session" prompt becomes a slim bar between the header and the viewport, not a layer on top of it */
+const app=document.querySelector('.app'),mainEl=document.querySelector('.main');
+const tuck=n=>{if(n&&n.classList&&n.classList.contains('restore')&&n.parentNode!==app)app.insertBefore(n,mainEl);};
+tuck(document.querySelector('.restore'));new MutationObserver(ms=>ms.forEach(m=>m.addedNodes.forEach(tuck))).observe(document.body,{childList:true});
 </script>
 </body>
 </html>
