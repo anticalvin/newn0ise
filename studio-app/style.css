@@ -222,6 +222,10 @@ dialog::backdrop { background:#000a; }
 }
 .text-edit textarea { flex:1; min-width:0; resize:none; color:var(--ink); background:#151617; border:1px solid #4a4947;
   border-radius:6px; padding:7px 9px; font:inherit; }
+.inline-text { position:absolute; z-index:4; min-width:2ch; max-width:46ch; margin:0; padding:0; overflow:hidden;
+  resize:none; border:0; outline:0; border-radius:0; color:var(--ink); background:transparent; caret-color:#f7d9a4;
+  font-family:sans-serif; white-space:pre; text-align:left; transform-origin:top left; user-select:text; touch-action:auto; }
+.inline-text:focus { outline:0; }
 .launch {
   color:var(--ink); width:min(760px,calc(100% - 28px)); max-height:calc(100dvh - 28px); padding:0;
   border:1px solid #55524b; border-radius:18px; background:#191a1b;
@@ -273,3 +277,4 @@ a.brand:focus-visible { outline:2px solid var(--accent); outline-offset:4px; }
   padding:5px; border:1px solid #53524e; border-radius:9px; background:#252628; box-shadow:0 12px 36px #0009; }
 .context-menu button { display:block; width:100%; padding:8px 10px; border-radius:5px; text-align:left; }
 .context-menu button:hover,.context-menu button:focus-visible { outline:none; background:#454442; }
+.stagebody[data-tool=line] { cursor:crosshair; }

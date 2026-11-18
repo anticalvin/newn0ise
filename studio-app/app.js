@@ -16,7 +16,7 @@
   const stage = $('stagebody'), board = $('artboard'), overlay = $('overlay'), canvas = $('preview');
   const stack = history();
   let doc = create(preset()), selection = [];
-  let textEdit = null, launchMode = 'new', launchTicket = 0;
+  let textEdit = null, inlineText = null, launchMode = 'new', launchTicket = 0;
   let view = 'canvas', tool = 'select', rail = 'layers', sheet = 'canvas', shape = 'rectangle';
   let paintColor = '#e9e5db';
   let dirty = false, opening = 0, revision = 0, space = false, grid = false, snapping = true, angular = false;
@@ -455,6 +455,7 @@
     board.style.transform = `translate(calc(-50% + ${pan.x}px), calc(-50% + ${pan.y}px))`;
     overlay.setAttribute('viewBox',`0 0 ${w} ${h}`);
     $('dimension').textContent = `${w} × ${h} · ${Math.round(zoom*100)}%`;
+    positionTextEdit();
     if (view === 'spatial' && activeLayer() && !gpu?.enter(activeLayer(),w,h)) {
       setView('canvas');
       return;
@@ -758,7 +759,7 @@
   }
 
   stage.addEventListener('pointerdown',e => {
-    if (view === 'spatial' || e.target.closest('button,#textEdit') || e.button > 1) return;
+    if (view === 'spatial' || e.target.closest('button,#textEdit,#inlineText') || e.button > 1) return;
     if (textEdit) { finishTextEdit(); return; }
     stage.focus({preventScroll:true});
     if (e.pointerType === 'touch') {
@@ -844,7 +845,10 @@
     } else if (tool === 'crop') {
       if (active?.type !== 'image') { notice('Select an image to crop it.'); return; }
       gesture = {...base,kind:'crop',l:active};
-    } else if (tool === 'shape') gesture = {...base,kind:'shape'};
+    } else if (tool === 'shape' || tool === 'line') {
+      if (tool === 'line') shape = 'line';
+      gesture = {...base,kind:'shape'};
+    }
     else if (tool === 'gradient') gesture = {...base,kind:'gradient'};
     if (gesture) {
       e.preventDefault();
@@ -857,18 +861,59 @@
     if (view === 'graph' || view === 'spatial') setView('canvas');
     setSheet('canvas');
     if (!selection.includes(l.id) || selection.length !== 1) select([l.id]);
-    const input = $('textInput');
-    textEdit = {layer:l,before:before ?? capture(),original:l.text,created:!!before};
+    const [w,h] = dims();
+    const created = !!before;
+    const measured = textWidth(l);
+    const anchor = {x:created ? l.x+w/2 : l.x+w/2-measured/2,
+      y:l.y+h/2-l.fontSize*.45};
+    const input = document.createElement('textarea');
+    input.id = 'inlineText';
+    input.className = 'inline-text';
+    input.setAttribute('aria-label','Type on canvas');
+    input.maxLength = 2000;
+    input.rows = 1;
+    input.wrap = 'off';
+    input.placeholder = 'Type here…';
     input.value = l.text;
-    $('textEdit').classList.remove('hidden');
+    board.append(input);
+    textEdit = {layer:l,before:before ?? capture(),original:l.text,created,anchor,input};
+    inlineText = input;
+    positionTextEdit();
     input.focus({preventScroll:true});
-    input.select();
+    input.setSelectionRange(input.value.length,input.value.length);
+  }
+  function textWidth(l) {
+    const ctx = canvas.getContext('2d');
+    ctx.save();
+    ctx.font = `${l.fontSize}px ${l.font || 'sans-serif'}`;
+    const width = Math.max(1,...String(l.text || '').split('\n').map(line => ctx.measureText(line).width));
+    ctx.restore();
+    return width;
+  }
+  function positionTextEdit() {
+    const edit = textEdit;
+    if (!edit || !edit.input.isConnected) return;
+    const {layer:l,input,anchor} = edit, [w,h] = dims();
+    const width = textWidth(l);
+    l.x = anchor.x + width*l.scale/200 - w/2;
+    l.y = anchor.y + l.fontSize*.45*l.scale/100 - h/2;
+    const lines = Math.max(1,input.value.split('\n').length);
+    input.style.left = `${anchor.x*100/w}%`;
+    input.style.top = `${anchor.y*100/h}%`;
+    input.style.fontSize = `${l.fontSize*zoom}px`;
+    input.style.fontFamily = l.font || 'sans-serif';
+    input.style.color = l.fill || paintColor;
+    input.style.lineHeight = '1.2';
+    input.style.width = `${Math.max(2,Math.min(46,Math.max(input.value.length,8)+1))}ch`;
+    input.style.height = `${Math.max(1,l.fontSize*zoom*l.scale/100*1.2*lines)}px`;
+    input.style.transform = `rotate(${l.rotation}deg) scale(${l.scale/100})`;
   }
   function finishTextEdit(cancelled = false) {
     if (!textEdit) return;
     const edit = textEdit;
     textEdit = null;
-    $('textEdit').classList.add('hidden');
+    edit.input.remove();
+    inlineText = null;
     if (cancelled || (edit.created && !edit.layer.text.trim())) {
       restore(edit.before);
     } else if (edit.created || edit.original !== edit.layer.text) {
@@ -876,28 +921,25 @@
       finish(edit.before);
     }
   }
-  $('textInput').addEventListener('input',e => {
-    if (!textEdit) return;
-    textEdit.layer.text = e.currentTarget.value;
+  board.addEventListener('input',e => {
+    if (e.target !== inlineText || !textEdit) return;
+    textEdit.layer.text = e.target.value;
+    positionTextEdit();
     schedule();
   });
-  $('textInput').addEventListener('keydown',e => {
-    if (e.isComposing) return;
+  board.addEventListener('keydown',e => {
+    if (e.target !== inlineText || e.isComposing) return;
     if (e.key === 'Escape' || (e.key === 'Enter' && (e.metaKey || e.ctrlKey))) {
       e.preventDefault();
       finishTextEdit(e.key === 'Escape');
       stage.focus({preventScroll:true});
     }
   });
-  $('textEdit').addEventListener('focusout',e => {
-    if (!e.currentTarget.contains(e.relatedTarget)) finishTextEdit();
+  board.addEventListener('focusout',e => {
+    if (e.target === inlineText) finishTextEdit();
   });
-  $('textDone').onclick = () => {
-    finishTextEdit();
-    stage.focus({preventScroll:true});
-  };
   stage.addEventListener('dblclick',e => {
-    if (tool !== 'select' || view === 'spatial' || e.target.closest('button,#textEdit')) return;
+    if (tool !== 'select' || view === 'spatial' || e.target.closest('button,#textEdit,#inlineText')) return;
     const p = position(e.clientX,e.clientY), [w,h] = dims();
     const top = doc.layers.find(l => R.inside(l,p,w,h,5/zoom));
     if (top?.type === 'text') startTextEdit(top);
@@ -1317,7 +1359,7 @@
   $('launchRatio').onchange = launchLayout;
   $('launchForm').onsubmit = e => { e.preventDefault(); launchProject(false); };
   $('launchDemo').onclick = () => launchProject(true);
-  $('launchUpload').onclick = () => { if (launchSize()) $('launchFile').click(); };
+  $('launchUpload').onclick = () => $('launchFile').click();
   $('launchClose').onclick = () => launcher.close();
   $('resizeCustom').onclick = () => openLauncher('resize');
   launcher.addEventListener('close',() => { launchTicket++; });
@@ -1330,6 +1372,41 @@
       reader.onerror = () => reject(Error('The file could not be read.'));
       reader.readAsDataURL(file);
     });
+  }
+  function aspectCanvasSize(width,height) {
+    const gcd = (a,b) => b ? gcd(b,a%b) : a;
+    const divisor = gcd(width,height), unitW = width/divisor, unitH = height/divisor;
+    if (width >= 64 && height >= 64 && width <= 4096 && height <= 4096 && width*height <= 8388608) {
+      return [width,height];
+    }
+    const minScale = Math.max(1,Math.ceil(64/unitW),Math.ceil(64/unitH));
+    const minWidth = unitW*minScale, minHeight = unitH*minScale;
+    if ((width < 64 || height < 64) && minWidth <= 4096 && minHeight <= 4096 &&
+      minWidth*minHeight <= 8388608) {
+      return [minWidth,minHeight];
+    }
+    const maxScale = Math.min(Math.floor(4096/unitW),Math.floor(4096/unitH),
+      Math.floor(Math.sqrt(8388608/(unitW*unitH))));
+    if (maxScale > 0 && unitW*maxScale >= 64 && unitH*maxScale >= 64) {
+      return [unitW*maxScale,unitH*maxScale];
+    }
+    const scale = Math.min(4096/width,4096/height,Math.sqrt(8388608/(width*height)));
+    return [Math.max(64,Math.floor(width*scale)),Math.max(64,Math.floor(height*scale))];
+  }
+  async function imageDocument(file) {
+    const url = URL.createObjectURL(file);
+    let size;
+    try {
+      const image = new Image();
+      image.src = url;
+      await image.decode();
+      size = aspectCanvasSize(image.naturalWidth,image.naturalHeight);
+    } finally { URL.revokeObjectURL(url); }
+    const next = create('custom',false,size);
+    next.layers = await decodeImages([file],size,false);
+    if (!next.layers.length) throw Error('Invalid image');
+    Object.assign(next.layers[0],{width:size[0],height:size[1],x:0,y:0});
+    return next;
   }
   async function decodeImages(files,[w,h],background) {
     const results = await Promise.allSettled(files.map(async file => {
@@ -1387,8 +1464,6 @@
     const file = e.currentTarget.files[0];
     e.currentTarget.value = '';
     if (!file || !launcher.open) return;
-    const config = launchSize();
-    if (!config) return;
     const ticket = ++launchTicket;
     $('launchStatus').textContent = 'Opening…';
     try {
@@ -1397,9 +1472,7 @@
         next = normalize(JSON.parse(await file.text()));
         await R.prepare(next);
       } else {
-        next = create(config.ratio,false,config.size);
-        next.layers = await decodeImages([file],config.size,false);
-        if (!next.layers.length) throw Error('Invalid image');
+        next = await imageDocument(file);
         uploaded = true;
       }
       if (ticket !== launchTicket || !launcher.open) return;
@@ -1522,6 +1595,7 @@
   const extendedTools = [
     ['lasso','⌁','Lasso selection (L)'],
     ['eraser','⌫','Eraser (E)'],
+    ['line','／','Line (U)'],
     ['gradient','◒','Gradient fill (G)'],
     ['picker','◉','Eyedropper (I)']
   ];
@@ -1596,7 +1670,7 @@
     if (launcher.open || $('modal').open || e.defaultPrevented || e.target.matches('input,textarea,select,[contenteditable=true]')) return;
     if (gesture && e.key !== 'Escape') return;
     const key = e.key.toLowerCase(), modifier = e.ctrlKey || e.metaKey;
-    if (modifier && ['z','y','s','o','a'].includes(key)) {
+    if (modifier && ['z','y','s','o','a','j'].includes(key)) {
       e.preventDefault();
       finishNudge();
       if (key === 'z') traverse(e.shiftKey ? 'redo' : 'undo');
@@ -1604,6 +1678,7 @@
       if (key === 's') save();
       if (key === 'o') replaceDocument(() => $('openFile').click());
       if (key === 'a' && view !== 'graph') select(doc.layers.filter(l => l.visible).map(l => l.id));
+      if (key === 'j' && view === 'canvas') duplicateLayers();
       return;
     }
     if (modifier) return;
@@ -1635,7 +1710,7 @@
       syncInspector();
       schedule();
     } else if (view !== 'graph') {
-      const shortcut = {v:'select',l:'lasso',b:'brush',e:'eraser',p:'pen',t:'text',r:'shape',c:'crop',g:'gradient',i:'picker'}[key];
+      const shortcut = {v:'select',l:'lasso',b:'brush',e:'eraser',p:'pen',t:'text',r:'shape',c:'crop',g:'gradient',i:'picker',u:'line'}[key];
       if (shortcut) setTool(shortcut);
     }
   });
