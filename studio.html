@@ -90,13 +90,14 @@
   <div class="dialog-head"><h2 id="dialog-title">3D</h2><form method="dialog"><button class="ghost" aria-label="Close dialog"><svg><use href="#i-close"/></svg></button></form></div>
   <div class="dialog-body" id="dialog-body">
     <h3>Project</h3><div class="segment" id="globalslot"><button class="pill" id="bImport" type="button">Import</button><button class="pill" id="bExport" type="button">Export</button></div>
+    <h3 id="objh" hidden>Selected object</h3><div class="segment" id="objslot"></div>
     <h3 id="viewh">View</h3><div class="segment" id="viewslot"></div>
     <h3>Help</h3><div class="segment"><a class="pill" href="index.html">Home</a></div>
   </div>
 </dialog>
 <template id="globalbtns"><button class="desk-btn icon" id="bUndo" type="button" title="Undo (Ctrl+Z)" aria-label="Undo"><svg viewBox="0 0 24 24"><path d="m8 4-5 5 5 5M3 9h10a6 6 0 0 1 0 12h-3"/></svg></button><button class="desk-btn icon" id="bRedo" type="button" title="Redo (Ctrl+Shift+Z)" aria-label="Redo"><svg viewBox="0 0 24 24" style="transform:scaleX(-1)"><path d="m8 4-5 5 5 5M3 9h10a6 6 0 0 1 0 12h-3"/></svg></button><button class="desk-btn" id="bSave" type="button" title="Save the project to a file">Save</button></template>
 <script>document.getElementById('globalslot').append(document.getElementById('globalbtns').content);</script>
-<script type="module" src="assets/studio.js?v=2cc5a9cd"></script>
+<script type="module" src="assets/studio.js?v=3300eb1e"></script>
 <script type="module">
 const dlg=document.getElementById('dialog');
 document.getElementById('menubtn').addEventListener('click',()=>dlg.showModal());

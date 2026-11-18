@@ -415,3 +415,13 @@ html body[data-tab=build] #objbar,html body[data-tab=draw] #objbar,html body[dat
 #objbar{flex-wrap:wrap;justify-content:center;width:max-content;max-width:calc(100% - 16px)}
 #objbar button,#objbar .chip{flex:0 0 auto;min-width:44px;min-height:44px;padding:0 10px}
 @media (max-width:899px){.app>.ctx{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);margin:0;padding:0}}
+
+/* phone object tools: round icon buttons, as in the demo's scene card */
+@media (max-width:899px){
+  #objbar{gap:8px;padding:0;background:none;border:0;backdrop-filter:none;flex-wrap:nowrap;overflow:visible}
+  #objbar .round{--s:44px}
+  #objbar .round::before{background:#2d2d2f;border-color:#ffffff12}
+  #objbar .round[aria-pressed=true]::before{background:#494641;border-color:#e9e0d36b}
+  #objbar .round svg{width:17px;height:17px}
+}
+@media (max-width:899px){#objbar>button:not(.round),#objbar>i{display:none}}
