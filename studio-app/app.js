@@ -1518,6 +1518,25 @@
     };
   }
 
+  const toolstrip = $('tools');
+  const extendedTools = [
+    ['lasso','⌁','Lasso selection (L)'],
+    ['eraser','⌫','Eraser (E)'],
+    ['gradient','◒','Gradient fill (G)'],
+    ['picker','◉','Eyedropper (I)']
+  ];
+  for (const [name,glyph,title] of extendedTools) {
+    if (all('[data-tool]').some(button => button.dataset.tool === name)) continue;
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'tool';
+    button.dataset.tool = name;
+    button.textContent = glyph;
+    button.title = title;
+    button.setAttribute('aria-label',title.replace(/\s\([^)]*\)$/,''));
+    toolstrip.insertBefore(button,toolstrip.querySelector('[data-tool="add"]'));
+  }
+
   for (const b of all('[data-view]')) b.onclick = () => setView(b.dataset.view);
   for (const b of all('[data-rail]')) b.onclick = () => { rail = b.dataset.rail; renderLayers(); };
   for (const b of all('[data-mobile]')) b.onclick = () => setSheet(sheet === b.dataset.mobile ? 'canvas' : b.dataset.mobile);
