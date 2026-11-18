@@ -18,6 +18,10 @@ if(!chrome){console.error('ui-check: no Chrome found. Set CHROME=/path/to/chrome
 const PAGES=[['home','/index.html'],['camera','/effects.html?cam=1'],['effects','/effects.html'],['3d','/studio.html'],['world','/studio.html','document.querySelector("#bWalk")&&document.querySelector("#bWalk").click()'],['lab','/lab.html']];
 const VIEWS=[['phone',390,844,true],['tablet',820,1180,true],['desktop',1440,900,false]];
 const OUT=process.argv[2]||'docs/ui/before';
+/* node tools/ui-shots.mjs <outdir> [ref] [name,name]  (ref = the demo, docs/ui/n0ise-ui-reference.html; names filter the pages) */
+const REF=process.argv[3]==='ref',ONLY=(process.argv[4]||'').split(',').filter(Boolean);
+if(REF){const R='/docs/ui/n0ise-ui-reference.html#';PAGES.length=0;PAGES.push(['camera',R+'camera'],['effects',R+'effects'],['3d',R+'studio'],['lab',R+'lab']);}
+if(ONLY.length)for(let i=PAGES.length-1;i>=0;i--)if(!ONLY.includes(PAGES[i][0]))PAGES.splice(i,1);
 const update=process.argv.includes('--update');
 const srv=createServer(async(q,r)=>{try{const p=normalize(decodeURIComponent(q.url.split('?')[0])).replace(/^(\.\.[/\\])+/,'');const f=join(root,p.endsWith('/')?p+'index.html':p);const b=await readFile(f);r.writeHead(200,{'content-type':MIME[extname(f)]||'application/octet-stream'});r.end(b);}catch(e){r.writeHead(404);r.end('nf');}});
 await new Promise(ok=>srv.listen(0,'127.0.0.1',ok));const base='http://127.0.0.1:'+srv.address().port;
