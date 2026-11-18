@@ -225,7 +225,9 @@ export function createRuntime(canvas,onChange,onError) {
           else if (node.type === 'layer') outputs.set(node.id,raster());
           else if (node.type === 'upload') outputs.set(node.id,upload(h,outputs.get(inputs.input)));
           else if (node.type === 'effect') {
-            outputs.set(node.id,h.service.apply(node.params.effect,node.params.values,outputs.get(inputs.input),targets[i++%2],context));
+            const input = outputs.get(inputs.input);
+            outputs.set(node.id,node.params.disabled ? input :
+              h.service.apply(node.params.effect,node.params.values,input,targets[i++%2],context));
           } else if (node.type === 'output') copyTexture(h,outputs.get(inputs.input),null);
         }
         result = previous?.canvas ?? canvas2d(w,height);
