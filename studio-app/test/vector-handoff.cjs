@@ -26,6 +26,11 @@ const pngData = page => page.locator('#preview').evaluate(c => c.toDataURL());
     await page.waitForURL(url('index.html'));
     await page.locator('#studio-link').click();
     await page.waitForURL(url('studio-app.html'));
+    if (await page.locator('#launcher').isHidden()) {
+      await page.locator('#menu').click();
+      await page.locator('#modal').waitFor({state:'visible'});
+      await page.locator('#modalcontent').getByRole('button',{name:'New composition…'}).click();
+    }
     await page.locator('#launchCreate').click();
     await waitPaint(page);
     const board = await page.locator('#artboard').boundingBox();
