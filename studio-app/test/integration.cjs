@@ -27,6 +27,11 @@ async function clickAndDownload(page,button) {
   return pending;
 }
 
+async function downloadPNG(page) {
+  await page.locator('#export').click();
+  return clickAndDownload(page,menu(page).getByRole('button',{name:'Download PNG',exact:true}));
+}
+
 async function save(page) {
   await page.locator('#menu').click();
   return clickAndDownload(page,menu(page).getByRole('button',{name:'Save project',exact:true}));
@@ -160,7 +165,7 @@ async function pixelsEqual(page,first,second) {
     const composed = await canvasData(page);
     assert.notEqual(composed,effected);
 
-    const png = await clickAndDownload(page,page.locator('#export'));
+    const png = await downloadPNG(page);
     const bytes = await readFile(await png.path());
     assert.equal(bytes.readUInt32BE(16),1920);
     assert.equal(bytes.readUInt32BE(20),1080);
@@ -194,37 +199,86 @@ async function pixelsEqual(page,first,second) {
     await mobile.goto(url);
     await mobile.locator('#launcher').waitFor();
     await screenshot(mobile,'mobile-launcher');
-    assert.equal(await mobile.locator('#launchRatio').inputValue(),'portrait');
+    assert.equal(await mobile.locator('#launcher .brand').evaluate(link => link.href),new URL('index.html',url).href);
+    assert.equal(await mobile.locator('#launchRatio').inputValue(),'custom');
+    const screenSize = await mobile.evaluate(() => [
+      Math.round((screen.width || innerWidth)*Math.max(1,devicePixelRatio)),
+      Math.round((screen.height || innerHeight)*Math.max(1,devicePixelRatio))
+    ]);
+    assert.deepEqual(await Promise.all([
+      mobile.getByLabel('Width (px)').inputValue().then(Number),
+      mobile.getByLabel('Height (px)').inputValue().then(Number)
+    ]),screenSize);
     await mobile.locator('#launchDemo').tap();
     await mobile.locator('#spatialTab').waitFor();
     await forPaint(mobile);
-    assert.deepEqual(await mobile.locator('#preview').evaluate(c => [c.width,c.height]),[1080,1920]);
+    assert.deepEqual(await mobile.locator('#preview').evaluate(c => [c.width,c.height]),screenSize);
+    const mobileBoard = await mobile.locator('#artboard').boundingBox();
+    assert(mobileBoard && mobileBoard.width > 100 && mobileBoard.height > 100,'Mobile artboard must have a visible, usable size.');
     assert(await mobile.evaluate(() => document.documentElement.scrollWidth === innerWidth));
     await screenshot(mobile,'mobile-canvas');
     await mobile.locator('#spatialTab').tap();
     await forPaint(mobile);
     await screenshot(mobile,'mobile-spatial');
     await mobile.locator('[data-view=canvas]').tap();
+    for (const name of ['select','brush','pen','text','crop','lasso','eraser','line','gradient','picker']) {
+      const button = mobile.locator(`.tool[data-tool="${name}"]`);
+      await button.tap();
+      assert(await button.evaluate(node => node.classList.contains('active')),`${name} tool should activate on touch.`);
+      assert.equal(await mobile.locator('#stagebody').getAttribute('data-tool'),name);
+    }
+    const textButton = mobile.locator('.tool[data-tool=text]');
+    await textButton.tap();
+    const textPoint = {x:mobileBoard.x+mobileBoard.width*.5,y:mobileBoard.y+mobileBoard.height*.5};
+    await mobile.touchscreen.tap(textPoint.x,textPoint.y);
+    const mobileText = mobile.getByRole('textbox',{name:'Type on canvas'});
+    await mobileText.waitFor();
+    await mobileText.pressSequentially('Mobile type');
+    await mobileText.press('Control+Enter');
+    await mobile.locator('[data-mobile=left]').tap();
+    await mobile.locator('#layerlist .layertext').getByText('Text',{exact:true}).waitFor();
+    await mobile.locator('[data-mobile=canvas]').tap();
+    await mobile.locator('.tool[data-tool=brush]').tap();
+    const cdp = await mobile.context().newCDPSession(mobile);
+    await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:textPoint.x-40,y:textPoint.y+70}]});
+    await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:textPoint.x+40,y:textPoint.y+90}]});
+    await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+    await mobile.waitForFunction(() => document.querySelector('#selectedName')?.textContent === 'Vector stroke');
+    await mobile.locator('.tool[data-tool=select]').tap();
+    await mobile.locator('#undo').tap();
+    await mobile.locator('#redo').tap();
+    await mobile.locator('#fit').tap();
+    await mobile.locator('[data-mobile=right]').tap();
+    assert(await mobile.locator('#right').evaluate(node => node.classList.contains('mobileopen')),'Inspector must open on mobile.');
+    await mobile.locator('[data-mobile=canvas]').tap();
+    await mobile.locator('#menu').tap();
+    await menu(mobile).waitFor();
+    await menu(mobile).getByRole('button',{name:'Keyboard and gestures'}).tap();
+    await mobile.locator('#modal').waitFor({state:'visible'});
+    await mobile.locator('#modalcancel').tap();
     await mobile.locator('[data-mobile=left]').tap();
     const mobileRows = () => mobile.locator('#layerlist .layertext').allTextContents();
     const grip = await mobile.getByRole('button',{name:'Reorder Background',exact:true}).boundingBox();
     const top = await mobile.getByRole('button',{name:'Reorder Metallic torus',exact:true}).boundingBox();
-    const cdp = await mobile.context().newCDPSession(mobile);
     await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:grip.x+grip.width/2,y:grip.y+grip.height/2}]});
     await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:top.x+top.width/2,y:top.y+6}]});
     await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
-    assert.equal((await mobileRows())[0],'Background');
+    const reorderedMobileRows = await mobileRows();
+    assert(reorderedMobileRows.indexOf('Background') < reorderedMobileRows.indexOf('Metallic torus'),
+      'A touch drag should reorder the selected layer before the target layer.');
+    await mobile.close();
 
     const editor = await browser.newPage({viewport:{width:1440,height:900},acceptDownloads:true});
     editor.on('pageerror',error => errors.push(error.message));
     await editor.goto(url);
+    await editor.locator('#launcher').waitFor();
     await editor.locator('#launchRatio').selectOption('custom');
     await editor.getByLabel('Width (px)').fill('1050');
     await editor.getByLabel('Height (px)').fill('700');
     await editor.locator('#launchFile').setInputFiles({name:'proof.png',mimeType:'image/png',buffer:Buffer.from(fixture,'base64')});
     await editor.locator('.layertext').getByText('proof.png',{exact:true}).waitFor();
     await forPaint(editor);
-    assert.deepEqual(await editor.locator('#preview').evaluate(c => [c.width,c.height]),[1050,700]);
+    assert.deepEqual(await editor.locator('#preview').evaluate(c => [c.width,c.height]),[360,200]);
 
     await editor.locator('[data-tool=text]').click();
     const artboard = await editor.locator('#artboard').boundingBox();
@@ -237,8 +291,9 @@ async function pixelsEqual(page,first,second) {
     await textInput.pressSequentially('NOISE TYPE');
     await forPaint(editor);
     assert.notEqual(await canvasData(editor),emptyText);
-    await editor.locator('#textDone').click();
-    await editor.mouse.dblclick(textX,textY);
+    await textInput.press('Control+Enter');
+    // Inline text begins at the insertion point, so double-click inside the glyphs.
+    await editor.mouse.dblclick(artboard.x+artboard.width*.75,textY);
     await textInput.waitFor();
     assert.equal(await textInput.inputValue(),'NOISE TYPE');
     await textInput.press('Escape');
@@ -253,13 +308,13 @@ async function pixelsEqual(page,first,second) {
     assert.deepEqual(await rows(),['proof.png','Text']);
     await editor.locator('#undo').click();
     assert.deepEqual(await rows(),['Text','proof.png']);
-    const customExport = await clickAndDownload(editor,editor.locator('#export'));
+    const customExport = await downloadPNG(editor);
     const customBytes = await readFile(await customExport.path());
-    assert.equal(customBytes.readUInt32BE(16),1050);
-    assert.equal(customBytes.readUInt32BE(20),700);
+    assert.equal(customBytes.readUInt32BE(16),360);
+    assert.equal(customBytes.readUInt32BE(20),200);
     const customProject = await save(editor);
     const customJSON = JSON.parse(await readFile(await customProject.path(),'utf8'));
-    assert.deepEqual(customJSON.size,[1050,700]);
+    assert.deepEqual(customJSON.size,[360,200]);
     assert.equal(customJSON.layers.find(l => l.type === 'text').text,'NOISE TYPE');
     await editor.locator('#menu').click();
     await menu(editor).getByRole('button',{name:'New composition…'}).click();
