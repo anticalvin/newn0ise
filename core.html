@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no, interactive-widget=resizes-content">
+<meta name="theme-color" content="#0d0c0b">
+<title>n0ise Core</title>
+<link rel="manifest" href="manifest.webmanifest">
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.187.0/build/three.module.js"}}
+</script>
+<link rel="stylesheet" href="ui/core.css">
+</head>
+<body>
+<canvas id="c" tabindex="0" aria-label="n0ise Core world"></canvas>
+<div id="ui"></div>
+<noscript><p style="position:fixed;inset:0;display:grid;place-items:center;color:#ede8df;font:15px system-ui">n0ise Core needs JavaScript.</p></noscript>
+<script>
+/* Core needs WebGL 2; say so plainly instead of leaving a black page */
+(function(){var ok=false;try{ok=!!document.createElement('canvas').getContext('webgl2');}catch(e){}
+if(!ok){document.addEventListener('DOMContentLoaded',function(){document.body.insertAdjacentHTML('beforeend','<p style="position:fixed;inset:0;display:grid;place-items:center;text-align:center;padding:24px;color:#ede8df;background:#0d0c0b;font:15px system-ui">This browser can’t start WebGL 2, which Core needs. Try a recent Safari, Chrome or Firefox.</p>');});window.__noGL=true;}})();
+</script>
+<script type="module" src="assets/core.js?v=c1dba85d"></script>
+</body>
+</html>

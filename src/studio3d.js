@@ -3093,7 +3093,9 @@ function wsHide(){if(!WS||WS.hidden)return;WS.classList.add('out');setTimeout(()
 function wsShow(){if(!WS)return;WS.hidden=false;WS.classList.remove('out');const f=WS.querySelector('.card');f&&f.focus();}
 if(WS){
   WS.querySelectorAll('[data-w]').forEach(b=>b.addEventListener('click',async()=>{
-    const k=b.dataset.w;S._wsChosen=true;wsHide();
+    const k=b.dataset.w;
+    if(k==='core'){location.href='core.html';return;}   // n0ise Core is its own page
+    S._wsChosen=true;wsHide();
     if(k==='import'){worldImportSheet('');return;}
     await loadPlace(k);
   }));
