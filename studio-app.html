@@ -13,12 +13,15 @@
   <script defer src="studio-app/render.js"></script>
   <script defer src="studio-app/graph.js"></script>
   <script defer src="studio-app/layer-drag.js"></script>
+  <script defer src="studio-app/vendor/freehand.js"></script>
+  <script defer src="studio-app/vector.js"></script>
+  <script defer src="studio-app/context-menu.js"></script>
   <script defer src="studio-app/app.js"></script>
 </head>
 <body>
 <div class="app">
   <header class="top">
-    <div class="brand">n0ise <small>/ studio</small></div>
+    <a class="brand" href="index.html" aria-label="n0ise homepage">n0ise <small>/ studio</small></a>
     <div class="topright">
       <button class="iconbtn" id="undo" aria-label="Undo" title="Undo (Ctrl/⌘ Z)">↶</button>
       <button class="iconbtn" id="redo" aria-label="Redo" title="Redo (Ctrl/⌘ Shift Z)">↷</button>
@@ -60,7 +63,7 @@
         </div>
         <div class="toolstrip" id="tools" role="group" aria-label="Editing tools">
           <button class="tool" data-tool="select" aria-label="Select" title="Select (V)">↖</button>
-          <button class="tool" data-tool="brush" aria-label="Brush" title="Brush (B)">✎</button>
+          <button class="tool" data-tool="brush" aria-label="Draw vector stroke" title="Freehand vector (B)">✎</button>
           <button class="tool" data-tool="pen" aria-label="Pen" title="Pen (P)">♢</button>
           <button class="tool" data-tool="text" aria-label="Text" title="Text (T)">T</button>
           <button class="tool" data-tool="shape" aria-label="Shape" title="Shape (R)">□</button>
@@ -107,7 +110,7 @@
 <dialog class="launch" id="launcher" aria-labelledby="launchTitle">
   <div class="launch-controls">
     <header class="launch-head">
-      <div class="brand">n0ise <small>/ studio</small></div>
+      <a class="brand" href="index.html" aria-label="n0ise homepage">n0ise <small>/ studio</small></a>
       <button class="iconbtn" id="launchClose" aria-label="Close start screen" title="Close start screen">×</button>
     </header>
     <h1 id="launchTitle">Make something.</h1>
@@ -140,6 +143,7 @@
 </dialog>
 <input type="file" id="openFile" hidden accept=".json,application/json">
 <input type="file" id="imageFile" hidden multiple accept="image/png,image/jpeg,image/webp,image/gif,image/avif,image/bmp">
+<div id="studioContext" class="context-menu" role="menu" aria-label="Studio actions" hidden></div>
 <div class="toast hidden" id="toast" role="status"></div>
 </body>
 </html>
