@@ -68,7 +68,8 @@ const StudioDocument = (() => {
       }
       ids.add(item.id);
       const l = layer(item.type,{
-        id:item.id,name:String(item.name || labels[item.type]).slice(0,120),visible:item.visible !== false,locked:item.locked === true,
+        id:item.id,name:String(item.name || labels[item.type]).slice(0,120),visible:item.visible !== false,
+        ...(item.locked === true ? {locked:true} : {}),
         x:number(item.x,0,-1e6,1e6),y:number(item.y,0,-1e6,1e6),rotation:number(item.rotation,0,-36000,36000),
         opacity:number(item.opacity,100,0,100),scale:number(item.scale,100,1,2000),
         blend:blends.includes(item.blend) ? item.blend : 'source-over'
