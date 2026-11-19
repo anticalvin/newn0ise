@@ -143,7 +143,7 @@ body[data-recording='1']::after{content:'';position:fixed;top:calc(10px + env(sa
 
 /* world start page */
 #wstart{position:fixed;inset:0;z-index:79;background:#0c0b0b;color:#ede8df;display:flex;flex-direction:column;overflow:auto;padding:env(safe-area-inset-top,0) env(safe-area-inset-right,0) env(safe-area-inset-bottom,0) env(safe-area-inset-left,0);transition:opacity .3s,transform .3s}
-#wstart[hidden]{display:none}#wstart.out{opacity:0;transform:scale(1.02);pointer-events:none}
+#wstart .card[hidden]{display:none}#wstart[hidden]{display:none}#wstart.out{opacity:0;transform:scale(1.02);pointer-events:none}
 #wstart .lc{position:relative;max-width:980px;width:100%;margin:auto;padding:22px 18px 34px}
 #wstart h1{font:800 clamp(52px,13vw,120px)/.9 var(--display);letter-spacing:-.04em;margin:8px 0 6px}
 #wstart p.sub{margin:0 0 20px;font-size:14px;color:#aeaaa4;max-width:520px;line-height:1.45}

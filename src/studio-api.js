@@ -170,6 +170,7 @@ export function createApi(c){
     export:'{format:"glb|zip"} → base64 file.',
     batch:'{ops:[{cmd:"add",...},...]} → runs in order, returns each result.',
     clear:'{} → removes all objects and lights.',
+    core:'{command:{cmd:"scene.new"|"terrain.stroke"|...}} → n0ise Core commands. Core is its own page: open core.html?mcp=1 (the bridge talks to one page at a time) and use n0_core. Run {cmd:"core",command:{cmd:"describe"}} there for the list.',
     describe:'{} → this list.'
   };
   async function run(a){
@@ -195,6 +196,7 @@ export function createApi(c){
       case 'look':{S.fx=a.on!==false;bump();return{look:S.fx};}
       case 'walk':{if(a.on===false){walk.exit();return{walking:false};}walk.enter({pos:a.pos,yaw:a.yaw});return{walking:true};}
       case 'sim':{if(!sim)throw new Error('Simulation isn’t available.');const op=a.op||'play';if(op==='play')return await sim.play();if(op==='pause')return sim.pause();if(op==='reset')return sim.reset();if(op==='gravity')return sim.setGravity(num(a.g,-9.81));throw new Error('op must be play, pause, reset or gravity.');}
+      case 'core':throw new Error('That is a n0ise Core command, and Core is its own page. Open core.html?mcp=1, then send it again (n0_core).');
       case 'render':return renderCmd(a);
       case 'export':return exportCmd(a);
       case 'clear':{S.objs.slice().forEach(o=>removeObj(o.id));lightCmd({op:'clear'});return{cleared:true};}

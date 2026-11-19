@@ -78,7 +78,8 @@
 <button class="ws-back" id="wsback">‹ Back</button>
 <h1>World</h1><p class="sub">Pick how to begin. You can switch any time from the World tab.</p>
 <div class="cards">
-<button class="card big" data-w="night-station"><b>Night Station</b><span>The demo. A rainy petrol station at night with a shop, a TV, a pistol to find and lights that react. Press Play and walk in.</span><em>Play the demo</em></button>
+<button class="card big" data-w="core"><b>n0ise Core</b><span>The new engine: a living coast with a sea, sand, palms and real physics. Start blank or from the coast demo, sculpt the land and walk it.</span><em>Open Core</em></button>
+<button class="card big" data-w="night-station" hidden><b>Night Station</b><span>The demo. A rainy petrol station at night with a shop, a TV, a pistol to find and lights that react. Press Play and walk in.</span><em>Play the demo</em></button>
 <button class="card big" data-w="photowalk"><b>Photo walk</b><span>Walk around in first person with a camera. Pick a lens and a frame shape, find the shots on your list, and build a roll.</span><em>Walk and shoot</em></button>
 <button class="card" data-w="blank"><b>Start blank</b><span>Flat ground, a sky and a character. Build everything yourself.</span></button>
 <button class="card" data-w="level"><b>Starter level</b><span>Platforms, crates and a goal to play with right away.</span></button>
@@ -97,7 +98,7 @@
 </dialog>
 <template id="globalbtns"><button class="desk-btn icon" id="bUndo" type="button" title="Undo (Ctrl+Z)" aria-label="Undo"><svg viewBox="0 0 24 24"><path d="m8 4-5 5 5 5M3 9h10a6 6 0 0 1 0 12h-3"/></svg></button><button class="desk-btn icon" id="bRedo" type="button" title="Redo (Ctrl+Shift+Z)" aria-label="Redo"><svg viewBox="0 0 24 24" style="transform:scaleX(-1)"><path d="m8 4-5 5 5 5M3 9h10a6 6 0 0 1 0 12h-3"/></svg></button><button class="desk-btn" id="bSave" type="button" title="Save the project to a file">Save</button></template>
 <script>document.getElementById('globalslot').append(document.getElementById('globalbtns').content);</script>
-<script type="module" src="assets/studio.js?v=3300eb1e"></script>
+<script type="module" src="assets/studio.js?v=0b995296"></script>
 <script type="module">
 const dlg=document.getElementById('dialog');
 document.getElementById('menubtn').addEventListener('click',()=>dlg.showModal());
