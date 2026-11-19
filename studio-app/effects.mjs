@@ -1,5 +1,7 @@
 import {installLooks} from '../src/looks.js';
 import * as engine from '../src/engine.js';
+import {GLSL_LIB} from './glsl-lib.mjs';
+import {resetTimeState} from '../src/project.js';
 
 const supported = new Map([
   ['halation','Warm glow around bright highlights'],
@@ -27,8 +29,13 @@ installLooks({
   SS:'#define S (uRes.y/600.)\n',
   ST:engine.ST,
   defineModule(definition) {
-    if (supported.has(definition.id) && definition.params.every(p => !p.t && !p.opts)) {
-      effects.set(definition.id,{...definition,description:supported.get(definition.id)});
+    // Any single-pass Effects look that needs no history, mask or picture input comes across, with its own controls.
+    const usable = typeof definition.frag === 'string' && !definition.needsMask &&
+      !/\b(u_prev|uAux|u_tick|u_reset|u_has)\b/.test(definition.frag) &&
+      definition.params.every(p => !p.t || ['r','c','b','color'].includes(p.t));
+    if (usable) {
+      effects.set(definition.id,{...definition,source:'effects',
+        description:supported.get(definition.id) ?? definition.description ?? `${definition.family} look from n0ise Effects`});
     }
   }
 });
@@ -83,22 +90,34 @@ vec4 fx(vec2 uv){vec4 c=texture(uSrc,uv);vec3 rgb=studioHue(c.rgb,u_hue*3.141592
 ];
 for (const definition of studioEffects) effects.set(definition.id,definition);
 
+const hexColor = /^#[0-9a-f]{6}$/i;
+/* Hardware profiles from the Effects page (CRT Lab): each runs the real CRT pipeline on the layer, with a strength control. */
+for (const [id,name] of engine.PROFILES) {
+  if (id === 'none') continue;
+  effects.set('hw:'+id,{id:'hw:'+id,hardware:id,family:'Hardware',name,source:'hardware',
+    description:`${name} display, rendered by the n0ise CRT Lab`,
+    params:[{k:'mix',label:'Strength',min:0,max:100,def:100,hero:true}]});
+}
+
 export function effectValues(definition,values = {}) {
-  return Object.fromEntries(definition.params.map(p => [
-    p.k,Number.isFinite(values?.[p.k]) ? Math.max(p.min,Math.min(p.max,values[p.k])) : p.def
-  ]));
+  return Object.fromEntries(definition.params.map(p => {
+    const v = values?.[p.k];
+    if (p.t === 'color') return [p.k,typeof v === 'string' && hexColor.test(v) ? v : (typeof p.def === 'string' ? p.def : '#000000')];
+    if (p.t === 'b') return [p.k,v === undefined ? (p.def ? 1 : 0) : (v ? 1 : 0)];
+    if (p.t === 'c') return [p.k,Number.isInteger(v) && v >= 0 && v < p.opts.length ? v : (p.def ?? 0)];
+    return [p.k,Number.isFinite(v) ? Math.max(p.min,Math.min(p.max,v)) : p.def];
+  }));
 }
 
 export function effectService(gl) {
   const programs = new Map();
   function compile(definition) {
-    const declarations = definition.params.map(p => `uniform float u_${p.k};`).join('\n');
+    const declarations = definition.params.map(p => p.t === 'color' ? `uniform vec3 u_${p.k};` : `uniform float u_${p.k};`).join('\n');
     const program = engine.mkProg(engine.VS,engine.HEAD+`
 uniform sampler2D uSrc;
 uniform vec2 uRes;
 uniform float uTime,uSeed;
-#define luma lum
-`+declarations+'\n'+definition.frag+`
+`+GLSL_LIB+declarations+'\n'+definition.frag+`
 void main() {
   vec4 source=texture(uSrc,vUv);
   o=vec4(fx(vUv).rgb,source.a);
@@ -110,10 +129,48 @@ void main() {
     return program;
   }
 
+  let hardwareReady = false, hardwareOut = null, mixer = null;
+  /* The CRT pipeline keeps frame-to-frame state, so every render starts clean and replays a few frames. That makes a still
+     identical wherever it is rendered from, the same approach the project exporter uses. */
+  function hardware(definition,params,input,target,context) {
+    const G = engine, w = Math.max(160,context.width&~1), h = Math.max(120,context.height&~1);
+    if (!hardwareReady) { G.initGL(); G.initLUT(); hardwareReady = true; }
+    for (const key of Object.keys(G.T)) { G.freeRT(G.T[key]); delete G.T[key]; }
+    Object.assign(G.V,{sizeKey:'',lastBKey:'',pIdx:0,palCache:{key:'',v:null},textKey:''});
+    if (G.RB) { G.RB.pbo = null; G.RB.sync = null; G.RB.size = 0; }
+    resetTimeState();
+    G.applyProfile(definition.hardware,true);
+    G.P.seed = context.seed;
+    G.TEX.src = input;
+    G.SRC.el = null; G.SRC.w = w; G.SRC.h = h; G.SRC.live = false; G.SRC.ver++;
+    G.EMB.w = w; G.EMB.h = h;
+    G.ST.autoQ = 1; G.ST.lite = false;
+    if (!hardwareOut || hardwareOut.w !== w || hardwareOut.h !== h) {
+      if (hardwareOut) G.freeRT(hardwareOut);
+      hardwareOut = G.mkRT(w,h,{});
+    }
+    const d = 1/(context.fps || 30);
+    for (let i = 3; i >= 0; i--) {
+      G.CPU.last = -1e9; G.CPU.ms = 0;
+      G.V.frameNo = Math.max(0,context.frame-i);
+      G.renderFrame(Math.max(0,context.time-i*d),d,hardwareOut);
+    }
+    mixer ??= G.mkProg(G.VS,G.HEAD+`uniform sampler2D uA,uB;uniform float uM;
+void main(){vec4 a=texture(uA,vUv);o=vec4(mix(a.rgb,texture(uB,vUv).rgb,uM),a.a);}`);
+    G.bindRT(target);
+    mixer.use();
+    G.samp(mixer,'uA',0,input);
+    G.samp(mixer,'uB',1,hardwareOut.tex);
+    mixer.f('uM',effectValues(definition,params).mix/100);
+    G.draw();
+    return target.tex;
+  }
+
   return {
     apply(id,params,input,target,context) {
       const definition = effects.get(id);
       if (!definition) throw Error('The requested n0ise effect is unavailable.');
+      if (definition.hardware) return hardware(definition,params,input,target,context);
       if (!programs.has(id)) programs.set(id,compile(definition));
       const program = programs.get(id);
       engine.bindRT(target);
@@ -122,11 +179,26 @@ void main() {
       program.v2('uRes',context.width,context.height);
       program.f('uTime',context.time);
       program.f('uSeed',context.seed);
-      for (const [name,value] of Object.entries(effectValues(definition,params))) program.f('u_'+name,value);
+      const parameters = definition.params, values = effectValues(definition,params);
+      for (const p of parameters) {
+        if (p.t === 'color') {
+          const h = values[p.k];
+          program.v3('u_'+p.k,parseInt(h.slice(1,3),16)/255,parseInt(h.slice(3,5),16)/255,parseInt(h.slice(5,7),16)/255);
+        } else program.f('u_'+p.k,values[p.k]);
+      }
       engine.draw();
       return target.tex;
     },
+    // Drop any look this GPU cannot compile, so the palette never offers one that fails.
+    verify() {
+      for (const [id,definition] of [...effects]) {
+        if (definition.hardware || programs.has(id)) continue;
+        try { programs.set(id,compile(definition)); }
+        catch (e) { effects.delete(id); console.warn('Studio: effect unavailable',id,String(e.message).slice(0,160)); }
+      }
+    },
     dispose() {
+      if (hardwareOut) engine.freeRT(hardwareOut);
       for (const program of programs.values()) gl.deleteProgram(program.p);
       programs.clear();
     }

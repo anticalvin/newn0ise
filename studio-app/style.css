@@ -279,3 +279,12 @@ a.brand:focus-visible { outline:2px solid var(--accent); outline-offset:4px; }
 .context-menu button { display:block; width:100%; padding:8px 10px; border-radius:5px; text-align:left; }
 .context-menu button:hover,.context-menu button:focus-visible { outline:none; background:#454442; }
 .stagebody[data-tool=line] { cursor:crosshair; }
+
+/* node graph: unplug and replug */
+.port-hit { cursor:crosshair; }
+.port.open { fill:#17181a; stroke:#98999c; stroke-width:2; }
+.port.ok { fill:#f1eee8; stroke:#f1eee8; stroke-width:5; }
+.port.no { fill:#17181a; stroke:#c9694f; stroke-width:4; }
+.wire.drag { stroke:#f1eee8; stroke-dasharray:6 5; }
+.wire.drag.bad { stroke:#c9694f; }
+@media (prefers-reduced-motion:no-preference) { .port { transition:r .1s; } .port.ok { r:9; } }
