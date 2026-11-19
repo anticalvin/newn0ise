@@ -43,6 +43,7 @@ function studioGraph(svg, api) {
     const group = item('g',{transform:`translate(${viewport.x} ${viewport.y}) scale(${viewport.z})`},svg);
     const wire = (x,y,ex,ey) => `M ${x} ${y} C ${x+55} ${y},${ex-55} ${ey},${ex} ${ey}`;
     for (const e of g.edges) {
+      if (drag?.kind === 'wire' && drag.rewire === e.to) continue;   // picked up: drawn from the pointer instead
       const a = g.nodes.find(n => n.id === e.from), b = g.nodes.find(n => n.id === e.to);
       const attrs = {d:wire(a.x+130,a.y+27,b.x,b.y+27)};
       item('path',{...attrs,class:'wire'+(selection?.edge === e.to ? ' selected' : '')},group);
@@ -52,7 +53,9 @@ function studioGraph(svg, api) {
     if (drag?.kind === 'wire' && drag.point) {
       const n = g.nodes.find(n => n.id === drag.from);
       const x = (drag.point.x-viewport.x)/viewport.z, y = (drag.point.y-viewport.y)/viewport.z;
-      item('path',{d:wire(n.x+130,n.y+27,x,y),class:'wire','pointer-events':'none'},group);
+      const snap = drag.hover && g.nodes.find(m => m.id === drag.hover.id);
+      const end = snap ? [snap.x,snap.y+27] : [x,y];
+      item('path',{d:wire(n.x+130,n.y+27,end[0],end[1]),class:'wire drag'+(drag.hover && !drag.hover.ok ? ' bad' : ''),'pointer-events':'none'},group);
     }
     for (const n of g.nodes) {
       const node = item('g',{class:'node'+(selection?.node === n.id ? ' selected' : ''),
@@ -63,8 +66,13 @@ function studioGraph(svg, api) {
       item('text',{x:13,y:41,class:'sub'},node,n.version === 1 ? subtitle ?? 'Adapter unavailable' : 'Version unavailable');
       for (const port of ['in','out']) {
         if (port === 'in' ? !schema[n.type]?.inputs.input : !schema[n.type]?.outputs.frame) continue;
-        item('circle',{cx:port === 'in' ? 0 : 130,cy:27,r:7,class:'port'+(pending === n.id && port === 'out' ? ' pending' : ''),
-          'data-port':port,tabindex:0,role:'button','aria-label':`${name(n)} ${port === 'in' ? 'input' : 'output'}`},node);
+        const cx = port === 'in' ? 0 : 130;
+        const open = port === 'in' && !g.edges.some(e => e.to === n.id && e.in === 'input' && !(drag?.kind === 'wire' && drag.rewire === e.to));
+        const over = port === 'in' && drag?.hover?.id === n.id;
+        item('circle',{cx,cy:27,r:17,class:'port-hit',fill:'transparent','data-port':port},node);   // generous target for fingers and sticks
+        item('circle',{cx,cy:27,r:7,class:'port'+(pending === n.id && port === 'out' ? ' pending' : '')+(open ? ' open' : '')+
+          (over ? (drag.hover.ok ? ' ok' : ' no') : ''),'data-port':port,tabindex:0,role:'button',
+          'aria-label':`${name(n)} ${port === 'in' ? 'input' : 'output'}${open ? ', unplugged' : ''}`},node);
       }
     }
   }
@@ -89,6 +97,22 @@ function studioGraph(svg, api) {
     }
     selection = {edge:to};
     api.finish(before);
+  }
+
+  /* A picked-up wire: drop it on an input to replug it there, or anywhere else to unplug it. Undo restores either. */
+  function replug(d,to) {
+    const g = api.graph();
+    if (!g) return;
+    pending = null;
+    if (to === d.rewire) { choose({edge:to}); return; }                       // put back where it was
+    const trial = {...g,edges:[...g.edges]};
+    const error = to ? connect(trial,d.from,to,d.out) : null;
+    if (error) { api.notice(error); return; }                                 // incompatible: the wire snaps back
+    g.edges = g.edges.filter(x => !(x.to === d.rewire && x.in === 'input'));
+    if (to) connect(g,d.from,to,d.out);
+    selection = to ? {edge:to} : {node:d.rewire};
+    api.notice?.(to ? 'Replugged.' : 'Unplugged. Drag from an output to plug it back in.');
+    api.finish(d.before);
   }
 
   function activate(target) {
@@ -129,12 +153,15 @@ function studioGraph(svg, api) {
     const node = api.graph()?.nodes.find(n => n.id === e.target.closest('[data-node]')?.dataset.node);
     const edge = e.target.closest('[data-edge]')?.dataset.edge;
     const port = e.target.dataset.port;
-    if ((port === 'in' || edge) && e.button === 0) { activate(e.target); return; }
+    const plugged = port === 'in' && e.button === 0 && api.graph()?.edges.find(x => x.to === node?.id && x.in === 'input');
+    if (((port === 'in' && !plugged) || edge) && e.button === 0) { activate(e.target); return; }
     e.preventDefault();
     svg.focus({preventScroll:true});
     svg.setPointerCapture(e.pointerId);
     const base = {pointer:e.pointerId,sx:e.clientX,sy:e.clientY,moved:false};
-    if (e.button === 0 && port === 'out') {
+    if (plugged) {
+      drag = {...base,kind:'wire',from:plugged.from,out:plugged.out,rewire:node.id,before:api.capture(),node};
+    } else if (e.button === 0 && port === 'out') {
       drag = {...base,kind:'wire',from:node.id};
     } else if (e.button === 0 && node) {
       drag = {...base,kind:'node',node,x:node.x,y:node.y,before:api.capture()};
@@ -160,6 +187,12 @@ function studioGraph(svg, api) {
     } else {
       const rect = svg.getBoundingClientRect();
       drag.point = {x:e.clientX-rect.left,y:e.clientY-rect.top};
+      const over = document.elementFromPoint(e.clientX,e.clientY);
+      const id = over?.dataset?.port === 'in' ? over.closest('[data-node]')?.dataset.node : null;
+      const g = api.graph();
+      const was = drag.hover?.id;
+      drag.hover = id && g ? {id,ok:!connect({...g,edges:[...g.edges]},drag.from,id,drag.out ?? 'frame')} : null;
+      if (drag.hover?.id !== was && drag.hover) api.buzz?.(drag.hover.ok ? 12 : 30);
     }
     render();
   });
@@ -173,11 +206,16 @@ function studioGraph(svg, api) {
     }
     if (d.kind === 'wire' && !cancelled) {
       if (!d.moved) {
-        pending = pending === d.from ? null : d.from;
-        choose({node:d.from});
+        if (d.rewire) choose({edge:d.rewire});
+        else {
+          pending = pending === d.from ? null : d.from;
+          choose({node:d.from});
+        }
       } else {
         const target = document.elementFromPoint(e.clientX,e.clientY);
-        if (target?.dataset.port === 'in') link(d.from,target.closest('[data-node]').dataset.node);
+        const to = target?.dataset.port === 'in' ? target.closest('[data-node]').dataset.node : null;
+        if (d.rewire) replug(d,to);
+        else if (to) link(d.from,to);
       }
     }
     render();
@@ -195,6 +233,7 @@ function studioGraph(svg, api) {
     render();
   },{passive:false});
   svg.addEventListener('keydown',e => {
+    if (e.key === 'Escape' && drag) { e.preventDefault(); e.stopPropagation(); const d = drag; drag = null; if (d.kind === 'node') Object.assign(d.node,{x:d.x,y:d.y}); render(); return; }
     if (e.key !== 'Enter' && e.key !== ' ') return;
     e.preventDefault();
     const data = e.target.dataset;

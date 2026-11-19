@@ -360,9 +360,12 @@
         advanced.open = !!showAdvanced;
         advanced.innerHTML = '<summary>Advanced</summary>';
         for (const p of effect.params) {
-          const control = field(p.label,'number',parameters[p.k],v => {
-            node.params.values = {...parameters,[p.k]:v};
-          },{min:p.min,max:p.max});
+          const set = v => { node.params.values = {...parameters,[p.k]:v}; };
+          const control = p.t === 'color' ? field(p.label,'color',parameters[p.k],set) :
+            p.t === 'c' ? field(p.label,'select',String(parameters[p.k]),v => set(Number(v)),
+              {choices:p.opts.map((name,i) => [String(i),name])}) :
+            p.t === 'b' ? field(p.label,'select',String(parameters[p.k]),v => set(Number(v)),{choices:[['0','Off'],['1','On']]}) :
+            field(p.label,'number',parameters[p.k],set,{min:p.min,max:p.max});
           (p.hero ? context : advanced).append(control);
         }
         if (advanced.childElementCount > 1) context.append(advanced);
@@ -1095,6 +1098,7 @@
   function openEffects() {
     const l = activeLayer();
     if (!compatible(l)) { notice('Select a compatible visible layer first.'); return; }
+    runtimeModule?.prepare?.();   // compiles the effects once so the list only offers ones that work
     const dialog = $('modal'), content = $('modalcontent');
     $('modaltitle').textContent = 'Add Effect';
     $('modalcancel').textContent = 'Close';

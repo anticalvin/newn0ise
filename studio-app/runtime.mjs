@@ -88,6 +88,7 @@ export function createRuntime(canvas,onChange,onError) {
       renderer,gl,scene,camera,mesh,material,environment,controls,helper,vao,upload,program,
       service:effectService(gl),target:null,targets:[],size:'',meshKey:'',sceneKey:'',sceneTexture:null
     };
+    hardware.service.verify();
     return hardware;
   }
 
@@ -322,6 +323,7 @@ export function createRuntime(canvas,onChange,onError) {
 
   return {
     enter,exit,setRotation,supportedAsset,renderLayer,dispose,
+    prepare() { try { init(); } catch {} },
     begin() { visible = new Set(); },
     end() {
       for (const id of cache.keys()) if (!visible.has(id)) cache.delete(id);

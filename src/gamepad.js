@@ -101,7 +101,7 @@ html body .gp-hot{outline:3px solid #f2e5cd;outline-offset:2px;box-shadow:0 0 0 
     pt(t,'pointerup');mouse(t,'mouseup');
     if(!d.moved&&t.matches&&t.matches('textarea,input:not([type=range]):not([type=color]):not([type=checkbox]):not([type=radio]):not([type=button]):not([type=submit]):not([type=file])')){
       const v=prompt((t.getAttribute('aria-label')||t.placeholder||'Type here')+(sony?'':''),t.value);if(v!=null){t.value=v;t.dispatchEvent(new Event('input',{bubbles:true}));t.dispatchEvent(new Event('change',{bubbles:true}));}return;}
-    if(t.tagName!=='CANVAS'&&!d.moved){try{const tgt=interactive(t)||t,go=tgt.dispatchEvent(new MouseEvent('click',{clientX:st.x,clientY:st.y,button:0,bubbles:true,cancelable:true,view:window})),a=tgt.closest&&tgt.closest('a[href]');
+    if((t.tagName!=='CANVAS'||t.closest('a[href],button'))&&!d.moved){ /* a decorative canvas inside a link (the home doors) still clicks it */try{const tgt=interactive(t)||t,go=tgt.dispatchEvent(new MouseEvent('click',{clientX:st.x,clientY:st.y,button:0,bubbles:true,cancelable:true,view:window})),a=tgt.closest&&tgt.closest('a[href]');
       /* some browsers ignore a script-made click on a link: follow it ourselves unless the page handled it or is already leaving */
       if(a&&go&&!/^(#|javascript:)/.test(a.getAttribute('href')||'#')){setTimeout(()=>{if(!st.leaving){if(a.target==='_blank')window.open(a.href,'_blank','noopener');else location.href=a.href;}},60);}}catch(e){}buzz(18,.08,.25);}
   }

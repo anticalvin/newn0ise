@@ -18,6 +18,7 @@
 
   const TOOLS = [['select','Select','↖'],['lasso','Lasso','◌'],['brush','Brush','✎'],['eraser','Eraser','⌫'],['pen','Pen','♢'],['text','Text','T'],
     ['shape','Shape','□'],['line','Line','／'],['gradient','Gradient','◐'],['picker','Eyedropper','◉'],['crop','Crop','⌗']];
+  const PIE = [...TOOLS,['effect','Add effect','≋']];   // the wheel also reaches the effect palette
   const VIEWS = ['canvas','split','graph'];
   const clamp = (v,a,b) => Math.max(a,Math.min(b,v));
   const cfg = {speed:1,rumble:true,...JSON.parse(localStorage.getItem('n0.studiopad') || '{}')};
@@ -124,7 +125,7 @@
     if (el?.matches('select')) { cycleSelect(el,1); st.down = null; return; }
     if (el?.matches('input:not([type=range]):not([type=checkbox]),textarea')) { el.focus(); st.down = null; return; }
     const pen = onStage(t) && (mode() === 'brush' || mode() === 'eraser');
-    st.down = {t,sx:st.x,sy:st.y,moved:false,pen};
+    st.down = {t,sx:st.x,sy:st.y,moved:false,pen,cap:t.ownerSVGElement || null};   // cap: where events go if the target is redrawn mid-drag
     const extra = pen ? {pointerType:'pen',pressure:Math.max(.2,value(st.pad,7) || .5)} : {};
     pointer(t,'pointerdown',extra);
     cur.dataset.down = 'true';
@@ -135,7 +136,7 @@
     st.down = null;
     if (d.slider) return;
     const extra = d.pen ? {pointerType:'pen'} : {};
-    pointer(d.t.isConnected ? d.t : document.body,'pointerup',extra);
+    pointer(d.t.isConnected ? d.t : d.cap?.isConnected ? d.cap : document.body,'pointerup',extra);
     const near = Math.hypot(st.x-d.sx,st.y-d.sy) < 8;
     if (near && !onStage(d.t)) {
       const el = interactive(d.t) || d.t;
@@ -162,6 +163,7 @@
 
   /* ---------- tools, views, zoom, pan ---------- */
   function setTool(id) {
+    if (id === 'effect') { const add = $('graphAdd'); if (add && !add.disabled) { click(add); toast('Add effect'); buzz(30,.12,.25); } else toast('Select a layer first'); return; }
     const b = document.querySelector(`[data-tool="${id}"]`);
     if (b) click(b); else key({select:'v',lasso:'l',brush:'b',eraser:'e',pen:'p',text:'t',shape:'r',line:'u',gradient:'g',picker:'i',crop:'c'}[id] || 'v');
     const t = TOOLS.find(x => x[0] === id); if (t) toast(t[2]+'  '+t[1]);
@@ -200,23 +202,23 @@
 
   /* ---------- tool wheel ---------- */
   function openPie() {
-    const n = TOOLS.length, R = 178;
-    pie.innerHTML = TOOLS.map((t,i) => {
+    const n = PIE.length, R = 182;
+    pie.innerHTML = PIE.map((t,i) => {
       const a = i/n*Math.PI*2-Math.PI/2;
       return `<div class="pi" data-i="${i}" style="transform:translate(${Math.cos(a)*R}px,${Math.sin(a)*R}px)"><span><em>${t[2]}</em>${t[1]}</span></div>`;
     }).join('')+'<div class="pd"></div>';
-    pie.style.display = 'block'; st.pie = {i:Math.max(0,TOOLS.findIndex(t => t[0] === mode()))}; pie.querySelectorAll('.pi').forEach(e => e.classList.toggle('on',+e.dataset.i === st.pie.i)); buzz(25,.1,.2);
+    pie.style.display = 'block'; st.pie = {i:Math.max(0,PIE.findIndex(t => t[0] === mode()))}; pie.querySelectorAll('.pi').forEach(e => e.classList.toggle('on',+e.dataset.i === st.pie.i)); buzz(25,.1,.2);
   }
   function pieAim(x,y) {
     const m = Math.hypot(x,y), dot = pie.querySelector('.pd');
     dot.style.transform = `translate(${x*90}px,${y*90}px)`;
     if (m < .5) return;   // a stick that springs back to centre must not lose the pick
-    const n = TOOLS.length, a = (Math.atan2(y,x)+Math.PI/2+Math.PI*2) % (Math.PI*2), i = Math.round(a/(Math.PI*2)*n) % n;
+    const n = PIE.length, a = (Math.atan2(y,x)+Math.PI/2+Math.PI*2) % (Math.PI*2), i = Math.round(a/(Math.PI*2)*n) % n;
     if (i !== st.pie.i) { st.pie.i = i; pie.querySelectorAll('.pi').forEach(e => e.classList.toggle('on',+e.dataset.i === i)); buzz(8,.03,.15); }
   }
   function closePie(apply) {
     const i = st.pie?.i; pie.style.display = 'none'; st.pie = null;
-    if (apply && i >= 0) setTool(TOOLS[i][0]);
+    if (apply && i >= 0) setTool(PIE[i][0]);
   }
 
   /* ---------- help and hints ---------- */
@@ -227,7 +229,7 @@
         ['Left stick','Move the cursor'],['L3','Hold the stick down for a slow, precise cursor'],[g.a,'Press, draw, drag, click. Double-tap to edit text'],
         [g.r2,'Pen pressure. With Brush or Eraser, pull harder for a thicker stroke'],[g.b,'Back: close a menu or dialog, cancel, deselect'],[g.x,'Undo'],[g.y,'Tap: redo. Hold: tool wheel'],
         [g.l1+' / '+g.r1,'Previous and next tool'],['D-pad ◀ ▶','Previous and next view. Over a slider or menu: change it'],['D-pad ▲ ▼','Zoom in and out at the cursor'],
-        ['Right stick','Pan the view'],[g.l2,'Hold for Shift: multi-select, 15° rotation, proportional resize. With the D-pad: nudge the selection'],['R3','Fit to screen'],
+        ['Right stick','Pan the view'],[g.l2,'Hold for Shift: multi-select, 15° rotation, proportional resize. With the D-pad: nudge. With '+g.b+': delete the selection'],['Graph','Drag from an output to plug in. Drag off an input to unplug it, or onto another input to replug'],['R3','Fit to screen'],
         [g.opt,'Studio menu'],[g.sel,'This help']].map(([k,v]) => `<div class="r"><b>${k}</b><span>${v}</span></div>`).join('')+
       '<label><span class="r"><b>Cursor speed</b></span><input type="range" id="padspd" min="0.5" max="2" step="0.1" aria-label="Cursor speed"></label>'+
       '<label><input type="checkbox" id="padrum" style="width:22px;height:22px"> Vibration</label>';
@@ -300,7 +302,7 @@
       else {
         if (Math.hypot(st.x-st.down.sx,st.y-st.down.sy) > 4) st.down.moved = true;
         const extra = st.down.pen ? {pointerType:'pen',pressure:Math.max(.12,value(p,7) || .5)} : {};
-        if (mag) pointer(st.down.t.isConnected ? st.down.t : document.body,'pointermove',extra);
+        if (mag) pointer(st.down.t.isConnected ? st.down.t : st.down.cap?.isConnected ? st.down.cap : document.body,'pointermove',extra);
         else if (st.down.pen && value(p,7)) pointer(st.down.t,'pointermove',extra);
       }
     }
@@ -317,7 +319,11 @@
     if (lift(p,0)) release();
     if (edge(p,7) && !st.down && onStage(t) && (mode() === 'brush' || mode() === 'eraser')) press();   // R2 draws with analog pressure
     if (lift(p,7) && st.down?.pen) release();
-    if (edge(p,1)) { if (st.pie) { closePie(false); st.yHeld = false; toast('Cancelled'); } else back(); }
+    if (edge(p,1)) {
+      if (st.pie) { closePie(false); st.yHeld = false; toast('Cancelled'); }
+      else if (st.shift) { key('Delete'); toast('Deleted'); buzz(30,.2,.1); }   // L2 + B removes the selected layer, node or wire
+      else back();
+    }
     if (edge(p,2)) { key('z',{ctrlKey:true}); toast('Undo'); buzz(25,.08,.2); }
     if (edge(p,3)) { st.yAt = now; st.yHeld = true; }
     if (st.yHeld && !st.pie && now-st.yAt > 260 && pressed(p,3)) openPie();
