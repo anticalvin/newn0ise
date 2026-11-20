@@ -70,5 +70,59 @@
   "text": 0,
   "hscroll": false,
   "errors": 0
+ },
+ "core-start/phone390": {
+  "small": 0,
+  "text": 0,
+  "hscroll": false,
+  "errors": 0
+ },
+ "core-start/phone360": {
+  "small": 0,
+  "text": 0,
+  "hscroll": false,
+  "errors": 0
+ },
+ "core-start/desktop": {
+  "small": 0,
+  "text": 0,
+  "hscroll": false,
+  "errors": 0
+ },
+ "core-blank/phone390": {
+  "small": 0,
+  "text": 0,
+  "hscroll": false,
+  "errors": 0
+ },
+ "core-blank/phone360": {
+  "small": 0,
+  "text": 0,
+  "hscroll": false,
+  "errors": 0
+ },
+ "core-blank/desktop": {
+  "small": 0,
+  "text": 0,
+  "hscroll": false,
+  "errors": 0
+ },
+ "core-coast/phone390": {
+  "small": 0,
+  "text": 0,
+  "hscroll": false,
+  "errors": 0
+ },
+ "core-coast/phone360": {
+  "small": 0,
+  "text": 0,
+  "hscroll": false,
+  "errors": 0
+ },
+ "core-coast/desktop": {
+  "small": 0,
+  "text": 0,
+  "hscroll": false,
+  "errors": 0
  }
 }

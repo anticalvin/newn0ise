@@ -15,6 +15,7 @@ import { Input } from './input.js';
 import { UI } from './ui.js';
 import { clamp } from './util.js';
 import { connectBridge } from './api.js';
+import { createTelemetry } from './debug.js';
 
 const canvas = document.getElementById('c');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
@@ -202,6 +203,7 @@ function resize() { const w = innerWidth, h = innerHeight; camera.aspect = w / h
 const maxPr = () => Math.min(devicePixelRatio, 2);
 let pr = maxPr(), frames = 0, acc = 0; renderer.setPixelRatio(pr); resize(); addEventListener('resize', resize);
 
+const tele = createTelemetry(app); app.tele = tele;
 const v3 = new THREE.Vector3(); let last = performance.now(), physAcc = 0;
 function frame(now) {
   requestAnimationFrame(frame);
@@ -242,8 +244,8 @@ function frame(now) {
   } else ring.visible = false;
   terrain.flush(); water.update(dt, camera, env.p, env); env.update(dt, camera, explore ? player.pos : c.target);
   sand.update(dt, camera, explore ? player.pos : c.target, env, water.level);
-  renderer.render(scene, camera);
+  renderer.render(scene, camera); tele.tick(now);
 }
 requestAnimationFrame(frame);
-window.n0 = { app, core, run: l => core.run(l), exec: c => core.exec(c), get fps() { return app.fps; }, get pr() { return app.pr; } };
+window.n0 = { app, core, telemetry: () => tele.read(), run: l => core.run(l), exec: c => core.exec(c), get fps() { return app.fps; }, get pr() { return app.pr; } };
 window.Core = { exec: c => core.exec(c), describe: () => core.exec({ cmd: 'describe' }), state: () => core.exec({ cmd: 'state' }) };
