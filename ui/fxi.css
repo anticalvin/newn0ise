@@ -218,3 +218,10 @@ body[data-dt=hw] #peek,body[data-dt=hw] #strip,body[data-dt=col] #peek,body[data
 /* ---------- focus and motion (keyboard and controller) ---------- */
 body:not([data-cam]) .dock :is(button,input,select,summary,[tabindex]):focus-visible,body:not([data-cam]) .fx-foot :is(button):focus-visible{outline:2px solid #ded6c4;outline-offset:2px;border-radius:12px}
 @media(prefers-reduced-motion:reduce){.dock *,.fx-foot *{transition:none!important;animation:none!important}}
+
+/* Camera: the Looks browser lives in the flow above the shutter row instead of floating over it, so nothing overlaps and the picture stays visible */
+.camui .camdrawer .camdp{position:static;bottom:auto;border-radius:16px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.04);padding:8px 0 6px}
+.camui .camdrawer .camcats{padding:0 8px}
+.camui .camdrawer .camcats button{min-height:40px;font-size:13px}
+.camui .camdrawer .camt{width:96px;min-height:84px}
+.camui .camdrawer .camt span{font-size:12px;white-space:normal;max-width:90px;line-height:1.15}

@@ -3,7 +3,7 @@
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.187.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.187.0/examples/jsm/"}}</script><title>n0ise · lab</title>
 <link rel="manifest" href="manifest.webmanifest"><link rel="icon" href="icon.svg">
 <link rel="stylesheet" href="ui/ui.css">
-</head><body>
+<style>.looks-h{font-size:11px;color:var(--dim,#a3a59b);margin:12px 0 6px;text-transform:uppercase;letter-spacing:1px}.looks-row{display:flex;flex-wrap:wrap;gap:6px}.look{min-height:44px;padding:0 13px;border:1px solid #ffffff26;border-radius:12px;background:#ffffff0a;color:inherit;font-size:12px;cursor:pointer}.look.on{background:#e9e4d8;color:#161714}.lab-preview{background:radial-gradient(ellipse at 50% 45%,#252521,#111210 67%)!important}.editor-title{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.editor-title .pill{min-height:36px;margin-left:auto}.editor-title .pill+.pill{margin-left:0}#pastedlg{max-width:min(520px,92vw);background:#1b1c19;color:#eeece4;border:1px solid #ffffff26;border-radius:16px}#pastearea{width:100%;background:#111210;color:inherit;border:1px solid #ffffff26;border-radius:10px;padding:8px;font:12px monospace}</style></head><body>
 <svg aria-hidden="true" style="position:absolute;width:0;height:0;overflow:hidden" xmlns="http://www.w3.org/2000/svg"><defs>
 <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1" fill="currentColor"/><circle cx="12" cy="12" r="1" fill="currentColor"/><circle cx="19" cy="12" r="1" fill="currentColor"/></symbol>
 <symbol id="i-cube" viewBox="0 0 24 24"><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9L12 3Zm0 9 8-4.5M12 12 4 7.5M12 12v9"/></symbol>
@@ -27,7 +27,7 @@
   <div class="widebar"><a class="wordmark lab-word" href="index.html" aria-label="n0ise home">lab.</a><span class="desk-title"><strong>Lab</strong><span class="desk-muted">Generative workspace</span></span><div class="actions"><button class="desk-btn desk-src" type="button" id="src-toggle" aria-pressed="true" aria-controls="editor"><svg><use href="#i-presets"/></svg>Source</button><button class="ghost" type="button" id="pause" aria-label="Pause preview" aria-pressed="false"><svg><use href="#i-pause"/></svg></button><button class="ghost mobile-only" type="button" id="lab-menu" aria-label="Lab menu"><svg><use href="#i-more"/></svg></button></div></div>
   <div class="lab-preview stage" id="stage">
     <iframe id="preview" title="Live p5 sketch" sandbox="allow-scripts allow-downloads"></iframe>
-    <div class="reticle" aria-hidden="true"><svg><use href="#i-plus"/></svg></div><span class="live-label">Live generative output</span>
+    
   </div>
   <div class="status-line"><span id="status">Preparing canvas…</span><div id="error" role="alert"></div></div>
   <div class="lab-meta"><span><strong id="sketch-name">Sketch</strong><small id="run-state">p5.js · Ready</small></span><button class="pill run" type="button" id="run"><svg><use href="#i-play"/></svg>Run</button></div>
@@ -48,6 +48,7 @@
   <div class="lab-drawer" id="lab-presets" hidden>
     <div class="group"><h3>Sketch</h3><div class="segment"><button class="pill" type="button" id="new"><svg><use href="#i-plus"/></svg>New sketch</button><button class="pill" type="button" id="modeForm" title="Write code that makes a real 3D object"><svg><use href="#i-cube"/></svg>3D object</button><button class="pill" type="button" id="reset">Reset code</button><button class="pill" type="button" id="duplicate">Duplicate to editor</button></div><select class="pill" id="preset" aria-label="Choose sketch"><option value="flow">Flow field</option><option value="orbit">Orbital study</option><option value="grid">Signal grid</option></select></div>
     <div class="group"><h3>My sketches</h3><select class="pill" id="slots" aria-label="My sketches"><option value="">My sketches</option></select><div class="field"><button class="pill" type="button" id="save">Save</button><button class="pill" type="button" id="saveas">Save as…</button></div></div>
+    <div class="group"><h3>Looks <small id="look-count"></small></h3><div id="looks" class="looks"></div></div>
     <div class="group"><h3>Mood</h3><div id="moods" class="moods"></div></div>
   </div>
   <div class="lab-drawer" id="lab-export" hidden>
@@ -55,7 +56,8 @@
   </div>
   </div>
   <div class="editor" id="editor">
-    <div class="editor-title"><label for="code">Source</label><span>p5.js · Ctrl or Cmd + Enter runs</span></div>
+    <div class="editor-title"><label for="code">Source</label><span>p5.js · Ctrl or Cmd + Enter runs</span><button class="pill" type="button" id="pastecode" title="Replace the code with what is on your clipboard">Paste code</button><button class="pill" type="button" id="restorecode" title="Bring back the code from before the last paste" hidden>Restore</button></div>
+    <dialog id="pastedlg" aria-label="Paste code"><div><p class="hint">Your browser blocked clipboard access. Paste the code here (Ctrl or Cmd + V), then replace.</p><textarea id="pastearea" rows="8" spellcheck="false" aria-label="Code to paste"></textarea><div class="field"><button class="pill" type="button" id="pasteok">Replace code</button><button class="pill" type="button" id="pastecancel">Cancel</button></div></div></dialog>
     <div class="code-wrap"><textarea id="code" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="p5 sketch code"></textarea></div>
   </div>
 </section>
@@ -508,6 +510,21 @@ try{const saved=JSON.parse(localStorage.getItem('n0ise-lab-sketch'));if(saved?.c
 
 /* ---- more ways to edit ---- */
 fillPresets();
+
+/* ---- look gallery: every sketch in the registry, grouped, one tap to load ---- */
+function buildLooks(){const sel=$('preset'),box=$('looks');box.innerHTML='';let n=0;
+for(const g of sel.querySelectorAll('optgroup')){const h=document.createElement('div');h.className='looks-h';h.textContent=g.label;const row=document.createElement('div');row.className='looks-row';
+for(const o of g.children){n++;const b=document.createElement('button');b.type='button';b.className='look';b.dataset.k=o.value;b.textContent=o.textContent.replace(/ · photo$/,'');b.onclick=()=>{load(o.value);markLook()};row.append(b)}box.append(h,row)}
+$('look-count').textContent=n;markLook()}
+function markLook(){document.querySelectorAll('#looks .look').forEach(b=>{const on=b.dataset.k===$('preset').value;b.setAttribute('aria-pressed',on);b.classList.toggle('on',on)})}
+buildLooks();
+
+/* ---- Paste code: replaces the source, keeps the old code recoverable, never runs it ---- */
+{let prev=null;const rb=$('restorecode');
+function replaceCode(t){if(!t||!t.trim()){$('status').textContent='Nothing to paste';return}prev=$('code').value;$('code').value=t;rb.hidden=false;$('status').textContent='Code replaced · press Run to try it';try{localStorage.setItem('n0ise-lab-dirty','1')}catch{}}
+$('pastecode').onclick=async()=>{try{replaceCode(await navigator.clipboard.readText())}catch{const d=$('pastedlg');$('pastearea').value='';d.showModal();$('pastearea').focus()}};
+$('pasteok').onclick=()=>{const t=$('pastearea').value;$('pastedlg').close();replaceCode(t)};$('pastecancel').onclick=()=>$('pastedlg').close();
+rb.onclick=()=>{if(prev==null)return;const cur=$('code').value;$('code').value=prev;prev=cur;$('status').textContent='Previous code restored'}}
 const MOODS={Ember:[18,85],Ocean:[205,70],Forest:[135,55],Violet:[270,55],Rose:[340,70],Gold:[45,80],Mono:[0,0]};
 for(const [n,[h,sa]] of Object.entries(MOODS)){const b=document.createElement('button');b.textContent=n;b.onclick=()=>{params.hue=h;params.sat=sa;controls();send({type:'params',params})};$('moods').append(b)}
 $('aspect').onchange=e=>{aspect=+e.target.value;frameAR=aspect;fitStage();run()};
