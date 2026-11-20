@@ -28,6 +28,7 @@
       <button class="iconbtn" id="redo" aria-label="Redo" title="Redo (Ctrl/⌘ Shift Z)">↷</button>
       <button class="iconbtn" id="toggleLayers" aria-label="Toggle layers" title="Toggle layers">☷</button>
       <button class="iconbtn" id="toggleInspector" aria-label="Toggle inspector" title="Toggle inspector">▤</button>
+      <button class="iconbtn" id="fullscreen" aria-label="Full screen" title="Full screen (F)">⛶</button>
       <button class="iconbtn" id="menu" aria-label="Studio menu" title="Studio menu">···</button>
     </div>
   </header>
@@ -84,7 +85,7 @@
       <div class="panehead"><span>INSPECTOR</span><span aria-hidden="true">☷</span></div>
       <div class="inspector-scroll">
         <div class="inspectorGroup">
-          <label><span class="fieldlabel">Document</span><select class="field" id="ratio"><option value="landscape">Landscape · 16:9</option><option value="portrait">Portrait · 9:16</option><option value="square">Square · 1:1</option><option value="custom">Custom…</option></select><button class="softbtn compact hidden" type="button" id="resizeCustom">Edit dimensions</button></label>
+          <label><span class="fieldlabel">Document</span><select class="field" id="ratio"><option value="workspace">Fill workspace</option><option value="landscape">Landscape · 16:9</option><option value="portrait">Portrait · 9:16</option><option value="square">Square · 1:1</option><option value="custom">Custom…</option></select><button class="softbtn compact hidden" type="button" id="resizeCustom">Edit dimensions</button></label>
         </div>
         <div class="inspectorGroup">
           <strong id="selectedName"></strong>
@@ -118,6 +119,7 @@
     <form id="launchForm">
       <label for="launchRatio" class="fieldlabel">Canvas size</label>
       <select class="field" id="launchRatio">
+        <option value="workspace">Fill workspace</option>
         <option value="landscape">Landscape · 1920 × 1080</option>
         <option value="portrait">Portrait · 1080 × 1920</option>
         <option value="square">Square · 1440 × 1440</option>
@@ -145,6 +147,7 @@
 <input type="file" id="openFile" hidden accept=".json,application/json">
 <input type="file" id="imageFile" hidden multiple accept="image/png,image/jpeg,image/webp,image/gif,image/avif,image/bmp">
 <div id="studioContext" class="context-menu" role="menu" aria-label="Studio actions" hidden></div>
+<button class="iconbtn exitfs hidden" id="exitFullscreen" aria-label="Exit full screen" title="Exit full screen (Esc)">✕</button>
 <div class="toast hidden" id="toast" role="status"></div>
 </body>
 </html>
