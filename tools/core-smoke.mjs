@@ -55,6 +55,16 @@ for(const [name,url,body] of T){
   if(r===true&&errors.length)r='console errors: '+errors[0];
   console.log((r===true?'  ok   ':'  FAIL ')+name+(r===true?'':'  → '+r));if(r!==true)fail++;
 }
+/* screenshots of the store (software GL; for a human to look at, not asserted): node tools/core-smoke.mjs --shots */
+if(process.argv.includes('--shots')){
+  await mkdir(join(root,'ui-shots'),{recursive:true});
+  await open('/core.html?start=blank&debug=1');
+  await ev(`(async()=>{const a=n0.app;n0.exec({cmd:'environment.set',time:12,cloud:0.2});const r=n0.exec({cmd:'prefab.build',type:'retail.convenience',id:'store001',seed:42,at:[0,0],parameters:{condition:'worn'}});n0.exec({cmd:'store.door',id:'store001',open:true});a.setMode('edit');a.cam.target.set(0,1,0);a.cam.dist=22;a.cam.pitch=0.5;a.cam.yaw=0.5;await new Promise(r=>setTimeout(r,2500));return r.ok})()`);
+  let shot=await send('Page.captureScreenshot',{format:'png'});await writeFile(join(root,'ui-shots','core-store-outside.png'),Buffer.from(shot.data,'base64'));
+  await ev(`(async()=>{const a=n0.app;a.cam.dist=7;a.cam.pitch=0.9;a.cam.target.set(-3,0.8,-0.5);await new Promise(r=>setTimeout(r,2500));return 1})()`);
+  shot=await send('Page.captureScreenshot',{format:'png'});await writeFile(join(root,'ui-shots','core-store-inside.png'),Buffer.from(shot.data,'base64'));
+  console.log('  shots written to ui-shots/core-store-*.png');
+}
 /* performance baseline */
 for(const [label,url] of [['blank','/core.html?start=blank'],['coast','/core.html?start=coast']]){
   await open(url);await sleep(2500);const tl=await ev('n0.telemetry()');base0[label]=tl;console.log('  base',label.padEnd(6),JSON.stringify(tl));

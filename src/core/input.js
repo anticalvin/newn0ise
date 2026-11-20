@@ -24,6 +24,7 @@ export class Input {
       if (k === ' ') { e.preventDefault(); this.jumpEdge = true; }
       else if (k === 'e') app.toggleMode();
       else if (k === 'b') app.boulderAtCursor();
+      else if (k === 'f') app.interact();
       else if (k === '/') { e.preventDefault(); app.ui.toggleConsole(true); }
       else if (k === 'h') app.ui.toggleHidden();
       else if (k === 'p') app.snap();
@@ -87,8 +88,9 @@ export class Input {
       if (a.mode === 'explore') { if (edge(0)) jump = true; }
       else { padApply = cur[7] || cur[0]; padInv = cur[6]; }
       if (edge(11)) a.boulderAtCursor();
+      if (edge(5) && a.mode === 'explore') a.interact();
       if (edge(3)) a.toggleMode(); if (edge(2)) a.undo(); if (edge(1) && a.mode === 'edit') a.setMode('explore'); if (edge(9)) a.ui.showGuide();
-      if (edge(4)) a.ui.cycleTool(-1); if (edge(5)) a.ui.cycleTool(1);
+      if (edge(4)) a.ui.cycleTool(-1); if (edge(5) && a.mode !== 'explore') a.ui.cycleTool(1);
       if (edge(12)) a.ui.cycleGroup(-1); if (edge(13)) a.ui.cycleGroup(1);
       if (edge(14)) a.radius(-1); if (edge(15)) a.radius(1);
       if (edge(8)) a.resetCam();

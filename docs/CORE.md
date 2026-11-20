@@ -37,6 +37,10 @@ Every mutation goes through `Core.exec(cmd)` and records one undo entry. It vali
 | `spawn.set` | `x?`, `z?`, `yaw?` |
 | `world.import` | `world` (object or JSON), `at?:[x,z]`, `name?` |
 | `world.remove` | `index?` |
+| `entity.create`, `entity.set`, `entity.remove`, `entity.inspect`, `entity.list` | see `describe` |
+| `asset.catalog`, `asset.inspect`, `asset.place` | see `describe` |
+| `prefab.build` | `type:"retail.convenience"`, `seed?`, `parameters?`, `at?`, `yaw?` |
+| `store.door`, `product.take`, `product.return`, `interact.use` | see `describe` |
 | `state`, `describe` | none |
 
 The page console (`/`) takes shorthand (`time 18.5`, `sea .8`, `blank`, `coast`, `boulder`, `palms 10`) or raw JSON. `window.Core.exec(...)` does the same from the browser console.
@@ -61,7 +65,7 @@ Footsteps, landings, boulder impacts and the sculpt brush kick up thousands of s
 
 ## Saves
 
-`n0ise.core.scene`, version 3 (reads 2). Stored in `localStorage` under `n0ise.core.scene` (falls back to the old `n0ise.core.coast001` key) and exported as `.n0scene`. It holds the preset and seed, the terrain as a compressed delta from the seeded base plus the paint mask, palms, boulders, environment, spawn, player, and any imported `.n0world` documents. Grass and footprints are rebuilt, not saved.
+`n0ise.core.scene`, version 4 (reads 2 and 3; adds `entities` and `assetsUsed`). Stored in `localStorage` under `n0ise.core.scene` (falls back to the old `n0ise.core.coast001` key) and exported as `.n0scene`. It holds the preset and seed, the terrain as a compressed delta from the seeded base plus the paint mask, palms, boulders, environment, spawn, player, and any imported `.n0world` documents. Grass and footprints are rebuilt, not saved.
 
 ## `.n0world` import
 
@@ -74,3 +78,7 @@ The in-app guide (`?`) shows the same table; keep both in step.
 - **Working:** sculpt and paint with undo, Rapier physics, walkable character, ocean with foam and swash, wet and dry sand, footprints, palms, grass, boulders, day and night, commands, autosave, `.n0scene`, `.n0world` import.
 - **Approximated:** sand grains are particles, not granular simulation; the ocean is a wave model, not fluid; the character is procedural; imported worlds are static shapes.
 - **Planned:** see [CORE_BACKLOG.md](CORE_BACKLOG.md).
+
+## Phase 2 additions
+
+Entities, assets and the convenience store: see [core-architecture.md](core-architecture.md) and [CORE_ASSETS.md](CORE_ASSETS.md). Use the Place tab to search assets or build a store; F, RB or the Use button opens the door and picks up the nearest product. Telemetry: `core.html?debug=1`.
