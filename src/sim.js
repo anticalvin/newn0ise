@@ -4,6 +4,7 @@
    everything else falls), the world is built from the current poses and starts running. Reset puts everything back and removes
    whatever the simulation spawned (thrown balls, showers, towers). The floor is a fixed plane at y = 0 that can be switched off. */
 const CDN='https://cdn.jsdelivr.net/npm/@dimforge/rapier3d-compat@0.14.0/rapier.es.js';
+export const RAPIER_CDN=CDN;   // n0ise Core loads the same pinned build
 export const MATERIALS={
   rock:{label:'Rock',bounce:.08,friction:.9,mass:20},
   wood:{label:'Wood',bounce:.2,friction:.6,mass:8},

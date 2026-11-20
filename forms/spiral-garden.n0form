@@ -1,0 +1,63 @@
+{
+ "n0form": 1,
+ "id": "n0ise.spiral-garden",
+ "name": "Spiral Garden",
+ "version": "1.0.0",
+ "apiVersion": 1,
+ "author": "n0ise",
+ "licence": "CC0-1.0",
+ "description": "Strands that spiral upward, as real tubes.",
+ "seed": 7,
+ "params": [
+  {
+   "k": "strands",
+   "label": "Strands",
+   "min": 1,
+   "max": 200,
+   "def": 60,
+   "step": 1
+  },
+  {
+   "k": "turns",
+   "label": "Turns",
+   "min": 1,
+   "max": 12,
+   "def": 6,
+   "step": 0.5
+  },
+  {
+   "k": "height",
+   "label": "Height",
+   "min": 0.5,
+   "max": 8,
+   "def": 4,
+   "step": 0.1
+  },
+  {
+   "k": "thickness",
+   "label": "Thickness",
+   "min": 0.003,
+   "max": 0.05,
+   "def": 0.012,
+   "step": 0.001
+  },
+  {
+   "k": "wobble",
+   "label": "Wobble",
+   "min": 0,
+   "max": 1,
+   "def": 0.3,
+   "step": 0.01
+  }
+ ],
+ "code": "export default function create({ geometry, seed, params, rand, math }) {\n  const { strands, turns, height, thickness, wobble } = params;\n  const group = geometry.group(\"Spiral Garden\");\n  for (let i = 0; i < strands; i++) {\n    const points = [];\n    for (let j = 0; j <= 60; j++) {\n      const t = j / 60;\n      const angle = t * turns * Math.PI * 2 + i * 0.17;\n      const radius = 0.3 + t * 1.5 + math.noise(i * 0.3, t * 3) * wobble;\n      points.push([Math.cos(angle) * radius, t * height, Math.sin(angle) * radius]);\n    }\n    group.tube({ points, radius: thickness, radialSegments: 5, material: \"phosphor\", id: \"strand-\" + i });\n  }\n  return group;\n}",
+ "defaults": {
+  "materials": {
+   "phosphor": {
+    "color": "#9dff7a",
+    "roughness": 0.35,
+    "emissive": "#2a6a1a"
+   }
+  }
+ }
+}

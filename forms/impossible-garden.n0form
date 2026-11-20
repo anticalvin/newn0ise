@@ -1,0 +1,117 @@
+{
+ "n0form": 1,
+ "id": "n0ise.impossible-garden",
+ "name": "The Impossible Garden",
+ "version": "1.0.0",
+ "apiVersion": 1,
+ "author": "n0ise",
+ "licence": "CC0-1.0",
+ "description": "FORM 001. Plants that grow when you open it, stems that loop where they shouldn't, grass, and floating lights.",
+ "seed": 2026,
+ "params": [
+  {
+   "k": "plants",
+   "label": "Plants",
+   "min": 1,
+   "max": 80,
+   "def": 26,
+   "step": 1
+  },
+  {
+   "k": "height",
+   "label": "Height",
+   "min": 0.5,
+   "max": 4,
+   "def": 2,
+   "step": 0.05
+  },
+  {
+   "k": "bend",
+   "label": "Wind bend",
+   "min": 0,
+   "max": 2,
+   "def": 0.9,
+   "step": 0.01
+  },
+  {
+   "k": "leaves",
+   "label": "Leaves per plant",
+   "min": 0,
+   "max": 16,
+   "def": 9,
+   "step": 1
+  },
+  {
+   "k": "bloom",
+   "label": "Bloom",
+   "min": 0,
+   "max": 1.5,
+   "def": 1,
+   "step": 0.01
+  },
+  {
+   "k": "chaos",
+   "label": "Impossible loops",
+   "min": 0,
+   "max": 1,
+   "def": 0.35,
+   "step": 0.01
+  },
+  {
+   "k": "speed",
+   "label": "Growth speed",
+   "min": 0.2,
+   "max": 3,
+   "def": 1,
+   "step": 0.05
+  },
+  {
+   "k": "blades",
+   "label": "Grass",
+   "min": 0,
+   "max": 4000,
+   "def": 1600,
+   "step": 50
+  },
+  {
+   "k": "spread",
+   "label": "Spread",
+   "min": 1,
+   "max": 8,
+   "def": 4,
+   "step": 0.1
+  }
+ ],
+ "code": "export const params = [\n  { k: \"plants\", label: \"Plants\", t: \"r\", min: 1, max: 80, def: 26, step: 1 },\n  { k: \"height\", label: \"Height\", t: \"r\", min: 0.5, max: 4, def: 2, step: 0.05 },\n  { k: \"bend\", label: \"Wind bend\", t: \"r\", min: 0, max: 2, def: 0.9, step: 0.01 },\n  { k: \"leaves\", label: \"Leaves per plant\", t: \"r\", min: 0, max: 16, def: 9, step: 1 },\n  { k: \"bloom\", label: \"Bloom\", t: \"r\", min: 0, max: 1.5, def: 1, step: 0.01 },\n  { k: \"chaos\", label: \"Impossible loops\", t: \"r\", min: 0, max: 1, def: 0.35, step: 0.01 },\n  { k: \"speed\", label: \"Growth speed\", t: \"r\", min: 0.2, max: 3, def: 1, step: 0.05 },\n  { k: \"blades\", label: \"Grass\", t: \"r\", min: 0, max: 4000, def: 1600, step: 50 },\n  { k: \"spread\", label: \"Spread\", t: \"r\", min: 1, max: 8, def: 4, step: 0.1 }\n];\nexport const animated = true;\nexport const duration = 14;\n\nexport default function create({ geometry, params, rand, math, time }) {\n  const { plants, height, bend, leaves, bloom, chaos, speed, blades, spread } = params;\n  const g = geometry.group(\"Impossible Garden\");\n  const r = rand.fork(\"plants\");\n  const grow = Math.min(1, (time * speed) / duration);\n  const leafItems = [], petalItems = [], budItems = [];\n  for (let p = 0; p < plants; p++) {\n    const a = r() * math.TAU, d = Math.sqrt(r()) * spread, bx = Math.cos(a) * d, bz = Math.sin(a) * d;\n    const gp = math.smoothstep(0, 1, Math.min(1, Math.max(0, grow * 1.5 - r() * 0.5)));\n    const h = height * (0.5 + r() * 0.9), loops = r() < chaos ? 1 + Math.floor(r() * 2) : 0, N = 28, pts = [];\n    for (let j = 0; j <= N; j++) {\n      const t = j / N, sway = bend * t * t;\n      pts.push([\n        bx + math.noise(p * 1.7, t * 1.3, 0) * sway * 1.2 + (loops ? Math.cos(t * math.TAU * loops) * 0.28 * t : 0),\n        t * h * (0.02 + 0.98 * gp),\n        bz + math.noise(p * 1.7, t * 1.3, 9) * sway * 1.2 + (loops ? Math.sin(t * math.TAU * loops) * 0.28 * t : 0)\n      ]);\n    }\n    g.tube({ points: pts, radius: t => 0.04 * (1 - t * 0.8) * (0.3 + 0.7 * gp), radialSegments: 5, material: \"stem\", id: \"stem-\" + p });\n    for (let k = 0; k < leaves; k++) {\n      const t = 0.18 + (0.72 * k) / Math.max(1, leaves), at = pts[Math.floor(t * N)];\n      leafItems.push({ pos: at, rot: [0, k * 137.5, 28], scale: [0.26 * gp, 0.025, 0.12 * gp], color: r() < 0.5 ? \"#4f9a3c\" : \"#6cb04a\" });\n    }\n    const tip = pts[N], s = bloom * gp;\n    if (s > 0.2) {\n      budItems.push({ pos: tip, scale: 0.075 * s, color: \"#ffd24a\" });\n      for (let k = 0; k < 8; k++) petalItems.push({ pos: tip, rot: [0, k * 45, 18], scale: [0.17 * s, 0.02, 0.06 * s], color: p % 3 ? \"#ff6fae\" : \"#9d7cff\" });\n    }\n  }\n  const items = [];\n  const rb = rand.fork(\"grass\");\n  for (let i = 0; i < blades; i++) {\n    const a = rb() * math.TAU, d = Math.sqrt(rb()) * spread * 1.35, hh = (0.08 + rb() * 0.22) * (0.2 + 0.8 * grow);\n    items.push({ pos: [Math.cos(a) * d, 0, Math.sin(a) * d], rot: [rb() * 14, rb() * 360, rb() * 14], scale: [0.025, hh, 0.025], color: rb() < 0.5 ? \"#3f7d2e\" : \"#5aa043\" });\n  }\n  if (items.length) g.instances({ shape: \"cone\", dims: [1, 1, 1], segments: 4, items, material: \"blade\" });\n  if (leafItems.length) g.instances({ shape: \"box\", items: leafItems, material: \"leaf\" });\n  if (petalItems.length) g.instances({ shape: \"box\", items: petalItems, material: \"petal\" });\n  if (budItems.length) g.instances({ shape: \"sphere\", segments: 8, items: budItems, material: \"bud\" });\n  const orbs = [];\n  for (let i = 0; i < 7; i++) {\n    const a = (i / 7) * math.TAU + time * 0.15;\n    orbs.push({ pos: [Math.cos(a) * spread * 0.55, 1.4 + Math.sin(time * 0.6 + i) * 0.25 + i * 0.12, Math.sin(a) * spread * 0.55], scale: 0.07 });\n  }\n  g.instances({ shape: \"sphere\", segments: 10, items: orbs, material: \"glow\" });\n  return g;\n}",
+ "animated": true,
+ "defaults": {
+  "materials": {
+   "stem": {
+    "color": "#3d7a35",
+    "roughness": 0.7
+   },
+   "leaf": {
+    "color": "#ffffff",
+    "roughness": 0.6
+   },
+   "petal": {
+    "color": "#ffffff",
+    "roughness": 0.5
+   },
+   "bud": {
+    "color": "#ffd24a",
+    "roughness": 0.4,
+    "emissive": "#553300"
+   },
+   "blade": {
+    "color": "#ffffff",
+    "roughness": 0.9
+   },
+   "glow": {
+    "color": "#c8f5ff",
+    "roughness": 0.2,
+    "emissive": "#66ccff"
+   }
+  }
+ }
+}

@@ -1,181 +1,58 @@
 <!doctype html>
-<html lang="en" data-skin="lab">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
-<meta name="theme-color" content="#0b0b0c">
+<meta name="theme-color" content="#171615">
 <title>n0ise 3D</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Syne:wght@700;800&display=swap" rel="stylesheet">
 <script type="importmap">
 {"imports":{
   "three":"https://cdn.jsdelivr.net/npm/three@0.187.0/build/three.module.js",
   "three/addons/":"https://cdn.jsdelivr.net/npm/three@0.187.0/examples/jsm/",
+  "three/examples/jsm/":"https://cdn.jsdelivr.net/npm/three@0.187.0/examples/jsm/",
+  "manifold-3d":"https://cdn.jsdelivr.net/npm/manifold-3d@3.5.5/manifold.js",
+  "three-mesh-bvh":"https://cdn.jsdelivr.net/npm/three-mesh-bvh@0.9.17/src/index.js",
+  "three-gpu-pathtracer":"https://cdn.jsdelivr.net/npm/three-gpu-pathtracer@0.0.27/src/index.js",
   "@sparkjsdev/spark":"https://cdn.jsdelivr.net/npm/@sparkjsdev/spark@2.4.0/dist/spark.module.min.js"
 }}
 </script>
-<link rel="stylesheet" href="tokens.css">
-<style>
-:root{--rad:2px;--lab:'JetBrains Mono',ui-monospace,Menlo,Consolas,monospace;--disp:'Syne',system-ui,sans-serif;
-  --bg:#0b0b0c;--panel:#111113;--raise:#1a1a1d;--line:#2b2b2f;--ink:#e8e6e1;--mute:#85838c;--accent:#ff5a1f;--on-accent:#150a04;--stage:#050506;--hot:#ff5a1f;color-scheme:dark;
-  --safe-t:env(safe-area-inset-top,0px);--safe-b:env(safe-area-inset-bottom,0px)}
-:root[data-skin=parchment]{--bg:#e6d9bb;--panel:#f0e6cb;--raise:#e0d1ac;--line:#b8a47a;--ink:#2b1d12;--mute:#7a6648;--accent:#9b2d20;--on-accent:#f7eed8;--stage:#2b1d12;--hot:#9b2d20;color-scheme:light}
-:root[data-skin=utility]{--bg:#b9b9b9;--panel:#d0d0d0;--raise:#e4e4e4;--line:#7d7d7d;--ink:#111;--mute:#454545;--accent:#1c2f6e;--on-accent:#fff;--stage:#222;--hot:#a31515;color-scheme:light}
-*{box-sizing:border-box}
-[hidden]{display:none!important}
-html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);font:500 12px/1.4 var(--lab);overflow:hidden;overscroll-behavior:none;-webkit-tap-highlight-color:transparent;-webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums}
-button,input,select,textarea{font:inherit;color:inherit}
-button{cursor:pointer}
-:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
-.app{position:fixed;inset:0;display:flex;flex-direction:column}
-.bar{flex:none;display:flex;align-items:center;gap:6px;padding:calc(var(--safe-t) + 6px) 10px 6px;border-bottom:1px solid var(--line);background:var(--bg);z-index:5}
-.logo{font:800 17px/1 var(--disp);letter-spacing:-.02em}.logo b{color:var(--accent);font-weight:800}
-.logo small{font:600 9px var(--lab);letter-spacing:.16em;color:var(--mute);margin-left:8px;text-transform:uppercase}
-.grow{flex:1}
-.btn{min-height:32px;padding:0 12px;border:1px solid var(--line);background:var(--raise);border-radius:var(--rad);font:700 10px var(--lab);letter-spacing:.1em;text-transform:uppercase;white-space:nowrap}
-.btn.pri{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
-.btn[aria-pressed=true]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
-.btn:active{transform:translateY(1px)}
-.btn:disabled{opacity:.4}
-.main{flex:1;min-height:0;position:relative;display:flex}
-#stage{position:relative;flex:1;min-width:0;background:var(--stage);overflow:hidden}
-#gl{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;outline:none}
-.hud{position:absolute;display:flex;gap:4px;z-index:2;pointer-events:none}
-.hud>*{pointer-events:auto}
-.hud.tl{left:8px;top:8px}.hud.tr{right:8px;top:8px}.hud.bl{left:8px;bottom:10px}.hud.br{right:8px;bottom:10px}
-.seg{display:flex;border:1px solid var(--line);background:color-mix(in srgb,var(--bg) 82%,transparent);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
-.seg button{border:0;background:none;padding:0 7px;min-height:30px;font:700 8.5px var(--lab);letter-spacing:.06em;text-transform:uppercase;color:var(--mute)}
-.seg button[aria-pressed=true]{background:var(--ink);color:var(--bg)}
-.chipb{min-height:30px;padding:0 10px;border:1px solid var(--line);background:color-mix(in srgb,var(--bg) 82%,transparent);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);font:700 9px var(--lab);letter-spacing:.1em;text-transform:uppercase;border-radius:var(--rad)}
-.chipb[aria-pressed=true]{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
-.drop{position:absolute;inset:0;display:none;place-items:center;background:color-mix(in srgb,var(--bg) 70%,transparent);border:2px dashed var(--accent);z-index:6;font:700 12px var(--lab);letter-spacing:.14em;text-transform:uppercase;pointer-events:none}
-#stage.drag .drop{display:grid}
-.empty{position:absolute;left:0;right:0;top:34%;text-align:center;color:var(--mute);pointer-events:none;font:600 10px var(--lab);letter-spacing:.14em;text-transform:uppercase;z-index:1}
-.empty b{display:block;font:800 22px var(--disp);letter-spacing:-.02em;color:var(--ink);text-transform:none;margin-bottom:6px}
-.err{position:absolute;inset:0;z-index:9;display:grid;place-items:center;padding:24px;text-align:center;color:var(--mute);background:var(--stage)}
-
-/* sheet (mobile) */
-#sheet{position:absolute;left:0;right:0;bottom:0;height:var(--fullh,88%);display:flex;flex-direction:column;background:var(--panel);border-top:1px solid var(--line);border-radius:var(--rad) var(--rad) 0 0;z-index:4;transform:translate3d(0,0,0);will-change:transform;contain:layout paint}
-.grab{flex:none;height:22px;display:grid;place-items:center;touch-action:none;cursor:grab}
-.grab::after{content:"";width:34px;height:3px;background:var(--line)}
-.tabs{flex:none;display:flex;border-bottom:1px solid var(--line);touch-action:none}
-.tab{flex:1;min-height:38px;border:0;background:none;font:700 10px var(--lab);letter-spacing:.14em;text-transform:uppercase;color:var(--mute);border-bottom:2px solid transparent;margin-bottom:-1px}
-.tab[aria-selected=true]{color:var(--ink);border-bottom-color:var(--accent)}
-.panes{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding-bottom:calc(var(--safe-b) + 40px)}
-.sec{border-bottom:1px solid var(--line);padding:10px 12px}
-.st{font:700 9px var(--lab);letter-spacing:.16em;text-transform:uppercase;color:var(--mute);margin-bottom:6px;display:flex;justify-content:space-between;align-items:center}
-.row{display:grid;grid-template-columns:96px 1fr 44px;align-items:center;gap:8px;min-height:30px}
-.row label{font:600 10px var(--lab);letter-spacing:.06em;color:var(--mute);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.row output{text-align:right;font-size:11px}
-input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:26px;margin:0;background:transparent}
-input[type=range]::-webkit-slider-runnable-track{height:2px;background:linear-gradient(90deg,var(--accent) var(--p,50%),var(--line) var(--p,50%))}
-input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:18px;background:var(--ink);border:0;margin-top:-8px;border-radius:1px}
-input[type=range]::-moz-range-track{height:2px;background:var(--line)}input[type=range]::-moz-range-progress{height:2px;background:var(--accent)}
-input[type=range]::-moz-range-thumb{width:12px;height:18px;background:var(--ink);border:0;border-radius:1px}
-.chips{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none;padding:2px 0 4px;-webkit-overflow-scrolling:touch}
-.chips::-webkit-scrollbar{display:none}
-.chip{flex:none;min-height:30px;padding:0 10px;border:1px solid var(--line);background:var(--raise);border-radius:var(--rad);font:700 9.5px var(--lab);letter-spacing:.08em;text-transform:uppercase}
-.chip[aria-pressed=true]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
-.sw{flex:none;width:46px;height:28px;border:1px solid var(--line);border-radius:var(--rad);padding:0}
-.sw[aria-pressed=true]{outline:2px solid var(--accent);outline-offset:1px}
-.olist{display:flex;flex-direction:column}
-.orow{display:grid;grid-template-columns:34px 1fr auto 34px;align-items:center;min-height:40px;border-bottom:1px solid var(--line)}
-.orow[aria-selected=true]{background:var(--raise);box-shadow:inset 2px 0 0 var(--accent)}
-.orow button{border:0;background:none;min-height:40px;text-align:left;padding:0 6px}
-.orow .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:700}
-.badge{font:700 8.5px var(--lab);letter-spacing:.12em;color:var(--mute);text-transform:uppercase;padding-right:6px}
-.card{border:1px solid var(--line);background:var(--raise);border-radius:var(--rad);padding:10px;margin-bottom:8px}
-.card h4{margin:0 0 4px;font:800 14px var(--disp);letter-spacing:-.01em}
-.card p{margin:0 0 8px;color:var(--mute);font-size:10.5px;line-height:1.5}
-.card .acts{display:flex;gap:6px;flex-wrap:wrap}
-.note{color:var(--mute);font-size:10px;line-height:1.5;padding:4px 0}
-details.acc{border-bottom:1px solid var(--line)}
-details.acc>summary{list-style:none;min-height:36px;display:flex;align-items:center;justify-content:space-between;padding:0 12px;font:700 9.5px var(--lab);letter-spacing:.14em;text-transform:uppercase;cursor:pointer}
-details.acc>summary::-webkit-details-marker{display:none}
-details.acc>summary::after{content:"+";color:var(--mute)}details.acc[open]>summary::after{content:"–"}
-details.acc>.in{padding:0 12px 10px}
-.sub{font:700 9px var(--lab);letter-spacing:.12em;text-transform:uppercase;color:var(--mute);padding:8px 0 2px}
-.field{width:100%;background:var(--raise);border:1px solid var(--line);border-radius:var(--rad);padding:6px 8px}
-.cutbar{position:absolute;left:50%;top:calc(var(--safe-t) + 56px);transform:translateX(-50%);width:min(320px,86%);background:var(--panel);border:1px solid var(--line);border-radius:var(--rad);padding:8px 10px;z-index:6;font:700 10px var(--lab);letter-spacing:.08em;text-transform:uppercase;color:var(--ink)}.cutbar .prog{margin:6px 0 0}
-#wipe{position:absolute;pointer-events:none;z-index:4;overflow:hidden}#wipe img{position:absolute;inset:0;width:100%;height:100%;display:block}#wipe i{position:absolute;top:0;bottom:0;width:2px;margin-left:-1px;background:var(--ink)}
-#wipebar{position:absolute;left:50%;bottom:calc(var(--safe-b) + 14px);transform:translateX(-50%);display:flex;align-items:center;gap:8px;z-index:5;font:700 9px var(--lab);letter-spacing:.1em;text-transform:uppercase;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:var(--rad);padding:6px 10px}#wipebar input{width:min(160px,28vw)}#wipe[hidden],#wipebar[hidden]{display:none}.cutbar[hidden]{display:none}
-.prog{height:2px;background:var(--line);margin:6px 0}.prog i{display:block;height:100%;width:0;background:var(--accent)}
-
-/* scan modal */
-#scan{position:fixed;inset:0;z-index:20;background:#000;display:flex;flex-direction:column;color:#e8e6e1}
-#scan video,#scan canvas.ov{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
-#scan .top{position:relative;z-index:2;display:flex;gap:6px;align-items:center;padding:calc(var(--safe-t) + 8px) 10px 8px;background:linear-gradient(#000c,transparent)}
-#scan .bot{position:absolute;left:0;right:0;bottom:0;z-index:2;padding:12px 12px calc(var(--safe-b) + 12px);background:linear-gradient(transparent,#000d);display:flex;flex-direction:column;gap:8px}
-#scan .ring{display:flex;gap:2px;height:6px}#scan .ring i{flex:1;background:#ffffff33}#scan .ring i.on{background:var(--accent)}
-#scan .shutter{width:68px;height:68px;border-radius:50%;border:3px solid #fff;background:none;position:relative}
-#scan .shutter::after{content:"";position:absolute;inset:5px;border-radius:50%;background:#fff}
-#scan .shutter[disabled]{opacity:.35}
-#scan .ctrl{display:flex;align-items:center;justify-content:space-between;gap:8px}
-#scan .msg{font:600 10px var(--lab);letter-spacing:.08em;text-align:center;color:#ddd}
-.toast{position:fixed;left:50%;bottom:calc(var(--safe-b) + 90px);transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:8px 12px;border-radius:var(--rad);z-index:40;font:700 10px var(--lab);letter-spacing:.08em;text-transform:uppercase;max-width:90vw;text-align:center}
-.sheetwrap{position:fixed;inset:0;z-index:30;background:#000c;display:grid;place-items:center;padding:20px}
-.sheetwrap>div{max-width:560px;width:100%;display:flex;flex-direction:column;gap:10px;align-items:center}
-.sheetwrap img,.sheetwrap video{max-width:100%;max-height:60vh;border-radius:var(--rad)}
-
-@media (min-width:900px){
-  .main{flex-direction:row}
-  #sheet{position:relative;transform:none!important;height:auto;width:380px;border-top:0;border-left:1px solid var(--line);border-radius:0}
-  .grab{display:none}
-}
-@media (prefers-reduced-motion:reduce){*{transition:none!important}}
-.btn.lnk{display:inline-flex;align-items:center;text-decoration:none;color:inherit}
-#fxov{position:fixed;inset:0;z-index:60;background:var(--bg);display:flex;flex-direction:column}
-#fxov.bg{visibility:hidden;pointer-events:none}
-#fxov .fxtop{flex:none;display:flex;align-items:center;gap:8px;padding:calc(var(--safe-t) + 6px) 10px 6px;border-bottom:1px solid var(--line)}
-#fxov .fxtop b{font:700 11px var(--lab);letter-spacing:.12em;text-transform:uppercase}
-#fxov .fxtop span{font:500 10px var(--lab);color:var(--mute);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-#fxov iframe{flex:1;min-height:0;width:100%;border:0;background:var(--bg)}
-
-/* no sideways scrolling anywhere: rows wrap */
-.chips{flex-wrap:wrap;overflow:visible}
-.restore{position:fixed;left:8px;right:8px;top:calc(8px + env(safe-area-inset-top,0px));z-index:60;display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 12px;background:#0a0a0a;border:1px solid #3a3835;color:#f2efe8;font:500 12px/1.35 var(--lab,monospace);border-radius:3px}.restore span{flex:1 1 200px}
-
-body[data-walk] #sheet,body[data-walk] header.bar,body[data-walk] .hud,body[data-walk] #empty{display:none!important}
-#walkui{position:fixed;inset:0;z-index:40;pointer-events:none;display:none}
-body[data-walk] #walkui{display:block}
-#walkui button{pointer-events:auto;min-height:44px;min-width:44px;padding:0 14px;border:1px solid #3a3835;background:rgba(10,10,10,.8);color:#f2efe8;font:600 12px var(--lab,monospace);text-transform:uppercase;letter-spacing:.08em;border-radius:3px}
-#walkX{position:absolute;left:10px;top:calc(10px + env(safe-area-inset-top,0px))}
-#walkJump{position:absolute;right:18px;bottom:calc(30px + env(safe-area-inset-bottom,0px));width:76px;height:76px;border-radius:50%!important}
-#walkHint{position:absolute;left:0;right:0;bottom:calc(10px + env(safe-area-inset-bottom,0px));text-align:center;font:500 11px var(--lab,monospace);color:#f2efe8;text-shadow:0 1px 2px #000;padding:0 12px}
-#walkStick{position:absolute;width:100px;height:100px;border:2px solid rgba(242,239,232,.6);border-radius:50%}
-#walkStick i{position:absolute;left:30px;top:30px;width:40px;height:40px;border-radius:50%;background:rgba(242,239,232,.8)}
-.wgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:8px}
-.wtile{min-height:68px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;border:1px solid var(--line,#333);background:transparent;color:var(--ink,#eee);border-radius:3px;padding:4px 2px;font:600 10px var(--lab,monospace);text-transform:uppercase;letter-spacing:.06em}
-.wtile:active{background:var(--ink,#eee);color:var(--bg,#000)}.wtile:focus-visible{outline:2px solid var(--accent,#f60);outline-offset:2px}
-body[data-recording='1']::after{content:'';position:fixed;top:calc(10px + env(safe-area-inset-top,0px));right:12px;width:12px;height:12px;border-radius:50%;background:#ff3b2f;z-index:70;animation:recp 1s steps(2) infinite}@keyframes recp{50%{opacity:.2}}@media (prefers-reduced-motion:reduce){body[data-recording='1']::after{animation:none}}
-.fxnote{align-self:center;margin-right:8px;font:600 10.5px var(--lab,monospace);color:var(--ink,#eee);background:rgba(10,10,10,.75);padding:4px 8px;border-radius:3px;max-width:62vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.fxnote:empty{display:none}
-</style>
+<link rel="stylesheet" href="ui/ui.css"><link rel="stylesheet" href="ui/studio.css">
 </head>
 <body>
-<div class="app">
-  <header class="bar">
-    <a class="logo" href="index.html" aria-label="n0ise home" style="text-decoration:none;color:inherit">n<b>0</b>ise<small>3D</small></a>
-    <div class="grow"></div>
-    <a class="btn lnk" id="bLab" href="effects.html">Lab</a>
-    <button class="btn" id="bImport">Import</button>
-    <button class="btn pri" id="bExport">Export</button>
-  </header>
-  <nav class="ws" aria-label="Workspaces"><a href="effects.html?cam=1">Camera</a><a href="effects.html">Effects</a><a href="studio.html" aria-current="page">3D</a><a href="studio.html#world">World</a><a href="lab.html">Lab</a></nav>
-  <div class="main">
+<svg aria-hidden="true" style="position:absolute;width:0;height:0;overflow:hidden" xmlns="http://www.w3.org/2000/svg"><defs>
+<symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1" fill="currentColor"/><circle cx="12" cy="12" r="1" fill="currentColor"/><circle cx="19" cy="12" r="1" fill="currentColor"/></symbol>
+<symbol id="i-cube" viewBox="0 0 24 24"><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9L12 3Zm0 9 8-4.5M12 12 4 7.5M12 12v9"/></symbol>
+<symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+<symbol id="i-expand" viewBox="0 0 24 24"><path d="M13 5h6v6M5 13v6h6"/></symbol>
+<symbol id="i-chevron" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+</defs></svg>
+<div class="app shell studiopage">
+<header class="header">
+  <a class="wordmark" href="index.html" aria-label="n0ise home">n0ise</a>
+  <div class="desktop-only desk-project"><a class="wordmark" href="index.html" aria-label="n0ise home">n0ise</a><span class="desk-project-text">Untitled scene <small id="save-state" role="status">Local</small></span></div>
+  <nav class="nav" aria-label="Workspaces"><a href="effects.html?cam=1">Camera</a><a href="effects.html" id="bLab">Effects</a><a href="studio.html" aria-current="page">3D</a><a href="lab.html">Lab</a></nav>
+  <div class="desktop-only desk-global" id="deskglobal"></div>
+  <div class="header-end"><a class="round" id="studio-link" href="studio-app.html" aria-label="Studio" title="Studio"><svg><use href="#i-cube"/></svg></a><button class="round" type="button" id="menubtn" aria-label="Workspace menu" aria-haspopup="dialog"><svg><use href="#i-more"/></svg></button></div>
+</header>
+<div class="ctx" id="ctx" role="status" aria-live="polite"></div>
+<div class="widebar" id="widebar"><span class="wordmark">3d.</span><div class="actions" id="widebarActs"></div></div>
+<div class="main">
     <div id="stage">
       <canvas id="gl" tabindex="0"></canvas>
+      <button class="ghost scene-expand" type="button" id="expand" aria-label="Expand the scene" aria-pressed="false"><svg><use href="#i-expand"/></svg></button>
+      <button class="chipb" id="bTools" type="button" aria-expanded="false" aria-controls="hudBL">Tools</button>
       <div class="hud tl"><div class="seg" id="viewSeg"></div></div>
-      <div class="hud tr"><span id="fxnote" class="fxnote" aria-live="polite"></span><button class="chipb" id="bFx" aria-pressed="true">FX</button></div>
-      <div class="hud bl" id="hudBL"><button class="chipb" id="bFrame">Frame</button><button class="chipb" id="bGrid" aria-pressed="true">Grid</button><button class="chipb" id="bWalk">Walk</button><button class="chipb" id="bSpin" aria-pressed="false">Spin</button></div>
+      <div class="hud tr"><span id="fxnote" class="fxnote" aria-live="polite"></span><button class="chipb" id="bLight" title="Brighten dark scenes">Light</button><button class="chipb" id="bMat" title="Open the Material tab">Material</button><button class="chipb" id="bFx" title="Effects on the whole picture" aria-pressed="true">FX</button></div>
+      <div class="hud bl" id="hudBL"><button class="chipb" id="bFrame" title="Frame everything">Frame</button><button class="chipb" id="bGrid" title="Show or hide the floor grid" aria-pressed="true">Grid</button><button class="chipb" id="bWalk" title="Walk inside the scene">Walk</button><button class="chipb" id="bSpin" title="Turn the scene slowly" aria-pressed="false">Spin</button></div>
       <div class="hud br" id="hudBR"><button class="chipb" id="bHold">Hold: original</button></div>
-      <div class="empty" id="empty"><b>Bring a model, a photo or a scan.</b>glb · gltf · obj · stl · ply · splat · spz · audio — or use the Scan tab</div>
+      <div class="empty" id="empty"><b>Bring a model, a photo or a scan.</b>glb · gltf · obj · stl · ply · splat · spz · audio — or use the Scan tab<div class="eacts"><button class="btn pri" id="eImport" type="button">Import</button><button class="btn" id="eDraw" type="button">Draw</button><button class="btn" id="eShape" type="button">Add shape</button><button class="btn" id="eDemo" type="button">Try a demo</button></div></div>
       <div class="drop">Drop files to import</div>
       <div class="err" id="err" hidden></div>
     </div>
     <section id="sheet" aria-label="Controls">
-      <div class="grab" id="grab" role="button" tabindex="0" aria-label="Resize panel"></div>
+      <div data-ui-allow="drag handle; the whole sheet header also drags" class="grab" id="grab" role="button" tabindex="0" aria-label="Resize panel"></div>
       <nav class="tabs" id="tabs" role="tablist"></nav>
+      <button class="inspector-head" type="button" id="insphead" aria-expanded="true" aria-controls="panes"><span><strong id="insname">Scene</strong><small id="insstate"></small></span><svg><use href="#i-chevron"/></svg></button>
       <div class="panes" id="panes"></div>
     </section>
   </div>
@@ -183,6 +60,102 @@ body[data-recording='1']::after{content:'';position:fixed;top:calc(10px + env(sa
 <input type="file" id="file" multiple hidden accept="audio/*,.mp3,.wav,.m4a,.ogg,.flac,.glb,.gltf,.bin,.obj,.mtl,.stl,.ply,.splat,.spz,.ksplat,.sog,image/*,video/*">
 <section id="scan" hidden></section>
 <div id="fxov" class="bg"><div class="fxtop"><b>Effects</b><span>Pick and tune effects. They apply to the selected object only.</span><button class="btn pri" id="fxdone">Done</button></div><iframe id="fxif" title="n0ise effects" allow="autoplay"></iframe></div>
-<script type="module" src="assets/studio.js?v=1fe3235b"></script>
+<div id="launch" role="dialog" aria-label="Start in 3D" hidden><canvas></canvas><div class="lc">
+<button class="ws-back" id="launchback" type="button">‹ Back</button>
+<h1>3<b>D</b></h1><p class="sub">Build a house or a world, paint and make materials, draw in 3D, turn a photo into a model, or start with an empty scene.</p>
+<div class="cards">
+<button class="card big" data-go="world"><svg viewBox="0 0 40 40"><path d="M4 30l16-8 16 8-16 8z"/><path d="M8 24l12-6 12 6M13 13l7-4 7 4M20 9v9"/></svg><b>World</b><span>Walk around in 3D. Start blank, play the Night Station demo, take a photo walk, or import a world file.</span></button>
+<button class="card big" data-go="sigil"><svg viewBox="0 0 40 40"><path d="M6 33c6-16 10 4 14-10s8-12 14-18"/><circle cx="34" cy="5" r="2.4"/></svg><b>Sigil</b><span>Draw in real 3D with chrome, glass, gold or a material you make. Built for a finger on a phone.</span></button>
+<button class="card big" data-go="material"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="14"/><path d="M12 14a10 10 0 0 1 8-5M26 28a10 10 0 0 1-7 3"/></svg><b>Material</b><span>Paint on the model with layers, make glass, metal and fabric, add real textures, light and path-traced renders.</span></button>
+<button class="card big" data-go="build"><svg viewBox="0 0 40 40"><path d="M5 19 20 6l15 13M9 17v17h22V17M17 34V24h6v10"/></svg><b>Build</b><span>Draw rooms, doors, windows and roofs on a grid, then furnish with real furniture.</span></button>
+<button class="card big" data-go="sculpt"><svg viewBox="0 0 40 40"><path d="M8 28c0-10 6-18 14-18s10 8 4 14-8 8-18 4z"/><path d="M26 6l8 8"/></svg><b>Sculpt</b><span>Push, pull and smooth clay, with a pen or a controller.</span></button>
+<button class="card big" data-go="character"><svg viewBox="0 0 40 40"><circle cx="20" cy="9" r="5"/><path d="M10 36c0-9 4-15 10-15s10 6 10 15M12 22l-5 8M28 22l5 8"/></svg><b>Character</b><span>Make a person, then open it here to pose and render.</span></button>
+<button class="card" data-go="photo"><svg viewBox="0 0 40 40"><rect x="5" y="8" width="30" height="24" rx="3"/><circle cx="14" cy="17" r="3"/><path d="M5 28l9-7 7 6 6-5 8 7"/></svg><b>Photo to 3D</b><span>Pick a picture and it becomes a relief you can orbit and light.</span></button>
+<button class="card" data-go="model"><svg viewBox="0 0 40 40"><path d="M20 4l14 8v16l-14 8-14-8V12z"/><path d="M6 12l14 8 14-8M20 20v16"/></svg><b>Open a model</b><span>glb, obj, stl, ply, splats, or a saved project.</span></button>
+<button class="card" data-go="scan"><svg viewBox="0 0 40 40"><path d="M6 14V8h6M28 8h6v6M34 26v6h-6M12 32H6v-6"/><circle cx="20" cy="20" r="6"/></svg><b>Scan</b><span>Use the camera or a turntable video.</span></button>
+<button class="card" data-go="scene"><svg viewBox="0 0 40 40"><path d="M7 28l13-7 13 7-13 7z"/><rect x="15" y="9" width="10" height="12"/></svg><b>Empty scene</b><span>Add shapes and shape your own.</span></button>
+</div><button class="skip" data-go="knot">Skip, go to the editor</button></div></div>
+<div id="wstart" role="dialog" aria-label="Start a world" hidden><div class="lc">
+<button class="ws-back" id="wsback">‹ Back</button>
+<h1>World</h1><p class="sub">Pick how to begin. You can switch any time from the World tab.</p>
+<div class="cards">
+<button class="card big" data-w="core"><b>n0ise Core</b><span>The new engine: a living coast with a sea, sand, palms and real physics. Start blank or from the coast demo, sculpt the land and walk it.</span><em>Open Core</em></button>
+<button class="card big" data-w="night-station" hidden><b>Night Station</b><span>The demo. A rainy petrol station at night with a shop, a TV, a pistol to find and lights that react. Press Play and walk in.</span><em>Play the demo</em></button>
+<button class="card big" data-w="photowalk"><b>Photo walk</b><span>Walk around in first person with a camera. Pick a lens and a frame shape, find the shots on your list, and build a roll.</span><em>Walk and shoot</em></button>
+<button class="card" data-w="blank"><b>Start blank</b><span>Flat ground, a sky and a character. Build everything yourself.</span></button>
+<button class="card" data-w="level"><b>Starter level</b><span>Platforms, crates and a goal to play with right away.</span></button>
+<button class="card" data-w="sandbox"><b>Physics sandbox</b><span>Blocks and a character that can knock them over.</span></button>
+<button class="card" data-w="proving-ground"><b>Proving ground</b><span>An open test yard for movement, looks and shooting.</span></button>
+<button class="card" data-w="import"><b>Import a world</b><span>Open a .n0world file an AI wrote, or one you exported.</span></button>
+</div></div></div>
+<dialog id="dialog" aria-labelledby="dialog-title">
+  <div class="dialog-head"><h2 id="dialog-title">3D</h2><form method="dialog"><button class="ghost" aria-label="Close dialog"><svg><use href="#i-close"/></svg></button></form></div>
+  <div class="dialog-body" id="dialog-body">
+    <h3>Project</h3><div class="segment" id="globalslot"><button class="pill" id="bImport" type="button">Import</button><button class="pill" id="bExport" type="button">Export</button></div>
+    <h3 id="objh" hidden>Selected object</h3><div class="segment" id="objslot"></div>
+    <h3 id="viewh">View</h3><div class="segment" id="viewslot"></div>
+    <h3>Help</h3><div class="segment"><a class="pill" href="index.html">Home</a></div>
+  </div>
+</dialog>
+<template id="globalbtns"><button class="desk-btn icon" id="bUndo" type="button" title="Undo (Ctrl+Z)" aria-label="Undo"><svg viewBox="0 0 24 24"><path d="m8 4-5 5 5 5M3 9h10a6 6 0 0 1 0 12h-3"/></svg></button><button class="desk-btn icon" id="bRedo" type="button" title="Redo (Ctrl+Shift+Z)" aria-label="Redo"><svg viewBox="0 0 24 24" style="transform:scaleX(-1)"><path d="m8 4-5 5 5 5M3 9h10a6 6 0 0 1 0 12h-3"/></svg></button><button class="desk-btn" id="bSave" type="button" title="Save the project to a file">Save</button></template>
+<script>document.getElementById('globalslot').append(document.getElementById('globalbtns').content);</script>
+<script type="module" src="assets/studio.js?v=1dfb7f6f"></script>
+<script type="module">
+const dlg=document.getElementById('dialog');
+document.getElementById('menubtn').addEventListener('click',()=>dlg.showModal());
+dlg.addEventListener('click',e=>{if(e.target===dlg||(e.target.closest&&e.target.closest('.dialog-body button,.dialog-body a')))dlg.close();});
+document.getElementById('studio-link').addEventListener('click',e=>{e.preventDefault();const t=document.createElement('div');t.className='toast';t.setAttribute('role','status');t.textContent='Coming soon';document.body.append(t);setTimeout(()=>t.remove(),2400);});
+const mq=matchMedia('(min-width:960px) and (min-height:550px)'),dg=document.getElementById('deskglobal'),slot=document.getElementById('globalslot'),vs=document.getElementById('viewslot');
+const wbActs=document.getElementById('widebarActs');
+const place=()=>{
+  ['bUndo','bRedo'].forEach(id=>{const o=document.getElementById(id);if(!o)return;if(mq.matches){o.classList.remove('ghost');o.classList.add('desk-btn','icon');dg.appendChild(o);}else{o.classList.remove('desk-btn','icon');o.classList.add('ghost');wbActs.appendChild(o);}});
+  const sv=document.getElementById('bSave');if(sv)(mq.matches?dg:slot).appendChild(sv);};
+place();mq.addEventListener('change',place);
+const hudBL=document.getElementById('hudBL');
+/* View controls: on phones one View menu owns them (shading modes, light, material, look, FX, frame, grid, walk, spin); from 900px they sit on the stage as before.
+   The same elements move, so the 3D engine's handlers and state are untouched. */
+const mqE=matchMedia('(min-width:900px)'),hudTL=document.querySelector('.hud.tl'),hudTR=document.querySelector('.hud.tr'),marks=new Map();
+[hudTL,hudTR].forEach(h=>{if(!h)return;const m=document.createComment('hud');h.parentNode.insertBefore(m,h);marks.set(h,m);});
+const placeView=()=>{
+  ['bFrame','bGrid','bWalk','bSpin'].forEach(id=>{const o=document.getElementById(id);if(!o)return;if(mqE.matches){o.classList.remove('pill');hudBL.appendChild(o);}else{o.classList.add('pill');vs.appendChild(o);}});
+  [hudTL,hudTR].forEach(h=>{if(!h)return;if(mqE.matches)marks.get(h).after(h);else vs.prepend(h);});
+  const vh=document.getElementById('viewh');vh.hidden=vs.hidden=mqE.matches;
+};
+placeView();mqE.addEventListener('change',placeView);
+/* the phone Tools chip becomes the View button (its old handler toggled four stacked strips over the model) */
+{const tb=document.getElementById('bTools');if(tb){const nb=tb.cloneNode(true);nb.textContent='View';nb.removeAttribute('aria-controls');nb.setAttribute('aria-haspopup','dialog');nb.setAttribute('aria-expanded','false');tb.replaceWith(nb);nb.addEventListener('click',()=>dlg.showModal());}}
+/* active discipline: one attribute the stylesheet reads, so each discipline owns its own tool row */
+const tabsEl=document.getElementById('tabs');let lastTab='';
+const spawnChar=()=>{const empty=document.getElementById('empty'),hasModel=!empty||empty.hidden||getComputedStyle(empty).display==='none';
+  if(!hasModel)return;if([...document.querySelectorAll('.orow')].some(r=>/human|character/i.test(r.textContent)))return;
+  const find=re=>[...document.querySelectorAll('#panes button')].find(x=>re.test(x.textContent.trim()));
+  const mine=find(/my character/i);if(mine){mine.click();/* nobody has made a character yet: use the stock figure instead of showing an error */setTimeout(()=>{const t=document.querySelector('.toast');if(t&&/no character yet/i.test(t.textContent)){t.hidden=true;const h=find(/^\+ Human/i);h&&h.click();}},450);}else{const h=find(/^\+ Human/i);h&&h.click();}};
+/* smaller sheet in landscape; Build opens at the partial height so its tool strip and the model both fit */
+{const sh=window.__sheet;if(sh&&!sh.__n0){sh.__n0=1;const orig=sh.snaps.bind(sh);sh.snaps=()=>{const a=orig();if(matchMedia('(max-height:520px)').matches&&!mqE.matches){const H=innerHeight;return[a[0],Math.round(H*.28),Math.round(H*.42),Math.round(H*.42)];}return a;};}}
+{const bd=document.getElementById('bdtb');const move=()=>{const t=document.getElementById('bdtb');if(!t)return;const pn=document.getElementById('panes');if(!mqE.matches&&t.parentNode!==pn.parentNode)pn.parentNode.insertBefore(t,document.getElementById('insphead'));else if(mqE.matches&&t.parentNode!==document.body)document.body.appendChild(t);};
+  move();mqE.addEventListener('change',move);new MutationObserver(move).observe(document.body,{childList:true});}
+const onTab=()=>{const sel=tabsEl.querySelector('[aria-selected=true]');const k=sel?sel.id.replace('tab_',''):'';document.body.dataset.tab=k;if(k==='build'&&lastTab!=='build'){setTimeout(spawnChar,700);const sh=window.__sheet;if(sh&&!mqE.matches)sh.setIdx(1);}lastTab=k;};
+new MutationObserver(onTab).observe(tabsEl,{attributes:true,subtree:true,attributeFilter:['aria-selected']});onTab();
+/* sheet height, for anything that must sit above it */
+const rootEl=document.documentElement;
+/* phones: the sheet no longer covers the scene (it is a panel below it), so nothing needs lifting */
+{const sh=window.__sheet;if(sh)sh.coverPx=()=>0;}
+/* the object tool row lives inside the scene card */
+{const st=document.getElementById('stage'),ob=document.getElementById('objbar');if(st&&ob)st.appendChild(ob);}
+{const st=document.getElementById('stage'),ex=document.getElementById('expand');
+ if(ex){ex.addEventListener('click',()=>{const on=!st.classList.contains('expanded');st.classList.toggle('expanded',on);ex.setAttribute('aria-pressed',String(on));ex.setAttribute('aria-label',on?'Shrink the scene':'Expand the scene');document.body.toggleAttribute('data-expanded',on);});
+  addEventListener('keydown',e=>{if(e.key==='Escape'&&st.classList.contains('expanded'))ex.click();});}}
+{const ih=document.getElementById('insphead'),pn=document.getElementById('panes'),nm=document.getElementById('insname'),stt=document.getElementById('insstate'),cx=document.getElementById('ctx');
+ ih.addEventListener('click',()=>{const open=ih.getAttribute('aria-expanded')!=='true';ih.setAttribute('aria-expanded',String(open));pn.classList.toggle('collapsed',!open);});
+ const sync=()=>{const sel=tabsEl.querySelector('[aria-selected=true]');nm.textContent=sel?(sel.textContent||'').trim():'Scene';stt.textContent=(cx.textContent||'').replace(/\s+/g,' ').trim();};
+ new MutationObserver(sync).observe(cx,{childList:true,characterData:true,subtree:true});new MutationObserver(sync).observe(tabsEl,{attributes:true,subtree:true,attributeFilter:['aria-selected']});sync();}
+
+const rafCover=()=>{const sh=window.__sheet;if(sh)rootEl.style.setProperty('--cover',Math.round(sh.coverPx())+'px');
+  const d=tabsEl.classList.contains('dock')?tabsEl.offsetHeight:0;rootEl.style.setProperty('--objb',d?(d+10)+'px':'');requestAnimationFrame(rafCover);};rafCover();
+/* the "restore your last session" prompt becomes a slim bar between the header and the viewport, not a layer on top of it */
+const app=document.querySelector('.app'),mainEl=document.querySelector('.main');
+const tuck=n=>{if(n&&n.classList&&n.classList.contains('restore')&&n.parentNode!==app)app.insertBefore(n,mainEl);};
+tuck(document.querySelector('.restore'));new MutationObserver(ms=>ms.forEach(m=>m.addedNodes.forEach(tuck))).observe(document.body,{childList:true});
+</script>
 </body>
 </html>

@@ -3146,7 +3146,7 @@ function buildCamUI(){
   const sw=el('button','cb camswap','Next');sw.setAttribute('aria-label','Next camera');sw.addEventListener('click',()=>u.classList.contains('shoot')?setShoot(false):camStep(1));
   row.append(roll,sh,sw);
   const modes=el('div','cammode');
-  const KINDS=[['video','Video'],['photo','Photo'],['square','Square'],['burst','Burst'],['bracket','Bracket']];
+  const KINDS=[['photo','Photo'],['video','Video'],['square','Square'],['burst','Burst'],['bracket','Bracket']];
   const setKind=(m,quiet)=>{if(camRecorder.busy)return;const was=camKind;camKind=m;camMode=m==='video'?'video':'photo';lsSet('n0ise.cammode',camMode);lsSet('n0ise.camkind',m);u.dataset.kind=m;
     if(m==='square'&&was!=='square'){camAspBack=P.aspect;P.aspect='1:1';V.sizeKey='';}else if(was==='square'&&m!=='square'){P.aspect=camAspBack||'3:4';V.sizeKey='';}
     modes.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x.dataset.m===m));

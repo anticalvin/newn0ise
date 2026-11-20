@@ -1,0 +1,31 @@
+#!/usr/bin/env node
+/* Regenerates the parts of the Creator Kit that come straight from the format's registries, so the docs can't drift from the code:
+   docs/creator-kit/prefabs.md, docs/creator-kit/rules.md and worlds/n0world.schema.json. Run: node tools/n0world-docs.mjs */
+import {writeFileSync} from 'node:fs';
+import {PREFABS,TRIGGERS,ACTIONS,LIMITS,PRIM_TYPES,READY_TYPES,PHYS_TYPES,SOUNDS,PATTERNS,SKIES} from '../src/world-schema.js';
+const spec=s=>s.t==='num'||s.t==='int'?(s.t==='int'?'integer ':'number ')+s.min+' to '+s.max+', default '+s.def:s.t==='bool'?'true or false, default '+s.def:s.t==='enum'?s.opts.map(o=>'"'+o+'"').join(' | ')+', default "'+s.def+'"':s.t==='material'?'name of a material you defined (optional)':s.t==='vec3'?'[x, y, z], default '+JSON.stringify(s.def):s.t==='list'?'list of up to '+s.max+' items: '+Object.entries(s.of).map(([k,v])=>k+' ('+spec(v)+')').join('; '):'';
+let p='# Prefab catalogue\n\n_Generated from `src/world-schema.js` by `node tools/n0world-docs.mjs`. Do not edit by hand._\n\nA prefab instance is `{"id":"…","prefab":"door","pos":[x,y,z],"rot":[0,0,0],"params":{…}}`. It stays **one editable object** in n0ise: select it and change its parameters in the World tab. Out-of-range values are clamped and reported.\n\n';
+for(const [k,v] of Object.entries(PREFABS)){p+='## `'+k+'` · '+v.label+'\n'+v.note+'\n\n';const e=Object.entries(v.params);if(!e.length)p+='No parameters.\n\n';else{p+='| parameter | values |\n|---|---|\n';e.forEach(([n,s])=>p+='| `'+n+'` | '+spec(s)+' |\n');p+='\n';}}
+p+='## Plain shapes and ready-made objects\n\n`type` is one of: '+PRIM_TYPES.map(x=>'`'+x+'`').join(', ')+'. Ready-made (physics defaults included): '+READY_TYPES.map(x=>'`'+x+'`').join(', ')+'. Give exact size with `dims: [width, height, depth]` in metres.\n';
+writeFileSync('docs/creator-kit/prefabs.md',p);
+let r='# Rules reference\n\n_Generated from `src/world-schema.js`. Do not edit by hand._\n\nRules are data, never code. A rule is `{"id","when":{"trigger",…},"if"?:{"flag","equals"},"then":[actions]}`. Rules only run while you are walking (Play in the World tab). Everything resets each time you start walking.\n\n## Triggers\n| trigger | meaning |\n|---|---|\n';
+for(const [k,v] of Object.entries(TRIGGERS))r+='| `'+k+'` | '+v.note+' |\n';
+r+='\n`when.once: true` runs the rule only the first time. `player-enter` and `object-touch` fire when the character steps in, not every frame.\n\n## Actions\n| action | meaning |\n|---|---|\n';
+for(const [k,v] of Object.entries(ACTIONS))r+='| `'+k+'` | '+v.note.replace(/\|/g,'\\|')+' |\n';
+r+='\n## Conditions\n`"if":{"flag":"gate-open","equals":true}` runs the rule only when that flag has that value. Flags are set with `set-flag`. `collect` also counts up a flag named `collected`.\n\n## Limits\n- at most '+LIMITS.rules+' rules, '+LIMITS.actionsPerRule+' actions per rule, about '+LIMITS.actionsPerSecond+' actions per second in total (extras are skipped)\n- messages up to '+LIMITS.text+' characters\n- sounds: '+SOUNDS.map(x=>'`'+x+'`').join(', ')+' (built in, nothing is loaded)\n- there is no scripting, no network and no way to start another rule from a rule\n';
+writeFileSync('docs/creator-kit/rules.md',r);
+const schema={$schema:'https://json-schema.org/draft/2020-12/schema',title:'n0ise world (.n0world) version 1',type:'object',required:['format','version'],
+ description:'Loose by design: the app validates, repairs and reports. This file documents the shape for editors and AI tools. Limits: '+JSON.stringify(LIMITS),
+ properties:{format:{const:'n0ise-world'},version:{const:1},
+  scene:{type:'object',properties:{name:{type:'string',maxLength:LIMITS.name},environment:{type:'object',properties:{timeOfDay:{type:'number',minimum:0,maximum:24},sky:{enum:SKIES},bg:{type:'string',pattern:'^#[0-9a-fA-F]{6}$'},fog:{oneOf:[{const:false},{type:'object',properties:{color:{type:'string'},near:{type:'number'},far:{type:'number'}}}]},ground:{oneOf:[{type:'boolean'},{type:'object',properties:{color:{type:'string'},size:{type:'number'}}}]},shadows:{type:'boolean'},sun:{type:'object',properties:{intensity:{type:'number'},color:{type:'string'}}}}}}},
+  materials:{type:'object',maxProperties:LIMITS.materials,additionalProperties:{type:'object',properties:{color:{type:'string'},roughness:{type:'number',minimum:0,maximum:1},metalness:{type:'number',minimum:0,maximum:1},emissive:{type:'string'},emissiveIntensity:{type:'number'},opacity:{type:'number'},pattern:{type:'object',properties:{type:{enum:PATTERNS},color2:{type:'string'},scale:{type:'number'}}}}}},
+  prefabs:{type:'object',description:'Named parameter presets: {name:{prefab,params}}'},
+  instances:{type:'array',maxItems:LIMITS.instances,items:{type:'object',required:['id'],properties:{id:{type:'string'},name:{type:'string'},type:{enum:[...PRIM_TYPES,...READY_TYPES]},prefab:{enum:Object.keys(PREFABS)},params:{type:'object'},pos:{type:'array',items:{type:'number'},minItems:3,maxItems:3},rot:{type:'array',items:{type:'number'},minItems:3,maxItems:3},dims:{type:'array',items:{type:'number'},minItems:3,maxItems:3},scale:{},material:{type:'string'},color:{type:'string'},phys:{type:'object',properties:{type:{enum:PHYS_TYPES}}},parent:{type:'string'},visible:{type:'boolean'}}}},
+  lights:{type:'array',maxItems:LIMITS.lights},cameras:{type:'array',maxItems:LIMITS.cameras},
+  rules:{type:'array',maxItems:LIMITS.rules,items:{type:'object',required:['when','then'],properties:{when:{type:'object',properties:{trigger:{enum:Object.keys(TRIGGERS)}}},if:{type:'object'},then:{type:'array',maxItems:LIMITS.actionsPerRule,items:{type:'object',properties:{action:{enum:Object.keys(ACTIONS)}}}}}}},
+  looks:{type:'array',maxItems:LIMITS.looks,items:{type:'object',required:['target','profile'],properties:{target:{type:'string',description:'"scene", "object:<id>" or "material:<name>"'},profile:{type:'string'}}}},
+  assets:{type:'object',description:'Reserved. Not used in version 1.'}}};
+writeFileSync('worlds/n0world.schema.json',JSON.stringify(schema,null,1));
+import {WORLD_BRIEF} from '../src/world-brief.js';
+writeFileSync('docs/creator-kit/ai-brief.txt',WORLD_BRIEF);
+console.log('wrote docs/creator-kit/prefabs.md, docs/creator-kit/rules.md, worlds/n0world.schema.json');

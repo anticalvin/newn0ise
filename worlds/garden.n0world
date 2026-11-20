@@ -1,0 +1,64 @@
+{
+ "format": "n0ise-world",
+ "version": 1,
+ "scene": {
+  "name": "Garden ground",
+  "environment": {
+   "timeOfDay": 17.5,
+   "shadows": true,
+   "ground": {
+    "color": "#4d6b3e",
+    "size": 120
+   },
+   "fog": {
+    "color": "#c9b8a8",
+    "near": 14,
+    "far": 70
+   }
+  }
+ },
+ "instances": [
+  {
+   "id": "start",
+   "prefab": "spawn",
+   "pos": [
+    0,
+    0,
+    7
+   ],
+   "params": {
+    "yaw": 0
+   }
+  }
+ ],
+ "lights": [
+  {
+   "id": "lamp",
+   "type": "point",
+   "pos": [
+    0,
+    3.2,
+    0
+   ],
+   "color": "#ffcf8a",
+   "intensity": 18
+  }
+ ],
+ "cameras": [
+  {
+   "id": "main",
+   "pos": [
+    7,
+    3.5,
+    9
+   ],
+   "target": [
+    0,
+    1,
+    0
+   ],
+   "fov": 50
+  }
+ ],
+ "rules": []
+}

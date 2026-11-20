@@ -1,6 +1,7 @@
 # Building in n0ise with an AI
 
 n0ise 3D has a scene API. An AI can read the scene, build it, render a picture, look at it, and fix it.
+Worlds an AI can write: see [docs/creator-kit](docs/creator-kit/README.md).
 Units are metres, rotation is degrees, colours are `#rrggbb`. An object's `pos` is its base (`y: 0` is the floor).
 
 ## Connect Claude Code (or any MCP client)

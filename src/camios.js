@@ -27,7 +27,10 @@ export function installIosCam(c){
     const sk=el('button','cb','iOS look');sk.id='camskin';sk.setAttribute('aria-pressed',on);sk.addEventListener('click',()=>{const v=!u.classList.contains('ios');u.classList.toggle('ios',v);sk.setAttribute('aria-pressed',v);lsSet('n0ise.camskin',v?'ios':'lab');});
     const ck=el('button','cb','Click');ck.setAttribute('aria-label','Shutter click sound');ck.setAttribute('aria-pressed',clickOn);ck.addEventListener('click',()=>{clickOn=!clickOn;ck.setAttribute('aria-pressed',clickOn);lsSet('n0ise.camclick',clickOn?'on':'off');if(clickOn)sound();});
     const cm=el('button','cb','Compare');cm.setAttribute('aria-pressed',false);cm.addEventListener('click',()=>{const on=c.wipe&&c.wipe().toggle();cm.setAttribute('aria-pressed',!!on);});
-    more.append(sk,ck,cm);
+    const al=el('button','cb','Lock shape');al.setAttribute('aria-label','Lock the frame shape');al.setAttribute('aria-pressed',!!c.aspLock());al.addEventListener('click',()=>{c.setAspLock();al.setAttribute('aria-pressed',!!c.aspLock());toast(c.aspLock()?'Frame shape locked. Cameras keep it.':'Frame shape follows the camera and how you hold the phone');});
+    const fl=el('button','cb','No fisheye');fl.id='camlens';fl.setAttribute('aria-pressed',!!window.__lensOff);fl.addEventListener('click',()=>c.toggleLens());
+    const nzb=el('button','cb','Noise');nzb.setAttribute('aria-label','Digital noise: off, low or full');nzb.textContent='Noise: '+['off','low','full'][[0,.3,1].indexOf(window.__noiseK)];nzb.addEventListener('click',()=>{c.cycleNoise();nzb.textContent='Noise: '+['off','low','full'][[0,.3,1].indexOf(window.__noiseK)];});
+    more.append(sk,ck,cm,al,fl,nzb);
   }
   /* sounds belong to the camera body: the shutter, the film advance, the tape load */
   const cs=createCamSound();
@@ -46,10 +49,16 @@ export function installIosCam(c){
   const lock=el('div','clock','AE/AF LOCK');layer.appendChild(lock);
   const zb=el('button','czoom','1×');zb.setAttribute('aria-label','Zoom. Tap to reset');layer.appendChild(zb);
   const sun=fx.querySelector('.sun'),line=fx.querySelector('.sunline');
+  /* lens pills: 0.5× (when the camera can), 1×, 2×, 4×. They set the same zoom the pinch does. */
+  const lens=el('div','clens');lens.setAttribute('role','group');lens.setAttribute('aria-label','Zoom');layer.appendChild(lens);
+  const LZ=[.5,1,2,4],lb=[];
+  const paintLens=()=>{const zr=(c.caps()||{}).zoom,min=zr&&zr.min?zr.min:1,max=zr&&zr.max?zr.max:8;let near=1,bd=9;LZ.forEach(v=>{const d=Math.abs(Math.log(PRO.zoom/v));if(d<bd){bd=d;near=v;}});
+    lb.forEach(([v,b])=>{b.hidden=v<min-.01||v>max+.01&&v>1;const on=v===near&&bd<.12;b.setAttribute('aria-pressed',on);b.textContent=on?(v<1?'.5':String(v))+'×':(v<1?'.5':String(v));});};
+  LZ.forEach(v=>{const b=el('button','clensb',String(v));b.type='button';b.setAttribute('aria-label','Zoom '+v+' times');b.addEventListener('pointerdown',e=>e.stopPropagation());b.addEventListener('click',()=>{PRO.zoom=v;applyPro();showZoom();buzz(8);});lb.push([v,b]);lens.appendChild(b);});
   const paintSun=()=>{const y=-PRO.ev*25;sun.style.transform='translateY('+y+'px)';};
   let hideT=0,dimT=0,zT=0,fxX=0,fxY=0,locked=false;
-  const showZoom=()=>{zb.textContent=(PRO.zoom<10?PRO.zoom.toFixed(1).replace(/\.0$/,''):Math.round(PRO.zoom))+'×';zb.classList.add('on');clearTimeout(zT);zT=setTimeout(()=>{if(PRO.zoom<=1.01)zb.classList.remove('on');},1600);};
-  zb.addEventListener('pointerdown',e=>e.stopPropagation());
+  const showZoom=()=>{paintLens();zb.textContent=(PRO.zoom<10?PRO.zoom.toFixed(1).replace(/\.0$/,''):Math.round(PRO.zoom))+'×';zb.classList.add('on');clearTimeout(zT);zT=setTimeout(()=>{if(PRO.zoom<=1.01)zb.classList.remove('on');},1600);};
+  paintLens();setTimeout(paintLens,800);zb.addEventListener('pointerdown',e=>e.stopPropagation());
   zb.addEventListener('click',()=>{PRO.zoom=1;applyPro();showZoom();zb.classList.remove('on');buzz(8);});
   function place(x,y,lockIt){
     const r=layer.getBoundingClientRect();fxX=Math.max(48,Math.min(r.width-70,x-r.left));fxY=Math.max(48,Math.min(r.height-48,y-r.top));

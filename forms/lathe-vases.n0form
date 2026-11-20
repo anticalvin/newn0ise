@@ -1,0 +1,67 @@
+{
+ "n0form": 1,
+ "id": "n0ise.lathe-vases",
+ "name": "Lathe vases",
+ "version": "1.0.0",
+ "apiVersion": 1,
+ "author": "n0ise",
+ "licence": "CC0-1.0",
+ "description": "A row of vases made by revolving a profile.",
+ "seed": 7,
+ "params": [
+  {
+   "k": "count",
+   "label": "Vases",
+   "min": 1,
+   "max": 20,
+   "def": 5,
+   "step": 1
+  },
+  {
+   "k": "height",
+   "label": "Height",
+   "min": 0.3,
+   "max": 2,
+   "def": 1,
+   "step": 0.05
+  },
+  {
+   "k": "belly",
+   "label": "Belly",
+   "min": 0.1,
+   "max": 0.6,
+   "def": 0.3,
+   "step": 0.01
+  },
+  {
+   "k": "neck",
+   "label": "Neck",
+   "min": 0,
+   "max": 0.5,
+   "def": 0.15,
+   "step": 0.01
+  },
+  {
+   "k": "spacing",
+   "label": "Spacing",
+   "min": 0.5,
+   "max": 2,
+   "def": 0.9,
+   "step": 0.05
+  }
+ ],
+ "code": "export default function create({ geometry, params, rand, math }) {\n  const { count, height, belly, neck, spacing } = params;\n  const g = geometry.group(\"Vases\");\n  const r = rand.fork(\"vases\");\n  for (let i = 0; i < count; i++) {\n    const h = height * (0.7 + r() * 0.6), b = belly * (0.7 + r() * 0.6), n = neck * (0.8 + r() * 0.4);\n    const profile = [];\n    for (let k = 0; k <= 16; k++) {\n      const t = k / 16;\n      const rad = 0.05 + b * Math.sin(Math.PI * Math.pow(t, 0.8)) * (1 - t * 0.2) + n * t * t * 0.4;\n      profile.push([rad, t * h]);\n    }\n    g.lathe({ profile, segments: 28, material: i % 2 ? \"glaze\" : \"clay\", pos: [(i - (count - 1) / 2) * spacing, 0, 0] });\n  }\n  return g;\n}",
+ "defaults": {
+  "materials": {
+   "clay": {
+    "color": "#b5683c",
+    "roughness": 0.8
+   },
+   "glaze": {
+    "color": "#3b6e8f",
+    "roughness": 0.25,
+    "metalness": 0.1
+   }
+  }
+ }
+}

@@ -1,0 +1,416 @@
+{
+ "format": "n0ise-world",
+ "version": 1,
+ "scene": {
+  "name": "Proving ground",
+  "environment": {
+   "timeOfDay": 16,
+   "shadows": true,
+   "ground": {
+    "color": "#6e7a58",
+    "size": 160
+   },
+   "fog": {
+    "color": "#c8c0b2",
+    "near": 30,
+    "far": 120
+   }
+  }
+ },
+ "materials": {
+  "asphalt": {
+   "color": "#3a3c40",
+   "roughness": 0.95
+  },
+  "stripe": {
+   "color": "#e8e2d2",
+   "roughness": 0.8
+  },
+  "concrete": {
+   "color": "#b0aba0",
+   "roughness": 0.9
+  },
+  "steel": {
+   "color": "#8a949c",
+   "roughness": 0.4,
+   "metalness": 0.7
+  },
+  "redcar": {
+   "color": "#c0392b",
+   "roughness": 0.35,
+   "metalness": 0.3
+  },
+  "bullseye": {
+   "color": "#d4552b",
+   "roughness": 0.6
+  }
+ },
+ "instances": [
+  {
+   "id": "start",
+   "prefab": "spawn",
+   "pos": [
+    0,
+    0,
+    10
+   ],
+   "params": {
+    "yaw": 0,
+    "weapon": true
+   }
+  },
+  {
+   "id": "road",
+   "prefab": "platform",
+   "pos": [
+    0,
+    0,
+    -10
+   ],
+   "params": {
+    "width": 12,
+    "depth": 60,
+    "thickness": 0.05,
+    "material": "asphalt"
+   }
+  },
+  {
+   "id": "car",
+   "prefab": "vehicle",
+   "pos": [
+    3,
+    0,
+    3
+   ],
+   "rot": [
+    0,
+    0,
+    0
+   ],
+   "params": {
+    "length": 3.8,
+    "width": 1.8,
+    "height": 1.3,
+    "speed": 22,
+    "material": "redcar"
+   }
+  },
+  {
+   "id": "wall",
+   "type": "cube",
+   "dims": [
+    0.4,
+    6,
+    6
+   ],
+   "pos": [
+    -7,
+    0,
+    -4
+   ],
+   "material": "concrete",
+   "climb": true
+  },
+  {
+   "id": "tower",
+   "prefab": "platform",
+   "pos": [
+    -9.5,
+    6,
+    -4
+   ],
+   "params": {
+    "width": 5,
+    "depth": 6,
+    "thickness": 0.4,
+    "material": "concrete"
+   }
+  },
+  {
+   "id": "t1",
+   "prefab": "target",
+   "pos": [
+    -3,
+    0,
+    -14
+   ],
+   "params": {
+    "size": 1.4,
+    "hp": 2,
+    "material": "bullseye"
+   }
+  },
+  {
+   "id": "t2",
+   "prefab": "target",
+   "pos": [
+    3,
+    0,
+    -18
+   ],
+   "params": {
+    "size": 1.4,
+    "hp": 2,
+    "material": "bullseye"
+   }
+  },
+  {
+   "id": "t3",
+   "prefab": "target",
+   "pos": [
+    0,
+    0,
+    -24
+   ],
+   "params": {
+    "size": 1.8,
+    "hp": 3,
+    "material": "bullseye"
+   }
+  },
+  {
+   "id": "t4",
+   "prefab": "target",
+   "pos": [
+    -9.5,
+    6.4,
+    -4
+   ],
+   "params": {
+    "size": 1,
+    "hp": 1,
+    "material": "bullseye"
+   }
+  },
+  {
+   "id": "goal",
+   "prefab": "zone",
+   "pos": [
+    0,
+    0,
+    -34
+   ],
+   "params": {
+    "size": [
+     8,
+     3,
+     4
+    ]
+   }
+  },
+  {
+   "id": "gate",
+   "prefab": "door",
+   "pos": [
+    0,
+    0,
+    -30
+   ],
+   "rot": [
+    0,
+    0,
+    0
+   ],
+   "params": {
+    "width": 4,
+    "height": 3,
+    "material": "steel",
+    "frameMaterial": "steel"
+   }
+  },
+  {
+   "id": "pillar2",
+   "type": "cube",
+   "dims": [
+    3,
+    6,
+    0.6
+   ],
+   "pos": [
+    -3,
+    0,
+    -1
+   ],
+   "material": "concrete"
+  },
+  {
+   "id": "ladder",
+   "prefab": "ladder",
+   "pos": [
+    -3,
+    0,
+    -0.55
+   ],
+   "params": {
+    "height": 6,
+    "width": 0.8
+   }
+  },
+  {
+   "id": "gl",
+   "type": "cube",
+   "dims": [
+    4,
+    3,
+    0.5
+   ],
+   "pos": [
+    -4.1,
+    0,
+    -30
+   ],
+   "material": "concrete"
+  },
+  {
+   "id": "gr",
+   "type": "cube",
+   "dims": [
+    4,
+    3,
+    0.5
+   ],
+   "pos": [
+    4.1,
+    0,
+    -30
+   ],
+   "material": "concrete"
+  }
+ ],
+ "lights": [
+  {
+   "id": "sun",
+   "type": "dir",
+   "pos": [
+    10,
+    18,
+    8
+   ],
+   "intensity": 2.4
+  }
+ ],
+ "cameras": [
+  {
+   "id": "main",
+   "pos": [
+    14,
+    8,
+    16
+   ],
+   "target": [
+    0,
+    1,
+    -8
+   ],
+   "fov": 55
+  }
+ ],
+ "rules": [
+  {
+   "id": "hello",
+   "when": {
+    "trigger": "timer",
+    "after": 1
+   },
+   "then": [
+    {
+     "action": "show-message",
+     "text": "E near the car to drive. Click or F to shoot. Climb the ladder and the left wall.",
+     "seconds": 6
+    }
+   ]
+  },
+  {
+   "id": "s1",
+   "when": {
+    "trigger": "object-shot",
+    "target": "t1",
+    "once": true
+   },
+   "then": [
+    {
+     "action": "set-flag",
+     "flag": "t1",
+     "value": true
+    }
+   ]
+  },
+  {
+   "id": "s2",
+   "when": {
+    "trigger": "object-shot",
+    "target": "t2",
+    "once": true
+   },
+   "then": [
+    {
+     "action": "set-flag",
+     "flag": "t2",
+     "value": true
+    }
+   ]
+  },
+  {
+   "id": "s3",
+   "when": {
+    "trigger": "object-shot",
+    "target": "t3",
+    "once": true
+   },
+   "then": [
+    {
+     "action": "set-flag",
+     "flag": "t3",
+     "value": true
+    }
+   ]
+  },
+  {
+   "id": "open",
+   "when": {
+    "trigger": "object-shot",
+    "target": "t4",
+    "once": true
+   },
+   "if": {
+    "flag": "t3",
+    "equals": true
+   },
+   "then": [
+    {
+     "action": "toggle-open",
+     "target": "gate",
+     "state": "open"
+    },
+    {
+     "action": "show-message",
+     "text": "The gate opened. Drive through it!",
+     "seconds": 4
+    },
+    {
+     "action": "play-sound",
+     "sound": "chime"
+    }
+   ]
+  },
+  {
+   "id": "win",
+   "when": {
+    "trigger": "player-enter",
+    "target": "goal",
+    "once": true
+   },
+   "then": [
+    {
+     "action": "show-message",
+     "text": "Proving ground complete.",
+     "seconds": 5
+    },
+    {
+     "action": "play-sound",
+     "sound": "chime"
+    }
+   ]
+  }
+ ]
+}

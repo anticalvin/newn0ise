@@ -48,7 +48,7 @@ export function createTimeline(c){
     TL.view=[0,TL.dur];TL.t=0;build();draw();};
   /* ---- drawer ---- */
   const css=getComputedStyle(document.documentElement);
-  const ink=()=>'#f2efe8',acc=()=>(css.getPropertyValue('--accent')||'#ff5a1f').trim()||'#ff5a1f';
+  const ink=()=>'#f2efe8',acc=()=>(css.getPropertyValue('--accent')||'#e9dfcb').trim()||'#e9dfcb';
   const x2t=(x,w)=>TL.view[0]+x/w*(TL.view[1]-TL.view[0]),t2x=(t,w)=>(t-TL.view[0])/(TL.view[1]-TL.view[0])*w;
   function paint(){if(!host)return;const b=host.querySelector('.tlplay');const pl=TL.handle&&TL.handle.active()?TL.handle.playing:TL.playing;if(b)b.textContent=pl?'Pause':'Play';const r=host.querySelector('.tlrec');if(r)r.setAttribute('aria-pressed',TL.rec);}
   function drawLane(cv,tr){

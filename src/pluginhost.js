@@ -3,11 +3,11 @@ import {validatePlugin,hashPlugin,API_VERSION} from './plugins.js';
 const KEY='n0ise.plugins';
 export const SAFE=/[?&]safe=1/.test(location.search);
 export function createPluginHost(c){
-  const {defineModule,MODULES,SS,histBind,histSave,CAMS,RECIPES,ST,VS,HEAD,GLSL_LIB,toast,onChange}=c;
+  const {defineTool,defineModule,MODULES,SS,histBind,histSave,CAMS,RECIPES,ST,VS,HEAD,GLSL_LIB,toast,onChange}=c;
   const H={items:[],cost:{}};
   const store=()=>{try{return JSON.parse(localStorage.getItem(KEY)||'[]');}catch(e){return[];}};
-  const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(H.items.map(i=>({j:i.j,on:i.on,hash:i.hash}))));}catch(e){toast('Couldn’t save plugins: storage is full.');}};
-  const builtin=()=>new Set(Object.keys(MODULES).filter(k=>!H.items.some(i=>i.j.id===k)));
+  const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(H.items.map(i=>({j:i.j,on:i.on,hash:i.hash,mine:!!i.mine}))));}catch(e){toast('Couldn’t save plugins: storage is full.');}};
+  const builtin=()=>new Set(Object.keys(MODULES).filter(k=>!H.items.some(i=>i.j.id===k)&&!MODULES[k].community&&!MODULES[k].tool&&!MODULES[k].missing));
   const decl=ps=>ps.map(p=>p.t==='color'?`uniform vec3 u_${p.k};`:`uniform float u_${p.k};`).join('\n');
   const toParams=j=>(j.params||[]).map(p=>({t:p.t||'r',step:p.step||1,sec:p.hero?'Main':'Advanced',...p}));
   const sourceOf=j=>SS+(j.feedback?'uniform sampler2D u_prev;uniform float u_reset;\n':'')+j.glsl;
@@ -41,11 +41,14 @@ export function createPluginHost(c){
   H.check=(j)=>{const r=validatePlugin(j,{builtinIds:builtin(),installed:new Set(H.items.map(i=>i.j.id))});if(r.ok){const p=H.probe(j);if(!p.ok)r.errors.push(p.log);r.ms=p.ms;r.ok=r.errors.length===0;r.probe=p.log;}return r;};
 
   function register(j){
+    if(MODULES[j.id]&&MODULES[j.id].missing)delete MODULES[j.id];
     if(j.kind==='effect'||j.kind==='generator'){
       const jump={t:-1e9,clean:false};
       defineModule({id:j.id,family:j.kind==='generator'?'Source':(j.family||'Community'),name:j.name,community:true,params:toParams(j),hist:!!j.feedback,frag:sourceOf(j),
         bind:j.feedback?(pr,V,ctx)=>{const r=ctx.t<jump.t-1e-4||ctx.t-jump.t>.5||(ST.clean&&!jump.clean);jump.t=ctx.t;jump.clean=!!ST.clean;pr.f('u_reset',r?1:0);histBind(pr,j.id,ctx);}:undefined,
         after:j.feedback?(pr,V,ctx)=>histSave(j.id,ctx):undefined});
+    }else if(j.kind==='tool'){
+      defineTool(j,{mine:!!(H.items.find(i=>i.j.id===j.id)||{}).mine});
     }else if(j.kind==='macro'){
       RECIPES.push({name:j.name,note:j.description||'Macro by '+j.author,layers:j.layers.map(l=>[l.module,l.params||{}]),plugin:j.id});
     }else if(j.kind==='pack'){
@@ -58,24 +61,26 @@ export function createPluginHost(c){
     for(let i=RECIPES.length-1;i>=0;i--)if(RECIPES[i].plugin===j.id)RECIPES.splice(i,1);
     for(let i=CAMS.length-1;i>=0;i--)if(CAMS[i].plugin===j.id)CAMS.splice(i,1);
   }
-  H.install=async(j,{silent}={})=>{
+  H.install=async(j,{silent,mine}={})=>{
     const r=H.check(j);if(!r.ok)return r;
     const hash=await hashPlugin(j),old=H.items.findIndex(i=>i.j.id===j.id);
     if(old>=0){unregister(H.items[old].j);H.items.splice(old,1);if(MODULES[j.id]){MODULES[j.id].hidden=false;MODULES[j.id].replaced=true;}}
     try{
-      if(MODULES[j.id]&&(j.kind==='effect'||j.kind==='generator')){const m=MODULES[j.id];m.prog=null;m.cache={};m.params.length=0;toParams(j).forEach(p=>m.params.push(p));toast('Updated “'+j.name+'”. Reload to see every change.');}
+      if(j.kind==='tool'){defineTool(j,{mine:!!mine});}
+      else if(MODULES[j.id]&&MODULES[j.id].missing){delete MODULES[j.id];register(j);}
+      else if(MODULES[j.id]&&(j.kind==='effect'||j.kind==='generator')){const m=MODULES[j.id];m.prog=null;m.cache={};m.params.length=0;toParams(j).forEach(p=>m.params.push(p));toast('Updated “'+j.name+'”. Reload to see every change.');}
       else register(j);
     }catch(e){return{ok:false,errors:[String(e.message||e)],warnings:[]};}
-    H.items.push({j,on:true,hash});save();onChange&&onChange();if(!silent)toast('Installed “'+j.name+'” (community plugin).');return r;
+    H.items.push({j,on:true,hash,mine:!!mine});save();onChange&&onChange();if(!silent)toast('Installed “'+j.name+'” (community plugin).');return r;
   };
   H.remove=id=>{const i=H.items.findIndex(x=>x.j.id===id);if(i<0)return;unregister(H.items[i].j);H.items.splice(i,1);save();onChange&&onChange();toast('Removed. Layers that used it are hidden until you reinstall it.');};
   H.setOn=(id,on)=>{const it=H.items.find(x=>x.j.id===id);if(!it)return;it.on=on;if(on){if(MODULES[id])MODULES[id].hidden=false;else register(it.j);}else unregister(it.j);save();onChange&&onChange();};
   H.duplicate=id=>{const it=H.items.find(x=>x.j.id===id);if(!it)return null;const j=JSON.parse(JSON.stringify(it.j));j.id='my.'+(id.split('.')[1]||'copy')+'-'+Math.random().toString(36).slice(2,5);j.name=it.j.name+' (my version)';j.author='me';return j;};
   H.load=async()=>{
-    if(SAFE){H.safe=true;store().forEach(s=>H.items.push({j:s.j,on:false,hash:s.hash||''}));return;}
+    if(SAFE){H.safe=true;store().forEach(s=>H.items.push({j:s.j,on:false,hash:s.hash||'',mine:!!s.mine}));return;}
     for(const s of store()){
-      const it={j:s.j,on:s.on!==false,hash:s.hash||''};H.items.push(it);if(!it.on)continue;
-      const r=validatePlugin(s.j,{builtinIds:new Set(Object.keys(MODULES).filter(k=>k!==s.j.id)),installed:new Set()});
+      const it={j:s.j,on:s.on!==false,hash:s.hash||'',mine:!!s.mine};H.items.push(it);if(!it.on)continue;
+      const r=validatePlugin(s.j,{builtinIds:new Set(Object.keys(MODULES).filter(k=>k!==s.j.id&&!MODULES[k].community&&!MODULES[k].tool&&!MODULES[k].missing)),installed:new Set()});
       if(!r.ok){it.on=false;it.broken=r.errors[0];continue;}
       try{register(s.j);}catch(e){it.on=false;it.broken=String(e.message||e);}
     }
