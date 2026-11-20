@@ -6,7 +6,8 @@
     "build": "node tools/build.mjs",
     "test:parity": "node tools/parity.mjs",
     "check:bundles": "node tools/build.mjs && git diff --exit-code -- assets effects.html studio.html",
-    "test": "npm run check:bundles && npm run test:parity && npm run test:ui",
+    "test": "npm run check:bundles && npm run test:parity && npm run test:ui && npm run test:core",
+    "test:core": "node tools/core-smoke.mjs",
     "test:ui": "node tools/ui-check.mjs"
   },
   "devDependencies": {

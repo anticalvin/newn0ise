@@ -14,7 +14,7 @@ const root=fileURLToPath(new URL('..',import.meta.url));
 const MIME={'.html':'text/html','.js':'text/javascript','.mjs':'text/javascript','.css':'text/css','.json':'application/json','.svg':'image/svg+xml','.png':'image/png','.webp':'image/webp','.jpg':'image/jpeg','.wasm':'application/wasm','.webmanifest':'application/manifest+json'};
 const chrome=[process.env.CHROME,'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome','/Applications/Chromium.app/Contents/MacOS/Chromium','/usr/bin/google-chrome','/usr/bin/chromium'].find(p=>p&&existsSync(p));
 if(!chrome){console.error('ui-check: no Chrome found. Set CHROME=/path/to/chrome.');process.exit(1);}
-const PAGES=[['effects','/effects.html'],['camera','/effects.html?cam=1'],['studio','/studio.html'],['lab','/lab.html']];
+const PAGES=[['effects','/effects.html'],['camera','/effects.html?cam=1'],['studio','/studio.html'],['lab','/lab.html'],['core-start','/core.html'],['core-blank','/core.html?start=blank'],['core-coast','/core.html?start=coast']];
 const VIEWS=[['phone390',390,844,true],['phone360',360,640,true],['desktop',1440,900,false]];
 const update=process.argv.includes('--update');
 const srv=createServer(async(q,r)=>{try{const p=normalize(decodeURIComponent(q.url.split('?')[0])).replace(/^(\.\.[/\\])+/,'');const f=join(root,p.endsWith('/')?p+'index.html':p);const b=await readFile(f);r.writeHead(200,{'content-type':MIME[extname(f)]||'application/octet-stream'});r.end(b);}catch(e){r.writeHead(404);r.end('nf');}});

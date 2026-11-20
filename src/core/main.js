@@ -15,6 +15,10 @@ import { Input } from './input.js';
 import { UI } from './ui.js';
 import { clamp } from './util.js';
 import { connectBridge } from './api.js';
+import { Entities } from './entities.js';
+import { Assets } from './assets.js';
+import { retailPrefab } from './prefabs/retail.js';
+import { createTelemetry } from './debug.js';
 
 const canvas = document.getElementById('c');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
@@ -63,7 +67,7 @@ const app = {
   // ---- whole-scene snapshots (used by scene.new and its undo) ----
   snapshot() {
     return { t: this.snapshotTerrain(), base: terrain.base.slice(), env: { ...env.p }, name: this.name, spawn: [...this.spawn], palms: palms.items.map(p => ({ ...p })), boulders: boulders.items.map(b => [b.p.x, b.p.y, b.p.z, b.r, b.seed]),
-      worlds: this.worlds.map(w => ({ name: w.name, at: [...w.at], doc: w.doc })), player: [player.pos.x, player.pos.z, player.yaw] };
+      worlds: this.worlds.map(w => ({ name: w.name, at: [...w.at], doc: w.doc })), ents: entities.serialize(), player: [player.pos.x, player.pos.z, player.yaw] };
   },
   restoreScene(s) {
     core.muted = true;
@@ -71,8 +75,8 @@ const app = {
       terrain.preset = s.t.preset; terrain.base.set(s.base); this.setPreset(s.t.preset); this.restoreTerrain(s.t); env.set(s.env); this.name = s.name; this.spawn = [...s.spawn];
       palms.items = s.palms.map(p => ({ ...p })); palms.rebuild();
       [...boulders.items].forEach(b => boulders.remove(b)); s.boulders.forEach(([x, y, z, r, seed]) => boulders.add(x, y, z, r, seed));
-      this.clearWorlds(); s.worlds.forEach(w => { const r = readWorld(w.doc); if (r.ok) this.placeWorld(r.doc, w.at, w.name); });
-      player.pos.set(s.player[0], 0, s.player[1]); player.yaw = s.player[2]; player.pos.y = player.groundAt(player.pos.x, player.pos.z); player.vel.set(0, 0, 0); phys.teleport(player);
+      entities.clear(); this.clearWorlds(); s.worlds.forEach(w => { const r = readWorld(w.doc); if (r.ok) this.placeWorld(r.doc, w.at, w.name); });
+      entities.load(s.ents || []); player.pos.set(s.player[0], 0, s.player[1]); player.yaw = s.player[2]; player.pos.y = player.groundAt(player.pos.x, player.pos.z); player.vel.set(0, 0, 0); phys.teleport(player);
       this.afterTerrain(true); sand.clear();
     } finally { core.muted = false; }
     ui.render();
@@ -84,7 +88,17 @@ const app = {
     if (preset === 'coast') { this.props = buildProps(scene, shared, terrain, player); this.propCols = this.props.userData.colliders || []; } else { player.decks.length = 0; player.circles.length = 0; }
     this.refreshColliders();
   },
-  refreshColliders() { phys.setProps([...this.propCols, ...this.worlds.flatMap(w => w.colliders)]); },
+  refreshColliders() { phys.setProps([...this.propCols, ...this.worlds.flatMap(w => w.colliders), ...(this.entities ? this.entities.colliders() : [])]); },
+  // where a building of this size can go: the flattest dry spot near the player (or `at`), with the floor level taken from the highest ground under it
+  findSite(w, d, at) {
+    const rad = Math.hypot(w, d) / 2 + 1; let x, z;
+    if (at) { x = at[0]; z = at[1]; } else { const f = flatSpot(terrain, water.level, player.pos.x + Math.sin(player.yaw) * (rad + 3), player.pos.z + Math.cos(player.yaw) * (rad + 3), rad); if (!f) return null; x = f.x; z = f.z; }
+    let hi = -1e9, lo = 1e9; for (let i = 0; i <= 6; i++) for (let j = 0; j <= 6; j++) { const h = terrain.hAt(x + (i / 6 - 0.5) * w, z + (j / 6 - 0.5) * d); hi = Math.max(hi, h); lo = Math.min(lo, h); }
+    if (lo < water.level + 0.3) return null; return { x, z, y: hi + 0.02, spread: hi - lo };
+  },
+  // E/F/RB/Use: open the door or pick up the nearest product
+  interact() { const r = core.exec({ cmd: 'interact.use' }); ui.toast(r.msg); ui.updHist(); return r; },
+  inventory() { const out = []; entities.rt.forEach((rt, id) => { if (rt.rec && rt.rec.state && rt.rec.state.removed) rt.rec.state.removed.forEach(k => { const s = rt.index.get(k); out.push({ store: id, key: k, name: s ? rt.lib.product[s.type].name : 'Item' }); }); }); return out; },
   defaultSpawn() {
     if (terrain.preset === 'blank') return [0, 0, 0];
     let sx = 0; const sz = 8; for (let x = -100; x < 60; x += 0.5) { if (terrain.hAt(x, sz) > 0.75) { sx = x + 1.2; break; } }
@@ -95,7 +109,7 @@ const app = {
     core.muted = true;
     try {
       terrain.generate(seed, preset); this.name = preset === 'blank' ? 'BLANK' : 'COAST_001';
-      palms.items = []; palms.rebuild(); [...boulders.items].forEach(b => boulders.remove(b)); this.clearWorlds(); this.setPreset(preset);
+      palms.items = []; palms.rebuild(); [...boulders.items].forEach(b => boulders.remove(b)); entities.clear(); this.clearWorlds(); this.setPreset(preset);
       env.set(preset === 'blank' ? { time: 11, cloud: 0.3, wind: 0.35, windAng: 0, sea: 0.45, tide: 0 } : { time: 17.4, cloud: 0.38, wind: 0.55, windAng: 0, sea: 0.55, tide: 0 });
       if (preset === 'coast') this.populateCoast();
       this.spawn = this.defaultSpawn(); player.pos.set(this.spawn[0], 0, this.spawn[1]); player.yaw = this.spawn[2]; player.vel.set(0, 0, 0);
@@ -116,7 +130,7 @@ const app = {
   teleport(x, z) { player.pos.set(x, 0, z); player.pos.y = player.groundAt(x, z); player.vel.set(0, 0, 0); phys.teleport(player); },
   summary() {
     return { name: this.name, preset: terrain.preset, seed: terrain.seed, env: { ...env.p }, player: [+player.pos.x.toFixed(1), +player.pos.y.toFixed(1), +player.pos.z.toFixed(1)], spawn: this.spawn.map(n => +n.toFixed(1)),
-      palms: palms.items.length, boulders: boulders.items.length, worlds: this.worlds.map(w => ({ name: w.name, at: w.at, instances: w.count })), physics: phys.ready ? 'rapier' : phys.failed ? 'fallback (' + phys.error + ')' : 'loading',
+      palms: palms.items.length, boulders: boulders.items.length, entities: entities.size, instances: entities.instanceCount(), inventory: this.inventory().length, worlds: this.worlds.map(w => ({ name: w.name, at: w.at, instances: w.count })), physics: phys.ready ? 'rapier' : phys.failed ? 'fallback (' + phys.error + ')' : 'loading',
       limits: LIMITS, canUndo: core.canUndo(), canRedo: core.canRedo() };
   },
   // ---- .n0world ----
@@ -179,6 +193,7 @@ const app = {
   importScene(f) { return this.importFile(f); },
   newIsland() { core.exec({ cmd: 'terrain.reset', seed: Math.floor(Math.random() * 90000) + 100 }); ui.toast('New terrain'); ui.updHist(); },
 };
+app.shared = shared; app.assets = new Assets(shared); app.entities = new Entities(app); const entities = app.entities; app.entities.register('retail.convenience', retailPrefab);
 const core = new Core(app); app.core = core; const ui = new UI(app); app.ui = ui; const input = new Input(app, canvas); app.input = input;
 core.on(() => ui.updHist());
 phys.a = app;
@@ -202,6 +217,7 @@ function resize() { const w = innerWidth, h = innerHeight; camera.aspect = w / h
 const maxPr = () => Math.min(devicePixelRatio, 2);
 let pr = maxPr(), frames = 0, acc = 0; renderer.setPixelRatio(pr); resize(); addEventListener('resize', resize);
 
+const tele = createTelemetry(app); app.tele = tele;
 const v3 = new THREE.Vector3(); let last = performance.now(), physAcc = 0;
 function frame(now) {
   requestAnimationFrame(frame);
@@ -240,10 +256,10 @@ function frame(now) {
       if (paintTool && t !== 'rock' && t !== 'grass' && h.y > water.level + 0.1) sand.burst(h.x + (Math.random() - 0.5) * app.R * 0.7, h.y, h.z + (Math.random() - 0.5) * app.R * 0.7, Math.round(2 + app.R * 0.4), 1.2, 1.4, 0.4);
     }
   } else ring.visible = false;
-  terrain.flush(); water.update(dt, camera, env.p, env); env.update(dt, camera, explore ? player.pos : c.target);
+  entities.tick(dt); terrain.flush(); water.update(dt, camera, env.p, env); env.update(dt, camera, explore ? player.pos : c.target);
   sand.update(dt, camera, explore ? player.pos : c.target, env, water.level);
-  renderer.render(scene, camera);
+  renderer.render(scene, camera); tele.tick(now);
 }
 requestAnimationFrame(frame);
-window.n0 = { app, core, run: l => core.run(l), exec: c => core.exec(c), get fps() { return app.fps; }, get pr() { return app.pr; } };
+window.n0 = { app, core, telemetry: () => tele.read(), run: l => core.run(l), exec: c => core.exec(c), get fps() { return app.fps; }, get pr() { return app.pr; } };
 window.Core = { exec: c => core.exec(c), describe: () => core.exec({ cmd: 'describe' }), state: () => core.exec({ cmd: 'state' }) };

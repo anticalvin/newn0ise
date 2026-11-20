@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "note": "Every entry here is generated in code by src/core/assetlib.js (n0ise original work). No third-party model files are bundled. External GLBs are accepted by the loader only with source, license and licenseEvidence filled in. See docs/CORE_ASSETS.md.",
+  "assets": [
+    { "id": "retail.shelf", "name": "Retail shelf", "category": "retail", "tags": ["retail", "store", "shelf", "fixture", "interior"], "anchors": [{ "type": "shelf", "tiers": 5, "firstY": 0.3, "pitch": 0.38, "width": 2.0, "depth": 0.5 }], "collider": "box", "gpu": { "tris": 140 } },
+    { "id": "retail.product.can", "name": "Can", "category": "retail", "tags": ["retail", "product", "can", "drink", "stock"], "collider": "none", "gpu": { "tris": 56 } },
+    { "id": "retail.product.bottle", "name": "Bottle", "category": "retail", "tags": ["retail", "product", "bottle", "drink", "stock"], "collider": "none", "gpu": { "tris": 48 } },
+    { "id": "retail.product.box", "name": "Product box", "category": "retail", "tags": ["retail", "product", "box", "food", "stock"], "collider": "none", "gpu": { "tris": 12 } },
+    { "id": "retail.checkout", "name": "Checkout counter", "category": "retail", "tags": ["retail", "store", "counter", "fixture", "interior"], "anchors": [{ "type": "floor" }], "collider": "box", "gpu": { "tris": 36 } },
+    { "id": "retail.door", "name": "Shop door leaf", "category": "retail", "tags": ["retail", "store", "door", "interior"], "anchors": [{ "type": "wall" }], "collider": "none", "gpu": { "tris": 24 } },
+    { "id": "street.bollard", "name": "Bollard", "category": "street", "tags": ["street", "prop", "outdoor"], "anchors": [{ "type": "floor" }], "collider": "box", "gpu": { "tris": 56 } },
+    { "id": "street.bench", "name": "Bench", "category": "street", "tags": ["street", "prop", "outdoor", "seat"], "anchors": [{ "type": "floor" }], "collider": "box", "gpu": { "tris": 72 } },
+    { "id": "nature.rock", "name": "Rock", "category": "nature", "tags": ["nature", "rock", "outdoor"], "anchors": [{ "type": "floor" }], "collider": "box", "gpu": { "tris": 240 } },
+    { "id": "vehicle.car.generic", "name": "Generic car", "category": "vehicle", "tags": ["vehicle", "car", "generic"], "anchors": [{ "type": "floor" }], "collider": "box", "gpu": { "tris": 300 } }
+  ],
+  "defaults": { "source": "n0ise-generated", "license": "n0ise original work (generated in code, no third-party files)", "licenseEvidence": "src/core/assetlib.js", "format": "procedural" }
+}
