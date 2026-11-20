@@ -25,7 +25,7 @@ body:not([data-cam]) .peek{padding:0;border:0}
   body:not([data-cam]) .stage{padding:16px 24px}
 }
 @media(max-width:959px),(max-height:549px){
-  body:not([data-cam]) .fxpage.shell{padding:env(safe-area-inset-top) 0 0;max-width:none;height:100dvh;min-height:0;overflow:hidden;display:grid;grid-template-rows:52px minmax(0,1fr)}
+  body:not([data-cam]) .fxpage.shell{padding:env(safe-area-inset-top) 0 0;max-width:none;height:100dvh;min-height:0;overflow:hidden;display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:52px minmax(0,1fr)}
   body:not([data-cam]) .fxpage .header{height:52px;margin:0;padding:0 max(10px,env(safe-area-inset-right)) 0 max(10px,env(safe-area-inset-left));background:#111210}
   body:not([data-cam]) .fxpage .portrait{width:100%;max-width:none;height:auto;min-height:0;margin:0;border:0;border-radius:0;box-shadow:none;background:#111210}
   body:not([data-cam]) .fxpage .viewbar{display:none}
@@ -35,6 +35,11 @@ body:not([data-cam]) .peek{padding:0;border:0}
   body:not([data-cam]) .stage{padding:8px 14px}
   body:not([data-cam]) .insp{padding-bottom:calc(48px + env(safe-area-inset-bottom,0px))}
 }
+@media(max-width:959px) and (min-height:550px){
+  body:not([data-cam]) .fxleft{flex:0 0 auto}
+  body:not([data-cam]) .stage{flex:none;width:calc(100% - 16px);margin:8px 8px 0;padding:0;aspect-ratio:var(--pasp,4/3);max-height:52dvh;min-height:180px;border-radius:22px;overflow:hidden}
+}
+@media(min-width:960px) and (min-height:550px){body:not([data-cam]) .stage{margin:12px 0 12px 12px;border-radius:24px}}
 @media(orientation:landscape) and (max-height:520px) and (max-width:959px){
   body:not([data-cam]) .fxmain{flex-direction:row}
   body:not([data-cam]) .fxleft{flex:1 1 0}

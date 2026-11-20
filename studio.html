@@ -32,7 +32,7 @@
   <div class="desktop-only desk-project"><a class="wordmark" href="index.html" aria-label="n0ise home">n0ise</a><span class="desk-project-text">Untitled scene <small id="save-state" role="status">Local</small></span></div>
   <nav class="nav" aria-label="Workspaces"><a href="effects.html?cam=1">Camera</a><a href="studio-app.html">Studio</a><a href="effects.html" id="bLab">Effects</a><a href="lab.html">Lab</a><a href="studio.html" aria-current="page">3D</a></nav>
   <div class="desktop-only desk-global" id="deskglobal"></div>
-  <div class="header-end"><a class="round" id="studio-link" href="studio-app.html" aria-label="Studio" title="Studio"><svg><use href="#i-cube"/></svg></a><button class="round" type="button" id="menubtn" aria-label="Workspace menu" aria-haspopup="dialog"><svg><use href="#i-more"/></svg></button></div>
+  <div class="header-end"><a class="round" id="studio-link" href="nodes.html" aria-label="Node editor" title="Node editor"><svg><use href="#i-cube"/></svg></a><button class="round" type="button" id="menubtn" aria-label="Workspace menu" aria-haspopup="dialog"><svg><use href="#i-more"/></svg></button></div>
 </header>
 <div class="ctx" id="ctx" role="status" aria-live="polite"></div>
 <div class="widebar" id="widebar"><span class="wordmark">3d.</span><div class="actions" id="widebarActs"></div></div>
@@ -99,7 +99,7 @@
 </dialog>
 <template id="globalbtns"><button class="desk-btn icon" id="bUndo" type="button" title="Undo (Ctrl+Z)" aria-label="Undo"><svg viewBox="0 0 24 24"><path d="m8 4-5 5 5 5M3 9h10a6 6 0 0 1 0 12h-3"/></svg></button><button class="desk-btn icon" id="bRedo" type="button" title="Redo (Ctrl+Shift+Z)" aria-label="Redo"><svg viewBox="0 0 24 24" style="transform:scaleX(-1)"><path d="m8 4-5 5 5 5M3 9h10a6 6 0 0 1 0 12h-3"/></svg></button><button class="desk-btn" id="bSave" type="button" title="Save the project to a file">Save</button></template>
 <script>document.getElementById('globalslot').append(document.getElementById('globalbtns').content);</script>
-<script type="module" src="assets/studio.js?v=dd8127fd"></script>
+<script type="module" src="assets/studio.js?v=d09ed02a"></script>
 <script type="module">
 const dlg=document.getElementById('dialog');
 document.getElementById('menubtn').addEventListener('click',()=>dlg.showModal());

@@ -14,6 +14,7 @@ import {createPluginHost,SAFE as PLUG_SAFE} from './pluginhost.js';
 import {gridFromCanvas,geoDoc} from './formgeo.js';
 import {MAX_EXPOSED,buildTool,toolParams,innerParams,exposable,describeChain,describeModule,describeRecipe,newToolId,bumpVersion,MINE_FAMILY} from './tools.js';
 import {put as handoffPut,take as handoffTake} from './handoff.js';
+import {record as hubRecord} from './hub.js';
 import {CAMSIM_PARAMS,CAMSIM_FRAG,SIMS} from './camsim.js';
 import {QUAL,setMaskQuality,setAnimals,PERSON,startPerson,feedPerson,syntheticPerson,DRAWN,paintDrawn,clearDrawn,maskFor,resetMatteGL,MASK_DEFAULTS} from './matte.js';
 import {SIG,SIGNALS,signalValue,V,hooks,attachGL,createGL,VS,HEAD,$,clamp,lerp,TABS,CT,CTL,PALS,hexRGB,lum255,rgbHex,PROFILES,BASE,P,E,MODS,applyProfile,canvas,stage,gl,GLOK,noGL,PR,mkProg,mkProgAsync,initGL,mkRT,freeRT,bindRT,samp,draw,TEX,initLUT,SRC,srcDims,uploadSrc,setSource,fitCanvas,demoCanvas,testCanvas,RB,readDrop,audio,ST,STAGES,stageModel,CHAINS,applyStages,buildChainUI,refreshChainUI,computeE,T,POINTER,PAINTQ,SZ,exportCap,expDims,EMBED,EMB,layout,syncSrc,renderFrame,CTX,adaptQ} from './engine.js';
@@ -2865,7 +2866,7 @@ function openSheet(blob,name,isVideo,meta){
   const close=()=>{sh.remove();URL.revokeObjectURL(url);if(meta&&meta.back)meta.back();};
   $('#cls',sh).addEventListener('click',close);
   {const c2=$('#cls2',sh);if(c2)c2.addEventListener('click',()=>{sh.remove();URL.revokeObjectURL(url);});}
-  {const b=$('#to3',sh);if(b)b.addEventListener('click',async()=>{await handoffPut(blob,{from:'camera'});location.href='studio.html#from=camera';});}
+  {const b=$('#to3',sh);if(b)b.addEventListener('click',async()=>{await handoffPut(blob,{from:'camera'});await hubRecord({tool:'camera',name:'Camera shot',blob,to:'3d'});location.href='studio.html#from=camera';});}
   {const d=$('#dis',sh);if(d)d.addEventListener('click',async()=>{await rollDelete(meta.id);close();camThumbUpdate();toast('Discarded');});}
   sh.addEventListener('pointerdown',e=>{if(e.target===sh)close();});
   const shr=$('#shr',sh);if(shr)shr.addEventListener('click',async()=>{try{await navigator.share({files:[file]});}catch(e){}});
@@ -3173,7 +3174,7 @@ function buildCamUI(){
    info.style.display='none';const dp=el('div','camdp');dp.append(duo,cats,strip,info);drawer.append(dh,dm,dp);
    bot.replaceChildren(fbar,modes,row,drawer);
    new MutationObserver(syncT).observe(u,{attributes:true,attributeFilter:['class']});syncT();}
-  {const k=lsGet('n0ise.camkind',null);if(k&&k!==camKind)setKind(k,true);u.dataset.kind=camKind;}
+  u.dataset.kind=camKind;
   let hold=0,holdRec=false,downBusy=false;
   const takePhoto=async()=>{if(camBusy)return;camBusy=true;
     for(let n=camTimer;n>0;n--){cd.hidden=false;cd.textContent=n;buzz(8);await new Promise(r=>setTimeout(r,1000));}cd.hidden=true;
@@ -3242,7 +3243,7 @@ async function openCamera(o){
   if(o&&o.demo){camDemo=true;setSource(demoCanvas(),'Camera',false);refreshUI();}
   else{const ok=await startCam(false);if(!ok){if(camNeedTap)showTapGate();else showCamGate(camErr||'The camera couldn’t start.');return;}}
   if(!(o&&o.demo)&&(!(SRC.el instanceof HTMLVideoElement)||SRC.name!=='Camera'))return;
-  camLife();camMode=lsGet('n0ise.cammode','photo')==='video'?'video':'photo';camFavs=lsGet('n0ise.camfavs',[]);camCat=lsGet('n0ise.camcat','All');camIx=Math.max(0,CAMS.findIndex(c=>c.id===lsGet('n0ise.cam','cctv')));camText=!!lsGet('n0ise.camtext',false);{const tb=$('#camtxt');if(tb)tb.setAttribute('aria-pressed',camText);}
+  camLife();camMode='photo';camFavs=lsGet('n0ise.camfavs',[]);camCat=lsGet('n0ise.camcat','All');camIx=Math.max(0,CAMS.findIndex(c=>c.id===lsGet('n0ise.cam','cctv')));camText=!!lsGet('n0ise.camtext',false);{const tb=$('#camtxt');if(tb)tb.setAttribute('aria-pressed',camText);}
   camSaved={layers:STACK.layers,sel:STACK.sel,aspect:P.aspect};
   setPM(camFacing==='user');buildCamUI();CAMMODE=true;document.body.dataset.cam='1';delete document.documentElement.dataset.boot;
   readCaps();applyCam(camIx,true);
@@ -3702,7 +3703,6 @@ function phoneShell(){
   const open=e=>{try{dlg.showModal();}catch(x){}};
   ['menubtn','menubtn2'].forEach(id=>{const b=document.getElementById(id);if(b)b.addEventListener('click',open);});
   dlg.addEventListener('click',e=>{if(e.target===dlg||(e.target.closest&&e.target.closest('.dialog-body button:not([data-keep])')))dlg.close();});
-  const sl=document.getElementById('studio-link');if(sl)sl.addEventListener('click',e=>{e.preventDefault();toast('Coming soon',2400);});
   const tb=document.getElementById('tipbtn');if(tb)tb.addEventListener('click',()=>toast(GESTURE_TIP,5000));
   /* undo, redo and Save sit in the header on desktop and in this menu on phones: the same buttons move, so state and handlers stay */
   const mq=matchMedia('(min-width:960px) and (min-height:550px)'),dg=document.getElementById('deskglobal'),slot=document.getElementById('globalslot');
@@ -4133,12 +4133,13 @@ const toggleFav=id=>{const f=lsGet('n0ise.fav',[]),i=f.indexOf(id);if(i<0)f.push
 async function makeGeometry(){
   try{ST.clean=true;await frames2();const g=gridFromCanvas(canvas);ST.clean=false;
     const blob=new Blob([JSON.stringify(geoDoc(g,(SRC&&SRC.name&&SRC.name!=='Test card'?SRC.name+' pattern':'Pattern geometry').slice(0,40)))],{type:'application/json'});
-    await handoffPut(blob,{from:'effects',form:true});location.href='studio.html#from=effects';}
+    await handoffPut(blob,{from:'effects',form:true});await hubRecord({tool:'effects',name:SRC&&SRC.name||'Effects',layers:hubLayers(),blob:await new Promise(r=>canvas.toBlob(r,'image/png')),to:'3d'});location.href='studio.html#from=effects';}
   catch(e){ST.clean=false;toast('Couldn’t make geometry: '+(e.message||e));}
 }
+const hubLayers=()=>STACK.layers.map(l=>({name:(MODULES[l.module]&&MODULES[l.module].name)||l.module,kind:l.module,off:l.opacity===0}));
 async function openIn3D(){
   try{ST.clean=true;await frames2();const blob=await new Promise(r=>canvas.toBlob(r,'image/png'));ST.clean=false;if(!blob)throw new Error('empty');
-    await handoffPut(blob,{from:'effects',name:'From Effects'});location.href='studio.html#from=effects';}
+    await handoffPut(blob,{from:'effects',name:'From Effects'});await hubRecord({tool:'effects',name:SRC&&SRC.name||'Effects',layers:hubLayers(),blob,to:'3d'});location.href='studio.html#from=effects';}
   catch(e){ST.clean=false;toast('Couldn’t hand the picture over');}
 }
 async function takeHandoff(){

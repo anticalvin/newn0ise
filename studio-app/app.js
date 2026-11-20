@@ -932,7 +932,7 @@
     input.style.top = `${anchor.y*100/h}%`;
     input.style.fontSize = `${l.fontSize*zoom}px`;
     input.style.fontFamily = l.font || 'sans-serif';
-    input.style.color = l.fill || paintColor;
+    input.style.color = 'transparent'; /* the canvas draws the live text; this box only supplies the caret and selection, so nothing is doubled */
     input.style.lineHeight = '1.2';
     input.style.width = `${Math.max(2,Math.min(46,Math.max(input.value.length,8)+1))}ch`;
     input.style.height = `${Math.max(1,l.fontSize*zoom*l.scale/100*1.2*lines)}px`;
@@ -1340,6 +1340,16 @@
       notice('SVG downloaded.');
     } catch { notice('SVG export failed.'); }
   }
+  /* tell the node editor what this design is made of (its layers) and where it went */
+  async function hubRecord(blob,to) {
+    const hub = await import('../src/hub.js');
+    await hub.record({tool:'studio',name:doc.name,to,blob,
+      layers:[...doc.layers].reverse().filter(l => l.type !== 'background').map(l => ({name:l.name,kind:l.type,off:!l.visible}))});
+  }
+  async function showInNodes() {
+    try { await hubRecord(await exportPNG(),null); location.href = 'nodes.html'; }
+    catch { notice('Could not open the node editor.'); }
+  }
   async function sendArtwork(destination) {
     const tab = window.open('about:blank','_blank');
     if (!tab) { notice('Allow pop-ups to open the exported image in another tool.'); return; }
@@ -1347,6 +1357,7 @@
     try {
       const [blob,handoff] = await Promise.all([exportPNG(),import('../src/handoff.js')]);
       await handoff.put(blob,{from:'studio',name:doc.name,to:destination});
+      await hubRecord(blob,destination);
       tab.location.replace(new URL((destination === 'effects' ? 'effects.html' : 'studio.html')+'#from=studio',location.href));
     } catch {
       tab.close();
@@ -1359,6 +1370,7 @@
       ['Download PNG',downloadPNG],
       ['Download SVG',downloadSVG],
       ['Save editable project',save],
+      ['Show in node editor',showInNodes],
       ['Open in Effects',() => sendArtwork('effects')],
       ['Open in 3D as relief',() => sendArtwork('3d')]
     ]);
@@ -1868,5 +1880,6 @@
     window.history.replaceState(null,'',location.pathname+location.search);
     window.__wantGraph = true;
     openLauncher();
+    launchProject(true);
   } else openLauncher();
 })();
