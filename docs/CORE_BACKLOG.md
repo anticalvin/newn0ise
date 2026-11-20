@@ -14,3 +14,7 @@ In proposed order. Phase 1 (`core.html`, Rapier, commands, `.n0world` import, bl
 10. **Richer AI commands.** Camera paths, screenshots with passes, and batch scene authoring through `n0_core`, with the same limits.
 
 Not planned: real fluid, granular sand or soft-body simulation. If they ever land they get their own entry and the guide moves them from Approximated to Working.
+
+## Status after Phase 2 (PR 0-3)
+
+Done: Core smoke tests and UI coverage, `?debug=1` telemetry, entity registry with `.n0scene` v4, asset catalog and cached GLB importer, room/door/window geometry, the seeded convenience store with product instancing and a persistent interaction. Still open from the Phase 2 brief: transactional `scene.preview`/`scene.commit` (PR 4), generic seeded scatter (PR 5, also item 2 above), navmesh and a first drivable car (PR 6), tile chunks and IndexedDB (PR 7), character and equipment (PR 8), licensed GLB assets, a catalog thumbnail preview, and `.n0world` rules and doors in Core.

@@ -3,7 +3,9 @@
 // (cmd:"core") and the MCP bridge (n0_core). Command list: COMMANDS below, documented in docs/CORE.md.
 import { clamp } from './util.js';
 
-export const FORMAT = 'n0ise.core.scene', VERSION = 3;
+import { EntityError } from './entities.js';
+
+export const FORMAT = 'n0ise.core.scene', VERSION = 4;
 const KEY = 'n0ise.core.scene', OLD_KEY = 'n0ise.core.coast001';
 const num = (v, d, a, b) => (Number.isFinite(+v) && v !== null && v !== '' ? clamp(+v, a, b) : d);
 const TOOLS = ['raise', 'lower', 'smooth', 'flatten', 'sand', 'rock', 'grass'];
@@ -23,6 +25,19 @@ export const COMMANDS = {
   'spawn.set': '{x, z, yaw?} → where the character starts. With no x,z it uses the character’s current spot.',
   'world.import': `{world:<.n0world object or JSON string>, at?:[x,z], name?} → validate with the shared n0world schema, then place its instances on a flat spot (or at). Returns the full report: placed count, repairs, and everything Core cannot do. Max ${LIMITS.worlds} worlds, ${LIMITS.worldInstances} instances each.`,
   'world.remove': '{index?} → remove an imported world (the last one by default).',
+  'entity.create': '{prefab:"prim.box"|"prim.sphere"|"prim.cylinder"|"asset"|"retail.convenience", id?, parent?, position:[x,y,z], rotation:[rx,ry,rz] in radians (or rotationDeg), scale, parameters:{...}, components:{collider:{type:"static"|"none"}, render:{visible}}, tags?, state?} → a placed thing with a stable id. Errors carry {code, path}.',
+  'entity.set': '{id, position?, rotation?, rotationDeg?, scale?, parent?, parameters?, components?, state?, tags?} → change one entity.',
+  'entity.remove': '{id} → remove it and its children.',
+  'entity.inspect': '{id} → the record, bounds, instance and collider counts.',
+  'entity.list': '{} → every entity id with its prefab and position.',
+  'asset.catalog': '{query?, tags?, category?, limit?} → searchable catalog with size, triangle count and licence for each asset.',
+  'asset.inspect': '{id} → full record: licence evidence, anchors, bounds.',
+  'asset.place': '{assetId, at?:[x,z] (put on the ground) or position:[x,y,z], rotationDeg?, scale?, id?} → an entity from a catalog asset. Unknown ids fail with code asset.unknown.',
+  'prefab.build': '{type:"retail.convenience", id?, seed?, parameters?:{width 8..24, depth 6..16, height 2.4..5, stock 0..1, condition:"new"|"worn", wallColor}, at?:[x,z], yaw?} → an editable store: walls with a door and windows, shelves, a counter and thousands of stocked product instances. Same record, same result.',
+  'store.door': '{id?, open?:boolean} → open, close or toggle the store door.',
+  'product.take': '{id?, key?} → pick up a product (by key, or the nearest to the player). Saved with the scene.',
+  'product.return': '{id?, key?} → put a product back (the last one taken by default).',
+  'interact.use': '{} → what the Use button does: take the nearest product, or toggle the nearest door.',
   describe: '{} → this list plus the current limits.',
   state: '{} → a summary of the scene (preset, counts, environment, player, imported worlds).',
 };
@@ -110,6 +125,7 @@ export class Core {
           a.spawn = after; this.push({ label: 'spawn.set', undo: () => { a.spawn = before; }, redo: () => { a.spawn = after; } }); return { ok: true, msg: 'spawn set' };
         }
         case 'world.import': return this.importWorld(c);
+        case 'entity.create': case 'entity.set': case 'entity.remove': case 'entity.inspect': case 'entity.list': case 'asset.catalog': case 'asset.inspect': case 'asset.place': case 'prefab.build': case 'store.door': case 'product.take': case 'product.return': case 'interact.use': return this.entityCmd(c);
         case 'world.remove': {
           if (!a.worlds.length) return { ok: false, msg: 'No imported worlds' };
           const i = clamp(c.index == null ? a.worlds.length - 1 : +c.index | 0, 0, a.worlds.length - 1), w = a.worlds[i];
@@ -118,6 +134,73 @@ export class Core {
         default: return { ok: false, msg: 'Unknown command: ' + c.cmd + '. Run {"cmd":"describe"} for the list.' };
       }
     } catch (e) { return { ok: false, msg: String(e.message || e) }; }
+  }
+
+  // entity, asset and store commands. EntityError -> {ok:false, code, path, msg}; each mutation records exactly one undo entry.
+  entityCmd(c) {
+    const a = this.a, E = a.entities, V3 = a.camera.position.constructor, BUILDABLE = k => !/^(prim\.|asset$)/.test(k);
+    try {
+      switch (c.cmd) {
+        case 'entity.list': return { ok: true, entities: E.list() };
+        case 'entity.inspect': return { ok: true, entity: E.inspect(String(c.id)) };
+        case 'asset.catalog': return { ok: true, assets: a.assets.query(c) };
+        case 'asset.inspect': return { ok: true, asset: a.assets.inspect(String(c.id)) };
+        case 'entity.create': return this.createEntity({ ...c }, 'entity.create');
+        case 'entity.set': { const id = String(c.id), before = structuredClone(E.get(id)), patch = { ...c }; delete patch.cmd; delete patch.id; E.set(id, patch); const after = structuredClone(E.get(id));
+          this.push({ label: 'entity.set ' + id, undo: () => { E.set(id, { parent: before.parent, transform: before.transform, parameters: before.parameters, components: before.components, state: before.state, tags: before.tags }); }, redo: () => { E.set(id, { parent: after.parent, transform: after.transform, parameters: after.parameters, components: after.components, state: after.state, tags: after.tags }); } });
+          return { ok: true, msg: id, entity: E.inspect(id) }; }
+        case 'entity.remove': { const gone = E.remove(String(c.id)); this.push({ label: 'entity.remove ' + c.id, undo: () => E.restore(gone), redo: () => { E.remove(gone[0].id); } }); return { ok: true, msg: gone.length + ' removed', removed: gone.map(r => r.id) }; }
+        case 'asset.place': {
+          const spec = { ...c, prefab: 'asset', parameters: { assetId: c.assetId } }; delete spec.assetId;
+          if (!spec.position && !(spec.transform && spec.transform.position)) { const f = a.focusPoint(), at = Array.isArray(c.at) ? c.at : [f.x + (a.mode === 'explore' ? Math.sin(a.player.yaw) * 3 : 0), f.z + (a.mode === 'explore' ? Math.cos(a.player.yaw) * 3 : 0)]; spec.position = [+at[0], a.terrain.hAt(+at[0], +at[1]), +at[1]]; }
+          return this.createEntity(spec, 'asset.place');
+        }
+        case 'prefab.build': {
+          const def = E.prefabs.get(c.type); if (!def || !BUILDABLE(c.type)) return { ok: false, code: 'prefab.unknown', msg: `Unknown prefab "${c.type}". Buildable: ${[...E.prefabs.keys()].filter(BUILDABLE).join(', ')}`, path: 'type' };
+          const params = def.validate({ ...(c.parameters || {}), ...(c.seed != null ? { seed: c.seed } : {}) }, E.ctx());
+          const site = a.findSite(params.width, params.depth, Array.isArray(c.at) ? c.at.map(Number) : null);
+          if (!site) return { ok: false, code: 'prefab.site', msg: 'No dry, flat enough ground for that building. Pass "at":[x,z] on land, or sculpt a flat area first.', path: 'at' };
+          return this.createEntity({ prefab: c.type, id: c.id, parameters: params, position: [site.x, site.y, site.z], rotation: [0, Number.isFinite(+c.yaw) ? +c.yaw : 0, 0], tags: ['building'] }, 'prefab.build');
+        }
+        case 'store.door': {
+          const rt = this.store(c.id); if (!rt.ok) return rt; const id = rt.id, cur = !!E.get(id).state.doorOpen, want = c.open == null ? !cur : !!c.open;
+          return this.stateChange(id, s => ({ ...s, doorOpen: want }), 'store.door ' + (want ? 'open' : 'close'), want ? 'Door open' : 'Door closed');
+        }
+        case 'product.take': case 'product.return': case 'interact.use': {
+          const rt = this.store(c.id); if (!rt.ok) return rt; const id = rt.id, run = E.rt.get(id), st = E.get(id).state, p = a.player;
+          if (c.cmd === 'interact.use') {
+            const probe = new V3(p.pos.x + Math.sin(p.yaw) * 0.5, p.pos.y + 1.2, p.pos.z + Math.cos(p.yaw) * 0.5), hit = run.nearestProduct(probe, 1.3);
+            if (hit) return this.takeKey(id, hit.key);
+            if (run.nearDoor(p.pos)) return this.exec({ cmd: 'store.door', id });
+            return { ok: false, code: 'interact.none', msg: 'Nothing to use here. Walk up to the door or a shelf.' };
+          }
+          if (c.cmd === 'product.take') { const key = c.key || (run.nearestProduct(new V3(p.pos.x, p.pos.y + 1.2, p.pos.z), 3) || {}).key; if (!key) return { ok: false, code: 'product.none', msg: 'No product in reach.', path: 'key' }; return this.takeKey(id, String(key)); }
+          const key = c.key || st.removed[st.removed.length - 1]; if (!key || !st.removed.includes(key)) return { ok: false, code: 'product.none', msg: 'Nothing to put back.', path: 'key' };
+          return this.stateChange(id, s => ({ ...s, removed: s.removed.filter(k => k !== key) }), 'product.return', 'Put it back');
+        }
+      }
+    } catch (e) { if (e instanceof EntityError || e.code) return { ok: false, code: e.code, msg: e.message, path: e.path }; throw e; }
+  }
+  createEntity(spec, label) {
+    const a = this.a, r = a.entities.create(spec); this.push({ label: label + ' ' + r.id, undo: () => { a.entities.remove(r.id); }, redo: () => { a.entities.restore([r]); } });
+    return { ok: true, msg: r.id, id: r.id, entity: a.entities.inspect(r.id) };
+  }
+  store(id) {
+    const E = this.a.entities, ids = [...E.rt].filter(([, rt]) => rt.nearestProduct).map(([i]) => i);
+    if (id != null) { if (!E.recs.has(String(id))) return { ok: false, code: 'entity.unknown', msg: `No entity "${id}"`, path: 'id' }; return { ok: true, id: String(id) }; }
+    if (!ids.length) return { ok: false, code: 'store.none', msg: 'There is no store in the scene. Build one first: {"cmd":"prefab.build","type":"retail.convenience"}' };
+    const p = this.a.player.pos; ids.sort((x, y) => E.rt.get(x).object.position.distanceTo(p) - E.rt.get(y).object.position.distanceTo(p)); return { ok: true, id: ids[0] };
+  }
+  takeKey(id, key) {
+    const E = this.a.entities, st = E.get(id).state, run = E.rt.get(id); if (!run.index.has(key)) return { ok: false, code: 'product.unknown', msg: `No product "${key}" in ${id}.`, path: 'key' };
+    if (st.removed.includes(key)) return { ok: false, code: 'product.gone', msg: 'That product is already taken.', path: 'key' };
+    const s = run.index.get(key), name = run.lib.product[s.type].name, r = this.stateChange(id, x => ({ ...x, removed: [...x.removed, key] }), 'product.take', 'Picked up: ' + name); if (r.ok) { r.key = key; r.name = name; } return r;
+  }
+  // a state-only change is applied in place (no rebuild) and journalled once
+  stateChange(id, fn, label, msg) {
+    const a = this.a, E = a.entities, rec = E.get(id), before = structuredClone(rec.state), after = fn(structuredClone(before));
+    const set = s => { rec.state = structuredClone(s); E.rt.get(id).applyState(rec.state); E.changed(); };
+    set(after); this.push({ label, undo: () => set(before), redo: () => set(after) }); return { ok: true, msg, state: structuredClone(after) };
   }
 
   importWorld(c) {
@@ -156,7 +239,7 @@ export class Core {
     return { format: FORMAT, version: VERSION, name: a.name, preset: a.terrain.preset, env: { ...a.env.p }, terrain: await a.terrain.pack(), spawn: a.spawn.map(r),
       palms: a.palms.items.map(p => [r(p.x), r(p.z), r(p.s), r(p.yaw)]),
       boulders: a.boulders.items.map(b => [r(b.p.x), r(b.p.y), r(b.p.z), r(b.r), b.seed]),
-      worlds: a.worlds.map(w => ({ name: w.name, at: w.at.map(r), doc: w.doc })),
+      worlds: a.worlds.map(w => ({ name: w.name, at: w.at.map(r), doc: w.doc })), entities: a.entities.serialize(), assetsUsed: [...new Set(a.entities.serialize().filter(e => e.prefab === 'asset').map(e => e.parameters.assetId))],
       player: [r(a.player.pos.x), r(a.player.pos.z), r(a.player.yaw)] };
   }
   async load(d) {
@@ -168,8 +251,9 @@ export class Core {
       await a.terrain.unpack(d.terrain); a.env.set(d.env || {}); a.name = d.name || (a.terrain.preset === 'blank' ? 'BLANK' : 'COAST_001');
       a.palms.items = (d.palms || []).map(([x, z, s, yaw]) => ({ x: +x, z: +z, s: +s, yaw: +yaw })); a.palms.rebuild();
       [...a.boulders.items].forEach(b => a.boulders.remove(b)); (d.boulders || []).forEach(([x, y, z, r, seed]) => a.boulders.add(+x, +y, +z, +r, seed | 0));
-      a.clearWorlds(); a.setPreset(a.terrain.preset);
+      a.entities.clear(); a.clearWorlds(); a.setPreset(a.terrain.preset);
       for (const w of (d.worlds || []).slice(0, LIMITS.worlds)) { const r = a.readWorld(w.doc); if (r.ok) a.placeWorld(r.doc, w.at, w.name); }
+      this.loadProblems = a.entities.load(d.entities || []); if (this.loadProblems.length) a.ui && a.ui.toast(this.loadProblems.length + ' saved object(s) could not be restored: ' + this.loadProblems[0].msg);
       a.spawn = Array.isArray(d.spawn) ? d.spawn.map(Number) : d.player ? [+d.player[0], +d.player[1], +d.player[2]] : a.defaultSpawn();
       if (d.player) { a.player.pos.set(+d.player[0], 0, +d.player[1]); a.player.yaw = +d.player[2]; } else a.player.pos.set(a.spawn[0], 0, a.spawn[1]);
       a.player.pos.y = a.player.groundAt(a.player.pos.x, a.player.pos.z); a.player.vel.set(0, 0, 0); a.phys && a.phys.teleport(a.player);
