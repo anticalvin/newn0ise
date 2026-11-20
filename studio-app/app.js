@@ -1297,6 +1297,16 @@
       notice('SVG downloaded.');
     } catch { notice('SVG export failed.'); }
   }
+  /* tell the node editor what this design is made of (its layers) and where it went */
+  async function hubRecord(blob,to) {
+    const hub = await import('../src/hub.js');
+    await hub.record({tool:'studio',name:doc.name,to,blob,
+      layers:[...doc.layers].reverse().filter(l => l.type !== 'background').map(l => ({name:l.name,kind:l.type,off:!l.visible}))});
+  }
+  async function showInNodes() {
+    try { await hubRecord(await exportPNG(),null); location.href = 'nodes.html'; }
+    catch { notice('Could not open the node editor.'); }
+  }
   async function sendArtwork(destination) {
     const tab = window.open('about:blank','_blank');
     if (!tab) { notice('Allow pop-ups to open the exported image in another tool.'); return; }
@@ -1304,6 +1314,7 @@
     try {
       const [blob,handoff] = await Promise.all([exportPNG(),import('../src/handoff.js')]);
       await handoff.put(blob,{from:'studio',name:doc.name,to:destination});
+      await hubRecord(blob,destination);
       tab.location.replace(new URL((destination === 'effects' ? 'effects.html' : 'studio.html')+'#from=studio',location.href));
     } catch {
       tab.close();
@@ -1316,6 +1327,7 @@
       ['Download PNG',downloadPNG],
       ['Download SVG',downloadSVG],
       ['Save editable project',save],
+      ['Show in node editor',showInNodes],
       ['Open in Effects',() => sendArtwork('effects')],
       ['Open in 3D as relief',() => sendArtwork('3d')]
     ]);
