@@ -151,7 +151,7 @@ const StudioRender = (() => {
     ctx.restore();
   }
 
-  function draw(canvas,doc,gpu) {
+  function draw(canvas,doc,gpu,hidden) {
     const [w,h] = dimensions(doc);
     if (canvas.width !== w) canvas.width = w;
     if (canvas.height !== h) canvas.height = h;
@@ -160,7 +160,7 @@ const StudioRender = (() => {
     gpu?.begin();
     for (let i=doc.layers.length-1;i>=0;i--) {
       const l = doc.layers[i];
-      if (!l.visible || !l.opacity) continue;
+      if (!l.visible || !l.opacity || l === hidden) continue;
       let frame;
       if (gpu && l.chain) {
         const makeRaster = () => {

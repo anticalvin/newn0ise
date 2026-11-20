@@ -467,10 +467,13 @@
       zoom = flush ? Math.max(.01,Math.min(width/w,height/h)) : Math.max(.01,Math.min((width-30)/w,(height-66)/h,1));
       pan = {x:0,y:flush ? 0 : -18};
     }
-    board.classList.toggle('flush',Math.abs((w/h)/(width/height)-1) < .03);
-    board.style.width = w*zoom+'px';
-    board.style.height = h*zoom+'px';
-    board.style.transform = `translate(calc(-50% + ${pan.x}px), calc(-50% + ${pan.y}px))`;
+    board.classList.toggle('flush',fitted && Math.abs((w/h)/(width/height)-1) < .03);
+    // zoom is a view transform: the canvas keeps its own pixel size and the whole artboard scales, nothing is resized
+    board.style.width = w+'px';
+    board.style.height = h+'px';
+    board.style.transformOrigin = '50% 50%';
+    board.style.transform = `translate(calc(-50% + ${pan.x}px), calc(-50% + ${pan.y}px)) scale(${zoom})`;
+    board.style.outlineWidth = `${Math.max(1,1/zoom)}px`;
     overlay.setAttribute('viewBox',`0 0 ${w} ${h}`);
     $('dimension').textContent = `${w} × ${h} · ${Math.round(zoom*100)}%`;
     positionTextEdit();
@@ -489,7 +492,7 @@
     });
   }
   function renderComposition() {
-    const warnings = R.draw(canvas,doc,gpu);
+    const warnings = R.draw(canvas,doc,gpu,textEdit?.layer);
     const warning = warnings[0] ?? '';
     if (warning && warning !== renderWarning) notice(warning);
     renderWarning = warning;
@@ -717,6 +720,7 @@
       else { drawOverlay(); schedule(); }
       return;
     }
+    if (g.kind === 'move' && g.reedit && !g.moved && !g.edited) { startTextEdit(g.reedit); return; }
     if (g.kind === 'marquee' && g.moved) {
       const [w,h] = dims(), b = rectangle(g.p,g.now);
       const ids = doc.layers.filter(l => l.visible && !l.locked && l.opacity && !['background','crt'].includes(l.type)).filter(l => {
@@ -820,12 +824,13 @@
         return p.x >= b.left && p.x <= b.right && p.y >= b.top && p.y <= b.bottom;
       })();
       if (hit && multi) { select(toggleId(selection,hit.id)); return; }
+      const reedit = hit?.type === 'text' && !multi && (e.pointerType !== 'touch' || (selection.length === 1 && selection[0] === hit.id)) ? hit : null;   // a click (no drag) on text edits it; touch needs it selected first
       if (hit || (inside && inGroup)) {
         if (hit && !selection.includes(hit.id)) select([hit.id]);
         const moving = visibleSelection();
         const targets = doc.layers.filter(l => l.visible && l.opacity && !selection.includes(l.id) &&
           l.type !== 'background' && l.type !== 'crt').map(l => R.bounds(l,w,h));
-        gesture = {...base,kind:'move',items:snapshotTransforms(moving),bounds:boxFor(moving),targets,before:capture()};
+        gesture = {...base,kind:'move',items:snapshotTransforms(moving),bounds:boxFor(moving),targets,before:capture(),reedit};
       } else {
         const keep = multi ? [...selection] : [];
         if (!multi) select([]);
@@ -855,6 +860,8 @@
       drawOverlay();
     } else if (tool === 'text') {
       e.preventDefault();
+      const over = inside ? doc.layers.find(l => l.type === 'text' && l.visible && !l.locked && R.inside(l,p,w,h,5/zoom)) : null;
+      if (over) { setTool('select'); startTextEdit(over); return; }
       const before = capture(), l = build('text',{text:'',x:p.x-w/2,y:p.y-h/2});
       insert([l]);
       setTool('select');
@@ -919,12 +926,12 @@
     const lines = Math.max(1,input.value.split('\n').length);
     input.style.left = `${anchor.x*100/w}%`;
     input.style.top = `${anchor.y*100/h}%`;
-    input.style.fontSize = `${l.fontSize*zoom}px`;
+    input.style.fontSize = `${l.fontSize}px`;
     input.style.fontFamily = l.font || 'sans-serif';
     input.style.color = l.fill || paintColor;
     input.style.lineHeight = '1.2';
     input.style.width = `${Math.max(2,Math.min(46,Math.max(input.value.length,8)+1))}ch`;
-    input.style.height = `${Math.max(1,l.fontSize*zoom*l.scale/100*1.2*lines)}px`;
+    input.style.height = `${Math.max(1,l.fontSize*1.2*lines)}px`;
     input.style.transform = `rotate(${l.rotation}deg) scale(${l.scale/100})`;
   }
   function finishTextEdit(cancelled = false) {
@@ -933,6 +940,7 @@
     textEdit = null;
     edit.input.remove();
     inlineText = null;
+    schedule();   // the canvas hid this layer while it was being typed in
     if (cancelled || (edit.created && !edit.layer.text.trim())) {
       restore(edit.before);
     } else if (edit.created || edit.original !== edit.layer.text) {
