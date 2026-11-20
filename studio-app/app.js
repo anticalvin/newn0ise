@@ -932,7 +932,7 @@
     input.style.top = `${anchor.y*100/h}%`;
     input.style.fontSize = `${l.fontSize*zoom}px`;
     input.style.fontFamily = l.font || 'sans-serif';
-    input.style.color = l.fill || paintColor;
+    input.style.color = 'transparent'; /* the canvas draws the live text; this box only supplies the caret and selection, so nothing is doubled */
     input.style.lineHeight = '1.2';
     input.style.width = `${Math.max(2,Math.min(46,Math.max(input.value.length,8)+1))}ch`;
     input.style.height = `${Math.max(1,l.fontSize*zoom*l.scale/100*1.2*lines)}px`;
@@ -1868,5 +1868,6 @@
     window.history.replaceState(null,'',location.pathname+location.search);
     window.__wantGraph = true;
     openLauncher();
+    launchProject(true);
   } else openLauncher();
 })();

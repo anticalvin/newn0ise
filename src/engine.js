@@ -1364,7 +1364,9 @@ function layout(){
   let asp=srcAsp;
   if(E.aspect!=='src'){const [a,b]=E.aspect.split(':').map(Number);asp=a/b;}
   if(!SZ.w){SZ.w=stage?stage.clientWidth:(EMB.w||640);SZ.h=stage?stage.clientHeight:(EMB.h||480);}
-  const sw=Math.max(40,SZ.w-16),sh=Math.max(40,SZ.h-16);
+  const fl=stage&&!document.body.hasAttribute('data-cam')&&innerWidth<960&&innerHeight>=550;
+  if(stage&&ST._pa!==asp){ST._pa=asp;document.documentElement.style.setProperty('--pasp',asp.toFixed(4));}
+  const pd=fl?0:16,sw=Math.max(40,SZ.w-pd),sh=Math.max(40,SZ.h-pd);
   let cw=sw,ch=sw/asp;if(ch>sh){ch=sh;cw=sh*asp;}
   const dpr=Math.min(2,window.devicePixelRatio||1),q=parseFloat(E.quality)*ST.autoQ;
   let DW=Math.round(cw*dpr*q),DH=Math.round(ch*dpr*q);

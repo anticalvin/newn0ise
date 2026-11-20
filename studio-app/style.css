@@ -144,7 +144,6 @@ button:disabled { opacity:.35; cursor:default; }
 #overlay text { fill:#eeeae3; paint-order:stroke; stroke:#272624; stroke-linejoin:round; }
 .toolstrip { position:absolute; z-index:2; bottom:5px; left:50%; transform:translateX(-50%); margin:0; padding:5px; gap:3px; max-width:calc(100% - 12px); overflow-x:auto; justify-content:flex-start; scrollbar-width:none; touch-action:pan-x; background:#252628ee; box-shadow:0 6px 24px #0007; }
 .toolstrip::-webkit-scrollbar { display:none; }
-.tool[data-tool=picker] { box-shadow:inset 0 -3px 0 var(--paint-color,#e9e5db); }
 .tool { width:37px; height:34px; flex:none; }
 .stagehead button { color:inherit; padding:4px 0 4px 9px; letter-spacing:inherit; }
 .stagehead button:hover { color:var(--ink); }
@@ -303,4 +302,4 @@ a.brand:focus-visible { outline:2px solid var(--accent); outline-offset:4px; }
 .shapepal .tool{width:44px;height:44px;display:grid;place-items:center;border-radius:12px}
 .shapepal .tool.on{background:#e9e4d8;color:#161714}
 .tool{position:relative}
-.tool[data-tool=picker]::after{content:'';position:absolute;right:5px;bottom:5px;width:9px;height:9px;border-radius:50%;background:var(--paint-color,#e9e5db);border:1px solid #fffa}
+.tool[data-tool=picker]{font-size:0}.tool[data-tool=picker]::after{content:'';position:absolute;left:50%;top:50%;width:20px;height:20px;margin:-10px 0 0 -10px;border-radius:50%;background:var(--paint-color,#e9e5db);border:2px solid #ffffffb0;box-sizing:border-box}

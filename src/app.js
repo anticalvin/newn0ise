@@ -3173,7 +3173,7 @@ function buildCamUI(){
    info.style.display='none';const dp=el('div','camdp');dp.append(duo,cats,strip,info);drawer.append(dh,dm,dp);
    bot.replaceChildren(fbar,modes,row,drawer);
    new MutationObserver(syncT).observe(u,{attributes:true,attributeFilter:['class']});syncT();}
-  {const k=lsGet('n0ise.camkind',null);if(k&&k!==camKind)setKind(k,true);u.dataset.kind=camKind;}
+  u.dataset.kind=camKind;
   let hold=0,holdRec=false,downBusy=false;
   const takePhoto=async()=>{if(camBusy)return;camBusy=true;
     for(let n=camTimer;n>0;n--){cd.hidden=false;cd.textContent=n;buzz(8);await new Promise(r=>setTimeout(r,1000));}cd.hidden=true;
@@ -3242,7 +3242,7 @@ async function openCamera(o){
   if(o&&o.demo){camDemo=true;setSource(demoCanvas(),'Camera',false);refreshUI();}
   else{const ok=await startCam(false);if(!ok){if(camNeedTap)showTapGate();else showCamGate(camErr||'The camera couldn’t start.');return;}}
   if(!(o&&o.demo)&&(!(SRC.el instanceof HTMLVideoElement)||SRC.name!=='Camera'))return;
-  camLife();camMode=lsGet('n0ise.cammode','photo')==='video'?'video':'photo';camFavs=lsGet('n0ise.camfavs',[]);camCat=lsGet('n0ise.camcat','All');camIx=Math.max(0,CAMS.findIndex(c=>c.id===lsGet('n0ise.cam','cctv')));camText=!!lsGet('n0ise.camtext',false);{const tb=$('#camtxt');if(tb)tb.setAttribute('aria-pressed',camText);}
+  camLife();camMode='photo';camFavs=lsGet('n0ise.camfavs',[]);camCat=lsGet('n0ise.camcat','All');camIx=Math.max(0,CAMS.findIndex(c=>c.id===lsGet('n0ise.cam','cctv')));camText=!!lsGet('n0ise.camtext',false);{const tb=$('#camtxt');if(tb)tb.setAttribute('aria-pressed',camText);}
   camSaved={layers:STACK.layers,sel:STACK.sel,aspect:P.aspect};
   setPM(camFacing==='user');buildCamUI();CAMMODE=true;document.body.dataset.cam='1';delete document.documentElement.dataset.boot;
   readCaps();applyCam(camIx,true);
@@ -3702,7 +3702,6 @@ function phoneShell(){
   const open=e=>{try{dlg.showModal();}catch(x){}};
   ['menubtn','menubtn2'].forEach(id=>{const b=document.getElementById(id);if(b)b.addEventListener('click',open);});
   dlg.addEventListener('click',e=>{if(e.target===dlg||(e.target.closest&&e.target.closest('.dialog-body button:not([data-keep])')))dlg.close();});
-  const sl=document.getElementById('studio-link');if(sl)sl.addEventListener('click',e=>{e.preventDefault();toast('Coming soon',2400);});
   const tb=document.getElementById('tipbtn');if(tb)tb.addEventListener('click',()=>toast(GESTURE_TIP,5000));
   /* undo, redo and Save sit in the header on desktop and in this menu on phones: the same buttons move, so state and handlers stay */
   const mq=matchMedia('(min-width:960px) and (min-height:550px)'),dg=document.getElementById('deskglobal'),slot=document.getElementById('globalslot');
