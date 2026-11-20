@@ -298,3 +298,9 @@ a.brand:focus-visible { outline:2px solid var(--accent); outline-offset:4px; }
 .app.immersive .stage{position:absolute;inset:0;border-radius:0;border:0}
 .exitfs{position:fixed;top:calc(12px + env(safe-area-inset-top));right:calc(12px + env(safe-area-inset-right));z-index:60;width:44px;height:44px;background:#1b1c19e8;backdrop-filter:blur(14px)}
 .exitfs.hidden{display:none}
+
+.shapepal{position:fixed;z-index:70;display:flex;gap:4px;padding:6px;border-radius:16px;background:#1b1c19ee;border:1px solid #ffffff22;backdrop-filter:blur(16px);box-shadow:0 12px 40px #000a}
+.shapepal .tool{width:44px;height:44px;display:grid;place-items:center;border-radius:12px}
+.shapepal .tool.on{background:#e9e4d8;color:#161714}
+.tool{position:relative}
+.tool[data-tool=picker]::after{content:'';position:absolute;right:5px;bottom:5px;width:9px;height:9px;border-radius:50%;background:var(--paint-color,#e9e5db);border:1px solid #fffa}
