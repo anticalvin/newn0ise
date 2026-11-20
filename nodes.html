@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>n0ise / nodes</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="ui/nodes.css">
+</head>
+<body>
+<header class="bar">
+  <a class="back" href="index.html" aria-label="n0ise home">n0ise <small>/ nodes</small></a>
+  <div class="actions"><button id="fit" class="btn">Fit</button><button id="reset" class="btn">Clear</button></div>
+</header>
+<main id="stage" aria-label="Project node editor">
+  <svg id="svg" role="application" aria-label="Project graph" tabindex="0"></svg>
+  <div id="empty" hidden>
+    <h1>Nothing here yet</h1>
+    <p>Make something in a tool and send it on. Studio, Effects, Lab and Camera appear here with every layer, wired to where they went.</p>
+    <div class="row"><a class="btn" href="studio-app.html">Studio</a><a class="btn" href="effects.html">Effects</a><a class="btn" href="lab.html">Lab</a></div>
+  </div>
+  <aside id="panel" hidden aria-label="Selected node"></aside>
+</main>
+<script type="module" src="src/nodeeditor.js"></script>
+</body>
+</html>
