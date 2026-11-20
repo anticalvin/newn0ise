@@ -31,7 +31,7 @@
   let doc = create(preset(),false,workspaceSize()), selection = [];
   let textEdit = null, inlineText = null, launchMode = 'new', launchTicket = 0;
   let view = 'canvas', tool = 'select', rail = 'layers', sheet = 'canvas', shape = 'rectangle';
-  let paintColor = '#e9e5db';
+  let paintColor = '#e9e5db', constrain = true;
   let dirty = false, opening = 0, revision = 0, space = false, grid = false, snapping = true, angular = false;
   let pan = {x:0,y:0}, zoom = 1, fitted = true, frame = 0, gesture = null, pen = [], hover = null;
   let guides = [], draft = null, editAnchors = false, toastTimer = 0, contextKey = '';
@@ -435,6 +435,17 @@
     if (l.type === 'shape' || l.type === 'path' || l.type === 'brush') {
       if (l.type === 'shape' || l.closed) context.append(prop('Fill','fill','color'));
       context.append(prop('Stroke','stroke','color'),prop('Stroke width','strokeWidth','number',{min:l.closed || l.type === 'shape' ? 0 : 1,max:200}));
+    }
+    if (l.type === 'shape' || l.type === 'image') {
+      const sized = (title,key,other) => field(title,'number',Math.round(l[key]),v => {
+        const ratio = l[other]/l[key];
+        l[key] = Math.max(1,v);
+        if (constrain) l[other] = Math.max(1,Math.round(l[key]*ratio));
+        contextKey = '';
+      },{min:1,max:8192});
+      const toggle = action('Constrain proportions: '+(constrain ? 'on' : 'off'),() => { constrain = !constrain; contextKey = ''; syncInspector(); });
+      toggle.setAttribute('aria-pressed',String(constrain));
+      context.append(sized('Width','width','height'),sized('Height','height','width'),toggle);
     }
     if (l.type === 'shape') context.append(action('Convert to editable path',() => pathFromShape(l)));
     if (l.type === 'path') context.append(action(editAnchors ? 'Done editing anchors' : 'Edit anchors',toggleAnchors));
@@ -1236,8 +1247,48 @@
       ['Text',() => { setTool('text'); notice('Tap the artboard to place text.'); }]
     ]);
   }
+  /* Compact icon palette anchored above the Shape button (replaces the full-screen menu) */
+  const shapeIcons = {
+    rectangle:'<rect x="4" y="6" width="16" height="12" rx="1"/>',ellipse:'<ellipse cx="12" cy="12" rx="8" ry="6"/>',
+    triangle:'<path d="M12 5 20 19H4z"/>',diamond:'<path d="M12 4 20 12 12 20 4 12z"/>',
+    hexagon:'<path d="M8 5h8l4 7-4 7H8l-4-7z"/>',star:'<path d="m12 4 2.4 5 5.6.7-4.1 3.8 1.1 5.5L12 16.3 7 19l1.1-5.5L4 9.7 9.6 9z"/>',
+    line:'<path d="M5 19 19 5"/><circle cx="5" cy="19" r="1.6"/><circle cx="19" cy="5" r="1.6"/>'
+  };
+  function closeShapePalette(restore = true) {
+    const pal = $('shapePalette');
+    if (!pal) return;
+    pal.remove();
+    document.removeEventListener('pointerdown',pal._out,true);
+    document.removeEventListener('keydown',pal._key,true);
+    if (restore) document.querySelector('[data-tool="shape"]')?.focus();
+  }
   function shapePicker() {
-    menu('Vector shapes',Object.entries(V.shapes).map(([id,name]) => [name,() => chooseShape(id)]));
+    closeShapePalette(false);
+    const anchor = document.querySelector('[data-tool="shape"]');
+    const pal = document.createElement('div');
+    pal.id = 'shapePalette'; pal.className = 'shapepal'; pal.setAttribute('role','menu'); pal.setAttribute('aria-label','Vector shapes');
+    for (const [id,name] of Object.entries(V.shapes)) {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'tool'+(id === shape ? ' on' : ''); b.setAttribute('role','menuitem');
+      b.setAttribute('aria-label',name); b.title = name;
+      b.innerHTML = `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round">${shapeIcons[id] || ''}</svg>`;
+      b.onclick = () => { closeShapePalette(false); chooseShape(id); };
+      pal.append(b);
+    }
+    document.body.append(pal);
+    const r = anchor.getBoundingClientRect(), pw = pal.offsetWidth, ph = pal.offsetHeight;
+    pal.style.left = Math.max(8,Math.min(innerWidth-pw-8,r.left+r.width/2-pw/2))+'px';
+    pal.style.top = Math.max(8,r.top-ph-10)+'px';
+    pal._out = e => { if (!pal.contains(e.target) && !e.target.closest('[data-tool="shape"]')) closeShapePalette(false); };
+    pal._key = e => {
+      const items = [...pal.querySelectorAll('button')], i = items.indexOf(document.activeElement);
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeShapePalette(); }
+      else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { e.preventDefault(); e.stopPropagation(); items[(i+1)%items.length].focus(); }
+      else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { e.preventDefault(); e.stopPropagation(); items[(i-1+items.length)%items.length].focus(); }
+    };
+    document.addEventListener('pointerdown',pal._out,true);
+    document.addEventListener('keydown',pal._key,true);
+    (pal.querySelector('.on') || pal.querySelector('button')).focus();
   }
   function chooseShape(next) {
     shape = next;
@@ -1376,6 +1427,7 @@
     const next = create(config.ratio,demo,config.size);
     useDocument(next);
     if (demo) select([next.layers[0].id]);
+    if (window.__wantGraph) { window.__wantGraph = false; setView('graph'); }
   }
   $('launchRatio').onchange = launchLayout;
   $('launchForm').onsubmit = e => { e.preventDefault(); launchProject(false); };
@@ -1812,5 +1864,9 @@
       openLauncher();
       $('launchStatus').textContent = 'No Lab still could be opened. You can upload a PNG instead.';
     }
+  } else if (location.hash === '#graph') {
+    window.history.replaceState(null,'',location.pathname+location.search);
+    window.__wantGraph = true;
+    openLauncher();
   } else openLauncher();
 })();
