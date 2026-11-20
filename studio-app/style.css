@@ -288,3 +288,13 @@ a.brand:focus-visible { outline:2px solid var(--accent); outline-offset:4px; }
 .wire.drag { stroke:#f1eee8; stroke-dasharray:6 5; }
 .wire.drag.bad { stroke:#c9694f; }
 @media (prefers-reduced-motion:no-preference) { .port { transition:r .1s; } .port.ok { r:9; } }
+
+.artboard.flush{outline:0!important;box-shadow:none}
+
+/* Full screen: same canvas, chrome hidden, tool strip and document kept */
+.app.immersive{position:fixed;inset:0;z-index:50;display:block;background:#08090a}
+.app.immersive .top,.app.immersive .documentbar,.app.immersive .pane,.app.immersive .mobilebar,.app.immersive .stagehead,.app.immersive .stagefoot{display:none!important}
+.app.immersive .workspace{display:block;position:absolute;inset:0}
+.app.immersive .stage{position:absolute;inset:0;border-radius:0;border:0}
+.exitfs{position:fixed;top:calc(12px + env(safe-area-inset-top));right:calc(12px + env(safe-area-inset-right));z-index:60;width:44px;height:44px;background:#1b1c19e8;backdrop-filter:blur(14px)}
+.exitfs.hidden{display:none}

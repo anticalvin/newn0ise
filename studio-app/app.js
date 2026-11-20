@@ -12,7 +12,7 @@
   }
   const effects = runtimeModule?.effects ?? new Map();
   const mobile = matchMedia('(max-width:680px)');
-  const preset = () => mobile.matches ? 'custom' : 'landscape';
+  const preset = () => 'custom';
   function screenCanvasSize() {
     const density = Math.max(1,window.devicePixelRatio || 1);
     const width = Math.round((window.screen?.width || innerWidth)*density);
@@ -21,7 +21,14 @@
   }
   const stage = $('stagebody'), board = $('artboard'), overlay = $('overlay'), canvas = $('preview');
   const stack = history();
-  let doc = create(preset(),false,mobile.matches ? screenCanvasSize() : undefined), selection = [];
+  /* A new document fills the whole workspace: its pixel size takes the aspect of #stagebody (long edge 1920). */
+  function workspaceSize() {
+    const w = stage.clientWidth, h = stage.clientHeight;
+    if (!w || !h) return mobile.matches ? screenCanvasSize() : [1920,1080];
+    const k = 1920/Math.max(w,h);
+    return aspectCanvasSize(Math.round(w*k),Math.round(h*k));
+  }
+  let doc = create(preset(),false,workspaceSize()), selection = [];
   let textEdit = null, inlineText = null, launchMode = 'new', launchTicket = 0;
   let view = 'canvas', tool = 'select', rail = 'layers', sheet = 'canvas', shape = 'rectangle';
   let paintColor = '#e9e5db';
@@ -441,7 +448,7 @@
     $('undo').disabled = !stack.canUndo;
     $('redo').disabled = !stack.canRedo;
     $('docname').value = doc.name;
-    $('ratio').value = doc.ratio;
+    $('ratio').value = doc.ratio === 'custom' && Math.abs((doc.size[0]/doc.size[1])/(stage.clientWidth/Math.max(1,stage.clientHeight))-1) < .03 ? 'workspace' : doc.ratio;
     $('resizeCustom').classList.toggle('hidden',doc.ratio !== 'custom');
     $('stagefoot').textContent = 'RGB · '+ratioName(doc);
     refreshGraphLayer();
@@ -456,9 +463,11 @@
     const [w,h] = dims(), width = stage.clientWidth, height = stage.clientHeight;
     if (!width || !height) return;
     if (fitted) {
-      zoom = Math.max(.01,Math.min((width-30)/w,(height-66)/h,1));
-      pan = {x:0,y:-18};
+      const flush = Math.abs((w/h)/(width/height)-1) < .03;
+      zoom = flush ? Math.max(.01,Math.min(width/w,height/h)) : Math.max(.01,Math.min((width-30)/w,(height-66)/h,1));
+      pan = {x:0,y:flush ? 0 : -18};
     }
+    board.classList.toggle('flush',Math.abs((w/h)/(width/height)-1) < .03);
     board.style.width = w*zoom+'px';
     board.style.height = h*zoom+'px';
     board.style.transform = `translate(calc(-50% + ${pan.x}px), calc(-50% + ${pan.y}px))`;
@@ -1333,15 +1342,16 @@
     $('launchTitle').textContent = mode === 'resize' ? 'Canvas dimensions' : 'Make something.';
     $('launchCreate').firstChild.textContent = mode === 'resize' ? 'Resize canvas ' : 'Blank canvas ';
     launcher.classList.toggle('resize-only',mode === 'resize');
-    $('launchRatio').value = mode === 'resize' ? 'custom' : preset();
-    const [w,h] = mode === 'resize' ? dims() : preset() === 'custom' ? screenCanvasSize() : [1600,1200];
+    $('launchRatio').value = mode === 'resize' ? 'custom' : 'workspace';
+    const [w,h] = mode === 'resize' ? dims() : workspaceSize();
     $('launchWidth').value = w;
     $('launchHeight').value = h;
     launchLayout();
     launcher.showModal();
   }
   function launchSize() {
-    const ratio = $('launchRatio').value;
+    let ratio = $('launchRatio').value;
+    if (ratio === 'workspace') { ratio = 'custom'; return {ratio,size:workspaceSize()}; }
     const size = ratio === 'custom' ? [$('launchWidth').valueAsNumber,$('launchHeight').valueAsNumber] : sizes[ratio];
     if (!validSize(size)) {
       $('launchStatus').textContent = 'Use 64–4096 px per side and up to 8 megapixels.';
@@ -1559,6 +1569,26 @@
   $('graphAdd').onclick = openEffects;
   $('effectTool').onclick = openEffects;
   $('graphFit').onclick = graph.fit;
+  /* Full screen: Fullscreen API where it exists, in-page immersive mode otherwise (iPhone). Document, tool, selection and zoom are untouched. */
+  const appEl = document.querySelector('.app');
+  function setImmersive(on) {
+    appEl.classList.toggle('immersive',on);
+    $('exitFullscreen').classList.toggle('hidden',!on);
+    $('fullscreen').setAttribute('aria-pressed',String(on));
+    requestAnimationFrame(layout);
+  }
+  async function toggleFullscreen(force) {
+    const on = force ?? !appEl.classList.contains('immersive');
+    setImmersive(on);
+    const el = document.documentElement;
+    try {
+      if (on && el.requestFullscreen && !document.fullscreenElement) await el.requestFullscreen({navigationUI:'hide'});
+      else if (!on && document.fullscreenElement) await document.exitFullscreen();
+    } catch {}
+  }
+  document.addEventListener('fullscreenchange',() => { if (!document.fullscreenElement && appEl.classList.contains('immersive')) setImmersive(false); });
+  $('fullscreen').onclick = () => toggleFullscreen();
+  $('exitFullscreen').onclick = () => toggleFullscreen(false);
   $('docname').onchange = e => {
     const name = e.target.value.trim() || 'Untitled 01';
     e.target.value = name;
@@ -1566,7 +1596,8 @@
   };
   $('ratio').onchange = e => {
     const value = e.target.value;
-    if (value === 'custom') {
+    if (value === 'workspace') { e.target.value = doc.ratio; setDimensions('custom',workspaceSize()); }
+    else if (value === 'custom') {
       e.target.value = doc.ratio;
       openLauncher('resize');
     } else setDimensions(value,sizes[value]);
@@ -1716,6 +1747,8 @@
       else if (graph.selection && view !== 'canvas') { graph.clear(); syncInspector(); }
       else select([]);
     } else if (key === 'enter' && tool === 'pen' && pen.length && !e.target.closest('button')) penFinish();
+    else if (key === 'f') toggleFullscreen();
+    else if (key === 'escape' && appEl.classList.contains('immersive')) toggleFullscreen(false);
     else if (key === '0') (view === 'graph' ? graph.fit : fit)();
     else if (key === 'delete' || key === 'backspace') {
       e.preventDefault();
