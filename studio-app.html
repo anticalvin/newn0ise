@@ -52,7 +52,7 @@
       <div class="panel-handle" data-resize="left" role="separator" aria-label="Resize layers" aria-orientation="vertical" tabindex="0"></div>
     </aside>
     <section class="stage viewcanvas" id="stage" aria-label="Composition">
-      <div class="stagehead"><span>ARTBOARD 01</span><span><span id="dimension"></span><button id="fit" aria-label="Zoom to fit" title="Zoom to fit (0)">FIT</button></span></div>
+      <div class="stagehead"><span>ARTBOARD 01</span><span><span id="dimension"></span><button id="zoomLock" aria-label="Lock zoom anchor" aria-pressed="false" title="Lock zoom anchor: zooming keeps the artboard where it is">LOCK</button><button id="fit" aria-label="Zoom to fit" title="Zoom to fit (0)">FIT</button></span></div>
       <div class="stagebody" id="stagebody" tabindex="0" aria-label="Artwork workspace">
         <div class="artboard" id="artboard">
           <canvas id="preview" aria-label="Composition preview"></canvas>
@@ -149,5 +149,6 @@
 <div id="studioContext" class="context-menu" role="menu" aria-label="Studio actions" hidden></div>
 <button class="iconbtn exitfs hidden" id="exitFullscreen" aria-label="Exit full screen" title="Exit full screen (Esc)">✕</button>
 <div class="toast hidden" id="toast" role="status"></div>
+<script type="module" src="ui/sound.js"></script>
 </body>
 </html>

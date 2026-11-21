@@ -157,5 +157,6 @@ const app=document.querySelector('.app'),mainEl=document.querySelector('.main');
 const tuck=n=>{if(n&&n.classList&&n.classList.contains('restore')&&n.parentNode!==app)app.insertBefore(n,mainEl);};
 tuck(document.querySelector('.restore'));new MutationObserver(ms=>ms.forEach(m=>m.addedNodes.forEach(tuck))).observe(document.body,{childList:true});
 </script>
+<script type="module" src="ui/sound.js"></script>
 </body>
 </html>
