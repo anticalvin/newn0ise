@@ -283,6 +283,7 @@
       text:{text:'Type here',font:'sans-serif',fontSize:Math.round(size*.38),fill:paintColor},
       path:{points:[],closed:false,fill:paintColor,stroke:paintColor,strokeWidth:4},
       brush:{points:[],stroke:paintColor,strokeWidth:Math.max(4,w*.007)},
+      background:{fill:'#151617'},
       gradient:{gradient:{kind:'linear',from:[-w/2,0],to:[w/2,0],start:paintColor,end:'#101112'}}
     };
     return layer(type,{...defaults[type],...props});
@@ -498,6 +499,9 @@
       }
     }
     const prop = (title,key,type,options) => field(title,type,l[key],v => { l[key] = v; },options);
+    if (l.type === 'background') context.append(field('Colour','color',l.fill || '#1d1e20',v => { l.fill = v; }),
+      action('Studio gradient',() => change(() => { delete l.fill; contextKey = ''; })),
+      Object.assign(document.createElement('span'),{className:'muted compact',textContent:'Hide this layer for a transparent PNG.'}));
     if (l.type === 'text') context.append(action('Edit on canvas',() => startTextEdit(l)),
 
       prop('Text','text','textarea',{maxLength:2000}),
@@ -518,7 +522,7 @@
       toggle.setAttribute('aria-pressed',String(constrain));
       context.append(sized('Width','width','height'),sized('Height','height','width'),toggle);
     }
-    if (l.type === 'shape') context.append(action('Convert to editable path',() => pathFromShape(l)));
+    if (l.type === 'shape') context.append(action('Edit points',() => pathFromShape(l)));
     if (l.type === 'path') context.append(action(editAnchors ? 'Done editing anchors' : 'Edit anchors',toggleAnchors));
     if (l.type === 'image' && l.crop) context.append(action('Reset crop',() => {
       contextKey = '';
@@ -527,6 +531,8 @@
   }
 
   function sync() {
+    board.classList.toggle('transparent',!doc.layers.some(l => l.type === 'background' && l.visible && l.opacity));
+    board.classList.toggle('artboardlocked',!!doc.artboardLocked);
     $('undo').disabled = !stack.canUndo;
     $('redo').disabled = !stack.canRedo;
     $('docname').value = doc.name;
@@ -864,6 +870,7 @@
 
   stage.addEventListener('pointerdown',e => {
     if (view === 'spatial' || e.target.closest('button,#textEdit,#inlineText') || e.button > 1) return;
+    if (doc.artboardLocked && e.button === 0 && pointers.size < 2) { if (e.pointerType !== 'touch') notice('Artboard is locked. Right-click it to unlock.'); return; }
     if (textEdit) { finishTextEdit(); return; }
     stage.focus({preventScroll:true});
     if (e.pointerType === 'touch') {
@@ -1048,6 +1055,8 @@
     const p = position(e.clientX,e.clientY), [w,h] = dims();
     const top = doc.layers.find(l => R.inside(l,p,w,h,5/zoom));
     if (top?.type === 'text') startTextEdit(top);
+    else if (top?.type === 'shape' && !top.locked && !doc.artboardLocked) pathFromShape(top);
+    else if (top?.type === 'path' && !top.locked && !editAnchors) { select([top.id]); toggleAnchors(); }
   });
 
   function cropPreview(g,p,w,h) {
@@ -1273,7 +1282,43 @@
     });
     if (clones.length) change(() => insert(clones));
   }
+  /* node graph: right-click (or long-press on touch) opens the commands for what is under the pointer */
+  function graphMenu(x,y,target) {
+    const g = visibleGraph();
+    if (!g) return;
+    const nodeId = target.closest('[data-node]')?.dataset.node, edgeId = target.closest('[data-edge]')?.dataset.edge;
+    const node = g.nodes.find(n => n.id === nodeId), actions = [];
+    if (node) {
+      graph.choose({node:node.id});
+      if (node.type === 'effect') {
+        actions.push([node.params.disabled ? 'Enable effect' : 'Bypass effect',() => change(() => { node.params.disabled = !node.params.disabled; })]);
+      }
+      if (g.edges.some(e => e.to === node.id)) actions.push(['Disconnect input',() => { graph.choose({edge:node.id}); graph.remove(); }]);
+      if (node.type === 'effect') actions.push(['Delete effect',() => { graph.choose({node:node.id}); graph.remove(); }]);
+    } else if (edgeId) {
+      graph.choose({edge:edgeId});
+      actions.push(['Disconnect',() => graph.remove()]);
+    } else {
+      actions.push(['Add effect…',openEffects]);
+    }
+    actions.push(['Fit graph',() => graph.fit()]);
+    contextMenu.show(x,y,actions);
+  }
+  { const svg = $('graphsvg'); let press = null;
+    const stop = () => { clearTimeout(press?.timer); press = null; };
+    svg.addEventListener('pointerdown',e => {
+      stop();
+      if (e.pointerType !== 'touch') return;
+      const target = e.target;
+      press = {x:e.clientX,y:e.clientY,timer:setTimeout(() => { const p = press; press = null; if (p) { navigator.vibrate?.(12); graphMenu(p.x,p.y,target); } },480)};
+    });
+    svg.addEventListener('pointermove',e => { if (press && Math.hypot(e.clientX-press.x,e.clientY-press.y) > 10) stop(); });
+    svg.addEventListener('pointerup',stop);
+    svg.addEventListener('pointercancel',stop);
+    svg.addEventListener('contextmenu',e => { e.preventDefault(); e.stopPropagation(); stop(); graphMenu(e.clientX,e.clientY,e.target); });
+  }
   document.addEventListener('contextmenu',e => {
+    if (e.target.closest('#graphsvg')) return;
     if (launcher.open || $('modal').open || gesture || e.target.closest('input,textarea,select,a,#textEdit') ||
       !e.target.closest('#workspace')) return;
     const onStage = stage.contains(e.target), row = e.target.closest('[data-layer-id]');
@@ -1292,15 +1337,19 @@
         if (hit.type === 'procedure') actions.push(['Edit in Lab',() => editVectorInLab(hit)]);
         if (hit.type === 'text') actions.push(['Edit text',() => startTextEdit(hit)]);
         if (hit.type === 'path' && selection.length === 1) actions.push(['Edit anchors',toggleAnchors]);
-        if (hit.type === 'shape' && selection.length === 1) actions.push(['Convert to path',() => pathFromShape(hit)]);
+        if (hit.type === 'shape' && selection.length === 1) actions.push(['Edit points',() => pathFromShape(hit)]);
       }
       actions.push(['Duplicate',duplicateLayers],['Delete',remove],['Deselect',() => select([])]);
+      if (doc.artboardLocked) actions.push(['Unlock artboard',() => change(() => { doc.artboardLocked = false; })]);
     } else {
       actions.push(['Text',() => setTool('text')],['Vector shapes',shapePicker],['Freehand',() => setTool('brush')],
         ['Lasso selection',() => setTool('lasso')],
         ['Eraser',() => setTool('eraser')],['Gradient fill',() => setTool('gradient')],
         ['Eyedropper',() => setTool('picker')],['Import image…',() => $('imageFile').click()]);
       if (selection.length) actions.push(['Deselect',() => select([])]);
+      actions.push([doc.artboardLocked ? 'Unlock artboard' : 'Lock artboard',() => change(() => { doc.artboardLocked = !doc.artboardLocked; })],
+        ['Rename artboard',() => { $('docname').focus(); $('docname').select(); }],['Export…',() => $('export').click()],
+        ['Fit to screen',fit],[zoomLocked ? 'Unlock zoom anchor' : 'Lock zoom anchor',() => $('zoomLock').click()]);
     }
     const rect = e.target.getBoundingClientRect();
     contextMenu.show(e.clientX || rect.left,e.clientY || rect.bottom,actions);

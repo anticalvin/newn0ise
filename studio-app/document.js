@@ -61,6 +61,7 @@ const StudioDocument = (() => {
     project.time = number(raw.time,0,0,1e6);
     project.fps = number(raw.fps,30,1,120);
     project.seed = number(raw.seed,7,0,2147483647);
+    if (raw.artboardLocked === true) project.artboardLocked = true;
     project.swatches = Array.isArray(raw.swatches) ? [...new Set(raw.swatches.filter(c => /^#[0-9a-f]{6}$/i.test(c)).map(c => c.toLowerCase()))].slice(0,64) : [];
     const ids = new Set();
     project.layers = raw.layers.map(item => {
@@ -98,6 +99,7 @@ const StudioDocument = (() => {
           if (x >= 0 && y >= 0 && w > 0 && h > 0 && x+w <= 1.00001 && y+h <= 1.00001) l.crop = item.crop;
         }
       }
+      if (l.type === 'background' && /^#[0-9a-f]{6}$/i.test(item.fill)) l.fill = item.fill.toLowerCase();
       if (l.type === 'shape' || l.type === 'text' || l.type === 'path' || l.type === 'brush') {
         l.fill = l.type === 'path' && item.fill === null ? null : color(item.fill,l.type === 'shape' ? '#d5d0c5' : '#e9e5db');
         l.stroke = color(item.stroke,'#e9e5db');
