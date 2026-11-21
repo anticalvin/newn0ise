@@ -290,7 +290,67 @@
     if (document.activeElement !== input) input.value = value;
   }
 
+  /* ---- colour: HEX + RGB entry, recent colours, swatches saved with the project ---- */
+  const hexOf = v => { const m = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(String(v).trim()); if (!m) return null; let h = m[1].toLowerCase(); if (h.length === 3) h = [...h].map(c => c+c).join(''); return '#'+h; };
+  const recentColors = () => { try { return JSON.parse(localStorage.getItem('n0ise.recentColors') || '[]').filter(hexOf).slice(0,8); } catch { return []; } };
+  function rememberColor(c) { const h = hexOf(c); if (!h) return; try { localStorage.setItem('n0ise.recentColors',JSON.stringify([h,...recentColors().filter(x => x !== h)].slice(0,8))); } catch {} }
+  function setPaint(c) {
+    const h = hexOf(c); if (!h) return;
+    paintColor = h; rememberColor(h);
+    const picker = document.querySelector('[data-tool="picker"]');
+    if (picker) { picker.style.setProperty('--paint-color',h); picker.title = `Eyedropper · current ${h}`; }
+  }
+  function colourControl(title,value,apply,direct) {
+    const box = document.createElement('div');
+    box.className = 'colourfield';
+    const head = document.createElement('span'); head.className = 'fieldlabel'; head.textContent = title;
+    const row = document.createElement('div'); row.className = 'colourrow';
+    const well = document.createElement('input'); well.type = 'color'; well.className = 'field'; well.setAttribute('aria-label',title);
+    const hex = document.createElement('input'); hex.type = 'text'; hex.className = 'field hex'; hex.maxLength = 7; hex.spellcheck = false; hex.setAttribute('aria-label',title+' hex');
+    const rgb = [0,1,2].map(i => { const n = document.createElement('input'); n.type = 'number'; n.min = 0; n.max = 255; n.className = 'field rgb'; n.setAttribute('aria-label',title+' '+'RGB'[i]); return n; });
+    let current = hexOf(value) || '#000000';
+    const show = c => { current = c; well.value = c; hex.value = c; rgb.forEach((n,i) => { n.value = parseInt(c.slice(1+i*2,3+i*2),16); }); };
+    const commit = c => {
+      const h = hexOf(c); if (!h) { show(current); return; }
+      if (h === current) { show(h); return; }
+      show(h); rememberColor(h); contextKey = '';
+      if (direct) apply(h); else change(() => apply(h));
+      if (direct) syncInspector();
+    };
+    well.onchange = () => commit(well.value);
+    hex.onchange = () => commit(hex.value);
+    rgb.forEach(n => { n.onchange = () => commit('#'+rgb.map(x => Math.max(0,Math.min(255,Math.round(+x.value || 0))).toString(16).padStart(2,'0')).join('')); });
+    row.append(well,hex,...rgb);
+    show(current);
+    const bar = document.createElement('div'); bar.className = 'swatchbar'; bar.setAttribute('role','group'); bar.setAttribute('aria-label','Swatches');
+    let removing = false;
+    const dot = (c,label,run) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'swatch'; b.style.setProperty('--c',c); b.title = label; b.setAttribute('aria-label',label); b.onclick = run; return b; };
+    const paint = () => {
+      bar.replaceChildren();
+      const saved = doc.swatches || [];
+      for (const c of recentColors()) bar.append(dot(c,'Recent '+c,() => commit(c)));
+      if (saved.length) { const sep = document.createElement('i'); sep.className = 'sep'; bar.append(sep); }
+      for (const c of saved) bar.append(dot(c,(removing ? 'Remove swatch ' : 'Swatch ')+c,() => {
+        if (removing) { contextKey = ''; change(() => { doc.swatches = (doc.swatches || []).filter(x => x !== c); }); syncInspector(); }
+        else commit(c);
+      }));
+      const add = action('Save colour',() => { if (saved.includes(current)) { notice('Already in swatches'); return; } contextKey = ''; change(() => { (doc.swatches ||= []).push(current); }); syncInspector(); });
+      add.classList.add('compact');
+      bar.append(add);
+      if (saved.length) { const rm = action(removing ? 'Done' : 'Remove',() => { removing = !removing; rm.setAttribute('aria-pressed',removing); paint(); }); rm.classList.add('compact'); rm.setAttribute('aria-pressed',removing); bar.append(rm); }
+    };
+    paint();
+    box.append(head,row,bar);
+    return box;
+  }
+  function paintPanel() {
+    const panel = document.createElement('div');
+    panel.className = 'paintpanel';
+    panel.append(colourControl('Paint colour',paintColor,c => setPaint(c),true));
+    return panel;
+  }
   function field(title,type,value,apply,options = {}) {
+    if (type === 'color') return colourControl(title,value,apply);
     const wrapper = document.createElement('label');
     const label = document.createElement('span');
     label.className = 'fieldlabel';
@@ -388,6 +448,7 @@
       context.append(action(edge ? 'Disconnect' : 'Delete effect',() => graph.remove()));
       return;
     }
+    if (!l && view !== 'spatial') context.append(paintPanel());
     if (!l) {
       if (!node && !edge && values.length > 1) {
         context.append(field('Align layers','select','',alignment => {
@@ -664,7 +725,8 @@
     const [w,h] = dims(), x = Math.round(p.x), y = Math.round(p.y);
     if (x < 0 || y < 0 || x >= w || y >= h) return;
     const [r,g,b] = canvas.getContext('2d').getImageData(x,y,1,1).data;
-    paintColor = '#'+[r,g,b].map(n => n.toString(16).padStart(2,'0')).join('');
+    setPaint('#'+[r,g,b].map(n => n.toString(16).padStart(2,'0')).join(''));
+    contextKey = '';
     setTool('select');
     notice(`Picked ${paintColor}`);
   }
