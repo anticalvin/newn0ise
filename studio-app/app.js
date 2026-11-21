@@ -37,7 +37,7 @@
   let doc = create(preset(),false,workspaceSize()), selection = [];
   let textEdit = null, inlineText = null, launchMode = 'new', launchTicket = 0;
   let view = 'canvas', tool = 'select', rail = 'layers', sheet = 'canvas', shape = 'rectangle';
-  let paintColor = '#e9e5db', constrain = true;
+  let paintColor = '#e9e5db', constrain = true, hoverId = null;
   let dirty = false, opening = 0, revision = 0, space = false, grid = false, snapping = true, angular = false;
   let pan = {x:0,y:0}, zoom = 1, fitted = true, frame = 0, gesture = null, pen = [], hover = null;
   let guides = [], draft = null, editAnchors = false, toastTimer = 0, contextKey = '';
@@ -320,47 +320,46 @@
     const picker = document.querySelector('[data-tool="picker"]');
     if (picker) { picker.style.setProperty('--paint-color',h); picker.title = `Eyedropper · current ${h}`; }
   }
+  let chromaOpen = false;   /* stays open while you move between layers */
   function colourControl(title,value,apply,direct) {
     const box = document.createElement('div');
     box.className = 'colourfield';
     const head = document.createElement('span'); head.className = 'fieldlabel'; head.textContent = title;
-    const row = document.createElement('div'); row.className = 'colourrow';
-    const well = document.createElement('input'); well.type = 'color'; well.className = 'field'; well.setAttribute('aria-label',title);
+    const row = document.createElement('div'); row.className = 'chiprow';
+    const chip = document.createElement('button'); chip.type = 'button'; chip.className = 'cchip'; chip.title = 'Open the colour instrument'; chip.setAttribute('aria-label',title+', open colour instrument');
     const hex = document.createElement('input'); hex.type = 'text'; hex.className = 'field hex'; hex.maxLength = 7; hex.spellcheck = false; hex.setAttribute('aria-label',title+' hex');
-    const rgb = [0,1,2].map(i => { const n = document.createElement('input'); n.type = 'number'; n.min = 0; n.max = 255; n.className = 'field rgb'; n.setAttribute('aria-label',title+' '+'RGB'[i]); return n; });
-    let current = hexOf(value) || '#000000';
-    const show = c => { current = c; well.value = c; hex.value = c; rgb.forEach((n,i) => { n.value = parseInt(c.slice(1+i*2,3+i*2),16); }); };
-    const commit = c => {
-      const h = hexOf(c); if (!h) { show(current); return; }
-      if (h === current) { show(h); return; }
-      show(h); rememberColor(h); contextKey = '';
-      if (direct) apply(h); else change(() => apply(h));
-      if (direct) syncInspector();
-    };
-    well.onchange = () => commit(well.value);
-    hex.onchange = () => commit(hex.value);
-    rgb.forEach(n => { n.onchange = () => commit('#'+rgb.map(x => Math.max(0,Math.min(255,Math.round(+x.value || 0))).toString(16).padStart(2,'0')).join('')); });
-    row.append(well,hex,...rgb);
-    show(current);
+    const save = action('＋',() => {}); save.classList.add('chipsave'); save.title = 'Save to project swatches'; save.setAttribute('aria-label','Save '+title+' to project swatches');
+    row.append(chip,hex,save);
     const bar = document.createElement('div'); bar.className = 'swatchbar'; bar.setAttribute('role','group'); bar.setAttribute('aria-label','Swatches');
-    let removing = false;
-    const dot = (c,label,run) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'swatch'; b.style.setProperty('--c',c); b.title = label; b.setAttribute('aria-label',label); b.onclick = run; return b; };
-    const paint = () => {
+    const holder = document.createElement('div'); holder.className = 'chroma-wrap'; holder.hidden = !chromaOpen;
+    let before = null, current = hexOf(value) || '#000000';
+    const showChip = c => { current = c; chip.style.setProperty('--c',c); hex.value = c; };
+    const chroma = StudioChroma.mount({
+      value:current,
+      onBegin() { before = direct ? null : capture(); },
+      onPreview(c) { apply(c); if (!direct) schedule(); },
+      onCommit(c) { if (before) finish(before); before = null; rememberColor(c); paintBar(); },
+      onPaint: showChip,
+      saved: () => doc.swatches || [],
+      recent: recentColors,
+      onSave: c => saveSwatch(c),
+      onRemove: c => { change(() => { doc.swatches = (doc.swatches || []).filter(x => x !== c); }); paintBar(); }
+    });
+    holder.append(chroma.el);
+    function saveSwatch(c) { if ((doc.swatches || []).includes(c)) { notice('Already in swatches'); return; } change(() => { (doc.swatches ||= []).push(c); }); paintBar(); }
+    function paintBar() {
       bar.replaceChildren();
+      const dot = (c,label) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'swatch'; b.style.setProperty('--c',c); b.title = label+' '+c; b.setAttribute('aria-label',label+' '+c); b.onclick = () => chroma.setHex(c); return b; };
+      for (const c of recentColors().slice(0,5)) bar.append(dot(c,'Recent'));
       const saved = doc.swatches || [];
-      for (const c of recentColors()) bar.append(dot(c,'Recent '+c,() => commit(c)));
-      if (saved.length) { const sep = document.createElement('i'); sep.className = 'sep'; bar.append(sep); }
-      for (const c of saved) bar.append(dot(c,(removing ? 'Remove swatch ' : 'Swatch ')+c,() => {
-        if (removing) { contextKey = ''; change(() => { doc.swatches = (doc.swatches || []).filter(x => x !== c); }); syncInspector(); }
-        else commit(c);
-      }));
-      const add = action('Save colour',() => { if (saved.includes(current)) { notice('Already in swatches'); return; } contextKey = ''; change(() => { (doc.swatches ||= []).push(current); }); syncInspector(); });
-      add.classList.add('compact');
-      bar.append(add);
-      if (saved.length) { const rm = action(removing ? 'Done' : 'Remove',() => { removing = !removing; rm.setAttribute('aria-pressed',removing); paint(); }); rm.classList.add('compact'); rm.setAttribute('aria-pressed',removing); bar.append(rm); }
-    };
-    paint();
-    box.append(head,row,bar);
+      if (saved.length) { const sep = document.createElement('i'); sep.className = 'sep'; bar.append(sep); for (const c of saved.slice(0,12)) bar.append(dot(c,'Swatch')); }
+    }
+    chip.onclick = () => { chromaOpen = !chromaOpen; holder.hidden = !chromaOpen; chip.setAttribute('aria-expanded',chromaOpen); };
+    chip.setAttribute('aria-expanded',chromaOpen);
+    hex.onchange = () => { if (!chroma.setHex(hex.value)) showChip(current); };
+    save.onclick = () => saveSwatch(current);
+    showChip(current); paintBar();
+    box.append(head,row,bar,holder);
     return box;
   }
   function paintPanel() {
@@ -626,6 +625,10 @@
       svg(shape,shape === 'circle' ? {cx:p.x,cy:p.y,r,class:'handle'} :
         {x:p.x-r,y:p.y-r,width:r*2,height:r*2,class:'handle'});
       svg('circle',{cx:p.x,cy:p.y,r:hit,class:'hit',...attrs});
+    }
+    if (hoverId && tool === 'select' && !gesture && !selection.includes(hoverId)) {
+      const hl = doc.layers.find(l => l.id === hoverId);
+      if (hl && hl.visible && !hl.locked) svg('polygon',{points:R.corners(hl,w,h).map(xy).join(' '),class:'hover'});
     }
     const layers = visibleSelection();
     const points = selectionGeometry(layers);
@@ -1088,6 +1091,25 @@
     }).join(' ')};
   }
 
+  function setHover(id) {
+    if (hoverId === id) return;
+    hoverId = id;
+    stage.classList.toggle('hovering',!!id);
+    document.querySelectorAll('[data-layer-id]').forEach(r => r.classList.toggle('hover',r.dataset.layerId === id));
+    drawOverlay();
+  }
+  stage.addEventListener('pointermove',e => {
+    if (e.pointerType === 'touch' || gesture || tool !== 'select' || view === 'spatial' || doc.artboardLocked) return setHover(null);
+    const p = position(e.clientX,e.clientY), [w,h] = dims();
+    const top = doc.layers.find(l => !['background','crt'].includes(l.type) && !l.locked && R.inside(l,p,w,h,5/zoom));
+    setHover(top?.id ?? null);
+  });
+  stage.addEventListener('pointerleave',() => setHover(null));
+  $('layerlist').addEventListener('pointerover',e => {
+    const r = e.target.closest('[data-layer-id]');
+    if (e.pointerType !== 'touch') setHover(r && tool === 'select' ? r.dataset.layerId : null);
+  });
+  $('layerlist').addEventListener('pointerleave',() => setHover(null));
   stage.addEventListener('pointermove',e => {
     if (pointers.has(e.pointerId)) pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
     const g = gesture;
