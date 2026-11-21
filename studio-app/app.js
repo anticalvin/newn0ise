@@ -164,7 +164,7 @@
     list.replaceChildren();
     $('railtitle').textContent = rail.toUpperCase();
     stateButtons('[data-rail]',rail,'rail');
-    const glyphs = {scene:'◉',shape:'□',image:'▧',brush:'✎',path:'◇',text:'T',crt:'≋',gradient:'◒',procedure:'◎'};
+    const glyphs = {scene:'◉',shape:'□',image:'▧',brush:'✎',path:'◇',text:'T',crt:'≋',gradient:'◒',procedure:'◎',video:'▶'};
     function row(name,type,activate,id) {
       const box = document.createElement('div');
       box.className = 'layer';
@@ -405,6 +405,7 @@
   }
 
   function syncInspector() {
+    window.n0iseMotionRefresh?.();
     const values = selected();
     const active = values[0], shown = visibleGraph();
     const node = view !== 'spatial' && active?.chain && shown?.nodes.find(n => n.id === graph.selection?.node);
@@ -543,6 +544,7 @@
   }
 
   function sync() {
+    window.n0iseMotionRefresh?.();
     board.classList.toggle('transparent',!doc.layers.some(l => l.type === 'background' && l.visible && l.opacity));
     board.classList.toggle('artboardlocked',!!doc.artboardLocked);
     $('undo').disabled = !stack.canUndo;
@@ -1758,7 +1760,9 @@
     e.target.value = '';
     const background = e.target.dataset.background === 'true';
     delete e.target.dataset.background;
-    importImages(files,background);
+    const videos = files.filter(f => f.type.startsWith('video/'));
+    if (videos.length) window.n0iseMotionUI?.importVideos(videos);
+    importImages(files.filter(f => !f.type.startsWith('video/')),background);
   };
   $('imageFile').addEventListener('cancel',e => { delete e.target.dataset.background; });
   stage.addEventListener('dragover',e => {
@@ -1766,7 +1770,9 @@
   });
   stage.addEventListener('drop',e => {
     e.preventDefault();
-    importImages([...e.dataTransfer.files]);
+    const dropped = [...e.dataTransfer.files], videos = dropped.filter(f => f.type.startsWith('video/'));
+    if (videos.length) window.n0iseMotionUI?.importVideos(videos);
+    importImages(dropped.filter(f => !f.type.startsWith('video/')));
   });
 
   $('menu').onclick = () => menu('Studio',[
@@ -1774,6 +1780,8 @@
     ['Open project…',() => replaceDocument(() => $('openFile').click())],
     ['Save project',save],
     ['Import image…',() => $('imageFile').click()],
+    ['Import video…',() => { $('imageFile').click(); }],
+    ['Timeline',() => window.n0iseMotionUI?.toggle()],
     [`Grid · ${grid ? 'On' : 'Off'}`,() => { grid = !grid; drawOverlay(); notice(grid ? 'Grid on' : 'Grid off'); }],
     [`Smart snapping · ${snapping ? 'On' : 'Off'}`,() => { snapping = !snapping; notice(snapping ? 'Smart snapping on' : 'Smart snapping off'); }],
     [`15° rotation snapping · ${angular ? 'On' : 'Off'}`,() => { angular = !angular; notice(angular ? 'Rotation snapping on' : 'Rotation snapping off'); }],
@@ -2134,4 +2142,17 @@
     openLauncher();
     launchProject(true);
   } else openLauncher();
+
+  /* the Motion timeline (motion.js) works on this document through this small bridge */
+  window.n0iseMotion = {
+    R, canvas,
+    get doc() { return doc; },
+    get selection() { return selection; },
+    setTime(t) { doc.time = Math.max(0,t); schedule(); },
+    schedule, change, select, notice, dims,
+    capture, finish,
+    add(layers,extra) { change(() => { extra?.(); insert(layers); }); },
+    remove() { $('removeLayer').click(); }
+  };
+  R.media.onFrame = () => schedule();
 })();

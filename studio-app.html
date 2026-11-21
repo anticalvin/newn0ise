@@ -6,6 +6,7 @@
   <title>n0ise / studio</title>
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="studio-app/style.css">
+  <link rel="stylesheet" href="studio-app/motion.css">
   <script defer src="studio-app/vendor/fabric.js"></script>
   <script defer src="studio-app/graph-model.js"></script>
   <script defer src="studio-app/document.js"></script>
@@ -19,6 +20,7 @@
   <script defer src="studio-app/chroma.js"></script>
   <script defer src="studio-app/app.js"></script>
   <script defer src="studio-app/pad.js"></script>
+  <script defer src="studio-app/motion.js"></script>
 </head>
 <body>
 <div class="app">
@@ -146,7 +148,7 @@
   <div class="modalactions"><button class="softbtn" id="modalcancel">Close</button></div>
 </dialog>
 <input type="file" id="openFile" hidden accept=".json,application/json">
-<input type="file" id="imageFile" hidden multiple accept="image/png,image/jpeg,image/webp,image/gif,image/avif,image/bmp">
+<input type="file" id="imageFile" hidden multiple accept="image/png,image/jpeg,image/webp,image/gif,image/avif,image/bmp,video/mp4,video/webm,video/quicktime">
 <div id="studioContext" class="context-menu" role="menu" aria-label="Studio actions" hidden></div>
 <button class="iconbtn exitfs hidden" id="exitFullscreen" aria-label="Exit full screen" title="Exit full screen (Esc)">✕</button>
 <div class="toast hidden" id="toast" role="status"></div>

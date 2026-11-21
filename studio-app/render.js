@@ -20,6 +20,27 @@ function createStudioRender(vector) {
     return assets.get(src);
   }
 
+  /* video: clips keep their file in memory (and in IndexedDB, via motion.js); each layer owns one <video> that the timeline seeks or plays */
+  const mediaUrls = new Map(), videoEls = new Map();
+  const media = {
+    onFrame: null,
+    register(id,blob) { if (!mediaUrls.has(id)) mediaUrls.set(id,URL.createObjectURL(blob)); },
+    has(id) { return mediaUrls.has(id); },
+    video(l) {
+      if (!mediaUrls.has(l.videoId)) return null;
+      let v = videoEls.get(l.id);
+      if (!v || v._src !== l.videoId) {
+        v = document.createElement('video');
+        v._src = l.videoId; v.src = mediaUrls.get(l.videoId);
+        v.muted = true; v.playsInline = true; v.preload = 'auto'; v.crossOrigin = 'anonymous';
+        for (const ev of ['loadeddata','seeked']) v.addEventListener(ev,() => media.onFrame?.());
+        videoEls.set(l.id,v);
+      }
+      return v;
+    },
+    elements() { return [...videoEls.values()]; }
+  };
+  const activeAt = (l,t) => l.dur === undefined || l.start === undefined || (t >= l.start && t < l.start+l.dur);
   async function prepare(doc) {
     await Promise.all(doc.layers.filter(l => l.type === 'image').map(l => image(l.src).ready));
   }
@@ -60,7 +81,7 @@ function createStudioRender(vector) {
   }
 
   function project(l) {
-    const key = [l.type,l.fill,l.stroke,l.strokeWidth,l.shape,l.width,l.height,l.text,l.font,l.fontSize,l.src,l.crop,l.points,l.points?.length,l.closed];
+    const key = [l.type,l.videoId,l.fill,l.stroke,l.strokeWidth,l.shape,l.width,l.height,l.text,l.font,l.fontSize,l.src,l.crop,l.points,l.points?.length,l.closed];
     const cached = projections.get(l);
     if (cached && (cached.key === key || (Array.isArray(key) && key.every((v,i) => v === cached.key[i])))) return cached.value;
     const style = {originX:'center',originY:'center',objectCaching:false,fill:l.fill,
@@ -82,6 +103,9 @@ function createStudioRender(vector) {
         scaleX:l.width/img.naturalWidth,scaleY:l.height/img.naturalHeight});
       x = (cx+cw/2-0.5)*l.width;
       y = (cy+ch/2-0.5)*l.height;
+    } else if (l.type === 'video') {
+      /* geometry only (selection, hit tests); the frame itself is drawn straight from the <video> in drawLayer */
+      object = new Rect({...style,fill:'transparent',stroke:null,strokeWidth:0,width:l.width,height:l.height});
     } else if (l.type === 'brush' || l.type === 'path') {
       object = new Path(pathData(l),{...style,fill:l.closed ? l.fill : null,
         strokeWidth:l.strokeWidth || (l.closed ? 0 : 4)});
@@ -167,7 +191,10 @@ function createStudioRender(vector) {
     ctx.rotate(radians(l.rotation));
     ctx.scale(scale,scale);
     const projected = project(l);
-    if (projected) {
+    if (l.type === 'video') {
+      const v = media.video(l);
+      if (v && v.videoWidth && v.readyState >= 2) ctx.drawImage(v,-l.width/2,-l.height/2,l.width,l.height);
+    } else if (projected) {
       projected.object.globalCompositeOperation = composite ? l.blend : 'source-over';
       projected.object.render(ctx);
     } else if (l.type === 'procedure') drawVector(ctx,l);
@@ -184,7 +211,7 @@ function createStudioRender(vector) {
     gpu?.begin();
     for (let i=doc.layers.length-1;i>=0;i--) {
       const l = doc.layers[i];
-      if (!l.visible || !l.opacity) continue;
+      if (!l.visible || !l.opacity || !activeAt(l,doc.time ?? 0)) continue;
       let frame;
       const makeRaster = () => {
         if (raster.width !== w) raster.width = w;
@@ -270,7 +297,7 @@ function createStudioRender(vector) {
   function rasterSignature(layer,projection) {
     const transform = JSON.stringify([layer.x,layer.y,layer.scale,layer.rotation,layer.gradient,layer.fill,
       layer.stroke,layer.strokeWidth,layer.width,layer.height,layer.shape,layer.text,layer.fontSize,
-      layer.points,layer.crop]);
+      layer.points,layer.crop,layer.type === 'video' ? [layer.start,layer.trim,media.video(layer)?.currentTime] : null]);
     const key = rasterKeys.get(layer);
     if (key && key.transform === transform && key.projection === projection) return key;
     const next = {projection,transform};
@@ -348,5 +375,5 @@ function createStudioRender(vector) {
       top:Math.min(...p.map(a => a.y)),bottom:Math.max(...p.map(a => a.y))};
   }
 
-  return {draw,toSVG,prepare,image,inside,bounds,corners,local,dimensions,center,transform,radians,pathData,vectorImage};
+  return {media,activeAt,draw,toSVG,prepare,image,inside,bounds,corners,local,dimensions,center,transform,radians,pathData,vectorImage};
 }
