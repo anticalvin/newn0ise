@@ -2,7 +2,7 @@
    the editor core. lab.html falls back to its plain textarea if this file can't load. */
 import {basicSetup} from 'codemirror';
 import {EditorView,keymap,Decoration} from '@codemirror/view';
-import {EditorState,StateField,StateEffect,Prec} from '@codemirror/state';
+import {EditorState,StateField,StateEffect,Transaction,Prec} from '@codemirror/state';
 import {javascript,javascriptLanguage} from '@codemirror/lang-javascript';
 import {oneDark} from '@codemirror/theme-one-dark';
 import {completeFromList} from '@codemirror/autocomplete';
@@ -22,7 +22,7 @@ const errField=StateField.define({
   },
   provide:f=>EditorView.decorations.from(f)
 });
-export function createEditor(parent,{doc,onRun,onChange}){
+export function createEditor(parent,{doc,onRun,onChange,definition = false}){
   let trap=true;
   const theme=EditorView.theme({
     '&':{height:'100%',backgroundColor:'#121316',fontSize:'12.5px'},
@@ -34,21 +34,29 @@ export function createEditor(parent,{doc,onRun,onChange}){
     '.cm-content':{caretColor:'#e8d1b6'},
     '.cm-tooltip':{maxWidth:'90vw'}
   },{dark:true});
-  const view=new EditorView({parent,state:EditorState.create({doc,extensions:[
+  const makeState=(doc,definition)=>EditorState.create({doc,extensions:[
     Prec.highest(keymap.of([
       {key:'Mod-Enter',run:()=>{onRun&&onRun();return true;}},
       {key:'Escape',run:()=>{trap=false;return false;}},
       {key:'Tab',run:v=>trap?indentMore(v):false,shift:v=>trap?indentLess(v):false}
     ])),
-    basicSetup,javascript(),complete,oneDark,theme,EditorView.lineWrapping,errField,
-    EditorView.contentAttributes.of({'aria-label':'p5 sketch code',spellcheck:'false',autocapitalize:'off',autocorrect:'off'}),
+    basicSetup,javascript(),definition ? [] : complete,oneDark,theme,EditorView.lineWrapping,errField,
+    EditorView.contentAttributes.of({'aria-label':definition ? 'Vector generator definition' : 'p5 sketch code',spellcheck:'false',autocapitalize:'off',autocorrect:'off'}),
     EditorView.domEventHandlers({blur:()=>{trap=true;}}),
     EditorView.updateListener.of(u=>{if(u.docChanged&&onChange)onChange();})
-  ]})});
+  ]});
+  const view=new EditorView({parent,state:makeState(doc,definition)});
+  let sketchState, vectorState, showingVector = definition;
   return {
+    showDefinition(on,source){
+      if(on === showingVector)return;
+      if(on)sketchState=view.state;else vectorState=view.state;
+      view.setState(on ? vectorState ?? makeState(source,true) : sketchState);
+      showingVector=on;
+    },
     view,
     get:()=>view.state.doc.toString(),
-    set(v){view.dispatch({changes:{from:0,to:view.state.doc.length,insert:String(v)},selection:{anchor:0},scrollIntoView:true});},
+    set(v,{addToHistory = true} = {}){view.dispatch({annotations:Transaction.addToHistory.of(addToHistory),changes:{from:0,to:view.state.doc.length,insert:String(v)},selection:{anchor:0},scrollIntoView:true});},
     setError(n){view.dispatch({effects:setErr.of(n||null)});if(n&&n<=view.state.doc.lines){const l=view.state.doc.line(n);view.dispatch({effects:EditorView.scrollIntoView(l.from,{y:'center'})});}},
     lines:()=>view.state.doc.lines,
     focus:()=>view.focus(),

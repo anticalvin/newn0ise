@@ -44,3 +44,18 @@ Undo and redo cover everything placed from that tab. Time of day moves the sun a
 
 **Walk** (Scene tab or the Walk button on the view) drops you into first person: WASD and mouse (click to capture), or the on-screen stick and right-thumb look on a phone. Space jumps, Shift runs, Esc leaves.
 You collide with object bounds: low boxes are steps, tall ones are walls. The floor is `y = 0`.
+
+## Vector Lab
+
+Open `lab.html?mcp=vector` while the same MCP bridge is running. Call `n0_vector` with
+`{command:{cmd:"describe"}}` for the command names. The same commands are available through
+`n0vector.run(command)` in Lab. Use these calls to read the definition or propose a change.
+
+```js
+n0vector.run({cmd:'getVectorDocument'})
+n0vector.run({cmd:'setVectorParameters',parameters:{count:24,offset:65}})
+n0vector.run({cmd:'createVectorVariation',seed:71})
+```
+
+Lab renders proposed changes for review. The designer can apply or dismiss a proposal.
+Sending to Studio also requires approval in Lab. [Vector Lab guide](docs/creator-kit/vector-guide.md)

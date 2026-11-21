@@ -121,7 +121,7 @@ html body .gp-hot{outline:3px solid #f2e5cd;outline-offset:2px;box-shadow:0 0 0 
   }
   const visible=e=>{const r=e.getBoundingClientRect();return r.width>1&&r.height>1;};
   const camOn=()=>!!document.body.dataset.cam&&!!document.getElementById('camui');
-  const tabs=()=>camOn()?[...document.querySelectorAll('#camui .modes button,#camui [data-m]')].filter(visible):[...document.querySelectorAll('.tabs .tab,[role=tablist]:not(.nav) [role=tab],#lab-actions [data-drawer]')].filter(visible);
+  const tabs=()=>camOn()?[...document.querySelectorAll('#camui .modes button,#camui [data-m]')].filter(visible):[...document.querySelectorAll('.tabs .tab,[role=tablist]:not(.nav) [role=tab],#lab-actions [data-drawer],#vector-actions [data-vector-drawer]')].filter(visible);
   const wsLinks=()=>[...document.querySelectorAll('.header .nav a')];
   const stepTab=d=>{const t=tabs();if(!t.length)return;let i=t.findIndex(b=>b.getAttribute('aria-selected')==='true'||b.getAttribute('aria-expanded')==='true'||(camOn()&&b.getAttribute('aria-pressed')==='true'));i=i<0?(d>0?0:t.length-1):(i+d+t.length)%t.length;t[i].click();t[i].scrollIntoView&&t[i].scrollIntoView({inline:'center',block:'nearest'});buzz(15,.05,.2);};
   const tapEl=el=>{if(!el)return;const r=el.getBoundingClientRect();st.x=r.left+r.width/2;st.y=r.top+r.height/2;place();pt(el,'pointerdown');mouse(el,'mousedown');setTimeout(()=>{pt(el,'pointerup');mouse(el,'mouseup');el.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true,view:window}));},90);buzz(25,.1,.2);};
