@@ -3,7 +3,7 @@
 const StudioDocument = (() => {
   const sizes = {landscape:[1920,1080], portrait:[1080,1920], square:[1440,1440]};
   const ratios = {landscape:'16:9', portrait:'9:16', square:'1:1'};
-  const labels = {chrome:'Chrome form', crt:'CRT effect', background:'Background', shape:'Shape',
+  const labels = {video:'Video',chrome:'Chrome form', crt:'CRT effect', background:'Background', shape:'Shape',
     brush:'Brush stroke', image:'Image', text:'Text', path:'Path', scene:'Metallic torus',gradient:'Gradient',procedure:'Procedural vector'};
   const blends = ['source-over','screen','multiply','lighter','destination-out'];
   const graph = () => ({
@@ -32,7 +32,7 @@ const StudioDocument = (() => {
   function create(ratio, demo = false, size) {
     if (ratio === 'custom' && !validSize(size)) throw Error('Choose supported canvas dimensions.');
     return {
-      format:'n0ise-studio',version:2,name:'Untitled 01',ratio,swatches:[],...(ratio === 'custom' ? {size:[...size]} : {}),graph:graph(),time:0,fps:30,seed:7,
+      format:'n0ise-studio',version:2,duration:8,name:'Untitled 01',ratio,swatches:[],...(ratio === 'custom' ? {size:[...size]} : {}),graph:graph(),time:0,fps:30,seed:7,
       layers:demo ? [
         sceneLayer(),
         layer('crt',{name:'CRT Lab',opacity:38,blend:'screen'}),
@@ -60,6 +60,7 @@ const StudioDocument = (() => {
     project.name = String(raw.name || project.name).slice(0,120);
     project.time = number(raw.time,0,0,1e6);
     project.fps = number(raw.fps,30,1,120);
+    project.duration = number(raw.duration,8,1,600);
     project.seed = number(raw.seed,7,0,2147483647);
     if (raw.artboardLocked === true) project.artboardLocked = true;
     project.swatches = Array.isArray(raw.swatches) ? [...new Set(raw.swatches.filter(c => /^#[0-9a-f]{6}$/i.test(c)).map(c => c.toLowerCase()))].slice(0,64) : [];
@@ -76,6 +77,14 @@ const StudioDocument = (() => {
         opacity:number(item.opacity,100,0,100),scale:number(item.scale,100,1,2000),
         blend:blends.includes(item.blend) ? item.blend : 'source-over'
       });
+      if (Number.isFinite(item.start) && Number.isFinite(item.dur) && item.dur > 0) { l.start = number(item.start,0,0,6000); l.dur = number(item.dur,1,.05,6000); }
+      if (l.type === 'video') {
+        if (typeof item.videoId !== 'string' || !item.videoId) throw new Error('This project contains an invalid video.');
+        l.videoId = item.videoId.slice(0,80);
+        l.width = number(item.width,640,1,8192); l.height = number(item.height,360,1,8192);
+        l.srcDur = number(item.srcDur,1,.05,6000); l.trim = number(item.trim,0,0,6000);
+        l.volume = number(item.volume,1,0,1); l.muted = item.muted === true;
+      }
       if (l.type === 'procedure') l.definition = validateDefinition(item.definition);
       if (l.type === 'scene') {
         const asset = item.asset;
