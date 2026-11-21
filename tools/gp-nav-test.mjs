@@ -62,6 +62,16 @@ const v0=+s.value;await tap(15);ok('D-pad right raises a slider ('+v0+' to '+s.v
 const t0=[...document.querySelectorAll('#lab-actions [data-drawer]')].findIndex(b=>b.getAttribute('aria-expanded')==='true');await tap(5);await sl(200);
 const t1=[...document.querySelectorAll('#lab-actions [data-drawer]')].findIndex(b=>b.getAttribute('aria-expanded')==='true');ok('RB moves to the next tab ('+t0+' to '+t1+')',t1===t0+1);
 pad.buttons[7]={pressed:true,value:1};return R.join('\\n');})()`;
+const T3=`(async()=>{const sl=window.__sl,pad=window.__pad,st=window.__n0gp,q=s=>document.querySelector(s),R=[],ok=(n,v)=>R.push((v?'ok   ':'FAIL ')+n);
+const fr=window.__fr,tap=async i=>{pad.buttons[i]={pressed:true,value:1};await fr(4);pad.buttons[i]={pressed:false,value:0};await fr(4);};
+await tap(5);
+const params=q('[data-vector-drawer=params]');ok('RB moves from Vector Looks to Params',params.getAttribute('aria-expanded')==='true');
+const count=q('#vector-controls input[aria-label="Count slider"]');
+if(!count){ok('Vector Count slider is available',false);return R.join('\\n');}
+count.scrollIntoView({block:'center'});await sl(100);
+const r=count.getBoundingClientRect();st.x=r.left+r.width/2;st.y=r.top+r.height/2;await fr(6);
+const before=Number(count.value);await tap(15);ok('D-pad raises Vector Count',Number(count.value)>before);
+return R.join('\\n');})()`;
 async function run(path,w,h,mobile,expr,setup=true){
   await send('Emulation.setDeviceMetricsOverride',{width:w,height:h,deviceScaleFactor:1,mobile});
   await send('Page.navigate',{url:base+path});await sleep(3500);
@@ -71,6 +81,7 @@ async function run(path,w,h,mobile,expr,setup=true){
 for(const [vn,w,h,m] of [['desktop',1440,900,false],['phone',390,844,true]]){
   console.log('-- effects',vn);console.log(await run('/effects.html',w,h,m,T1));
   console.log('-- lab',vn);console.log(await run('/lab.html',w,h,m,T2));
-  await sleep(1500);const loc=await send('Runtime.evaluate',{expression:'location.pathname+location.search',returnByValue:true});console.log((/effects.html\?cam=1/.test(loc.result.value)?'ok   ':'FAIL ')+'RT switches workspace (Lab to '+loc.result.value+')');
+  await sleep(1500);const loc=await send('Runtime.evaluate',{expression:'location.pathname+location.search',returnByValue:true});console.log((loc.result.value==='/studio.html'?'ok   ':'FAIL ')+'RT switches workspace (Lab to '+loc.result.value+')');
+  console.log('-- vector lab',vn);console.log(await run('/lab.html?vector',w,h,m,T3));
 }
 ws.close();proc.kill();srv.close();

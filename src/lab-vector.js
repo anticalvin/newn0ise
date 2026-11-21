@@ -37,7 +37,7 @@ export function mountVectorLab({editor,applyPause}) {
   const search = new URLSearchParams(location.search);
   let ticket = search.get('vectorEdit'), loading = !!ticket, active = false;
   let definition = createDefinition(), cleanSource, raf, geometry, rendered;
-  let p5Source = lab.dataset.src !== 'off', vectorSource = false, p5Draft = '', vectorDraft = '';
+  let p5Source = lab.dataset.src !== 'off', vectorSource = false, p5Draft = '', vectorDraft = null;
   let proposal = null, sending = false, drawer = null;
   const past = [], future = [], fields = new Map();
   const sketchNodes = [$('preview'),$('pause'),$('status').parentElement,$('run').closest('.lab-meta'),
@@ -97,7 +97,7 @@ export function mountVectorLab({editor,applyPause}) {
     else {
       if (on) p5Draft = code.value;
       else vectorDraft = code.value;
-      code.value = on ? vectorDraft || cleanSource : p5Draft;
+      code.value = on ? vectorDraft ?? cleanSource : p5Draft;
       code.setAttribute('aria-label',on ? 'Vector generator definition' : 'p5 sketch code');
     }
     applyPause(on);

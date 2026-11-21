@@ -591,7 +591,7 @@ Promise.all([editorReady,import('./src/lab-vector.js')]).then(([editor,module])=
 $('modeForm').addEventListener('click',async()=>{const b=$('modeForm');b.disabled=true;try{const m=await import('./assets/labform.js?v=1');await m.openFormLab();}catch(e){$('status').textContent='3D object mode couldn’t load: '+(e.message||e);}b.disabled=false;});
 if('serviceWorker' in navigator&&location.protocol!=='file:')navigator.serviceWorker.register('sw.js').catch(()=>{});
 </script>
-<script type="module" src="assets/gp.js?v=c99682cc"></script>
+<script type="module" src="assets/gp.js?v=29aa5fe0"></script>
 <script type="module">
 import {openMenu,menuEntriesCommon,toast} from './ui/ui.js';
 const $q=s=>document.querySelector(s);
