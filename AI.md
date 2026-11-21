@@ -49,7 +49,7 @@ You collide with object bounds: low boxes are steps, tall ones are walls. The fl
 
 Open `lab.html?mcp=vector` while the same MCP bridge is running. Call `n0_vector` with
 `{command:{cmd:"describe"}}` for the command names. The same commands are available through
-`n0vector.run(command)` in Lab. For example:
+`n0vector.run(command)` in Lab. Use these calls to read the definition or propose a change.
 
 ```js
 n0vector.run({cmd:'getVectorDocument'})

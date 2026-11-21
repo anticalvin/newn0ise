@@ -4,7 +4,8 @@ Choose **Vector** in Lab and select a generator family or construction preset un
 **Params** provides sliders, numeric fields, locks, seed controls, and history. **New variation**
 advances the saved seed. **Randomize from seed** reproduces the same unlocked parameter values for
 the current seed. **Source** opens the generator definition in Lab's CodeMirror editor.
-Use **Apply** or Ctrl/Cmd+Enter to validate and apply the JSON.
+Use **Apply** or Ctrl/Cmd+Enter to validate and apply the JSON. With a controller, use the
+shoulder buttons to cycle through drawers and the D-pad to adjust the highlighted slider.
 
 **Export** can download the transparent SVG, save and reopen an editable `.n0vector.json` file, or
 send the vector to Studio. Studio opens the design as one procedural layer in a new tab.
