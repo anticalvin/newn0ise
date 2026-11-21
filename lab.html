@@ -566,4 +566,5 @@ const labMenu=e=>openMenu('Lab',[
 $q('#menubtn').addEventListener('click',labMenu);$q('#lab-menu').addEventListener('click',labMenu);
 $q('#src-toggle').addEventListener('click',e=>{const on=e.currentTarget.getAttribute('aria-pressed')!=='true';e.currentTarget.setAttribute('aria-pressed',String(on));$q('#lab').dataset.src=on?'on':'off';});
 </script>
+<script type="module" src="ui/sound.js"></script>
 </body></html>

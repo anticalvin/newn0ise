@@ -637,7 +637,10 @@
     const r = board.getBoundingClientRect();
     return {x:(x-r.left)/zoom,y:(y-r.top)/zoom};
   }
+  let zoomLocked = false;
+  try { zoomLocked = localStorage.getItem('n0ise.zoomlock') === '1'; } catch {}
   function zoomAt(x,y,value) {
+    if (zoomLocked) { const q = stage.getBoundingClientRect(); x = q.left+q.width/2+pan.x; y = q.top+q.height/2+pan.y; } /* locked: zoom about the artboard's own centre, so it never drifts */
     const p = position(x,y), r = stage.getBoundingClientRect(), [w,h] = dims();
     const min = Math.min(.05,zoom);
     zoom = clamp(value,min,4);
@@ -997,8 +1000,7 @@
     if (g?.kind === 'pinch' && pointers.size === 2) {
       const pair = touchPair();
       zoomAt(g.center.x,g.center.y,g.z*pair.distance/g.distance);
-      pan.x += pair.center.x-g.center.x;
-      pan.y += pair.center.y-g.center.y;
+      if (!zoomLocked) { pan.x += pair.center.x-g.center.x; pan.y += pair.center.y-g.center.y; }
       Object.assign(g,pair,{z:zoom});
       layout();
       return;
@@ -1624,6 +1626,9 @@
   $('modalcancel').onclick = () => $('modal').close();
   $('export').onclick = exportOptions;
   $('fit').onclick = fit;
+  { const zl = $('zoomLock'), paintZl = () => { zl.setAttribute('aria-pressed',zoomLocked); zl.classList.toggle('on',zoomLocked); };
+    zl.onclick = () => { zoomLocked = !zoomLocked; try { localStorage.setItem('n0ise.zoomlock',zoomLocked?'1':'0'); } catch {} paintZl(); };
+    paintZl(); }
   $('addLayer').onclick = openAdd;
   $('moveUp').onclick = () => reorder(-1);
   $('moveDown').onclick = () => reorder(1);
