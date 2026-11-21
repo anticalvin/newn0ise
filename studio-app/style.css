@@ -351,3 +351,4 @@ a.brand:focus-visible { outline:2px solid var(--accent); outline-offset:4px; }
 .stage.hovering .stagebody{cursor:pointer}
 .layer.hover,.layer:hover{background:#34353a}
 .layer.active.hover,.layer.active:hover{background:#444441}
+.chiprow .hex{min-width:0;width:100%;padding:0 6px}.chiprow>*{min-width:0}
