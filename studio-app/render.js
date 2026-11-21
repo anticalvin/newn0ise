@@ -110,7 +110,10 @@ function createStudioRender(vector) {
   }
 
   function drawProcedural(ctx,type,w,h,scale,layer) {
-    if (type === 'background') {
+    if (type === 'background' && layer?.fill) {
+      ctx.fillStyle = layer.fill;
+      ctx.fillRect(-w/2,-h/2,w,h);
+    } else if (type === 'background') {
       const g = ctx.createRadialGradient(0,0,20,0,0,Math.max(w,h)*.7);
       g.addColorStop(0,'#494a4b');
       g.addColorStop(.6,'#1d1e20');
