@@ -2135,7 +2135,7 @@ const HIST=[],REDO=[];let lastSnap='';
 const stackState=()=>STACK.layers.map(l=>({u:l.uid,m:l.module,p:l.module==='crtlab'?null:l.params,o:l.opacity,b:l.blend,s:l.showSource,sel:l.select,t:l.thr,pos:l.pos,z:l.size,seed:l.seed,v:l.visible,c:l.color,mk:l.mask,so:l.solo,md:l.mods}));
 function snap(){
   const s=JSON.stringify({p:P,l:stackState()});
-  if(s!==lastSnap){if(lastSnap)HIST.push(lastSnap);if(HIST.length>60)HIST.shift();lastSnap=s;REDO.length=0;}
+  if(s!==lastSnap){if(lastSnap)HIST.push(lastSnap);if(HIST.length>60)HIST.shift();lastSnap=s;REDO.length=0;try{hubAuto();}catch(e){}}
 }
 function layersFromSnap(o,keepUid){
   return o.l.filter(x=>MODULES[x.m]||ensureModule(x.m)).map(x=>{const l=mkLayer(x.m,x.p||undefined);if(keepUid&&x.u!=null){l.uid=x.u;layerUid=Math.max(layerUid,x.u+1);}Object.assign(l,{opacity:x.o,blend:x.b,showSource:x.s,select:x.sel,thr:x.t,pos:x.pos,size:x.z,seed:x.seed,visible:x.v});if(x.c)l.color=x.c;if(x.mk)l.mask=x.mk;l.solo=!!x.so;l.mods=x.md||[];return l;});
@@ -4136,6 +4136,8 @@ async function makeGeometry(){
     await handoffPut(blob,{from:'effects',form:true});await hubRecord({tool:'effects',name:SRC&&SRC.name||'Effects',layers:hubLayers(),blob:await new Promise(r=>canvas.toBlob(r,'image/png')),to:'3d'});location.href='studio.html#from=effects';}
   catch(e){ST.clean=false;toast('Couldn’t make geometry: '+(e.message||e));}
 }
+const hubParams=()=>{const o={};STACK.layers.forEach(l=>{const m=MODULES[l.module],n=(m&&m.name)||l.module;Object.entries(l.params||{}).slice(0,10).forEach(([k,v])=>{if(typeof v==='number'||typeof v==='string'||typeof v==='boolean')o[n+' · '+k]=typeof v==='number'?Math.round(v*100)/100:v;});});return o;};
+let hubT=0;const hubAuto=()=>{clearTimeout(hubT);hubT=setTimeout(()=>{try{hubRecord({tool:'effects',name:(SRC&&SRC.name)||'Effects',layers:hubLayers(),params:hubParams()});}catch(e){}},1800);};
 const hubLayers=()=>STACK.layers.map(l=>({name:(MODULES[l.module]&&MODULES[l.module].name)||l.module,kind:l.module,off:l.opacity===0}));
 async function openIn3D(){
   try{ST.clean=true;await frames2();const blob=await new Promise(r=>canvas.toBlob(r,'image/png'));ST.clean=false;if(!blob)throw new Error('empty');

@@ -31,12 +31,15 @@ async function thumb(blob, max = 320) {
   } catch { return ''; }
 }
 /* tool: 'studio'|'effects'|'lab'|'camera'|'3d'. layers: [{name, kind}]. blob: the picture it made. to: the tool it went to. Never throws. */
-export async function record({tool, name = '', layers = [], blob = null, to = null}) {
+export async function record({tool, name = '', layers = [], blob = null, to = null, params}) {
   try {
     const t = blob ? await thumb(blob) : '';
     const rec = {tool, name: String(name).slice(0, 80), layers: layers.slice(0, 64).map(l => ({name: String(l.name || l.kind || 'Layer').slice(0, 60), kind: String(l.kind || '').slice(0, 24), off: !!l.off})), thumb: t, t: Date.now()};
+    if (params) rec.params = Object.fromEntries(Object.entries(params).slice(0, 48).map(([k, v]) => [String(k).slice(0, 48), String(v).slice(0, 60)]));
     await run('readwrite', st => {
-      st.put(rec, 'node:' + tool);
+      /* a quiet update keeps the picture and the settings a fuller hand-off stored earlier */
+      const old = st.get('node:' + tool);
+      old.onsuccess = () => { const o = old.result; if (o) { if (!rec.thumb) rec.thumb = o.thumb || ''; if (!rec.params) rec.params = o.params; } st.put(rec, 'node:' + tool); };
       if (blob) st.put(blob, 'blob:' + tool);
       if (to && to !== tool) {
         const g = st.get('edges');
