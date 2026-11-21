@@ -4,7 +4,7 @@ const StudioDocument = (() => {
   const sizes = {landscape:[1920,1080], portrait:[1080,1920], square:[1440,1440]};
   const ratios = {landscape:'16:9', portrait:'9:16', square:'1:1'};
   const labels = {chrome:'Chrome form', crt:'CRT effect', background:'Background', shape:'Shape',
-    brush:'Brush stroke', image:'Image', text:'Text', path:'Path', scene:'Metallic torus',gradient:'Gradient'};
+    brush:'Brush stroke', image:'Image', text:'Text', path:'Path', scene:'Metallic torus',gradient:'Gradient',procedure:'Procedural vector'};
   const blends = ['source-over','screen','multiply','lighter','destination-out'];
   const graph = () => ({
     nodes:[{id:'source',type:'source',x:35,y:55},{id:'output',type:'output',x:450,y:55}],
@@ -51,7 +51,7 @@ const StudioDocument = (() => {
   }
 
   const color = (value,fallback) => /^#[0-9a-f]{6}$/i.test(value) ? value : fallback;
-  function normalize(raw) {
+  function normalize(raw,validateDefinition) {
     if (!raw || raw.format !== 'n0ise-studio' || ![1,2].includes(raw.version) ||
       !(Object.hasOwn(sizes,raw.ratio) || (raw.ratio === 'custom' && validSize(raw.size))) || !Array.isArray(raw.layers)) {
       throw new Error('Choose a supported n0ise Studio project.');
@@ -74,6 +74,7 @@ const StudioDocument = (() => {
         opacity:number(item.opacity,100,0,100),scale:number(item.scale,100,1,2000),
         blend:blends.includes(item.blend) ? item.blend : 'source-over'
       });
+      if (l.type === 'procedure') l.definition = validateDefinition(item.definition);
       if (l.type === 'scene') {
         const asset = item.asset;
         if (!asset || typeof asset !== 'object' || Array.isArray(asset)) throw Error('Invalid scene asset.');
@@ -97,7 +98,7 @@ const StudioDocument = (() => {
         }
       }
       if (l.type === 'shape' || l.type === 'text' || l.type === 'path' || l.type === 'brush') {
-        l.fill = color(item.fill,l.type === 'shape' ? '#d5d0c5' : '#e9e5db');
+        l.fill = l.type === 'path' && item.fill === null ? null : color(item.fill,l.type === 'shape' ? '#d5d0c5' : '#e9e5db');
         l.stroke = color(item.stroke,'#e9e5db');
         l.strokeWidth = number(item.strokeWidth,0,0,200);
       }
