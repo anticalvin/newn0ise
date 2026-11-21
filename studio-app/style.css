@@ -320,3 +320,4 @@ a.brand:focus-visible { outline:2px solid var(--accent); outline-offset:4px; }
 .artboard.transparent{background:conic-gradient(#2d2e30 25%,#1b1c1e 0 50%,#2d2e30 0 75%,#1b1c1e 0) 0 0/24px 24px}
 .artboard.artboardlocked{outline:2px dashed #f7d9a455;outline-offset:-2px}
 #graphsvg .node{-webkit-touch-callout:none;user-select:none}
+@media(max-width:959px){.topright #n0iseSound{display:none}}

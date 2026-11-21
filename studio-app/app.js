@@ -94,7 +94,20 @@
   }
 
   function capture() { return {doc:copy(doc),selection:[...selection]}; }
+  let hubTimer = 0;
+  function hubAuto() {
+    clearTimeout(hubTimer);
+    hubTimer = setTimeout(async () => {
+      try {
+        const hub = await import('../src/hub.js'), bg = doc.layers.find(l => l.type === 'background'), [w,h] = StudioDocument.dimensions(doc);
+        await hub.record({tool:'studio',name:doc.name,
+          layers:[...doc.layers].reverse().filter(l => l.type !== 'background').map(l => ({name:l.name,kind:l.type,off:!l.visible})),
+          params:{Size:w+' × '+h,Background:bg ? (bg.visible ? (bg.fill || 'studio gradient') : 'transparent') : 'none',Swatches:(doc.swatches || []).join(' ') || 'none',Layers:doc.layers.length}});
+      } catch {}
+    },2000);
+  }
   function finish(before) {
+    hubAuto();
     stack.push(before);
     revision++;
     dirty = true;
