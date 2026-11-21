@@ -124,6 +124,8 @@ function details() {
     const ol = add('ol');
     for (const l of rec.layers) { const li = document.createElement('li'); li.textContent = l.name + (l.off ? ' (hidden)' : ''); ol.append(li); }
     if (!rec.layers.length) add('div', 'No layers recorded for this one.', 'meta');
+    const ps = Object.entries(rec.params || {});
+    if (ps.length) { add('div', 'Values used', 'meta'); const dl = add('dl'); for (const [k, v] of ps) { const dt = document.createElement('dt'), dd = document.createElement('dd'); dt.textContent = k; dd.textContent = v; dl.append(dt, dd); } }
   }
   const row = add('div', null, 'row');
   const open = (label, tool, main) => {

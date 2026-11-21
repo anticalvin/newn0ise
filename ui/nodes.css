@@ -37,3 +37,5 @@ body{display:flex;flex-direction:column;padding:env(safe-area-inset-top) env(saf
 #panel .row{display:flex;gap:8px;flex-wrap:wrap}
 #panel ol{margin:0;padding-left:18px;color:var(--dim);font-size:13px;line-height:1.7}
 @media(prefers-reduced-motion:no-preference){#panel{animation:up .18s ease-out}@keyframes up{from{transform:translateY(10px);opacity:0}}}
+.panel dl,#panel dl{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;margin:8px 0;font-size:12px}.panel dt,#panel dt{opacity:.6}.panel dd,#panel dd{margin:0;word-break:break-word}
+#panel{overflow-y:auto}
