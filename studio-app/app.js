@@ -3,8 +3,14 @@
 (async () => {
   const $ = id => document.getElementById(id);
   const all = selector => [...document.querySelectorAll(selector)];
-  const {sizes,dimensions,ratioName,validSize,create,layer,normalize,clamp,copy,history} = StudioDocument;
-  const R = StudioRender, S = StudioSnap, G = StudioGraph, V = StudioVector;
+  const {sizes,dimensions,ratioName,validSize,create,layer,clamp,copy,history} = StudioDocument;
+  const [vector,vectorHandoff] = await Promise.all([
+    import('../src/vector-generator.js'),import('../src/vector-handoff.js')
+  ]);
+  const R = createStudioRender(vector), S = StudioSnap, G = StudioGraph, V = StudioVector;
+  const normalize = raw => StudioDocument.normalize(raw,vector.validateDefinition);
+  const vectorEdits = new Map();
+  let projectEpoch = 0;
   const contextMenu = studioContextMenu($('studioContext'));
   let runtimeModule;
   try { runtimeModule = await import('./runtime.mjs'); } catch (e) {
@@ -145,7 +151,7 @@
     list.replaceChildren();
     $('railtitle').textContent = rail.toUpperCase();
     stateButtons('[data-rail]',rail,'rail');
-    const glyphs = {scene:'◉',shape:'□',image:'▧',brush:'✎',path:'◇',text:'T',crt:'≋',gradient:'◒'};
+    const glyphs = {scene:'◉',shape:'□',image:'▧',brush:'✎',path:'◇',text:'T',crt:'≋',gradient:'◒',procedure:'◎'};
     function row(name,type,activate,id) {
       const box = document.createElement('div');
       box.className = 'layer';
@@ -475,6 +481,10 @@
         }
         context.append(action('Return to Canvas',() => setView('canvas')));
       }
+    }
+    if (l.type === 'procedure') {
+      context.append(action('Edit in Lab',() => editVectorInLab(l)),action('Expand to Paths',() => expandVector(l)));
+      context.append(action('Rasterize vector',() => rasterizeVector(l)));
     }
     if (l.type === 'gradient') {
       context.append(field('Type','select',l.gradient.kind,v => { l.gradient.kind = v; },
@@ -1256,8 +1266,11 @@
   }
 
   function duplicateLayers() {
-    const clones = selected().map(l => ({...copy(l),id:StudioDocument.id(),
-      name:(l.name+' copy').slice(0,120),x:l.x+16,y:l.y+16}));
+    const clones = selected().map(l => {
+      const clone = {...copy(l),id:StudioDocument.id(),name:(l.name+' copy').slice(0,120),x:l.x+16,y:l.y+16};
+      if (clone.type === 'procedure') clone.definition.id = vector.vectorId();
+      return clone;
+    });
     if (clones.length) change(() => insert(clones));
   }
   document.addEventListener('contextmenu',e => {
@@ -1276,6 +1289,7 @@
     if (hit) {
       if (hit.locked) actions.push(['Unlock layer',() => change(() => { hit.locked = false; })]);
       else {
+        if (hit.type === 'procedure') actions.push(['Edit in Lab',() => editVectorInLab(hit)]);
         if (hit.type === 'text') actions.push(['Edit text',() => startTextEdit(hit)]);
         if (hit.type === 'path' && selection.length === 1) actions.push(['Edit anchors',toggleAnchors]);
         if (hit.type === 'shape' && selection.length === 1) actions.push(['Convert to path',() => pathFromShape(hit)]);
@@ -1440,6 +1454,8 @@
     ]);
   }
   function useDocument(next) {
+    projectEpoch++;
+    vectorEdits.clear();
     opening++;
     dirty = false;
     stack.clear();
@@ -1914,6 +1930,81 @@
     e.preventDefault();
     e.returnValue = true;
   });
+  function expandVector(l) {
+    if (l.opacity !== 100 || l.blend !== 'source-over' || l.chain?.nodes.some(node => node.type === 'effect')) {
+      notice('Set opacity to 100%, use Normal blend, and remove layer effects before expanding.');
+      return;
+    }
+    const {definition,chain,...base} = l;
+    const paths = vector.generateGeometry(definition).reverse().map((path,i) =>
+      layer('path',{...base,...path,id:StudioDocument.id(),type:'path',fill:null,name:`${l.name} · Path ${i+1}`}));
+    if (!paths.length) { notice('This generator has no paths to expand.'); return; }
+    change(() => {
+      doc.layers.splice(doc.layers.indexOf(l),1,...paths);
+      selection = paths.map(path => path.id);
+    });
+    notice('Vector expanded into editable paths.');
+  }
+
+  function rasterizeVector(l) {
+    try {
+      const {definition,...base} = l;
+      const image = layer('image',{...base,...R.vectorImage(l),type:'image'});
+      change(() => { doc.layers[doc.layers.indexOf(l)] = image; });
+      notice('Vector rasterized.');
+    } catch (error) { notice(error.message); }
+  }
+
+  function editVectorInLab(l) {
+    try {
+      finishTextEdit();
+      for (const [ticket,pending] of vectorEdits) {
+        if (pending.tab.closed) vectorEdits.delete(ticket);
+        else if (pending.layerId === l.id) { pending.tab.focus(); return; }
+      }
+      const {ticket,tab,ready} = vectorHandoff.openVectorTab('lab.html',l.definition,true);
+      vectorEdits.set(ticket,{tab,layerId:l.id,epoch:projectEpoch,base:JSON.stringify(l.definition)});
+      ready.catch(error => {
+        vectorEdits.delete(ticket);
+        notice(error.message);
+      });
+    } catch (error) { notice(error.message); }
+  }
+
+  window.addEventListener('message',event => {
+    const {type,ticket,definition} = event.data ?? {};
+    if (event.origin !== location.origin || type !== 'n0ise-vector-return') return;
+    const pending = vectorEdits.get(ticket);
+    if (!pending || event.source !== pending.tab) return;
+    const reply = error => event.source.postMessage({type:'n0ise-vector-ack',ticket,error},location.origin);
+    try {
+      if (gesture || textEdit || launcher.open || $('modal').open) throw Error('Finish the active edit in Studio, then try again.');
+      const target = pending.epoch === projectEpoch && doc.layers.find(l => l.id === pending.layerId);
+      if (!target || target.type !== 'procedure' || JSON.stringify(target.definition) !== pending.base) {
+        throw Error('The original layer changed in Studio. Save the vector project to keep your edits.');
+      }
+      if (target.locked) throw Error('Unlock the original layer in Studio, then try again.');
+      const next = vector.validateDefinition(definition);
+      if (next.id !== target.definition.id) throw Error('The generator ID does not match the Studio layer.');
+      if (JSON.stringify(next) !== pending.base) change(() => { target.definition = next; });
+      vectorEdits.delete(ticket);
+      reply();
+      notice('Procedural vector updated.');
+    } catch (error) { reply(error.message); }
+  });
+
+  async function openLabVector(ticket) {
+    const definition = await vectorHandoff.takeVector(ticket,'lab-vector');
+    const size = vector.viewBox(vector.generateGeometry(definition))[2];
+    const next = create('custom',false,[size,size]);
+    next.name = vector.GENERATORS[definition.generator].name;
+    next.layers = [layer('procedure',{name:next.name,definition})];
+    useDocument(next);
+    select([next.layers[0].id]);
+    dirty = true;
+    notice('Vector opened. Edit its generator in Lab.');
+  }
+
   async function openLabStill() {
     const handoff = await import('../src/handoff.js');
     const record = await handoff.take();
@@ -1936,7 +2027,17 @@
   setSheet('canvas');
   setView('canvas');
   sync();
-  if (location.hash === '#from=lab') {
+  const url = new URL(location.href);
+  const vectorImport = url.searchParams.get('vectorImport');
+  if (vectorImport) {
+    url.searchParams.delete('vectorImport');
+    window.history.replaceState(null,'',url.href);
+    try { await openLabVector(vectorImport); }
+    catch (error) {
+      openLauncher();
+      $('launchStatus').textContent = error.message;
+    }
+  } else if (location.hash === '#from=lab') {
     window.history.replaceState(null,'',location.pathname+location.search);
     try { await openLabStill(); }
     catch {

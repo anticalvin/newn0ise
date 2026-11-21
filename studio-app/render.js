@@ -1,6 +1,6 @@
 'use strict';
 
-const StudioRender = (() => {
+function createStudioRender(vector) {
   const {Rect,Ellipse,Triangle,FabricImage,FabricText,Path,Point} = StudioFabric;
   const {dimensions,pipeline} = StudioDocument;
   const assets = new Map();
@@ -24,19 +24,39 @@ const StudioRender = (() => {
     await Promise.all(doc.layers.filter(l => l.type === 'image').map(l => image(l.src).ready));
   }
 
-  function pathData(l) {
-    const points = l.points;
-    if (!points.length) return 'M 0 0';
-    const [x,y] = points[0];
-    if (points.length === 1) return `M ${x} ${y} l 0.01 0`;
-    let d = `M ${x} ${y}`;
-    const count = points.length + (l.closed ? 1 : 0);
-    for (let i = 1; i < count; i++) {
-      const [px,py,pdx = 0,pdy = 0] = points[i-1];
-      const [nx,ny,ndx = 0,ndy = 0] = points[i % points.length];
-      d += ` C ${px+pdx} ${py+pdy} ${nx-ndx} ${ny-ndy} ${nx} ${ny}`;
+  const {pathData,generateGeometry,geometryMarkup,geometryBounds,viewBox} = vector;
+  const vectorCache = new WeakMap();
+  function procedural(l) {
+    let entry = vectorCache.get(l.definition);
+    if (!entry) {
+      const geometry = generateGeometry(l.definition);
+      entry = {geometry, paths:geometry.map(path => new Path2D(pathData(path))),bounds:geometryBounds(geometry,0)};
+      vectorCache.set(l.definition,entry);
     }
-    return d+(l.closed ? ' Z' : '');
+    return entry;
+  }
+
+  function drawVector(ctx,l) {
+    const {geometry,paths} = procedural(l);
+    ctx.lineCap = ctx.lineJoin = 'round';
+    for (let i = 0; i < paths.length; i++) {
+      ctx.strokeStyle = geometry[i].stroke;
+      ctx.lineWidth = geometry[i].strokeWidth;
+      ctx.stroke(paths[i]);
+    }
+  }
+
+  function vectorImage(l) {
+    const surface = document.createElement('canvas');
+    const [x,y,w,h] = viewBox(procedural(l).geometry);
+    const density = Math.max(2,Math.min(4096/w,l.scale/100));
+    surface.width = Math.ceil(w*density);
+    surface.height = Math.ceil(h*density);
+    const ctx = surface.getContext('2d');
+    ctx.scale(surface.width/w,surface.height/h);
+    ctx.translate(-x,-y);
+    drawVector(ctx,l);
+    return {src:surface.toDataURL('image/png'),width:w,height:h};
   }
 
   function project(l) {
@@ -147,7 +167,8 @@ const StudioRender = (() => {
     if (projected) {
       projected.object.globalCompositeOperation = composite ? l.blend : 'source-over';
       projected.object.render(ctx);
-    } else drawProcedural(ctx,l.type,w,h,scale,l);
+    } else if (l.type === 'procedure') drawVector(ctx,l);
+    else drawProcedural(ctx,l.type,w,h,scale,l);
     ctx.restore();
   }
 
@@ -162,21 +183,22 @@ const StudioRender = (() => {
       const l = doc.layers[i];
       if (!l.visible || !l.opacity) continue;
       let frame;
+      const makeRaster = () => {
+        if (raster.width !== w) raster.width = w;
+        if (raster.height !== h) raster.height = h;
+        const input = raster.getContext('2d');
+        input.clearRect(0,0,w,h);
+        drawLayer(input,l,w,h,false);
+        return raster;
+      };
       if (gpu && l.chain) {
-        const makeRaster = () => {
-          if (raster.width !== w) raster.width = w;
-          if (raster.height !== h) raster.height = h;
-          const input = raster.getContext('2d');
-          input.clearRect(0,0,w,h);
-          drawLayer(input,l,w,h,false);
-          return raster;
-        };
-        const projection = project(l)?.object ?? l.type;
+        const projection = l.type === 'procedure' ? procedural(l) : project(l)?.object ?? l.type;
         const key = l.type === 'scene' ? 'scene' : null;
         if (key) frame = gpu.renderLayer(l,doc,w,h,makeRaster,key);
         else frame = gpu.renderLayer(l,doc,w,h,makeRaster,
           rasterSignature(l,projection));
       }
+      if (!frame && l.type === 'procedure' && (l.opacity !== 100 || l.blend !== 'source-over')) frame = makeRaster();
       if (frame) {
         ctx.save();
         ctx.globalAlpha = l.opacity/100;
@@ -223,13 +245,14 @@ const StudioRender = (() => {
     const fragments = [];
     for (const l of [...doc.layers].reverse()) {
       if (!l.visible || !l.opacity) continue;
-      const vector = ['shape','text','path','brush'].includes(l.type) &&
+      const vector = ['shape','text','path','brush','procedure'].includes(l.type) &&
         !l.chain?.nodes.some(n => n.type === 'effect');
       let markup;
       if (vector) {
         const p = center(l,w,h);
         const transform = `translate(${p.x} ${p.y}) rotate(${l.rotation}) scale(${l.scale/100})`;
-        markup = `<g transform="${transform}">${project(l).object.toSVG()}</g>`;
+        const drawing = l.type === 'procedure' ? geometryMarkup(procedural(l).geometry) : project(l).object.toSVG();
+        markup = `<g transform="${transform}">${drawing}</g>`;
       } else {
         draw(surface,{...doc,layers:[{...l,opacity:100,blend:'source-over'}]},gpu);
         markup = image(surface);
@@ -269,6 +292,16 @@ const StudioRender = (() => {
       hitContext.lineWidth = size*.13+tolerance*100/l.scale;
       return hitContext.isPointInStroke(q.x,q.y);
     }
+    if (l.type === 'procedure') {
+      const {geometry,paths,bounds} = procedural(l);
+      const margin = tolerance*100/l.scale;
+      if (q.x < bounds.left-margin || q.x > bounds.right+margin || q.y < bounds.top-margin || q.y > bounds.bottom+margin) return false;
+      hitContext.lineCap = 'round';
+      return paths.some((path,i) => {
+        hitContext.lineWidth = geometry[i].strokeWidth+2*margin;
+        return hitContext.isPointInStroke(path,q.x,q.y);
+      });
+    }
     const projected = project(l);
     if (!projected) return false;
     const {object} = projected;
@@ -283,7 +316,7 @@ const StudioRender = (() => {
       const path = new Path2D(pathData(l));
       hitContext.lineWidth = Math.max(l.strokeWidth || 4,tolerance*200/l.scale);
       hitContext.lineCap = 'round';
-      return (l.closed && hitContext.isPointInPath(path,q.x,q.y)) || hitContext.isPointInStroke(path,q.x,q.y);
+      return (l.closed && l.fill && hitContext.isPointInPath(path,q.x,q.y)) || hitContext.isPointInStroke(path,q.x,q.y);
     }
     return object.containsPoint(new Point(q.x,q.y));
   }
@@ -291,6 +324,10 @@ const StudioRender = (() => {
   function corners(l,w,h) {
     const projected = project(l);
     let points = projected?.object.getCoords();
+    if (l.type === 'procedure') {
+      const {left,right,top,bottom} = procedural(l).bounds;
+      points = [{x:left,y:top},{x:right,y:top},{x:right,y:bottom},{x:left,y:bottom}];
+    }
     if (!points) {
       const s = Math.min(w,h), x = l.type === 'chrome' || l.type === 'scene' ? s*.38 : w/2;
       const y = l.type === 'chrome' || l.type === 'scene' ? s*.44 : h/2;
@@ -308,5 +345,5 @@ const StudioRender = (() => {
       top:Math.min(...p.map(a => a.y)),bottom:Math.max(...p.map(a => a.y))};
   }
 
-  return {draw,toSVG,prepare,image,inside,bounds,corners,local,dimensions,center,transform,radians,pathData};
-})();
+  return {draw,toSVG,prepare,image,inside,bounds,corners,local,dimensions,center,transform,radians,pathData,vectorImage};
+}
