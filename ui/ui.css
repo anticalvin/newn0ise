@@ -424,5 +424,5 @@ select.pill option{background:#262421;color:var(--ink)}
 
 /* phones: the node editor replaces the Studio shortcut so the menu button always fits */
 @media(max-width:959px){.header-end #studio-link{display:none}.header-end{gap:4px}.header>.header-end .round{--s:38px}}
-@media(max-width:570px){.header-end #n0iseSound{display:none}}
+@media(max-width:959px){.header-end #n0iseSound,.topright #n0iseSound{display:none}}
 @media(max-width:570px){.header .nav :is(button,a){padding:6px 3px;min-width:40px}.header{gap:3px}}

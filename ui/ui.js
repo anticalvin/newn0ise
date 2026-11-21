@@ -24,4 +24,4 @@ export function openMenu(title,entries,opener){
 }
 export const SPACES=[['Camera','effects.html?cam=1'],['Effects','effects.html'],['3D','studio.html'],['Lab','lab.html']];
 /* workspace links and the Studio button share one menu for global actions */
-export function menuEntriesCommon(){return [{h:'Go to'},...SPACES.map(([l,h])=>({label:l,href:h})),{label:'Home',href:'index.html'},...(window.n0iseSound?[{h:'Settings'},{label:'Sound: '+window.n0iseSound.level+' (tap to change)',click:'#n0iseSound'}]:[])];}
+export function menuEntriesCommon(){return [{h:'Go to'},...SPACES.map(([l,h])=>({label:l,href:h})),{label:'Home',href:'index.html'},...(window.n0iseSound&&!matchMedia('(max-width:959px)').matches?[{h:'Settings'},{label:'Sound: '+window.n0iseSound.level+' (tap to change)',click:'#n0iseSound'}]:[])];}
