@@ -42,7 +42,7 @@
   /* grid, guides and snap switches (StudioGrid): showing the grid and snapping to it are separate */
   let gridCfg = StudioGrid.normalize((() => { try { return JSON.parse(localStorage.getItem('n0ise.gridcfg') || 'null'); } catch { return null; } })());
   const saveGrid = () => { gridCfg = StudioGrid.normalize(gridCfg); try { localStorage.setItem('n0ise.gridcfg',JSON.stringify(gridCfg)); } catch {} };
-  let pan = {x:0,y:0}, zoom = 1, fitted = true, frame = 0, gesture = null, pen = [], hover = null;
+  let pan = {x:0,y:0}, zoom = 1, fitted = true, lastDims = '', lastRenderScale = 1, frame = 0, gesture = null, pen = [], hover = null;
   let guides = [], draft = null, editAnchors = false, anchorSel = -1, toastTimer = 0, contextKey = '';
   const pointers = new Map();
   let graphLayerId = null, graphPreview = null, renderWarning = '';
@@ -301,7 +301,7 @@
     editAnchors = false;
   }
   /* options for each tool, remembered between sessions (shown in the palette above the tool) */
-  const toolOpts = {brushSize:12,smooth:58,taper:55,eraserSize:40,lineWidth:6,shapeStroke:0,penWidth:4,textFont:'sans-serif',textSize:0,gradKind:'linear',cropAspect:0};
+  const toolOpts = {pickSize:1,brushSize:12,smooth:58,taper:55,eraserSize:40,lineWidth:6,shapeStroke:0,penWidth:4,textFont:'sans-serif',textSize:0,gradKind:'linear',cropAspect:0};
   try { Object.assign(toolOpts,JSON.parse(localStorage.getItem('n0ise.toolopts') || '{}')); } catch {}
   const saveOpts = () => { try { localStorage.setItem('n0ise.toolopts',JSON.stringify(toolOpts)); } catch {} };
   function build(type,props = {}) {
@@ -359,6 +359,7 @@
       onPaint: showChip,
       saved: () => doc.swatches || [],
       recent: recentColors,
+      photo: photoColours,
       onSave: c => saveSwatch(c),
       onRemove: c => { change(() => { doc.swatches = (doc.swatches || []).filter(x => x !== c); }); paintBar(); }
     });
@@ -400,8 +401,20 @@
     if (options.maxLength) input.maxLength = options.maxLength;
     if (type === 'textarea') input.rows = 2;
     input.value = value;
+    /* sliders preview while you drag: every input event applies the value and redraws, and the whole drag is one undo step on release */
+    let live = null;
+    if (type === 'range') {
+      input.addEventListener('input',() => {
+        const v = input.valueAsNumber; if (!Number.isFinite(v)) return;
+        if (!live) live = {before:capture()};
+        apply(clamp(v,options.min ?? -1e6,options.max ?? 1e6));
+        live.moved = true; schedule();
+        const out = wrapper.querySelector('.slidervalue'); if (out) out.textContent = String(Math.round(v*100)/100);
+      });
+    }
     input.onchange = () => {
       const next = ['number','range'].includes(type) ? input.valueAsNumber : input.value;
+      if (live) { const l = live; live = null; if (l.moved && Number.isFinite(next)) { contextKey = ''; finish(l.before); return; } }
       if (typeof next === 'number' && !Number.isFinite(next)) { input.value = value; return; }
       if (options.choices && next === '' && value === '') return;
       const resolved = typeof next === 'number' ? clamp(next,options.min ?? -1e6,options.max ?? 1e6) : next;
@@ -553,6 +566,7 @@
       context.append(sized('Width','width','height'),sized('Height','height','width'),toggle);
     }
     if (l.type === 'shape') context.append(action('Edit points',() => pathFromShape(l)));
+    if (l.type === 'text') context.append(action('Convert to outlines',() => { setTool('direct'); enterEdit(l); }));
     if (l.type === 'procgraph') context.append(action('Edit graph…',() => openProcEditor(l)));
     if (l.type === 'path') {
       context.append(action(editAnchors ? 'Done editing anchors' : 'Edit anchors',toggleAnchors));
@@ -563,6 +577,17 @@
         context.append(smooth,del,action(l.closed ? 'Open path' : 'Close path',toggleClosed));
         context.append(Object.assign(document.createElement('p'),{className:'muted compact',textContent:'Double-click the outline to add a point. Double-click a point for smooth or corner. Alt-drag a handle to move it on its own.'}));
       }
+    }
+    if (l.type === 'image') {
+      const row = document.createElement('div'); row.className = 'photopalette';
+      const head = document.createElement('span'); head.className = 'fieldlabel'; head.textContent = 'Key colours';
+      const bar = document.createElement('div'); bar.className = 'swatchbar';
+      const draw = () => { bar.replaceChildren(); for (const c of l.palette || []) { const b = document.createElement('button'); b.type = 'button'; b.className = 'swatch'; b.style.background = c; b.title = 'Use '+c+' as the paint colour'; b.setAttribute('aria-label','Use '+c); b.onclick = () => { setPaint(c); notice('Paint colour '+c); }; bar.append(b); } };
+      draw();
+      const acts = document.createElement('div'); acts.className = 'chips';
+      acts.append(action(l.palette?.length ? 'Re-read' : 'Find key colours',() => { const im = R.image(l.src).img; if (!im) return; const pal = keyColours(im); change(() => { l.palette = pal; contextKey = ''; }); }));
+      if (l.palette?.length) acts.append(action('Add all to swatches',() => change(() => { doc.swatches = [...new Set([...(doc.swatches || []),...l.palette])].slice(0,64); contextKey = ''; notice('Added '+l.palette.length+' colours to the project swatches'); })));
+      row.append(head,bar,acts); context.append(row);
     }
     if (l.type === 'image' && l.crop) context.append(action('Reset crop',() => {
       contextKey = '';
@@ -654,6 +679,7 @@
     $('undo').disabled = !stack.canUndo;
     $('redo').disabled = !stack.canRedo;
     $('docname').value = doc.name;
+    { const n = doc.artboards?.length || 1, lab = abName().toUpperCase()+(n > 1 ? ' · '+(abIndex()+1)+'/'+n : '')+' ▾'; if ($('artboardBtn').textContent !== lab) $('artboardBtn').textContent = lab; $('abPrev').hidden = $('abNext').hidden = n < 2; }
     $('ratio').value = doc.ratio === 'custom' && Math.abs((doc.size[0]/doc.size[1])/(stage.clientWidth/Math.max(1,stage.clientHeight))-1) < .03 ? 'workspace' : doc.ratio;
     $('resizeCustom').classList.toggle('hidden',doc.ratio !== 'custom');
     $('stagefoot').textContent = 'RGB · '+ratioName(doc);
@@ -669,6 +695,7 @@
   function layout() {
     const [w,h] = dims(), width = stage.clientWidth, height = stage.clientHeight;
     if (!width || !height) return;
+    if (`${w}x${h}` !== lastDims) { lastDims = `${w}x${h}`; fitted = true; }     /* a different artboard size is a new fit, even while the viewport is locked */
     if (fitted) {
       const f = StudioViewport.fitTransform(w,h,width,height);
       zoom = f.zoom; pan = f.pan;
@@ -697,7 +724,7 @@
     });
   }
   /* vectors are re-rasterised at screen resolution, so shapes and text stay sharp when you zoom in */
-  let forceScale = 0, lastRenderScale = 1, scaleTimer = 0;
+  let forceScale = 0, scaleTimer = 0;
   function renderScale() {
     if (forceScale) return forceScale;
     const [w,h] = dims();
@@ -748,9 +775,9 @@
     }
     const layers = visibleSelection();
     const points = selectionGeometry(layers);
-    if (points && (tool === 'select' || tool === 'crop') && gesture?.kind !== 'pinch') {
+    if (points && (tool === 'select' || tool === 'crop' || tool === 'direct') && gesture?.kind !== 'pinch') {
       svg('polygon',{points:points.map(xy).join(' '),class:'outline'});
-      if (editAnchors && layers[0]?.type === 'path' && tool === 'select') {
+      if (editAnchors && layers[0]?.type === 'path' && (tool === 'select' || tool === 'direct')) {
         const l = layers[0], c = R.center(l,w,h);
         const world = (x,y) => {
           const p = R.transform(x*l.scale/100,y*l.scale/100,R.radians(l.rotation));
@@ -807,7 +834,7 @@
 
   function setTool(next) {
     if (tool === 'pen' && next !== 'pen') { pen = []; hover = null; }
-    if (next !== 'select') editAnchors = false;
+    if (next !== 'select' && next !== 'direct') editAnchors = false;
     tool = next;
     stage.dataset.tool = tool;
     stateButtons('[data-tool]',tool,'tool');
@@ -880,14 +907,50 @@
     }
     return inside;
   }
-  function pickColor(p) {
-    const [w,h] = dims(), x = Math.round(p.x), y = Math.round(p.y), k = canvas.width/w;
-    if (x < 0 || y < 0 || x >= w || y >= h) return;
-    const [r,g,b] = canvas.getContext('2d').getImageData(Math.min(canvas.width-1,Math.round(x*k)),Math.min(canvas.height-1,Math.round(y*k)),1,1).data;
-    setPaint('#'+[r,g,b].map(n => n.toString(16).padStart(2,'0')).join(''));
-    contextKey = '';
-    setTool('select');
-    notice(`Picked ${paintColor}`);
+  /* eyedropper: press and hold to see a magnified view of the pixels around the pointer with the colour it will pick, move or use the arrow keys for single-pixel control, release to pick, Esc to cancel */
+  const SAMPLE_SIZES = [[1,'Point'],[3,'3×3'],[5,'5×5'],[9,'9×9']];
+  let loupeEl = null;
+  function readPixels(p,half) {
+    const [w,h] = dims(), k = canvas.width/w, cx = Math.round(clamp(p.x,0,w-1)*k), cy = Math.round(clamp(p.y,0,h-1)*k), g = canvas.getContext('2d',{willReadFrequently:true});
+    const x0 = clamp(cx-half,0,canvas.width-1), y0 = clamp(cy-half,0,canvas.height-1), x1 = clamp(cx+half,0,canvas.width-1), y1 = clamp(cy+half,0,canvas.height-1);
+    return {data:g.getImageData(x0,y0,x1-x0+1,y1-y0+1).data,w:x1-x0+1,h:y1-y0+1,cx:cx-x0,cy:cy-y0};
+  }
+  function sampledColour(p) {
+    const half = Math.floor((toolOpts.pickSize || 1)/2), r = readPixels(p,half); let R0 = 0,G0 = 0,B0 = 0,n = 0;
+    const x0 = Math.max(0,r.cx-half), x1 = Math.min(r.w-1,r.cx+half), y0 = Math.max(0,r.cy-half), y1 = Math.min(r.h-1,r.cy+half);
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) { const i = (y*r.w+x)*4; R0 += r.data[i]; G0 += r.data[i+1]; B0 += r.data[i+2]; n++; }
+    return n ? [Math.round(R0/n),Math.round(G0/n),Math.round(B0/n)] : [0,0,0];
+  }
+  const rgbHex = c => '#'+c.map(n => n.toString(16).padStart(2,'0')).join('');
+  function updateLoupe(g) {
+    const [w,h] = dims(); if (g.p.x < 0 || g.p.y < 0 || g.p.x >= w || g.p.y >= h) { hideLoupe(); return; }
+    if (!loupeEl) {
+      loupeEl = document.createElement('div'); loupeEl.className = 'loupe'; loupeEl.setAttribute('aria-hidden','true');
+      loupeEl.innerHTML = '<canvas width="143" height="143"></canvas><div class="loupeinfo"><span class="loupenew"></span><span class="loupeold"></span><b class="loupehex"></b><small class="louperaw"></small></div>';
+      stage.append(loupeEl);
+    }
+    const c = loupeEl.querySelector('canvas'), g2 = c.getContext('2d'), N = 11, cell = 13, half = 5, r = readPixels(g.p,half);
+    g2.clearRect(0,0,143,143); g2.imageSmoothingEnabled = false;
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      const sx = r.cx-half+x, sy = r.cy-half+y; let col = null;
+      if (sx >= 0 && sy >= 0 && sx < r.w && sy < r.h) { const i = (sy*r.w+sx)*4; col = `rgba(${r.data[i]},${r.data[i+1]},${r.data[i+2]},${r.data[i+3]/255})`; }
+      g2.fillStyle = col || '#111'; g2.fillRect(x*cell,y*cell,cell,cell);
+    }
+    g2.strokeStyle = 'rgba(0,0,0,.28)'; g2.lineWidth = 1; g2.beginPath(); for (let i = 0; i <= N; i++) { g2.moveTo(i*cell+.5,0); g2.lineTo(i*cell+.5,143); g2.moveTo(0,i*cell+.5); g2.lineTo(143,i*cell+.5); } g2.stroke();
+    const area = Math.floor((toolOpts.pickSize || 1)/2), o = (half-area)*cell, sz = (area*2+1)*cell;
+    g2.lineWidth = 2; g2.strokeStyle = '#000'; g2.strokeRect(o+1,o+1,sz-2,sz-2); g2.strokeStyle = '#fff'; g2.strokeRect(o+3,o+3,sz-6,sz-6);
+    const col = sampledColour(g.p), hx = rgbHex(col);
+    g.colour = hx; loupeEl.querySelector('.loupenew').style.background = hx; loupeEl.querySelector('.loupeold').style.background = g.was; loupeEl.querySelector('.loupehex').textContent = hx.toUpperCase();
+    loupeEl.querySelector('.louperaw').textContent = `RGB ${col.join(' ')} · ${Math.round(g.p.x)}, ${Math.round(g.p.y)} px${(toolOpts.pickSize || 1) > 1 ? ' · avg '+toolOpts.pickSize+'×'+toolOpts.pickSize : ''}`;
+    const sr = stage.getBoundingClientRect(), px = (g.cx ?? sr.left+sr.width/2)-sr.left, py = (g.cy ?? sr.top+sr.height/2)-sr.top, W = 160, H = 230;
+    let lx = px+24, ly = g.touch ? py-H-36 : py-H/2; if (lx+W > sr.width-6) lx = px-W-24; lx = clamp(lx,6,Math.max(6,sr.width-W-6)); ly = clamp(ly,6,Math.max(6,sr.height-H-6));
+    loupeEl.style.transform = `translate(${lx}px,${ly}px)`; loupeEl.hidden = false;
+  }
+  function hideLoupe() { if (loupeEl) loupeEl.hidden = true; }
+  function commitPick(g) {
+    const hx = g.colour; if (!hx) return;
+    setPaint(hx); rememberColor(hx); contextKey = '';
+    setTool('select'); notice(`Picked ${hx.toUpperCase()}`);
   }
   function snapshotTransforms(layers) {
     return layers.map(l => ({l,x:l.x,y:l.y,scale:l.scale,rotation:l.rotation}));
@@ -907,9 +970,9 @@
   /* node commands: every one is a single undoable change */
   const editable = () => { const l = visibleSelection()[0]; return editAnchors && l?.type === 'path' && !l.locked ? l : null; };
   function addAnchorAt(l,p) {
-    const [w,h] = dims(), q = R.local(l,p,w,h), hit = StudioPath.nearest(l.points,!!l.closed,q);
+    const [w,h] = dims(), q = R.local(l,p,w,h), hit = StudioPath.nearest(l.points,!!l.closed,q,32,l.breaks);
     if (!hit || hit.dist*l.scale/100*zoom > 18) return false;
-    change(() => { const r = StudioPath.split(l.points,!!l.closed,hit.seg,hit.t); l.points = r.points; anchorSel = r.index; contextKey = ''; });
+    change(() => { const r = StudioPath.split(l.points,!!l.closed,hit.seg,hit.t,l.breaks); l.points = r.points; if (r.breaks) l.breaks = r.breaks; anchorSel = r.index; contextKey = ''; });
     return true;
   }
   /* procedural graph layers: the graph lives on the layer, so undo, save and Motion treat it like any other layer data */
@@ -930,15 +993,15 @@
   }
   function deleteAnchor() {
     const l = editable(); if (!l || anchorSel < 0) return false;
-    const next = StudioPath.removeAt(l.points,!!l.closed,anchorSel);
-    if (!next) { notice(l.closed ? 'A closed path needs at least three points.' : 'A path needs at least two points. Delete the layer instead.'); return true; }
-    change(() => { l.points = next; anchorSel = Math.min(anchorSel,next.length-1); contextKey = ''; });
+    const next = StudioPath.removeAtB(l.points,!!l.closed,anchorSel,l.breaks);
+    if (!next) { notice(l.closed || l.breaks ? 'An outline needs at least three points.' : 'A path needs at least two points. Delete the layer instead.'); return true; }
+    change(() => { l.points = next.points; if (next.breaks) l.breaks = next.breaks; anchorSel = Math.min(anchorSel,next.points.length-1); contextKey = ''; });
     return true;
   }
   function toggleSmooth() {
     const l = editable(); if (!l || anchorSel < 0) return;
     const smooth = StudioPath.isSmooth(l.points[anchorSel]);
-    change(() => { l.points = smooth ? StudioPath.toCorner(l.points,anchorSel) : StudioPath.toSmooth(l.points,!!l.closed,anchorSel); contextKey = ''; });
+    change(() => { l.points = smooth ? StudioPath.toCorner(l.points,anchorSel) : StudioPath.toSmooth(l.points,!!l.closed,anchorSel,l.breaks); contextKey = ''; });
   }
   function toggleClosed() {
     const l = editable(); if (!l) return;
@@ -952,6 +1015,38 @@
     contextKey = '';
     syncInspector();
     drawOverlay();
+  }
+  /* every vector can be edited point by point: shapes and text become paths (text as outlines; letters with holes become one compound path) */
+  const isVector = l => ['path','shape','text'].includes(l.type);
+  function shapeToPath(l) {
+    change(() => {
+      Object.assign(l,{type:'path',closed:true,points:V.outline(l.shape,l.width,l.height)});
+      delete l.shape; delete l.width; delete l.height; contextKey = '';
+    });
+  }
+  function textToOutlines(l) {
+    const obj = R.textObject(l); if (!obj) return false;
+    const stroke = obj.stroke, sw = obj.strokeWidth; obj.set({stroke:null,strokeWidth:0});
+    try {
+      const bw = Math.max(8,obj.width), bh = Math.max(8,obj.height), k = clamp(1800/Math.max(bw,bh),1,6), cw = Math.ceil(bw*k)+16, ch = Math.ceil(bh*k)+16;
+      const c = document.createElement('canvas'); c.width = cw; c.height = ch; const g = c.getContext('2d',{willReadFrequently:true});
+      g.translate(cw/2,ch/2); g.scale(k,k); obj.render(g);
+      const px = g.getImageData(0,0,cw,ch).data, alpha = new Uint8Array(cw*ch); for (let i = 0; i < alpha.length; i++) alpha[i] = px[i*4+3];
+      const r = StudioTrace.compound(StudioTrace.contours(alpha,cw,ch),{scale:1/k,ox:cw/2,oy:ch/2,minArea:3*k,eps:1.5});
+      if (r.points.length < 3) return false;
+      change(() => {
+        Object.assign(l,{type:'path',closed:true,points:r.points,fill:l.fill || paintColor,strokeWidth:0});
+        if (r.breaks.length) l.breaks = r.breaks; delete l.text; delete l.font; delete l.fontSize; contextKey = '';
+      });
+      return true;
+    } finally { obj.set({stroke,strokeWidth:sw}); }
+  }
+  function enterEdit(l) {
+    if (l.locked) return;
+    if (l.type === 'shape') shapeToPath(l);
+    else if (l.type === 'text') { if (!textToOutlines(l)) { notice('That text has no outlines to edit.'); return; } notice('Text converted to outlines. Undo to get the editable text back.'); }
+    else if (l.type !== 'path') { notice('Only paths, shapes and text can be edited as points.'); return; }
+    editAnchors = true; contextKey = ''; syncInspector(); drawOverlay();
   }
   function pathFromShape(l) {
     change(() => {
@@ -1002,7 +1097,9 @@
     guides = [];
     draft = null;
     delete stage.dataset.drag;
+    hideLoupe();
     if (!g) { drawOverlay(); return; }
+    if (g.kind === 'picker') { if (!cancelled) commitPick(g); return; }
     if (cancelled) {
       if (g.kind === 'pen') pen.pop();
       if (g.before && g.edited) restore(g.before);
@@ -1098,9 +1195,16 @@
     if (space || e.button === 1 || (!inside && e.pointerType === 'touch' && handle === undefined && anchor === undefined)) {
       gesture = {...base,kind:'pan',pan:{...pan}};
       stage.dataset.drag = 'true';
-    } else if (tool === 'select' && anchor !== undefined && active?.type === 'path') {
+    } else if ((tool === 'select' || tool === 'direct') && anchor !== undefined && active?.type === 'path') {
       anchorSel = Number(anchor); contextKey = ''; syncInspector();
       gesture = {...base,kind:'anchor',l:active,index:Number(anchor),tangent:e.target.dataset.tangent || '',before:capture()};
+    } else if (tool === 'direct') {
+      /* direct selection: pick any vector under the pointer and edit its points; shapes and text are turned into editable outlines on the way */
+      const hit = inside ? doc.layers.find(l => !l.locked && R.inside(l,p,w,h,7/zoom)) : null;
+      if (hit) { if (!selection.includes(hit.id)) select([hit.id]); enterEdit(hit); }
+      else if (!editAnchors || !layers.length) { select([]); }
+      else { editAnchors = false; anchorSel = -1; select([]); }
+      return;
     } else if (tool === 'select' && handle !== undefined && layers.length) {
       const corners = selectionGeometry(layers);
       const rotate = handle === 'rotate';
@@ -1129,7 +1233,8 @@
     else if (tool === 'lasso') {
       gesture = {...base,kind:'lasso',points:[p],base:multi ? [...selection] : []};
     } else if (tool === 'picker') {
-      pickColor(p);
+      gesture = {...base,kind:'picker',p,touch:e.pointerType === 'touch',was:paintColor};
+      stage.dataset.drag = 'true'; updateLoupe(gesture);
       return;
     } else if (tool === 'brush' || tool === 'eraser') {
       const before = capture();
@@ -1252,7 +1357,7 @@
     if (e.target === inlineText) finishTextEdit();
   });
   stage.addEventListener('dblclick',e => {
-    if (tool !== 'select' || view === 'spatial' || e.target.closest('button,#textEdit,#inlineText')) return;
+    if ((tool !== 'select' && tool !== 'direct') || view === 'spatial' || e.target.closest('button,#textEdit,#inlineText')) return;
     const p = position(e.clientX,e.clientY), [w,h] = dims();
     const editing = editable();
     if (editing) {
@@ -1313,6 +1418,7 @@
       return;
     }
     const p = position(e.clientX,e.clientY);
+    if (g?.kind === 'picker') { g.p = p; g.cx = e.clientX; g.cy = e.clientY; updateLoupe(g); return; }
     if (!g) {
       if (tool === 'pen' && pen.length) { hover = p; drawOverlay(); }
       return;
@@ -1686,6 +1792,14 @@
       pal.append(row);
     }
     if (name === 'picker') {
+      const srow = document.createElement('div'); srow.className = 'optrow';
+      const shead = document.createElement('span'); shead.className = 'optlabel'; shead.textContent = 'Sample';
+      const seg = document.createElement('div'); seg.className = 'chips';
+      for (const [n,label] of SAMPLE_SIZES) { const b = action(label,() => { toolOpts.pickSize = n; saveOpts(); seg.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed',String(x === b))); }); b.setAttribute('aria-pressed',String((toolOpts.pickSize || 1) === n)); seg.append(b); }
+      const hint = document.createElement('span'); hint.className = 'muted compact'; hint.textContent = 'Hold to magnify. Arrow keys move one pixel (Shift five). Esc cancels.';
+      srow.append(shead,seg,hint); pal.append(srow);
+    }
+    if (name === 'picker') {
       const row = document.createElement('div'); row.className = 'optrow';
       const head = document.createElement('span'); head.className = 'optlabel'; head.textContent = 'Recent colours';
       const sw = document.createElement('div'); sw.className = 'swatchbar';
@@ -1788,12 +1902,79 @@
     if (gesture || view === 'spatial') return;
     menu('Export artwork',[
       ['Download PNG',downloadPNG],
+      ...(doc.artboards ? [['Download every artboard (PNG)',downloadAllPNG]] : []),
       ['Download SVG',downloadSVG],
       ['Save editable project',save],
       ['Show in node editor',showInNodes],
       ['Open in Effects',() => sendArtwork('effects')],
       ['Open in 3D as relief',() => sendArtwork('3d')]
     ]);
+  }
+  /* ---- artboards. The active artboard's layers are doc.layers; the others are stored on doc.artboards with their own layers, graph and size. Every operation is one undo step. ---- */
+  const AB_MAX = 12, abIndex = () => doc.artboards ? Math.max(0,doc.artboards.findIndex(a => a.id === doc.activeArtboard)) : 0;
+  const abName = () => doc.artboards ? doc.artboards[abIndex()].name : 'Artboard 01';
+  function abEnsure() { if (!doc.artboards) { const id = StudioDocument.id(); doc.artboards = [{id,name:'Artboard 01'}]; doc.activeArtboard = id; } }
+  function abStash() { const cur = doc.artboards.find(a => a.id === doc.activeArtboard); cur.layers = doc.layers; cur.graph = doc.graph; cur.ratio = doc.ratio; if (doc.ratio === 'custom') cur.size = doc.size; else delete cur.size; }
+  function abLoad(ab) {
+    doc.layers = ab.layers; doc.graph = ab.graph; doc.ratio = ab.ratio; if (ab.size) doc.size = ab.size; else delete doc.size;
+    delete ab.layers; delete ab.graph; delete ab.ratio; delete ab.size; doc.activeArtboard = ab.id; selection = []; editAnchors = false; anchorSel = -1;
+  }
+  const abAfter = () => { fitted = true; contextKey = ''; setView(view === 'spatial' ? 'canvas' : view); layout(); };
+  function abSwitch(id,history = true) {
+    if (!doc.artboards || id === doc.activeArtboard || !doc.artboards.some(a => a.id === id)) return;
+    const run = () => { abStash(); abLoad(doc.artboards.find(a => a.id === id)); };
+    if (history) change(run); else { run(); sync(); }
+    abAfter();
+  }
+  function abAdd(opts = {}) {
+    if (doc.artboards && doc.artboards.length >= AB_MAX) { notice('A project can have up to '+AB_MAX+' artboards.'); return; }
+    change(() => {
+      abEnsure(); abStash();
+      const at = abIndex(), id = StudioDocument.id(), n = doc.artboards.length+1, src = doc.artboards[at];
+      const ratio = opts.ratio ?? src.ratio, size = opts.size ?? src.size, entry = {id,name:opts.name || 'Artboard '+String(n).padStart(2,'0'),ratio,...(ratio === 'custom' ? {size:[...size]} : {})};
+      if (opts.duplicate) { entry.layers = copy(src.layers).map(l => ({...l,id:StudioDocument.id()})); entry.graph = copy(src.graph); entry.name = (src.name+' copy').slice(0,60); entry.ratio = src.ratio; if (src.size) entry.size = [...src.size]; }
+      else { entry.layers = []; entry.graph = StudioDocument.create(ratio,false,ratio === 'custom' ? size : undefined).graph; }
+      doc.artboards.splice(at+1,0,entry); abLoad(entry);
+    });
+    abAfter(); notice(opts.duplicate ? 'Artboard duplicated' : 'Artboard added');
+  }
+  function abRename() {
+    if (!doc.artboards) abEnsure();
+    const name = (prompt('Artboard name',abName()) || '').trim().slice(0,60); if (!name) return;
+    change(() => { abEnsure(); doc.artboards[abIndex()].name = name; });
+  }
+  function abMove(delta) {
+    if (!doc.artboards) return; const i = abIndex(), j = i+delta; if (j < 0 || j >= doc.artboards.length) return;
+    change(() => { const [a] = doc.artboards.splice(i,1); doc.artboards.splice(j,0,a); });
+  }
+  function abDelete() {
+    if (!doc.artboards || doc.artboards.length < 2) { notice('A project needs at least one artboard.'); return; }
+    change(() => {
+      const i = abIndex(), list = doc.artboards, next = list[i+1] || list[i-1]; list.splice(i,1); abLoad(next);
+      if (list.length === 1) { delete doc.artboards; delete doc.activeArtboard; }
+    });
+    abAfter(); notice('Artboard deleted. Undo brings it back.');
+  }
+  async function downloadAllPNG() {
+    const start = doc.activeArtboard, names = doc.artboards.map(a => [a.id,a.name]);
+    try {
+      for (const [id,name] of names) { abSwitch(id,false); await new Promise(r => setTimeout(r,60)); download(await exportPNG(),'png',doc.name+' - '+name); await new Promise(r => setTimeout(r,250)); }
+      notice('Downloaded '+names.length+' artboards.');
+    } catch (e) { notice(e.message || 'Export failed.'); }
+    finally { abSwitch(start,false); }
+  }
+  function openArtboards() {
+    const list = doc.artboards || [{id:'solo',name:'Artboard 01'}], cur = doc.activeArtboard || 'solo', one = !doc.artboards;
+    const sizeLabel = r => ({landscape:'16:9',portrait:'9:16',square:'1:1'}[r] || 'custom');
+    menu('Artboards',[
+      ...list.map((a,i) => [(a.id === cur ? '● ' : '○ ')+(i+1)+'. '+a.name,() => abSwitch(a.id)]),
+      ['New artboard (same size)',() => abAdd()],
+      ['New artboard · portrait 9:16',() => abAdd({ratio:'portrait'})],['New artboard · square 1:1',() => abAdd({ratio:'square'})],['New artboard · landscape 16:9',() => abAdd({ratio:'landscape'})],
+      ['Duplicate this artboard',() => abAdd({duplicate:true})],['Rename this artboard…',abRename],
+      ...(one ? [] : [['Move earlier',() => abMove(-1)],['Move later',() => abMove(1)],['Delete this artboard',abDelete]]),
+      ...(one ? [] : [['Export every artboard (PNG)',downloadAllPNG]])
+    ],'Close');
+    void sizeLabel;
   }
   function useDocument(next) {
     projectEpoch++;
@@ -1915,6 +2096,16 @@
     Object.assign(next.layers[0],{width:size[0],height:size[1],x:0,y:0});
     return next;
   }
+  /* key colours of a picture: a 64 px copy through StudioPalette */
+  function keyColours(img) {
+    try {
+      const k = 64/Math.max(img.naturalWidth || img.width,img.naturalHeight || img.height,1), c = document.createElement('canvas');
+      c.width = Math.max(1,Math.round((img.naturalWidth || img.width)*k)); c.height = Math.max(1,Math.round((img.naturalHeight || img.height)*k));
+      const g = c.getContext('2d',{willReadFrequently:true}); g.drawImage(img,0,0,c.width,c.height);
+      return StudioPalette.extract(g.getImageData(0,0,c.width,c.height).data,6);
+    } catch { return []; }
+  }
+  const photoColours = () => { const l = selected().find(x => x.type === 'image' && x.palette?.length) || doc.layers.find(x => x.type === 'image' && x.palette?.length); return l ? l.palette : []; };
   async function decodeImages(files,[w,h],background) {
     const results = await Promise.allSettled(files.map(async file => {
       if (!/^image\/(png|jpeg|webp|gif|avif|bmp|svg\+xml)$/i.test(file.type)) throw Error('Unsupported image.');
@@ -1938,7 +2129,8 @@
           src = surface.toDataURL(file.type === 'image/jpeg' ? 'image/jpeg' : 'image/png',.94);
         } else src = await readData(file);
         await R.image(src).ready;
-        return build('image',{name:file.name.slice(0,120),src,
+        const palette = keyColours(img);
+        return build('image',{name:file.name.slice(0,120),src,palette,
           width:background ? w : Math.max(1,img.naturalWidth*scale),height:background ? h : Math.max(1,img.naturalHeight*scale)});
       } finally { URL.revokeObjectURL(url); }
     }));
@@ -2058,7 +2250,7 @@
     ['Keyboard and gestures',() => {
       $('modaltitle').textContent = 'Keyboard and gestures';
       const help = document.createElement('p');
-      help.textContent = 'V Select · L Lasso · B Brush · E Eraser · P Pen · T Text · R Shape · C Crop · G Gradient · I Eyedropper. Shift-click adds or removes layers. Drag empty space to select several. Space-drag or use two fingers to pan. Scroll or pinch to zoom. Hold Alt to bypass snapping, or Shift for 15° rotation steps. Arrow keys nudge 1 px and Shift nudges 10 px. Press 0 to fit.';
+      help.textContent = 'V Select · A Direct select · L Lasso · B Brush · E Eraser · P Pen · T Text · R Shape · C Crop · G Gradient · I Eyedropper. Shift-click adds or removes layers. Drag empty space to select several. Space-drag or use two fingers to pan. Scroll or pinch to zoom. Hold Alt to bypass snapping, or Shift for 15° rotation steps. Arrow keys nudge 1 px and Shift nudges 10 px. Press 0 to fit.';
       $('modalcontent').replaceChildren(help);
       $('modal').showModal();
     }]
@@ -2109,7 +2301,7 @@
   }
   /* the shortcut reference: one list, used for the dialog and for the conflict test */
   const SHORTCUTS = [
-    ['Tools',[['V','Select'],['L','Lasso'],['B','Freehand brush'],['E','Eraser'],['P','Pen'],['T','Text'],['R','Shape'],['C','Crop'],['G','Gradient'],['I','Eyedropper']]],
+    ['Tools',[['V','Select'],['A','Direct select (edit points of any vector)'],['L','Lasso'],['B','Freehand brush'],['E','Eraser'],['P','Pen'],['T','Text'],['R','Shape'],['C','Crop'],['G','Gradient'],['I','Eyedropper']]],
     ['Edit',[['Ctrl/Cmd Z','Undo'],['Ctrl/Cmd Shift Z or Y','Redo'],['Ctrl/Cmd J','Duplicate layers'],['Ctrl/Cmd A','Select all'],['Ctrl/Cmd D','Deselect'],['Delete or Backspace','Delete selected layers, or the selected path point'],['Arrows','Nudge 1 px (Shift 10 px)'],['Esc','Cancel, close, or deselect']]],
     ['View',[['Space + drag','Pan temporarily'],['0 or Ctrl/Cmd 0','Fit to screen'],['F','Full screen canvas'],["'",'Show or hide the grid'],["Shift '",'Snap to grid on or off'],['Scroll or pinch','Zoom (frozen when the viewport is locked)'],['?','This list']]],
     ['File',[['Ctrl/Cmd S','Save project'],['Ctrl/Cmd O','Open project']]],
@@ -2131,6 +2323,10 @@
   $('modalcancel').onclick = () => $('modal').close();
   $('export').onclick = exportOptions;
   $('fit').onclick = fit;
+  $('artboardBtn').onclick = openArtboards;
+  $('abPrev').onclick = () => { const i = abIndex(); if (i > 0) abSwitch(doc.artboards[i-1].id); };
+  $('abNext').onclick = () => { const i = abIndex(); if (doc.artboards && i < doc.artboards.length-1) abSwitch(doc.artboards[i+1].id); };
+  window.n0iseArtboards = {add:abAdd,switch:abSwitch,remove:abDelete,move:abMove,get list() { return (doc.artboards || []).map(a => ({id:a.id,name:a.name,active:a.id === doc.activeArtboard})); }};
   { const zl = $('zoomLock'), LOCKED = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="9.5" rx="2.2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>',
       OPEN = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="9.5" rx="2.2"/><path d="M8 11V8a4 4 0 0 1 7.6-1.7"/></svg>';
     const paintZl = () => {
@@ -2261,6 +2457,7 @@
   /* toolbar icons: one stroke family, drawn on a 24 grid (the eyedropper stays a circle of the active colour) */
   const toolIcons = {
     select:'<path d="M6 3.5 18.5 11l-5.6 1.4L10.2 18z"/>',
+    direct:'<path d="M6 3.500 18.500 11l-5.600 1.400L10.200 18z" fill="none"/><rect x="15.500" y="15.500" width="5" height="5" rx="1" fill="currentColor" stroke="none"/>',
     brush:'<path d="M20 4 11.5 12.5"/><path d="M11.5 12.5c-2.6-.6-4.6 1-4.6 3.2 0 1.6-.9 2.5-2.9 3.3 4.4 1.4 8.600-.4 8.600-3.800"/>',
     pen:'<path d="M12 3.5 18 11.500 12 14.500 6 11.500z"/><path d="M12 14.500V21"/><circle cx="12" cy="10.500" r="1.200"/>',
     text:'<path d="M5.500 7V5h13v2M12 5v14M9 19h6"/>',
@@ -2361,6 +2558,10 @@
   const arrows = {ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,-1],ArrowDown:[0,1]};
   document.addEventListener('keydown',e => {
     if (launcher.open || $('modal').open || e.defaultPrevented || e.target.matches('input,textarea,select,[contenteditable=true]')) return;
+    if (gesture?.kind === 'picker' && /^Arrow/.test(e.key)) {
+      e.preventDefault(); const st = (e.shiftKey ? 5 : 1)/Math.max(1,canvas.width/dims()[0]), d = {ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,-1],ArrowDown:[0,1]}[e.key];
+      gesture.p = {x:gesture.p.x+d[0]*st,y:gesture.p.y+d[1]*st}; updateLoupe(gesture); return;
+    }
     if (gesture && e.key !== 'Escape') return;
     const key = e.key.toLowerCase(), modifier = e.ctrlKey || e.metaKey;
     if (modifier && key === 'd') { e.preventDefault(); select([]); return; }
@@ -2410,7 +2611,7 @@
       syncInspector();
       schedule();
     } else if (view !== 'graph') {
-      const shortcut = {v:'select',l:'lasso',b:'brush',e:'eraser',p:'pen',t:'text',r:'shape',c:'crop',g:'gradient',i:'picker',u:'line'}[key];
+      const shortcut = {a:'direct',v:'select',l:'lasso',b:'brush',e:'eraser',p:'pen',t:'text',r:'shape',c:'crop',g:'gradient',i:'picker',u:'line'}[key];
       if (shortcut) setTool(shortcut);
     }
   });

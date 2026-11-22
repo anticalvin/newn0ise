@@ -416,3 +416,16 @@ a.brand:focus-visible { outline:2px solid var(--accent); outline-offset:4px; }
 .procaddlist{overflow:auto;display:flex;flex-direction:column;gap:2px;min-height:0}.procgroup{margin:8px 4px 2px;font-size:10px;letter-spacing:.8px;color:#8b8c8d;text-transform:uppercase}
 .procitem{min-height:44px;text-align:left;padding:0 12px;border-radius:10px;background:transparent;color:inherit;border:0}.procitem:hover,.procitem:focus-visible{background:#34363a}
 @media(max-width:680px){.procmain{flex-direction:column}.procsvg{height:auto;flex:1 1 0}.procright{width:auto;max-height:42%;border-left:0;border-top:1px solid #2a2b2c;flex-direction:row;flex-wrap:wrap}.procpreview{width:140px}.procside{flex:1;min-width:200px}}
+
+.photopalette{display:grid;gap:6px;margin:8px 0}.photopalette .swatchbar{display:flex;gap:6px;flex-wrap:wrap}.photopalette .swatch{width:40px;height:40px;padding:0;border-radius:50%;border:2px solid #ffffff33}
+
+/* eyedropper loupe */
+.loupe{position:absolute;left:0;top:0;z-index:5;width:160px;padding:8px;border-radius:18px;background:#1c1d1ee8;border:1px solid #4a4b4d;box-shadow:0 10px 30px #000a;pointer-events:none;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+.loupe[hidden]{display:none}.loupe canvas{display:block;width:143px;height:143px;border-radius:10px;image-rendering:pixelated}
+.loupeinfo{display:grid;grid-template-columns:auto auto 1fr;gap:6px;align-items:center;margin-top:8px}.loupenew,.loupeold{width:22px;height:22px;border-radius:50%;border:2px solid #ffffff55}
+.loupeold{margin-left:-14px;width:22px}.loupehex{font:600 13px ui-monospace,Menlo,monospace;color:#f1ede3;justify-self:end}.louperaw{grid-column:1/-1;color:#9c9a93;font-size:10px;font-variant-numeric:tabular-nums}
+
+.abnav{display:inline-flex;align-items:center;gap:2px}.artboardbtn{color:inherit;letter-spacing:inherit;font:inherit;padding:6px 8px;min-height:36px;border-radius:10px;background:transparent;border:0;text-align:left;max-width:48vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.artboardbtn:hover,.abstep:hover{background:#ffffff12}.abstep{min-width:36px;min-height:36px;border-radius:50%;background:transparent;border:0;color:inherit;font-size:18px;line-height:1}
+.artboardbtn:focus-visible,.abstep:focus-visible{outline:2px solid #e9e5db;outline-offset:2px}
+@media(max-width:680px){.artboardbtn{min-height:30px;padding:4px 6px}.abstep{min-width:30px;min-height:30px}}

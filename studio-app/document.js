@@ -107,6 +107,7 @@ const StudioDocument = (() => {
           throw new Error('This project contains an unsupported image.');
         }
         l.src = item.src;
+        if (Array.isArray(item.palette)) l.palette = item.palette.filter(c => /^#[0-9a-f]{6}$/i.test(c)).map(c => c.toLowerCase()).slice(0,12);
         l.width = number(item.width,600,1,8192);
         l.height = number(item.height,600,1,8192);
         if (Array.isArray(item.crop) && item.crop.length === 4 && item.crop.every(Number.isFinite)) {
@@ -149,6 +150,7 @@ const StudioDocument = (() => {
         }
         l.points = item.points;
         l.closed = item.closed === true;
+        if (l.type === 'path' && Array.isArray(item.breaks)) { const br = item.breaks.filter((b,i,arr) => Number.isInteger(b) && b > 0 && b < item.points.length && (i === 0 || b > arr[i-1])); if (br.length) l.breaks = br; }
       }
       return l;
     });
@@ -168,6 +170,19 @@ const StudioDocument = (() => {
       for (const e of raw.graph.edges) {
         if (!e || !connect(project.graph,e.from,e.to)) throw new Error('Invalid composition connection.');
       }
+    }
+    /* several artboards: the active one lives in project.layers, the others keep their own layers, graph and size */
+    if (Array.isArray(raw.artboards) && raw.artboards.length > 1 && raw.artboards.length <= 12 && raw.artboards.some(ab => ab?.id === raw.activeArtboard)) {
+      const seen = new Set();
+      project.artboards = raw.artboards.map(ab => {
+        if (!ab || typeof ab.id !== 'string' || !ab.id || seen.has(ab.id)) throw new Error('This project contains an invalid artboard.');
+        seen.add(ab.id); const name = String(ab.name || 'Artboard').slice(0,60);
+        if (ab.id === raw.activeArtboard) return {id:ab.id,name};
+        if (!Array.isArray(ab.layers)) throw new Error('This project contains an invalid artboard.');
+        const sub = normalize({...raw,ratio:ab.ratio,size:ab.size,layers:ab.layers,graph:ab.graph,artboards:undefined,activeArtboard:undefined},validateDefinition);
+        return {id:ab.id,name,ratio:sub.ratio,...(sub.ratio === 'custom' ? {size:sub.size} : {}),layers:sub.layers,graph:sub.graph};
+      });
+      project.activeArtboard = raw.activeArtboard;
     }
     return project;
   }

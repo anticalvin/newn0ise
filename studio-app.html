@@ -15,6 +15,8 @@
   <script defer src="studio-app/viewport.js"></script>
   <script defer src="studio-app/pathedit.js"></script>
   <script defer src="studio-app/grid.js"></script>
+  <script defer src="studio-app/trace.js"></script>
+  <script defer src="studio-app/palette.js"></script>
   <script defer src="studio-app/procgraph.js"></script>
   <script defer src="studio-app/procgraph-ui.js"></script>
   <script defer src="studio-app/render.js"></script>
@@ -63,7 +65,7 @@
       <div class="panel-handle" data-resize="left" role="separator" aria-label="Resize layers" aria-orientation="vertical" tabindex="0"></div>
     </aside>
     <section class="stage viewcanvas" id="stage" aria-label="Composition">
-      <div class="stagehead"><span>ARTBOARD 01</span><span><span id="dimension"></span><button id="zoomLock" class="iconlock" aria-label="Lock viewport" aria-pressed="false" title="Lock viewport: freeze the current zoom and position"></button><button id="fit" aria-label="Zoom to fit" title="Zoom to fit (0)">FIT</button></span></div>
+      <div class="stagehead"><span class="abnav"><button id="abPrev" class="abstep" aria-label="Previous artboard" title="Previous artboard" hidden>‹</button><button id="artboardBtn" class="artboardbtn" aria-haspopup="dialog" aria-label="Artboards" title="Artboards: switch, add, duplicate, rename, reorder, delete">ARTBOARD 01 ▾</button><button id="abNext" class="abstep" aria-label="Next artboard" title="Next artboard" hidden>›</button></span><span><span id="dimension"></span><button id="zoomLock" class="iconlock" aria-label="Lock viewport" aria-pressed="false" title="Lock viewport: freeze the current zoom and position"></button><button id="fit" aria-label="Zoom to fit" title="Zoom to fit (0)">FIT</button></span></div>
       <div class="stagebody" id="stagebody" tabindex="0" aria-label="Artwork workspace">
         <div class="artboard" id="artboard">
           <canvas id="preview" aria-label="Composition preview"></canvas>
@@ -76,6 +78,7 @@
         </div>
         <div class="toolstrip" id="tools" role="group" aria-label="Editing tools">
           <button class="tool" data-tool="select" aria-label="Select" title="Select (V)">↖</button>
+          <button class="tool" data-tool="direct" aria-label="Direct select: edit points" title="Direct select: edit points (A)">▷</button>
           <button class="tool" data-tool="brush" aria-label="Draw vector stroke" title="Freehand vector (B)">✎</button>
           <button class="tool" data-tool="pen" aria-label="Pen" title="Pen (P)">♢</button>
           <button class="tool" data-tool="text" aria-label="Text" title="Text (T)">T</button>

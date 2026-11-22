@@ -2,7 +2,7 @@
 
 /* move(id,beforeId,toBin): when the pointer is released over the bin, toBin is true and nothing is reordered. Escape or a cancelled pointer drops nothing. */
 function studioLayerDrag(list,move,bin) {
-  let drag, frame = 0;
+  let drag, frame = 0, swallow = false;
   const rows = () => [...list.querySelectorAll('[data-layer-id]')];
   function update() {
     if (!drag?.active) return;
@@ -34,15 +34,29 @@ function studioLayerDrag(list,move,bin) {
     cancelAnimationFrame(frame);
     for (const row of rows()) row.classList.remove('drag-layer','drop-before','drop-after');
     bin?.classList.remove('armed','dragging');
+    if (current.active && current.fromRow) { swallow = true; setTimeout(() => { swallow = false; },60); }
     if (commit && current.active) move(current.id,current.before,!!current.bin);
   }
+  /* a layer can be picked up anywhere on its row, not only by the grip. Mouse and pen start after 5 px; on touch a short hold starts the drag so scrolling the list still works. */
+  let hold = 0, startedBy = null;
+  const interactive = t => t.closest('input,select,textarea,.eye,.layer-lock,[data-action$=":lock"],[data-action$=":visible"]');
   list.addEventListener('pointerdown',e => {
-    const grip = e.target.closest('[data-layer-grip]');
-    if (!grip || drag || e.button !== 0) return;
-    grip.focus({preventScroll:true});
-    try { grip.setPointerCapture(e.pointerId); } catch {}
-    drag = {id:grip.dataset.layerGrip,pointer:e.pointerId,origin:e.clientY,y:e.clientY,x:e.clientX};
+    if (drag || e.button !== 0) return;
+    const grip = e.target.closest('[data-layer-grip]'), row = e.target.closest('[data-layer-id]');
+    if (!grip && (!row || interactive(e.target))) return;
+    const id = grip ? grip.dataset.layerGrip : row.dataset.layerId, el = grip || row;
+    if (grip) grip.focus({preventScroll:true});
+    const begin = () => { try { el.setPointerCapture(e.pointerId); } catch {} drag = {id,pointer:e.pointerId,origin:e.clientY,y:e.clientY,x:e.clientX,fromRow:!grip,touch:e.pointerType === 'touch',ready:true}; };
+    if (!grip && e.pointerType === 'touch') {
+      startedBy = {x:e.clientX,y:e.clientY,pointer:e.pointerId};
+      hold = setTimeout(() => { hold = 0; begin(); drag.active = true; navigator.vibrate?.(8); e.target.closest('[data-layer-id]')?.classList.add('drag-layer'); bin?.classList.add('dragging'); update(); },260);
+    } else begin();
   });
+  addEventListener('pointermove',e => { if (hold && startedBy && e.pointerId === startedBy.pointer && Math.hypot(e.clientX-startedBy.x,e.clientY-startedBy.y) > 8) { clearTimeout(hold); hold = 0; } },true);
+  const clearHold = () => { clearTimeout(hold); hold = 0; };
+  addEventListener('pointerup',clearHold,true); addEventListener('pointercancel',clearHold,true);
+  /* a drag that started on a row must not also select it */
+  list.addEventListener('click',e => { if (swallow) { e.stopPropagation(); e.preventDefault(); swallow = false; } },true);
   list.addEventListener('pointermove',e => {
     if (e.pointerId !== drag?.pointer) return;
     drag.y = e.clientY; drag.x = e.clientX;

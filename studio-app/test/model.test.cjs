@@ -84,3 +84,14 @@ test('text, shapes and paths stay editable objects through save and reopen (N0I-
   assert.equal(p.type,'path'); assert.deepEqual(plain(p.points),pts); assert.equal(p.closed,true);
   for (const l of back.layers) assert.ok(!('src' in l),l.type+' was flattened into a bitmap');
 });
+
+test('several artboards, compound outlines and photo colours survive save and reopen',() => {
+  const d = D.create('square',false), a = D.layer('shape',{shape:'rectangle',width:100,height:100,fill:'#d5d0c5',stroke:'#e9e5db',strokeWidth:0});
+  d.layers.push(a); d.artboards = [{id:'a1',name:'Cover'},{id:'a2',name:'Story',ratio:'portrait',layers:[D.layer('path',{points:[[0,0,0,0],[10,0,0,0],[10,10,0,0],[20,20,0,0],[30,20,0,0],[30,30,0,0]],closed:true,breaks:[3],fill:'#fff',stroke:'#fff',strokeWidth:0})],graph:D.create('portrait',false).graph}]; d.activeArtboard = 'a1';
+  const back = D.normalize(plain(d));
+  assert.equal(back.artboards.length,2); assert.equal(back.activeArtboard,'a1'); assert.equal(back.artboards[0].layers,undefined,'the active artboard keeps its layers on the document');
+  assert.equal(back.artboards[1].ratio,'portrait'); assert.deepEqual(plain(back.artboards[1].layers[0].breaks),[3]); assert.equal(back.layers.length,1);
+  const single = plain(d); delete single.artboards; delete single.activeArtboard; assert.equal(D.normalize(single).artboards,undefined,'old single-artboard projects still open');
+  const bad = plain(d); bad.artboards[1].id = 'a1'; assert.throws(() => D.normalize(bad),/invalid artboard/);
+  const img = D.layer('image',{src:'data:image/png;base64,AAAA',width:10,height:10,palette:['#AA0000','nope','#00ff00']}); d.layers.push(img); const p2 = D.normalize(plain(d)).layers.find(l => l.type === 'image'); assert.deepEqual(plain(p2.palette),['#aa0000','#00ff00']);
+});
