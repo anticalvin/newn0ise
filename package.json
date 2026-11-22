@@ -9,6 +9,7 @@
     "test": "npm run check:bundles && npm run test:models && npm run test:parity && npm run test:ui && npm run test:core",
     "test:models": "node --test studio-app/test/model.test.cjs studio-app/test/procedural-vector.test.mjs",
     "test:core": "node tools/core-smoke.mjs",
+    "test:world": "node tools/world/check_geo.mjs && node tools/core-smoke.mjs world:",
     "test:ui": "node tools/ui-check.mjs"
   },
   "devDependencies": {

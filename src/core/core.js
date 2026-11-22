@@ -4,6 +4,7 @@
 import { clamp } from './util.js';
 
 import { EntityError } from './entities.js';
+import { COMMANDS as GEO_COMMANDS } from './geo/manager.js';
 
 export const FORMAT = 'n0ise.core.scene', VERSION = 4;
 const KEY = 'n0ise.core.scene', OLD_KEY = 'n0ise.core.coast001';
@@ -64,10 +65,11 @@ export class Core {
     const a = this.a; let c; try { c = typeof cmd === 'string' ? JSON.parse(cmd) : cmd; } catch (e) { return { ok: false, msg: 'Bad JSON' }; }
     if (!c || typeof c.cmd !== 'string') return { ok: false, msg: 'Missing "cmd". Run {"cmd":"describe"} for the list.' };
     try {
+      if (c.cmd.startsWith('world.') && c.cmd !== 'world.import' && c.cmd !== 'world.remove' && a.geo) return a.geo.exec(c, this);
       switch (c.cmd) {
         case 'undo': return this.undo();
         case 'redo': return this.redo();
-        case 'describe': return { ok: true, commands: COMMANDS, limits: LIMITS, units: 'metres, hours, radians for windAng', world: '256 x 256 m, x and z from -128 to 128, y up' };
+        case 'describe': return { ok: true, commands: { ...COMMANDS, ...GEO_COMMANDS }, limits: LIMITS, units: 'metres, hours, radians for windAng', world: '256 x 256 m, x and z from -128 to 128, y up' };
         case 'state': return { ok: true, ...a.summary() };
         case 'scene.new': {
           const preset = c.preset === 'coast' ? 'coast' : c.preset === 'blank' ? 'blank' : null; if (!preset) return { ok: false, msg: 'preset must be "blank" or "coast"' };

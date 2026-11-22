@@ -2,3 +2,7 @@ node_modules/
 tools/fixtures/
 tools/out/
 ui-shots/
+
+*.pbf
+tmp/world-cache/
+tmp/*.log

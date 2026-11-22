@@ -4,12 +4,15 @@ Core is the new 3D engine page: `core.html`, bundled from `src/core/*` to `asset
 
 Open it from **3D → World → n0ise Core**, or directly: `core.html`, `core.html?start=blank`, `core.html?start=coast`, `core.html?start=continue`.
 
+**South Africa world:** a streamed, geographically grounded mode (real OSM roads and buildings, terrain, traffic, one interior). See [WORLD.md](WORLD.md). The `world.*` commands are listed there and in `{"cmd":"describe"}`.
+
 ## Start sheet
 
 | Choice | What you get |
 | --- | --- |
 | Blank | Flat land about 1.2 m up, a sky, a sun, a spawn point and nothing else. The sea is below the land, so sculpting down reaches it. |
 | Coast demo | COAST_001: island, beach, dunes, palms, boulders, a pier and a shack. |
+| South Africa | Opens the streamed world (Cape Town first, map to go anywhere). Island and blank are unchanged. |
 | Import | A `.n0scene` you saved, or a `.n0world` to place on the land. |
 | Continue | Your last autosave (only shown when there is one). |
 
