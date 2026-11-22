@@ -650,6 +650,8 @@
       const f = StudioViewport.fitTransform(w,h,width,height);
       zoom = f.zoom; pan = f.pan;
     }
+    /* the composition is drawn at screen resolution, so a change of zoom must redraw it (debounced), otherwise vectors stay soft until the next edit */
+    { const rs = renderScale(); if (Math.abs(rs-lastRenderScale) > .01) { lastRenderScale = rs; clearTimeout(scaleTimer); scaleTimer = setTimeout(() => { if (view !== 'spatial') schedule(); },90); } }
     board.classList.toggle('flush',Math.abs((w/h)/(width/height)-1) < .03);
     board.style.width = w*zoom+'px';
     board.style.height = h*zoom+'px';
@@ -672,7 +674,7 @@
     });
   }
   /* vectors are re-rasterised at screen resolution, so shapes and text stay sharp when you zoom in */
-  let forceScale = 0;
+  let forceScale = 0, lastRenderScale = 1, scaleTimer = 0;
   function renderScale() {
     if (forceScale) return forceScale;
     const [w,h] = dims();
