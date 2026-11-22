@@ -230,3 +230,15 @@ body:not([data-cam]) .dock :is(button,input,select,summary,[tabindex]):focus-vis
 .camui .camdrawer .camcats button{min-height:40px;font-size:13px}
 .camui .camdrawer .camt{width:96px;min-height:84px}
 .camui .camdrawer .camt span{font-size:12px;white-space:normal;max-width:90px;line-height:1.15}
+
+/* phones: the picture tools are a compact icon rail down the right edge of the picture; the instrument below gets the height back */
+@media(max-width:959px){
+  body:not([data-cam]) .fxleft{position:relative}
+  body:not([data-cam]) .fx-foot{position:absolute;z-index:6;top:14px;right:16px;bottom:auto;left:auto;width:auto;max-height:calc(100% - 20px);flex-direction:column;flex-wrap:nowrap;gap:4px;padding:5px;border-radius:26px;background:#111210a6;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border:1px solid #ffffff1f;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:none;touch-action:pan-y}
+  body:not([data-cam]) .fx-foot::-webkit-scrollbar{display:none}
+  body:not([data-cam]) .fx-foot .artbar{flex-direction:column;flex-wrap:nowrap;gap:4px}
+  body:not([data-cam]) .fx-foot .pill,body:not([data-cam]) .fx-foot .artbar .pill{width:44px;height:44px;min-height:44px;padding:0;justify-content:center;border-radius:50%;border-color:transparent;background:transparent;color:var(--ink)}
+  body:not([data-cam]) .fx-foot .pill[aria-pressed=true]{background:var(--accent);color:var(--on-accent)}
+  .fx-foot .rl{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+  body:not([data-cam]) .fx-foot .srcmenu{left:auto;right:calc(100% + 8px);top:0;bottom:auto;transform:none}
+}

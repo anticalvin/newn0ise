@@ -50,6 +50,8 @@
         <span class="nst-sep"></span>
         <button data-nst="zoomout" title="Zoom out" aria-label="Zoom out">−</button>
         <button data-nst="zoomin" title="Zoom in" aria-label="Zoom in">+</button>
+        <button data-nst="fit" title="Fit the whole sequence" aria-label="Fit sequence">Fit</button>
+        <button data-nst="fitsel" title="Zoom to the selected clip" aria-label="Fit selection">Sel</button>
         <label class="nst-duration">LENGTH <input id="nst-length" type="number" min="1" max="600" step="1" value="8" aria-label="Timeline length in seconds">s</label>
         <button class="nst-export" data-nst="export" title="Record the timeline to a video file">Export video</button>
         <button data-nst="close" title="Close timeline" aria-label="Close timeline">×</button>
@@ -64,7 +66,8 @@
     <div class="nst-bottom"><span id="nst-status"></span><span>DRAG CLIPS TO MOVE · DRAG EDGES TO TRIM · DRAG THE RULER TO SCRUB</span></div>`;
   stage.append(panel);
 
-  let open = false, playing = false, loop = false, pps = 60, raf = 0, t0 = 0, drag = null, exporting = false, pending = 0;
+  let open = false, playing = false, loop = false, pps = 60, raf = 0, t0 = 0, drag = null, exporting = false, pending = 0, autoFit = true;
+  const TV = StudioTimelineView;
   const q = s => panel.querySelector(s);
   const status = msg => { q('#nst-status').textContent = msg; };
   const time = () => doc().time || 0;
@@ -155,13 +158,27 @@
   /* ---- drawing the rows ---- */
   const x = t => t * pps;
   const visibleW = () => Math.max(q('#nst-scroll').clientWidth, 200);
+  const limits = () => TV.limits(doc()?.duration || 8, visibleW(), fps());
+  /* zoom and scroll move together; the view is UI state (the clips themselves stay in the document and its undo history) */
+  function applyView(v) { pps = v.pps; refresh(); q('#nst-scroll').scrollLeft = v.scrollLeft; paintHead(); }
+  const here = () => ({ pps, scrollLeft: q('#nst-scroll').scrollLeft });
+  /* while playing, zoom about the playhead if it is on screen; otherwise about the middle of the window */
+  function anchorPx() { const sc = q('#nst-scroll'), px = x(time()) - sc.scrollLeft; return playing && px >= 0 && px <= sc.clientWidth ? px : sc.clientWidth / 2; }
+  function zoomBy(f, at = anchorPx()) { autoFit = false; applyView(TV.zoomAround(here(), f, at, limits())); }
+  function fitSequence() { autoFit = true; applyView(TV.fitSequence(doc().duration, visibleW(), limits())); }
+  function fitSelection() {
+    const sel = doc().layers.filter(l => M().selection.includes(l.id));
+    if (!sel.length) { M().notice('Select a clip to zoom to it.'); return; }
+    let a = Infinity, b = -Infinity; for (const l of sel) { const c = clipOf(l); a = Math.min(a, c.start); b = Math.max(b, c.start + c.dur); }
+    autoFit = false; applyView(TV.fitRange(a, b, visibleW(), limits()));
+  }
   function niceStep() { for (const s of [.1, .25, .5, 1, 2, 5, 10, 30, 60, 120]) if (s * pps >= 56) return s; return 300; }
   function paintHead() {
     const t = time();
     q('#nst-clock').textContent = fmt(t);
     const head = q('.nst-playhead'); if (head) head.style.transform = `translateX(${x(t)}px)`;
     const sc = q('#nst-scroll');
-    if (playing) { const px = x(t); if (px > sc.scrollLeft + sc.clientWidth - 24 || px < sc.scrollLeft) sc.scrollLeft = Math.max(0, px - 40); }
+    if (playing) { const next = TV.followPlayhead({ pps, scrollLeft: sc.scrollLeft }, t, sc.clientWidth, 40); if (next !== sc.scrollLeft) sc.scrollLeft = next; }
   }
   function queueRefresh() { if (!open || drag || pending) return; pending = requestAnimationFrame(() => { pending = 0; refresh(); }); }
   window.n0iseMotionRefresh = queueRefresh;
@@ -170,6 +187,7 @@
     const d = doc(), canvas = q('#nst-canvas'), names = q('#nst-names');
     q('#nst-length').value = d.duration;
     q('#nst-seq').textContent = (d.name || 'COMPOSITION').toUpperCase();
+    if (autoFit) pps = TV.fitSequence(d.duration, visibleW(), limits()).pps;      /* until you zoom yourself, the whole sequence fits the width */
     const width = Math.max(visibleW(), x(d.duration) + 60);
     canvas.style.width = width + 'px';
     canvas.replaceChildren(); names.replaceChildren();
@@ -223,6 +241,8 @@
     if (e.button !== 0) return;
     const l = doc().layers.find(a => a.id === clipEl.dataset.id);
     if (!l || l.locked) return;
+    /* on touch the first tap only selects, so panning across clips never moves or trims them; edit a selected clip */
+    if (e.pointerType === 'touch' && !M().selection.includes(l.id)) { M().select([l.id]); return; }
     if (!M().selection.includes(l.id)) M().select([l.id]);
     const c = clipOf(l);
     const mode = e.target.classList.contains('nst-hl') ? 'l' : e.target.classList.contains('nst-hr') ? 'r' : 'move';
@@ -277,6 +297,36 @@
       M().change(() => { const k = clipOf(l); l.start = Math.max(0, Math.round((k.start + dt) * 1000) / 1000); l.dur = k.dur; });
     }
   });
+
+  /* ---- pinch, trackpad pinch and ctrl-wheel zoom, anchored under the fingers ---- */
+  const touches = new Map(); let pinch = null;
+  const sc = () => q('#nst-scroll');
+  sc().addEventListener('pointerdown', e => {
+    if (e.pointerType !== 'touch') return;
+    touches.set(e.pointerId, { x: e.clientX });
+    if (touches.size === 2) {
+      /* a second finger cancels any clip drag that was just starting, so zooming never trims */
+      if (drag && drag.mode !== 'scrub') { const d = drag; drag = null; if (d.moved) M().finish(d.before), M().schedule(); }
+      const [a, b] = [...touches.values()], r = sc().getBoundingClientRect();
+      pinch = { dist: Math.abs(a.x - b.x), base: here(), mid: (a.x + b.x) / 2 - r.left };
+    }
+  }, true);
+  sc().addEventListener('pointermove', e => {
+    if (!touches.has(e.pointerId)) return;
+    touches.get(e.pointerId).x = e.clientX;
+    if (pinch && touches.size === 2) {
+      const [a, b] = [...touches.values()], dist = Math.abs(a.x - b.x);
+      if (pinch.dist < 8) return;
+      autoFit = false; applyView(TV.pinch(null, pinch.dist, dist, pinch.mid, limits(), pinch.base));
+      e.preventDefault();
+    }
+  }, true);
+  for (const t of ['pointerup', 'pointercancel']) sc().addEventListener(t, e => { touches.delete(e.pointerId); if (touches.size < 2) pinch = null; }, true);
+  sc().addEventListener('wheel', e => {
+    if (!(e.ctrlKey || e.metaKey)) return;               /* plain wheel and shift-wheel keep scrolling sideways */
+    e.preventDefault(); const r = sc().getBoundingClientRect();
+    zoomBy(Math.exp(-e.deltaY * .01), e.clientX - r.left);
+  }, { passive: false });
 
   /* ---- commands ---- */
   function split() {
@@ -358,12 +408,14 @@
     else if (k === 'split') split();
     else if (k === 'delete') M().remove();
     else if (k === 'loop') { loop = !loop; b.setAttribute('aria-pressed', loop); b.classList.toggle('nst-on', loop); }
-    else if (k === 'zoomin') { pps = Math.min(400, pps * 1.5); refresh(); }
-    else if (k === 'zoomout') { pps = Math.max(8, pps / 1.5); refresh(); }
+    else if (k === 'zoomin') zoomBy(1.5);
+    else if (k === 'zoomout') zoomBy(1 / 1.5);
+    else if (k === 'fit') fitSequence();
+    else if (k === 'fitsel') fitSelection();
     else if (k === 'export') exportVideo();
   });
   q('#nst-length').onchange = e => { const v = clamp(Math.round(+e.target.value) || 8, 1, 600); M().change(() => { doc().duration = v; }); };
-  new ResizeObserver(() => queueRefresh()).observe(panel);
+  new ResizeObserver(() => { if (autoFit && open && M()) { const v = TV.fitSequence(doc().duration, visibleW(), limits()); if (Math.abs(v.pps - pps) > .01) { pps = v.pps; } } queueRefresh(); }).observe(panel);
 
   document.addEventListener('keydown', e => {
     if (!open || e.metaKey || e.ctrlKey || e.altKey || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) || e.target.isContentEditable) return;

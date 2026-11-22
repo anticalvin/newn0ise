@@ -80,7 +80,7 @@ t('studio: grid shows and snaps independently; guides snap; settings persist', '
  M.add([D.layer('shape',{shape:'rectangle',width:200,height:100,fill:'#d33',stroke:'#d33',strokeWidth:0})]);await wait(500);const l=M.doc.layers.find(x=>x.type==='shape'),[w,h]=M.dims();const x0=l.x;
  const r=document.getElementById('artboard').getBoundingClientRect(),sc=r.width/w,cx=r.left+(w/2+l.x)*sc,cy=r.top+(h/2+l.y)*sc;
  const pe=(ty,x,y)=>body.dispatchEvent(new PointerEvent(ty,{pointerId:9,pointerType:'mouse',isPrimary:true,button:0,buttons:ty==='pointerup'?0:1,clientX:x,clientY:y,bubbles:true}));
- const left=w/2+l.x-100,gl=Math.ceil(left/100)*100,d=(gl-left)+3;pe('pointerdown',cx,cy);for(let i=1;i<=6;i++)pe('pointermove',cx+d*sc*i/6,cy+0);pe('pointerup',cx+d*sc,cy);await wait(300);
+ const left=w/2+l.x-100;let gl=Math.ceil(left/100)*100;while(Math.abs(gl+100-w/2)<70||Math.abs(gl+100-w)<70||gl+100<70||Math.abs(gl+100-(w/2-100))<70)gl+=100;gl+=100;const d=(gl-left)+3;pe('pointerdown',cx,cy);for(let i=1;i<=6;i++)pe('pointermove',cx+d*sc*i/6,cy+0);pe('pointerup',cx+d*sc,cy);await wait(300);
  const edges=[w/2+l.x-100,w/2+l.x,w/2+l.x+100];if(!edges.some(e=>Math.abs(e/100-Math.round(e/100))<.001))return 'dragged layer did not snap to the hidden grid: edges '+edges.join(',')+' moved '+(l.x-x0)+' wanted a snap to '+gl;
  document.body.dispatchEvent(new KeyboardEvent('keydown',{key:"'",bubbles:true,cancelable:true}));await wait(200);if(!hasGrid())return "the ' shortcut did not show the grid";
  const saved=JSON.parse(localStorage.getItem('n0ise.gridcfg'));if(!saved.show||!saved.snapGrid)return 'settings were not saved';
@@ -95,3 +95,89 @@ t('studio: shortcut reference has no duplicate keys, shortcuts stay quiet while 
  document.body.dispatchEvent(new KeyboardEvent('keydown',{key:'d',ctrlKey:true,bubbles:true,cancelable:true}));await wait(150);if(M.selection.length!==0)return 'Ctrl+D did not deselect';
  document.body.dispatchEvent(new KeyboardEvent('keydown',{key:'?',bubbles:true,cancelable:true}));await wait(200);const dlg=document.getElementById('modal');if(!dlg.open||!/shortcuts/i.test(document.getElementById('modaltitle').textContent))return 'the ? key did not open the shortcut list';
  document.body.dispatchEvent(new KeyboardEvent('keydown',{key:'t',bubbles:true,cancelable:true}));await wait(100);if(tool()!==t0)return 'shortcuts fired behind an open dialog';dlg.close();return true}`);
+
+t('lab mobile: the fitted preview scrolls away with the page and never covers Run, drawers or source (N0I-37)', '/lab.html', `async()=>{const wait=ms=>new Promise(r=>setTimeout(r,ms));await wait(3500);const lp=document.querySelector('.lab-preview'),cs=getComputedStyle(lp);
+ if(cs.position==='sticky'||cs.position==='fixed')return 'preview is '+cs.position;if(parseFloat(cs.zIndex||0)>0)return 'preview has z-index '+cs.zIndex;
+ const doc=document.scrollingElement;doc.scrollTop=doc.scrollHeight;await wait(300);const r=lp.getBoundingClientRect();const run=document.getElementById('run').getBoundingClientRect();
+ for(const id of ['run','pause']){const e=document.getElementById(id);if(!e)continue;const b=e.getBoundingClientRect();if(b.width&&r.bottom>b.top+1&&r.top<b.bottom-1&&getComputedStyle(e).visibility!=='hidden'&&!lp.contains(e))return 'preview overlaps #'+id}
+ const ed=document.querySelector('.cm-editor')?.getBoundingClientRect();if(ed&&r.bottom>ed.top+1&&r.top<ed.bottom-1)return 'preview overlaps the source editor';
+ const f=document.getElementById('preview');if(Math.abs(f.clientWidth/f.clientHeight-1)>.03&&!/custom|sketch/.test(document.getElementById('status').textContent))return 'aspect changed';return true}`);
+
+t('effects mobile: picture tools are an icon rail on the right; hold is momentary; source menu and compare still work (N0I-39)', '/effects.html', `async()=>{const wait=ms=>new Promise(r=>setTimeout(r,ms));await wait(3000);const foot=document.getElementById('fxfoot');if(!foot)return 'no fxfoot';
+ const cs=getComputedStyle(foot);if(cs.position!=='absolute')return 'rail is '+cs.position;const fr=foot.getBoundingClientRect(),st=document.getElementById('stage').getBoundingClientRect();if(fr.right>st.right+1||fr.left<st.left+st.width*.5)return 'rail is not on the right edge of the picture';
+ const bs=[...foot.querySelectorAll('#srcchip,#hold,#artbar button')];if(bs.length<3)return 'too few tools in the rail '+bs.length;
+ for(const b of bs){const r=b.getBoundingClientRect();if(r.width&&(r.width<43.5||r.height<43.5))return b.id+' target '+r.width+'x'+r.height;if(!b.querySelector('svg'))return 'no icon on '+(b.id||b.textContent);if(!b.getAttribute('aria-label'))return 'no aria-label';}
+ if(foot.getBoundingClientRect().height>=innerHeight*.7)return 'rail is too tall';
+ const h=document.getElementById('hold');h.dispatchEvent(new PointerEvent('pointerdown',{pointerId:3,pointerType:'touch',isPrimary:true,bubbles:true}));if(h.getAttribute('aria-pressed')!=='true')return 'hold did not engage';h.dispatchEvent(new PointerEvent('pointerup',{pointerId:3,pointerType:'touch',isPrimary:true,bubbles:true}));if(h.getAttribute('aria-pressed')==='true')return 'hold stayed on after release';
+ document.getElementById('srcchip').click();await wait(100);if(document.getElementById('srcmenu').hidden)return 'source menu did not open';document.getElementById('srcchip').click();
+ const dock=document.getElementById('dock').getBoundingClientRect();return dock.top<innerHeight*.62?true:'instrument starts too low: '+Math.round(dock.top)}`);
+
+t('studio mobile: tools sit in the artboard footer, scroll sideways, keep 44px targets; lock has a 44px hit area (N0I-38)', '/studio-app.html', `async()=>{${OPEN}await open();const tools=document.getElementById('tools'),foot=document.querySelector('.stagefoot');if(tools.parentElement!==foot)return 'tools are not in the footer';
+ if(getComputedStyle(document.getElementById('stageStatus')).display!=='none')return 'footer metadata still visible on phone';
+ const tb=tools.getBoundingClientRect(),sb=document.getElementById('stagebody').getBoundingClientRect();if(tb.top<sb.bottom-1)return 'toolbar overlaps the artwork area';
+ for(const b of tools.querySelectorAll('.tool')){const r=b.getBoundingClientRect();if(r.width&&(r.width<43.5||r.height<43.5))return 'small tool target '+r.width+'x'+r.height}
+ if(!(tools.scrollWidth>=tools.clientWidth))return 'toolbar cannot scroll';if(document.documentElement.scrollWidth>innerWidth)return 'page overflows horizontally';
+ const z=document.getElementById('zoomLock'),r=z.getBoundingClientRect();if(r.width>32)return 'lock is still large '+r.width;const hit=document.elementFromPoint(r.left+r.width/2+18,r.top+r.height/2),hit2=document.elementFromPoint(r.left+r.width/2-18,r.top+r.height/2);if((hit!==z&&!z.contains(hit))||(hit2!==z&&!z.contains(hit2)))return 'lock hit area is smaller than 44px';
+ document.querySelector('[data-tool=text]').click();await wait(150);if(!document.querySelector('[data-tool=text]').classList.contains('active'))return 'tool selection from the footer does not work';
+ const head=document.querySelector('.stagehead').getBoundingClientRect();if(head.height>40)return 'top chrome is tall: '+head.height;return true}`);
+
+t('studio motion: fit sequence, fit selection, dynamic zoom limits, pinch and ctrl-wheel zoom, touch selects before it edits (N0I-40)', '/studio-app.html', `async()=>{${OPEN}await open();const M=window.n0iseMotion,D=StudioDocument;
+ M.add([D.layer('shape',{shape:'rectangle',width:200,height:100,fill:'#d33',stroke:'#d33',strokeWidth:0,start:2,dur:3})]);M.add([D.layer('shape',{shape:'ellipse',width:100,height:100,fill:'#39c',stroke:'#39c',strokeWidth:0,start:40,dur:5})]);
+ M.doc.duration=60;await wait(300);window.n0iseMotionUI.toggle();await wait(600);const P=document.getElementById('nst-timeline'),sc=document.getElementById('nst-scroll'),canvas=document.getElementById('nst-canvas');
+ const pps=()=>{const e=[...canvas.querySelectorAll('.nst-tick')];if(e.length<2)return 0;return (parseFloat(e[1].style.left)-parseFloat(e[0].style.left))/(parseFloat(e[1].textContent)-parseFloat(e[0].textContent))};
+ const w=sc.clientWidth;if(pps()*60>w)return 'a 60 s sequence does not fit the width at open: '+Math.round(pps()*60)+' > '+w;
+ const click=k=>P.querySelector('[data-nst='+k+']').click();const f0=pps();click('zoomin');await wait(200);if(!(pps()>f0*1.4))return 'zoom in did nothing';
+ click('fit');await wait(200);if(Math.abs(pps()-f0)>.05)return 'Fit did not return to the full sequence';
+ click('zoomout');await wait(200);if(!(pps()<f0))return 'could not zoom out below fit';
+ click('fit');await wait(200);M.select([M.doc.layers[0].id]);click('fitsel');await wait(250);const p1=pps();if(!(p1>f0*3))return 'fit selection did not zoom in ('+p1+')';const vis=[sc.scrollLeft/p1,(sc.scrollLeft+sc.clientWidth)/p1];if(!(vis[0]<=40.01&&vis[1]>=45))return 'selection not in view: '+vis.join('-');
+ click('fit');await wait(200);
+ const before=pps();sc.dispatchEvent(new WheelEvent('wheel',{deltaY:-120,ctrlKey:true,clientX:sc.getBoundingClientRect().left+200,clientY:sc.getBoundingClientRect().top+40,bubbles:true,cancelable:true}));await wait(200);if(!(pps()>before*1.5))return 'ctrl-wheel did not zoom';
+ click('fit');await wait(200);const r=sc.getBoundingClientRect(),tp=(id,ty,x)=>sc.dispatchEvent(new PointerEvent(ty,{pointerId:id,pointerType:'touch',isPrimary:id===41,clientX:x,clientY:r.top+60,bubbles:true,cancelable:true}));
+ const b2=pps();tp(41,'pointerdown',r.left+100);tp(42,'pointerdown',r.left+160);for(let i=1;i<=6;i++){tp(41,'pointermove',r.left+100-i*10);tp(42,'pointermove',r.left+160+i*10)}await wait(250);tp(41,'pointerup',r.left+40);tp(42,'pointerup',r.left+220);if(!(pps()>b2*1.8))return 'pinch did not zoom ('+b2+' -> '+pps()+')';
+ click('fit');await wait(200);M.select([]);await wait(100);const clip=canvas.querySelector('.nst-clip'),l0=M.doc.layers[0],start0=l0.start;const cr=clip.getBoundingClientRect();
+ const ce=(ty,x)=>clip.dispatchEvent(new PointerEvent(ty,{pointerId:51,pointerType:'touch',isPrimary:true,button:0,clientX:x,clientY:cr.top+10,bubbles:true,cancelable:true}));ce('pointerdown',cr.left+cr.width/2);ce('pointermove',cr.left+cr.width/2+40);await wait(120);ce('pointerup',cr.left+cr.width/2+40);await wait(150);
+ if(l0.start!==start0)return 'a touch drag on an unselected clip moved it';return true}`);
+
+t('effects hardware: four rendering profiles render real output, join the stack and change the picture (N0I-42)', '/effects.html', `async()=>{const wait=ms=>new Promise(r=>setTimeout(r,ms));await wait(3000);
+ const c=document.createElement('canvas');c.width=600;c.height=800;const g=c.getContext('2d');const gr=g.createLinearGradient(0,0,0,800);gr.addColorStop(0,'#3a7bd5');gr.addColorStop(1,'#f6d365');g.fillStyle=gr;g.fillRect(0,0,600,800);const rg=g.createRadialGradient(240,300,30,300,400,220);rg.addColorStop(0,'#ffe1c4');rg.addColorStop(.6,'#d2765a');rg.addColorStop(1,'#3b1c22');g.fillStyle=rg;g.beginPath();g.arc(300,400,220,0,7);g.fill();
+ const b=await new Promise(r=>c.toBlob(r,'image/png'));const dt=new DataTransfer();dt.items.add(new File([b],'t.png',{type:'image/png'}));const inp=document.querySelector('#file');inp.files=dt.files;inp.dispatchEvent(new Event('change',{bubbles:true}));await wait(1800);
+ [...document.querySelectorAll('button')].find(x=>x.textContent.trim()==='Hardware').click();await wait(3000);
+ const sig=()=>{const gl=document.getElementById('gl'),t=document.createElement('canvas');t.width=64;t.height=64;const x=t.getContext('2d');x.drawImage(gl,0,0,64,64);return Array.from(x.getImageData(0,0,64,64).data).filter((_,i)=>i%4<3)};
+ const diff=(a,b)=>{let s=0;for(let i=0;i<a.length;i++)s+=Math.abs(a[i]-b[i]);return s/a.length};
+ const ids=['orderedmatrix','inkscreen','cel','eink'];const cards=ids.map(i=>document.querySelector('.fx-card[data-rp='+i+']'));if(cards.some(x=>!x))return 'missing cards: '+cards.map((x,i)=>x?'':ids[i]).join(',');
+ for(const cd of cards){const cv=cd.querySelector('canvas');if(!cv||!cv.dataset.ok)return 'thumbnail not rendered for '+cd.dataset.rp}
+ const base=sig();const out=[];
+ for(const id of ids){document.querySelector('.fx-card[data-rp='+id+']').click();await wait(1800);const s=sig();const d=diff(base,s);if(d<6)return id+' did not change the picture ('+d.toFixed(1)+')';out.push(s);
+  [...document.querySelectorAll('button')].find(x=>x.textContent.trim()==='Hardware')?.click();await wait(900);}
+ for(let i=1;i<out.length;i++)if(diff(out[i],out[i-1])<2)return 'profiles look identical at '+ids[i];
+ return true}`);
+
+t('studio graph: a procedural graph layer renders, animates with time, edits with undo, saves and reopens (N0I-41)', '/studio-app.html', `async()=>{${OPEN}await open();const M=window.n0iseMotion,D=StudioDocument,P=StudioProc;
+ M.add([D.layer('procgraph',{name:'Graph',graph:P.templates['Noise threshold']()})]);await wait(900);const cv=document.getElementById('preview');
+ const stat=()=>{const g=cv.getContext('2d').getImageData(0,0,cv.width,cv.height).data;let lo=0,hi=0,n=0,sum=0;for(let i=0;i<g.length;i+=4*997){const v=g[i];n++;sum+=v;if(v<40)lo++;if(v>215)hi++}return {lo:lo/n,hi:hi/n,mean:sum/n}};
+ const a=stat();if(!(a.lo>.1&&a.hi>.1))return 'the graph did not render a black and white picture: '+JSON.stringify(a);
+ M.setTime(2.5,true);await wait(500);const b=stat();if(Math.abs(a.mean-b.mean)<1&&a.hi===b.hi&&a.lo===b.lo)return 'the picture did not change with time';M.setTime(0,true);
+ const st=window.n0iseProcStatus;const opener=[...document.querySelectorAll('button')].find(x=>x.textContent.trim()==='Edit graph…');if(!opener)return 'no Edit graph action for a graph layer';opener.click();await wait(600);
+ const box=document.querySelector('.procbox');if(!box)return 'the graph editor did not open';const nodes=()=>box.querySelectorAll('.pnode').length;const n0=nodes();if(n0<4)return 'expected the template nodes, saw '+n0;
+ [...box.querySelectorAll('button')].find(x=>x.textContent.trim()==='+ Node').click();await wait(200);const item=[...box.querySelectorAll('.procitem')].find(x=>x.textContent==='Blur');if(!item)return 'no Blur in the node list';item.click();await wait(300);if(nodes()!==n0+1)return 'adding a node failed';
+ const U=()=>document.getElementById('undo').click();U();await wait(300);if(nodes()!==n0)return 'undo did not remove the node';document.getElementById('redo').click();await wait(300);if(nodes()!==n0+1)return 'redo did not restore the node';
+ const l=M.doc.layers.find(x=>x.type==='procgraph'),blur=l.graph.nodes.find(x=>x.type==='blur'),noise=l.graph.nodes.find(x=>x.type==='noise');
+ blur.x=noise.x+60;blur.y=noise.y+220;box.querySelector('.procsvg').dispatchEvent(new PointerEvent('pointerdown',{pointerId:70,pointerType:'mouse',isPrimary:true,button:0,buttons:1,clientX:5,clientY:5,bubbles:true}));box.querySelector('.procsvg').dispatchEvent(new PointerEvent('pointerup',{pointerId:70,pointerType:'mouse',isPrimary:true,button:0,buttons:0,clientX:5,clientY:5,bubbles:true}));[...box.querySelectorAll('button')].find(x=>x.textContent.trim()==='Fit').click();await wait(250);
+ const out=box.querySelector('[data-node="'+noise.id+'"] [data-out]'),inp=box.querySelector('[data-node="'+blur.id+'"] [data-in]');const r1=out.getBoundingClientRect(),r2=inp.getBoundingClientRect(),svg=box.querySelector('.procsvg');
+ const pe=(ty,x,y,t)=>(t||svg).dispatchEvent(new PointerEvent(ty,{pointerId:61,pointerType:'mouse',isPrimary:true,button:0,buttons:ty==='pointerup'?0:1,clientX:x,clientY:y,bubbles:true}));
+ pe('pointerdown',r1.x+r1.width/2,r1.y+r1.height/2,out);pe('pointermove',r2.x+r2.width/2,r2.y+r2.height/2);pe('pointerup',r2.x+r2.width/2,r2.y+r2.height/2);await wait(300);
+ const L2=M.doc.layers.find(x=>x.type==='procgraph');if(!L2.graph.edges.some(e=>e.from===noise.id&&e.to===blur.id)){const hh=document.elementFromPoint(r2.x+r2.width/2,r2.y+r2.height/2);return 'dragging between ports did not connect (target at drop: '+(hh&&(hh.getAttribute('class')+'/'+hh.dataset.in+'/'+(hh.dataset.node===blur.id)))+'; port rect '+Math.round(r2.x)+','+Math.round(r2.y)+' vs viewport '+innerWidth+'x'+innerHeight+'): '+JSON.stringify(L2.graph.edges.map(e=>e.from.slice(0,5)+'>'+e.to.slice(0,5)+':'+e.in));}
+ const gg=P.normalize(JSON.parse(JSON.stringify(M.doc.layers.find(x=>x.type==='procgraph').graph))),lfo=P.createNode('lfo');gg.nodes.push(lfo);const err=P.connect(gg,lfo.id,'output','input');if(!/image/.test(String(err)))return 'type mismatch was not refused';
+ const copy=D.normalize(JSON.parse(JSON.stringify({...M.doc})));const back=copy.layers.find(x=>x.type==='procgraph');if(!back||back.graph.nodes.length!==l.graph.nodes.length||back.graph.edges.length!==l.graph.edges.length)return 'graph did not survive save and reopen';
+ box.querySelector('.procbox button.pri:last-child,.proctop .pri:last-child').click();await wait(200);return document.querySelector('.procbox')?'editor did not close':true}`);
+
+t('studio graph: image input feeds Threshold -> Blend with animated noise, and a failing node does not stop the graph', '/studio-app.html', `async()=>{${OPEN}await open();const M=window.n0iseMotion,D=StudioDocument,P=StudioProc;
+ const c=document.createElement('canvas');c.width=300;c.height=300;const g=c.getContext('2d');const gr=g.createLinearGradient(0,0,300,0);gr.addColorStop(0,'#000');gr.addColorStop(1,'#fff');g.fillStyle=gr;g.fillRect(0,0,300,300);
+ const b=await new Promise(r=>c.toBlob(r,'image/png'));const r=document.getElementById('artboard').getBoundingClientRect();await dropAt([new File([b],'ramp.png',{type:'image/png'})],r.left+r.width/2,r.top+r.height/2);await until(1);if(rows()!==1)return 'image did not import';
+ const gp=P.create(),im=P.createNode('image'),th=P.createNode('threshold'),vd=P.createNode('video'),bl=P.createNode('blend');gp.nodes.push(im,th,vd,bl);th.params.level=.5;th.params.soft=.01;bl.params.mode='normal';
+ P.connect(gp,im.id,th.id,'input');P.connect(gp,th.id,bl.id,'a');P.connect(gp,vd.id,bl.id,'b');P.connect(gp,bl.id,'output','input');
+ M.add([D.layer('procgraph',{name:'Graph',graph:gp})]);await wait(1200);const cv=document.getElementById('preview'),ctx=cv.getContext('2d');
+ const px=fr=>{const x=Math.floor(cv.width/2+(fr-.5)*cv.width*.5),y=Math.floor(cv.height/2);const d=ctx.getImageData(x,y,1,1).data;return d[0]};
+ const left=px(.1),right=px(.9);if(!(left<60&&right>200))return 'threshold of the image ramp is wrong: left '+left+' right '+right;
+ const st=window.n0iseMotion.R.procStatus(M.doc.layers.find(x=>x.type==='procgraph').id);if(!st||![...st.errors.values()].some(e=>/No video layer/.test(e)))return 'the missing video was not reported on its node';
+ return st.errors.size===1?true:'unexpected errors: '+[...st.errors.values()].join('|')}`);

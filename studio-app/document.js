@@ -4,7 +4,7 @@ const StudioDocument = (() => {
   const sizes = {landscape:[1920,1080], portrait:[1080,1920], square:[1440,1440]};
   const ratios = {landscape:'16:9', portrait:'9:16', square:'1:1'};
   const labels = {video:'Video',chrome:'Chrome form', crt:'CRT effect', background:'Background', shape:'Shape',
-    brush:'Brush stroke', image:'Image', text:'Text', path:'Path', scene:'Metallic torus',gradient:'Gradient',procedure:'Procedural vector',adjustment:'Adjustment'};
+    brush:'Brush stroke', image:'Image', text:'Text', path:'Path', scene:'Metallic torus',gradient:'Gradient',procedure:'Procedural vector',adjustment:'Adjustment',procgraph:'Procedural graph'};
   const blends = ['source-over','screen','multiply','lighter','destination-out'];
   const graph = () => ({
     nodes:[{id:'source',type:'source',x:35,y:55},{id:'output',type:'output',x:450,y:55}],
@@ -86,6 +86,7 @@ const StudioDocument = (() => {
         l.volume = number(item.volume,1,0,1); l.muted = item.muted === true;
       }
       if (l.type === 'procedure') l.definition = validateDefinition(item.definition);
+      if (l.type === 'procgraph') l.graph = StudioProc.normalize(item.graph);
       if (l.type === 'scene') {
         const asset = item.asset;
         if (!asset || typeof asset !== 'object' || Array.isArray(asset)) throw Error('Invalid scene asset.');
