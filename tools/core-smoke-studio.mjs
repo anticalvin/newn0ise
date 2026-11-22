@@ -137,3 +137,17 @@ t('studio motion: fit sequence, fit selection, dynamic zoom limits, pinch and ct
  click('fit');await wait(200);M.select([]);await wait(100);const clip=canvas.querySelector('.nst-clip'),l0=M.doc.layers[0],start0=l0.start;const cr=clip.getBoundingClientRect();
  const ce=(ty,x)=>clip.dispatchEvent(new PointerEvent(ty,{pointerId:51,pointerType:'touch',isPrimary:true,button:0,clientX:x,clientY:cr.top+10,bubbles:true,cancelable:true}));ce('pointerdown',cr.left+cr.width/2);ce('pointermove',cr.left+cr.width/2+40);await wait(120);ce('pointerup',cr.left+cr.width/2+40);await wait(150);
  if(l0.start!==start0)return 'a touch drag on an unselected clip moved it';return true}`);
+
+t('effects hardware: four rendering profiles render real output, join the stack and change the picture (N0I-42)', '/effects.html', `async()=>{const wait=ms=>new Promise(r=>setTimeout(r,ms));await wait(3000);
+ const c=document.createElement('canvas');c.width=600;c.height=800;const g=c.getContext('2d');const gr=g.createLinearGradient(0,0,0,800);gr.addColorStop(0,'#3a7bd5');gr.addColorStop(1,'#f6d365');g.fillStyle=gr;g.fillRect(0,0,600,800);const rg=g.createRadialGradient(240,300,30,300,400,220);rg.addColorStop(0,'#ffe1c4');rg.addColorStop(.6,'#d2765a');rg.addColorStop(1,'#3b1c22');g.fillStyle=rg;g.beginPath();g.arc(300,400,220,0,7);g.fill();
+ const b=await new Promise(r=>c.toBlob(r,'image/png'));const dt=new DataTransfer();dt.items.add(new File([b],'t.png',{type:'image/png'}));const inp=document.querySelector('#file');inp.files=dt.files;inp.dispatchEvent(new Event('change',{bubbles:true}));await wait(1800);
+ [...document.querySelectorAll('button')].find(x=>x.textContent.trim()==='Hardware').click();await wait(3000);
+ const sig=()=>{const gl=document.getElementById('gl'),t=document.createElement('canvas');t.width=64;t.height=64;const x=t.getContext('2d');x.drawImage(gl,0,0,64,64);return Array.from(x.getImageData(0,0,64,64).data).filter((_,i)=>i%4<3)};
+ const diff=(a,b)=>{let s=0;for(let i=0;i<a.length;i++)s+=Math.abs(a[i]-b[i]);return s/a.length};
+ const ids=['orderedmatrix','inkscreen','cel','eink'];const cards=ids.map(i=>document.querySelector('.fx-card[data-rp='+i+']'));if(cards.some(x=>!x))return 'missing cards: '+cards.map((x,i)=>x?'':ids[i]).join(',');
+ for(const cd of cards){const cv=cd.querySelector('canvas');if(!cv||!cv.dataset.ok)return 'thumbnail not rendered for '+cd.dataset.rp}
+ const base=sig();const out=[];
+ for(const id of ids){document.querySelector('.fx-card[data-rp='+id+']').click();await wait(1800);const s=sig();const d=diff(base,s);if(d<6)return id+' did not change the picture ('+d.toFixed(1)+')';out.push(s);
+  [...document.querySelectorAll('button')].find(x=>x.textContent.trim()==='Hardware')?.click();await wait(900);}
+ for(let i=1;i<out.length;i++)if(diff(out[i],out[i-1])<2)return 'profiles look identical at '+ids[i];
+ return true}`);

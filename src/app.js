@@ -1275,6 +1275,100 @@ vec4 fx(vec2 uv){
   vec3 col=mix(u_paper,ink,cover);
   col=mix(col,texture(uSrc,uv).rgb,u_under/100.*(1.-cover*.5));
   return vec4(col,1.);}`});
+
+/* ---------- Hardware rendering profiles: Ordered Matrix, Ink Screen, E-ink Paper (Cel Plane is the Cel Shade module with its own presets) ---------- */
+defineModule({id:'orderedmatrix',family:'Hardware',name:'Ordered Matrix',
+  defaultLook:{paper:'#9bbc0f',ink:'#0f380f',palette:'Gameboy'},
+  presets:[
+    {name:'Handheld Bayer',v:{matrix:2,cell:3,bias:0,con:12,mode:0,levels:4,mix:0,pal:PALETTES.Handheld.Gameboy}},
+    {name:'Mac 1-bit',v:{matrix:3,cell:2,bias:0,con:22,mode:0,levels:2,mix:0,pal:['#000000','#ffffff']}},
+    {name:'Pocket cluster',v:{matrix:4,cell:3,bias:-4,con:18,mode:0,levels:3,mix:0,pal:['#1b1b1d','#8d8a82','#f2eee4']}},
+    {name:'Line screen',v:{matrix:5,cell:2,bias:0,con:16,mode:0,levels:2,mix:0,pal:['#10100f','#f1ece0']}},
+    {name:'Colour Bayer',v:{matrix:1,cell:3,bias:0,con:8,mode:1,levels:3,mix:0,pal:PALETTES.Handheld.Gameboy}}],
+  params:[
+    {k:'matrix',t:'c',label:'Matrix',opts:['Bayer 2','Bayer 4','Bayer 8','Cluster dot','Diagonal lines','Horizontal lines'],def:1,sec:'Matrix',hero:true},
+    {k:'cell',label:'Resolution (px per cell)',min:1,max:16,def:3,step:.5,sec:'Matrix',hero:true},
+    {k:'bias',label:'Threshold',min:-50,max:50,def:0,sec:'Tone',hero:true},{k:'con',label:'Contrast',min:-100,max:100,def:12,sec:'Tone'},{k:'gam',label:'Gamma',min:30,max:250,def:100,sec:'Tone'},
+    {k:'inv',t:'b',label:'Invert',def:false,sec:'Tone'},
+    {k:'mode',t:'c',label:'Colour',opts:['Palette','Per channel'],def:0,sec:'Colour'},{k:'levels',label:'Levels per channel',min:2,max:8,def:3,step:1,sec:'Colour'},
+    {k:'pal',t:'pal',label:'Palette',def:PALETTES.Handheld.Gameboy,sec:'Colour'},{k:'mix',label:'Blend original',min:0,max:100,def:0,sec:'Colour'}],
+  frag:SS+`
+float b2(vec2 a){a=floor(a);return fract(a.x/2.+a.y*a.y*.75);}
+float b4(vec2 a){return b2(.5*a)*.25+b2(a);}
+float b8(vec2 a){return b4(.5*a)*.25+b2(a);}
+float thr(vec2 g,float m){
+  if(m<.5)return b2(g);if(m<1.5)return b4(g);if(m<2.5)return b8(g);
+  if(m<3.5){vec2 a=mod(floor(g),4.)-1.5;return clamp(length(a)/2.2,0.,.999);}
+  if(m<4.5)return fract((g.x+g.y)/4.+.125);return fract(g.y/4.+.125);}
+vec4 fx(vec2 uv){
+  float cell=max(1.,u_cell*S);vec2 px=uv*uRes,g=floor(px/cell),cuv=(g+.5)*cell/uRes;
+  vec3 c=texture(uSrc,cuv).rgb;float t=thr(g,u_matrix),k=(1.+u_con/50.);vec3 col;
+  if(u_mode<.5){
+    float l=pow(clamp(luma(c),0.,1.),u_gam/100.);l=(l-.5)*k+.5+u_bias/100.;if(u_inv>.5)l=1.-l;l=clamp(l,0.,1.);
+    float n=float(max(uPalN,2));float v=floor(l*(n-1.)+t);col=uPal[int(clamp(v,0.,n-1.))];
+  }else{
+    vec3 cc=clamp((pow(clamp(c,0.,1.),vec3(u_gam/100.))-.5)*k+.5+u_bias/100.,0.,1.);if(u_inv>.5)cc=1.-cc;float n=u_levels;
+    col=clamp(floor(cc*(n-1.)+vec3(t)),0.,n-1.)/(n-1.);
+  }
+  return vec4(mix(col,texture(uSrc,uv).rgb,u_mix/100.),1.);}`});
+defineModule({id:'inkscreen',family:'Hardware',name:'Ink Screen',
+  defaultLook:{paper:'#f3ede0',ink:'#16130f',palette:null},
+  presets:[
+    {name:'Newsprint',v:{mode:0,cell:7,ang:45,spread:30,gain:12,dens:92,mis:0,grain:35,ink1:'#1a1816',ink2:'#c24a2e',paper:'#e9e3d3'}},
+    {name:'Blue and red',v:{mode:1,cell:8,ang:35,spread:30,gain:8,dens:95,mis:1.5,grain:25,ink1:'#234a9c',ink2:'#d8412f',paper:'#f4efe2'}},
+    {name:'Process CMYK',v:{mode:2,cell:9,ang:15,spread:30,gain:6,dens:96,mis:1,grain:22,ink1:'#16130f',ink2:'#c24a2e',paper:'#f6f1e4'}},
+    {name:'Fine mono',v:{mode:0,cell:4,ang:30,spread:30,gain:0,dens:100,mis:0,grain:18,ink1:'#101010',ink2:'#c24a2e',paper:'#f7f4ec'}},
+    {name:'Heavy gain',v:{mode:2,cell:12,ang:15,spread:36,gain:34,dens:88,mis:2.5,grain:45,ink1:'#16130f',ink2:'#c24a2e',paper:'#e6dfcc'}}],
+  params:[
+    {k:'mode',t:'c',label:'Inks',opts:['One ink','Two inks','CMYK process'],def:0,sec:'Screen',hero:true},{k:'cell',label:'Dot size',min:3,max:28,def:7,step:.5,sec:'Screen',hero:true},
+    {k:'ang',label:'Screen angle',min:0,max:90,def:45,sec:'Screen'},{k:'spread',label:'Angle separation',min:0,max:60,def:30,sec:'Screen',hero:true},
+    {k:'gain',label:'Dot gain',min:-40,max:80,def:10,sec:'Ink'},{k:'dens',label:'Ink density',min:30,max:100,def:92,sec:'Ink'},{k:'mis',label:'Misregistration',min:0,max:8,def:0,step:.25,sec:'Ink'},
+    {k:'grain',label:'Paper grain',min:0,max:100,def:30,sec:'Paper'},
+    {k:'ink1',t:'color',label:'Ink 1',def:'#1a1816',sec:'Colour'},{k:'ink2',t:'color',label:'Ink 2',def:'#c24a2e',sec:'Colour'},{k:'paper',t:'color',label:'Paper',def:'#e9e3d3',sec:'Colour'}],
+  frag:SS+`
+float scr(vec2 px,float ang,float cell,float tone,float gain){float s=sin(ang),c=cos(ang);vec2 p=vec2(c*px.x+s*px.y,-s*px.x+c*px.y)/cell,f=fract(p)-.5;
+  float r=sqrt(clamp(tone,0.,1.))*.72*(1.+gain);float aa=.6/cell*S;return smoothstep(r+aa,r-aa,length(f));}
+vec4 fx(vec2 uv){
+  vec2 px=uv*uRes;float cell=u_cell*S,a0=radians(u_ang),sp=u_spread/30.,gain=u_gain/100.,dens=u_dens/100.,m=u_mis*S;
+  vec3 paper=u_paper*(1.-u_grain/100.*.18*(vnoise(px*.7/S)*.6+h21(floor(px/S))*.4));vec3 col=paper;
+  if(u_mode<.5){
+    float l=luma(texture(uSrc,uv).rgb),d=scr(px,a0,cell,1.-l,gain)*dens;col=mix(paper,u_ink1,d);
+  }else if(u_mode<1.5){
+    vec3 c1=texture(uSrc,uv+vec2(m,0.)/uRes).rgb,c2=texture(uSrc,uv-vec2(m,0.)/uRes).rgb;
+    float t1=1.-luma(c1),t2=clamp((c2.r-c2.b)*1.4+.45,0.,1.)*(1.-.5*t1);
+    float d1=scr(px,a0,cell,t1,gain)*dens,d2=scr(px+vec2(m,m),a0+radians(30.*sp),cell,t2,gain)*dens;
+    col=paper;col=mix(col,col*u_ink2*1.15,d2);col=mix(col,u_ink1*mix(vec3(1.),col,.35),d1);
+  }else{
+    vec3 c=texture(uSrc,uv).rgb;float k=1.-max(c.r,max(c.g,c.b));vec3 cmy=(1.-c-k)/max(1.-k,.001);
+    vec2 o1=vec2(m,0.),o2=vec2(-m,m),o3=vec2(0.,-m);
+    float dc=scr(px+o1,a0+radians(15.*sp),cell,cmy.x,gain)*dens,dm=scr(px+o2,a0+radians(75.*sp),cell,cmy.y,gain)*dens,dy=scr(px+o3,a0,cell,cmy.z,gain)*dens,dk=scr(px,a0+radians(45.*sp),cell,k,gain)*dens;
+    col=paper;col=mix(col,col*vec3(.08,.62,.86),dc);col=mix(col,col*vec3(.92,.14,.5),dm);col=mix(col,col*vec3(1.,.9,.05),dy);col=mix(col,col*mix(u_ink1,vec3(.12),.5),dk);
+  }
+  return vec4(col,1.);}`});
+defineModule({id:'eink',family:'Hardware',name:'E-ink Paper',
+  defaultLook:{paper:'#d9d6c8',ink:'#141414',palette:null},
+  presets:[
+    {name:'Paperwhite',v:{levels:16,con:10,dither:35,grain:30,fiber:35,ghost:12,refresh:false,period:6,paper:'#d8d6c6',ink:'#161616'}},
+    {name:'4-bit gray',v:{levels:4,con:18,dither:50,grain:40,fiber:30,ghost:20,refresh:false,period:6,paper:'#d4d1c2',ink:'#181818'}},
+    {name:'Ghosting',v:{levels:8,con:8,dither:30,grain:35,fiber:40,ghost:60,refresh:true,period:5,paper:'#dad6c4',ink:'#1a1a18'}},
+    {name:'Newspaper e-ink',v:{levels:3,con:30,dither:60,grain:55,fiber:55,ghost:10,refresh:false,period:6,paper:'#cfcab8',ink:'#1b1a17'}},
+    {name:'Cold panel',v:{levels:6,con:14,dither:40,grain:25,fiber:20,ghost:25,refresh:false,period:6,paper:'#d3d8d6',ink:'#101414'}}],
+  params:[
+    {k:'levels',label:'Gray levels',min:2,max:16,def:16,step:1,sec:'Panel',hero:true},{k:'con',label:'Contrast',min:-40,max:80,def:10,sec:'Panel'},{k:'dither',label:'Dither',min:0,max:100,def:35,sec:'Panel'},
+    {k:'grain',label:'Grain',min:0,max:100,def:30,sec:'Paper',hero:true},{k:'fiber',label:'Paper fibre',min:0,max:100,def:35,sec:'Paper'},
+    {k:'ghost',label:'Ghosting',min:0,max:100,def:12,sec:'Refresh',hero:true},{k:'refresh',t:'b',label:'Refresh flash',def:false,sec:'Refresh'},{k:'period',label:'Refresh every (s)',min:2,max:20,def:6,step:1,sec:'Refresh'},
+    {k:'paper',t:'color',label:'Paper',def:'#d8d6c6',sec:'Colour'},{k:'ink',t:'color',label:'Ink',def:'#161616',sec:'Colour'}],
+  frag:SS+`
+vec4 fx(vec2 uv){
+  vec2 px=uv*uRes;float s=S;vec3 c=texture(uSrc,uv).rgb;float l=luma(c);
+  float gl=luma(texture(uSrc,uv+vec2(3.,5.)*s/uRes).rgb);l=mix(l,mix(l,1.-gl,.55),u_ghost/100.*.4);
+  l=(l-.5)*(1.+u_con/50.)+.5;
+  l+=((vnoise(px*.9/s)*.6+h21(floor(px/s))*.4)-.5)*u_grain/100.*.22;
+  float n=u_levels,d=(ign(floor(px/s))-.5)/max(n-1.,1.)*u_dither/50.;l=clamp(l+d,0.,1.);l=floor(l*(n-1.)+.5)/(n-1.);
+  vec3 col=mix(u_ink,u_paper,l);
+  col*=1.-u_fiber/100.*.1*vnoise(vec2(px.x*.05,px.y*1.4)/s)*vnoise(vec2(px.x*1.3,px.y*.05)/s)*3.;
+  if(u_refresh>.5){float ph=fract(uTime/max(u_period,1.)),band=smoothstep(.0,.04,abs(uv.y-(1.-ph))*8.);float flash=1.-band;col=mix(col,vec3(1.)-col*.9,flash*step(ph,.35));}
+  return vec4(col,1.);}`});
 defineModule({colorBound:true,hideOnOrig:['ink','bg'],id:'engrave',family:'Lines',name:'Engraving',
   defaultLook:{paper:'#f2ead3',ink:'#1a1208',palette:null},
   params:[
@@ -4121,9 +4215,31 @@ function hwTick(t){
     }
   }finally{restoreP(bak);try{draw(.016);draw(.016);}catch(e){}}
 }
+/* rendering profiles: real effect layers (their own parameters, presets, stack position, compare and export), shown as cards beside the CRT characters */
+const HW_RENDER=[['orderedmatrix','Ordered Matrix','Threshold matrix and palette','Handheld Bayer'],['inkscreen','Ink Screen','Halftone inks and paper','Newsprint'],['cel','Cel Plane','Tone bands and outlines','Clean'],['eink','E-ink Paper','Quantised gray panel','Paperwhite']];
+function useRenderProfile(mod){
+  const m=MODULES[mod],ps=(m.presets||[])[0];let at=STACK.layers.findIndex(x=>x.module===mod);
+  if(at<0){STACK.layers.push(mkLayer(mod));at=STACK.layers.length-1;if(ps)Object.assign(STACK.layers[at].params,JSON.parse(JSON.stringify(ps.v)));}
+  STACK.sel=at;snap();refreshUI();buzz(8);renderInspector();
+}
+function renderRenderProfiles(host){
+  host.appendChild(fxSec('Rendering profiles','New'));
+  const grid=el('div','fx-cards');
+  HW_RENDER.forEach(([mod,name,sub,pname])=>{
+    const m=MODULES[mod];if(!m)return;const ps=(m.presets||[]).find(q=>q.name===pname)||{v:{}};
+    const b=el('button','fx-card');b.type='button';b.dataset.rp=mod;
+    const th=el('div','fx-thumb');
+    /* the thumbnail is the module's own output on your picture; if the first frame comes back empty (source or shader still loading) try again shortly */
+    const paint=(n=0)=>{try{const cv=moduleThumb(mod,176,132,JSON.parse(JSON.stringify(ps.v)));if(!cv)return;const d=cv.getContext('2d').getImageData(0,0,cv.width,cv.height).data;let sum=0;for(let i=0;i<d.length;i+=61)sum+=d[i];if(sum)cv.dataset.ok='1';th.replaceChildren(cv);if(!sum&&n<4)setTimeout(()=>{if(th.isConnected)paint(n+1);},350);}catch(e){}};paint();
+    b.append(th,el('b','',esc0(name)),el('small','',esc0(STACK.layers.some(x=>x.module===mod)?'In the stack · tap to edit':sub)));
+    b.setAttribute('aria-pressed',layer()&&layer().module===mod);
+    b.addEventListener('click',()=>useRenderProfile(mod));grid.appendChild(b);});
+  host.appendChild(grid);
+}
 function renderHardware(host){
   const l=layer();
   host.appendChild(fxHead('Hardware','Choose a physical character, then tune its signal.'));
+  renderRenderProfiles(host);
   if(l.module!=='crtlab'){
     const n=el('div','fx-note','There is no CRT Lab layer in this composition. Hardware profiles live on that layer.');host.appendChild(n);
     const b=el('button','fx-add','+ Add CRT Lab');b.type='button';b.addEventListener('click',()=>{STACK.layers.unshift(mkLayer('crtlab'));STACK.sel=0;snap();renderInspector();});host.appendChild(b);return;
@@ -4205,7 +4321,7 @@ const CAM_FAMILY={clean:'Color',chrome:'Color',aqua:'Color',solar:'Color',therma
  noir:'Film',lomo:'Film',vintage:'Film',kodak:'Film',fuji:'Film',cinema:'Film',super8:'Film',night:'Film',vhs:'Signal / CRT',crt:'Signal / CRT',
  bubble:'Y2K',lchrome:'Y2K',holo:'Y2K',aero:'Y2K',digicam:'Y2K',webcam:'Y2K',lcd:'Y2K',vapor:'Y2K',vga:'Y2K',gboy:'Pixel',ps1:'Pixel',bayer:'Dither',ign:'Dither',linedith:'Lines',hatch:'Lines',contour:'Lines',wavel:'Lines',sketch:'Lines',stitch:'Pixel',mosaic:'Pixel',lego:'Pixel',ledm:'Pixel',emboss:'Light',tilt:'Light',streak:'Light',longexp:'Time',rgbtear:'Glitch',fish:'Warp',swirl:'Warp',ripple:'Warp',acid:'Color',pop:'Color',halftone:'Print',pixel:'Pixel',ascii:'Glyph',matrix:'Glyph',glitch:'Glitch',mosh:'Glitch',bloom:'Light',dream:'Light',
  prism:'Warp',kaleido:'Warp',mirror:'Warp',liquid:'Warp',paint:'Warp',grid:'Warp',ghost:'Time',tunnel:'Time',slit:'Time'};
-const UFAM_ORDER=['Mine','Source','Subject','Mix','Color','Y2K','Film','Signal / CRT','Dither','Print','Toon','Pixel','Glyph','Lines','Glitch','Light','Warp','Time','Studio','Face'];
+const UFAM_ORDER=['Mine','Source','Subject','Mix','Color','Y2K','Film','Signal / CRT','Dither','Print','Toon','Hardware','Pixel','Glyph','Lines','Glitch','Light','Warp','Time','Studio','Face'];
 const camFam=f=>f.face?'Face':(f.custom||f.cat==='custom')?'Mine':CAM_FAMILY[f.id]||'Color';
 const modFam=m=>RAIL_FAMILY[m.id]||m.family;
 const famRank=f=>{const i=UFAM_ORDER.indexOf(f);return i<0?99:i;};
@@ -4355,7 +4471,7 @@ function wireHero(){
 function pickCam(id){const l=layer();if(l.module!=='fuse'){l.module='fuse';l.params=MODULES.fuse.defaults();for(let s=2;s<=4;s++)l.params['f'+s]=0;}fuseSet(l,1,id);INS.gallery=false;renderInspector();}
 function loadRecipeLayer(r){const l=layer();if(l.module!=='fuse'){l.module='fuse';l.params=MODULES.fuse.defaults();}Object.assign(l.params,r.p);INS.gallery=false;renderInspector();}
 const camOn=(l,fx)=>l.module==='fuse'&&+l.params.f1===fxIndex(fx.id);
-const RAIL_FAMILY={patdith:'Dither',contour:'Lines',ridge:'Lines',dither:'Dither',orb:'Dither',multithr:'Dither',cmyk:'Print',shapes:'Print',stipple:'Print',patmerge:'Print',crusher:'Pixel',pixelmania:'Pixel',ascii:'Glyph',linemod:'Lines',displace:'Glitch',epsilon:'Light',crtlab:'Signal / CRT',fuse:'Mix',psort:'Glitch',mosh:'Glitch',riso:'Print',engrave:'Lines',seccam:'Signal / CRT',cel:'Toon',comic:'Toon',tonedot:'Toon'};
+const RAIL_FAMILY={patdith:'Dither',contour:'Lines',ridge:'Lines',dither:'Dither',orb:'Dither',multithr:'Dither',cmyk:'Print',shapes:'Print',stipple:'Print',patmerge:'Print',crusher:'Pixel',pixelmania:'Pixel',ascii:'Glyph',linemod:'Lines',displace:'Glitch',epsilon:'Light',crtlab:'Signal / CRT',fuse:'Mix',psort:'Glitch',mosh:'Glitch',riso:'Print',engrave:'Lines',seccam:'Signal / CRT',cel:'Toon',comic:'Toon',tonedot:'Toon',orderedmatrix:'Hardware',inkscreen:'Hardware',eink:'Hardware'};
 const RAIL_ORDER=['★ Favorites','Recent','Mine',...UFAM_ORDER];
 const THUMBS=new Map();   /* key: module id + source version -> canvas */
 function cachedThumb(id){const k=id+'|'+SRC.ver;if(id!=='crtlab'&&THUMBS.has(k))return THUMBS.get(k);const rc=id.startsWith('recipe:')&&loadRecipes().find(r=>'recipe:'+r.id===id);const fx=id.startsWith('fuse:')&&FXBY[id.slice(5)];const c=rc?moduleThumb('fuse',112,84,rc.p):fx?moduleThumb('fuse',112,84,{f1:fxIndex(fx.id),i1:fx.i,m1:fx.m}):moduleThumb(id,112,84);if(id!=='crtlab'){THUMBS.set(k,c);if(THUMBS.size>60)THUMBS.delete(THUMBS.keys().next().value);}return c;}
