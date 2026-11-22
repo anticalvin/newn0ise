@@ -2345,6 +2345,7 @@
     const [w,h] = dims();
     menu('New layer',[
       ['Blank layer',() => add('shape',{name:'Blank layer',shape:'rectangle',width:w,height:h,x:0,y:0,strokeWidth:0})],
+      ['Solid colour',() => add('shape',{name:'Solid colour',shape:'rectangle',width:w,height:h,x:0,y:0,fill:paintColor,stroke:paintColor,strokeWidth:0})],
       ['Procedural graph…',() => menu('Procedural graph',[...Object.keys(StudioProc.templates).map(k => [k,() => addProcGraph(k)]),['Empty graph',() => addProcGraph(null)]])],
       ['Filter',() => addAdjustment('Filter',{kind:'look'},{preset:'film'})],
       ['Brightness / contrast',() => addAdjustment('Brightness / contrast',{kind:'look'},{brightness:110,contrast:115})],

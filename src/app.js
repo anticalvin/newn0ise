@@ -4218,8 +4218,14 @@ function hwTick(t){
 /* rendering profiles: real effect layers (their own parameters, presets, stack position, compare and export), shown as cards beside the CRT characters */
 const HW_RENDER=[['orderedmatrix','Ordered Matrix','Threshold matrix and palette','Handheld Bayer'],['inkscreen','Ink Screen','Halftone inks and paper','Newsprint'],['cel','Cel Plane','Tone bands and outlines','Clean'],['eink','E-ink Paper','Quantised gray panel','Paperwhite']];
 function useRenderProfile(mod){
-  const m=MODULES[mod],ps=(m.presets||[])[0];let at=STACK.layers.findIndex(x=>x.module===mod);
-  if(at<0){STACK.layers.push(mkLayer(mod));at=STACK.layers.length-1;if(ps)Object.assign(STACK.layers[at].params,JSON.parse(JSON.stringify(ps.v)));}
+  /* cycle between looks: choosing a profile swaps the one already in the stack instead of stacking another on top */
+  const m=MODULES[mod],ps=(m.presets||[])[0],ids=HW_RENDER.map(x=>x[0]);
+  let at=STACK.layers.findIndex(x=>x.module===mod);
+  if(at<0){
+    const other=STACK.layers.findIndex(x=>ids.includes(x.module));
+    const fresh=mkLayer(mod);if(ps)Object.assign(fresh.params,JSON.parse(JSON.stringify(ps.v)));
+    if(other>=0){STACK.layers[other]=fresh;at=other;}else{STACK.layers.push(fresh);at=STACK.layers.length-1;}
+  }
   STACK.sel=at;snap();refreshUI();buzz(8);renderInspector();
 }
 function renderRenderProfiles(host){
@@ -4231,7 +4237,7 @@ function renderRenderProfiles(host){
     const th=el('div','fx-thumb');
     /* the thumbnail is the module's own output on your picture; if the first frame comes back empty (source or shader still loading) try again shortly */
     const paint=(n=0)=>{try{const cv=moduleThumb(mod,176,132,JSON.parse(JSON.stringify(ps.v)));if(!cv)return;const d=cv.getContext('2d').getImageData(0,0,cv.width,cv.height).data;let sum=0;for(let i=0;i<d.length;i+=61)sum+=d[i];if(sum)cv.dataset.ok='1';th.replaceChildren(cv);if(!sum&&n<4)setTimeout(()=>{if(th.isConnected)paint(n+1);},350);}catch(e){}};paint();
-    b.append(th,el('b','',esc0(name)),el('small','',esc0(STACK.layers.some(x=>x.module===mod)?'In the stack · tap to edit':sub)));
+    b.append(th,el('b','',esc0(name)),el('small','',esc0(STACK.layers.some(x=>x.module===mod)?'Active · tap to edit':sub)));
     b.setAttribute('aria-pressed',layer()&&layer().module===mod);
     b.addEventListener('click',()=>useRenderProfile(mod));grid.appendChild(b);});
   host.appendChild(grid);
