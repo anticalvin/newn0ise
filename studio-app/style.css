@@ -375,3 +375,10 @@ a.brand:focus-visible { outline:2px solid var(--accent); outline-offset:4px; }
 @media (prefers-reduced-motion:reduce){.layerbin{transition:none}}
 
 #overlay .handle.selected{fill:none;stroke:#f4e9d6;stroke-width:2;vector-effect:non-scaling-stroke;pointer-events:none}
+
+#overlay .userguide{stroke:#7fd1ff;stroke-width:1;stroke-dasharray:6 4;vector-effect:non-scaling-stroke;pointer-events:none;opacity:.8}
+.gridsettings h3,.shortcuts h3{margin:14px 0 6px;font-size:11px;letter-spacing:1px;font-weight:650;color:#9c9a93}
+.gridrow{display:grid;grid-template-columns:minmax(0,1fr) minmax(96px,150px) auto;gap:8px;align-items:center;min-height:44px;font-size:13px}
+.gridrow input[type=checkbox]{width:22px;height:22px;justify-self:end}.gridrow input[type=range]{width:100%}
+.keylist{display:grid;grid-template-columns:max-content 1fr;gap:6px 16px;margin:0 0 6px;font-size:13px}.keylist dd{margin:0;color:#c8c5bd}
+.keylist kbd{font:600 11px ui-monospace,Menlo,monospace;background:#2a2b2c;border:1px solid #3d3e40;border-radius:6px;padding:3px 7px;white-space:nowrap}

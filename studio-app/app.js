@@ -38,7 +38,10 @@
   let textEdit = null, inlineText = null, launchMode = 'new', launchTicket = 0;
   let view = 'canvas', tool = 'select', rail = 'layers', sheet = 'canvas', shape = 'rectangle';
   let paintColor = '#e9e5db', constrain = true, hoverId = null;
-  let dirty = false, opening = 0, revision = 0, space = false, grid = false, snapping = true, angular = false;
+  let dirty = false, opening = 0, revision = 0, space = false, snapping = true, angular = false;
+  /* grid, guides and snap switches (StudioGrid): showing the grid and snapping to it are separate */
+  let gridCfg = StudioGrid.normalize((() => { try { return JSON.parse(localStorage.getItem('n0ise.gridcfg') || 'null'); } catch { return null; } })());
+  const saveGrid = () => { gridCfg = StudioGrid.normalize(gridCfg); try { localStorage.setItem('n0ise.gridcfg',JSON.stringify(gridCfg)); } catch {} };
   let pan = {x:0,y:0}, zoom = 1, fitted = true, frame = 0, gesture = null, pen = [], hover = null;
   let guides = [], draft = null, editAnchors = false, anchorSel = -1, toastTimer = 0, contextKey = '';
   const pointers = new Map();
@@ -724,13 +727,12 @@
     overlay.replaceChildren();
     if (view === 'spatial') return;
     const [w,h] = dims();
-    if (grid) {
-      let d = '';
-      const step = zoom < .3 ? 200 : 100;
-      for (let x=step;x<w;x+=step) d += `M ${x} 0 V ${h} `;
-      for (let y=step;y<h;y+=step) d += `M 0 ${y} H ${w} `;
-      svg('path',{d,class:'grid'});
+    if (gridCfg.show) {
+      const g = StudioGrid.lines(gridCfg,w,h), o = gridCfg.opacity/100;
+      if (g.minor) svg('path',{d:g.minor,class:'grid',style:`opacity:${(o*.55).toFixed(3)}`});
+      if (g.major) svg('path',{d:g.major,class:'grid',style:`opacity:${o.toFixed(3)}`});
     }
+    for (const gd of gridCfg.guides) svg('line',gd.axis === 'x' ? {x1:gd.at,y1:0,x2:gd.at,y2:h,class:'userguide'} : {x1:0,y1:gd.at,x2:w,y2:gd.at,class:'userguide'});
     function line(x1,y1,x2,y2,cls) { svg('line',{x1,y1,x2,y2,class:cls}); }
     function handle(p,attrs,shape = 'rect') {
       const r = 3.4/zoom, hit = 11/zoom;
@@ -893,8 +895,13 @@
     return S.union(layers.map(l => R.bounds(l,w,h)));
   }
 
-  /* snap hook for anchors; the grid settings (N0I-36) plug in here */
-  function snapPoint(q,l) { return window.n0iseGridSnap ? window.n0iseGridSnap(q,l) : q; }
+  /* anchors snap to guides and the grid too: local point -> artboard point -> snapped -> local again */
+  function snapPoint(q,l) {
+    if (!(gridCfg.snapGrid || (gridCfg.snapGuides && gridCfg.guides.length))) return q;
+    const [w,h] = dims(), c = R.center(l,w,h), t = R.transform(q.x*l.scale/100,q.y*l.scale/100,R.radians(l.rotation));
+    const r = StudioGrid.snapPoint(gridCfg,{x:c.x+t.x,y:c.y+t.y},w,h,8/zoom);
+    return r.on.length ? R.local(l,{x:r.x,y:r.y},w,h) : q;
+  }
   /* node commands: every one is a single undoable change */
   const editable = () => { const l = visibleSelection()[0]; return editAnchors && l?.type === 'path' && !l.locked ? l : null; };
   function addAnchorAt(l,p) {
@@ -1310,6 +1317,11 @@
         x += result.x;
         y += result.y;
         guides = result.guides;
+      }
+      if (!e.altKey && g.bounds && (gridCfg.snapGrid || (gridCfg.snapGuides && gridCfg.guides.length))) {
+        const adj = StudioGrid.snapBox(gridCfg,S.translate(g.bounds,x,y),w,h,6/zoom);
+        if (adj.snappedX && !guides.some(q => q.axis === 'x')) x += adj.x;
+        if (adj.snappedY && !guides.some(q => q.axis === 'y')) y += adj.y;
       }
       for (const item of g.items) Object.assign(item.l,{x:round(item.x+x),y:round(item.y+y)});
       update();
@@ -2019,9 +2031,11 @@
     ['Import image…',() => $('imageFile').click()],
     ['Import video…',() => { $('imageFile').click(); }],
     ['Timeline',() => window.n0iseMotionUI?.toggle()],
-    [`Grid · ${grid ? 'On' : 'Off'}`,() => { grid = !grid; drawOverlay(); notice(grid ? 'Grid on' : 'Grid off'); }],
+    [`Grid · ${gridCfg.show ? 'On' : 'Off'}`,() => toggleGrid()],
+    ['Grid, guides and snapping…',openGridSettings],
     [`Smart snapping · ${snapping ? 'On' : 'Off'}`,() => { snapping = !snapping; notice(snapping ? 'Smart snapping on' : 'Smart snapping off'); }],
     [`15° rotation snapping · ${angular ? 'On' : 'Off'}`,() => { angular = !angular; notice(angular ? 'Rotation snapping on' : 'Rotation snapping off'); }],
+    ['Keyboard shortcuts',() => openShortcuts()],
     ['Keyboard and gestures',() => {
       $('modaltitle').textContent = 'Keyboard and gestures';
       const help = document.createElement('p');
@@ -2030,6 +2044,71 @@
       $('modal').showModal();
     }]
   ]);
+  function toggleGrid(force) { gridCfg.show = force ?? !gridCfg.show; saveGrid(); drawOverlay(); notice(gridCfg.show ? 'Grid on' : 'Grid off'); }
+  function toggleGridSnap() { gridCfg.snapGrid = !gridCfg.snapGrid; saveGrid(); notice(gridCfg.snapGrid ? 'Snap to grid on' : 'Snap to grid off'); }
+  /* grid, guides and snapping: one dialog, every control applies live */
+  function openGridSettings() {
+    const el = (t,props = {},...kids) => { const e = Object.assign(document.createElement(t),props); e.append(...kids); return e; };
+    const content = $('modalcontent'); content.className = 'gridsettings'; content.replaceChildren();
+    $('modaltitle').textContent = 'Grid, guides and snapping'; $('modalcancel').textContent = 'Done';
+    const apply = () => { saveGrid(); drawOverlay(); };
+    const row = (label,input) => el('label',{className:'gridrow'},el('span',{textContent:label}),input);
+    const num = (key,min,max,step = 1) => { const i = el('input',{type:'number',className:'field',min,max,step,value:gridCfg[key],inputMode:'decimal'}); i.setAttribute('aria-label',key); i.onchange = () => { gridCfg[key] = Number(i.value); apply(); i.value = gridCfg[key]; }; return i; };
+    const check = (label,key,after) => { const i = el('input',{type:'checkbox',checked:!!gridCfg[key]}); i.onchange = () => { gridCfg[key] = i.checked; apply(); after?.(); }; return row(label,i); };
+    const kind = el('select',{className:'field'}); for (const [v,t] of [['square','Square'],['columns','Columns and rows'],['baseline','Baseline'],['isometric','Isometric']]) kind.append(el('option',{value:v,textContent:t,selected:gridCfg.kind === v}));
+    const fields = el('div',{className:'gridfields'});
+    const paint = () => {
+      fields.replaceChildren();
+      if (gridCfg.kind === 'square' || gridCfg.kind === 'isometric') fields.append(row('Spacing (px)',num('size',4,2000)));
+      if (gridCfg.kind === 'square') fields.append(row('Subdivisions',num('subs',1,16)));
+      if (gridCfg.kind === 'columns') fields.append(row('Columns',num('cols',1,64)),row('Rows (0 for none)',num('rows',0,64)));
+      if (gridCfg.kind === 'baseline') fields.append(row('Line height (px)',num('baseline',2,400)));
+    };
+    kind.onchange = () => { gridCfg.kind = kind.value; apply(); paint(); };
+    const op = el('input',{type:'range',min:2,max:100,step:1,value:gridCfg.opacity}); op.setAttribute('aria-label','Grid opacity'); op.oninput = () => { gridCfg.opacity = Number(op.value); apply(); };
+    const list = el('div',{className:'guidelist'});
+    const guides = () => {
+      list.replaceChildren();
+      gridCfg.guides.forEach((gd,i) => {
+        const at = el('input',{type:'number',className:'field',value:gd.at,step:1}); at.setAttribute('aria-label',(gd.axis === 'x' ? 'Vertical' : 'Horizontal')+' guide position'); at.onchange = () => { gd.at = Number(at.value) || 0; apply(); };
+        const rm = el('button',{className:'softbtn compact',type:'button',textContent:'Remove'}); rm.setAttribute('aria-label','Remove guide'); rm.onclick = () => { gridCfg.guides.splice(i,1); apply(); guides(); };
+        list.append(el('div',{className:'gridrow'},el('span',{textContent:gd.axis === 'x' ? 'Vertical guide at' : 'Horizontal guide at'}),at,rm));
+      });
+      if (!gridCfg.guides.length) list.append(el('p',{className:'muted compact',textContent:'No guides yet.'}));
+    };
+    const addGuide = axis => { const [w,h] = dims(); gridCfg.guides.push({axis,at:Math.round((axis === 'x' ? w : h)/2)}); apply(); guides(); };
+    content.append(
+      el('h3',{textContent:'Grid'}),check('Show grid','show'),row('Layout',kind),fields,row('Grid opacity',op),
+      el('h3',{textContent:'Snapping'}),check('Snap to grid','snapGrid'),
+      (() => { const r = check('Snap to objects','__objects'); const i = r.querySelector('input'); i.checked = snapping; i.onchange = () => { snapping = i.checked; notice(snapping ? 'Smart snapping on' : 'Smart snapping off'); }; return r; })(),
+      check('Snap to guides','snapGuides'),
+      el('h3',{textContent:'Guides'}),list,
+      el('div',{className:'modalactions'},el('button',{className:'softbtn',type:'button',textContent:'Add vertical guide',onclick:() => addGuide('x')}),el('button',{className:'softbtn',type:'button',textContent:'Add horizontal guide',onclick:() => addGuide('y')}),
+        el('button',{className:'softbtn',type:'button',textContent:'Reset grid',onclick:() => { gridCfg = StudioGrid.defaults(); apply(); openGridSettings(); }})),
+      el('p',{className:'muted compact',textContent:'Alt while dragging bypasses snapping. Showing the grid and snapping to it are separate.'}));
+    paint(); guides(); $('modal').showModal();
+  }
+  /* the shortcut reference: one list, used for the dialog and for the conflict test */
+  const SHORTCUTS = [
+    ['Tools',[['V','Select'],['L','Lasso'],['B','Freehand brush'],['E','Eraser'],['P','Pen'],['T','Text'],['R','Shape'],['C','Crop'],['G','Gradient'],['I','Eyedropper']]],
+    ['Edit',[['Ctrl/Cmd Z','Undo'],['Ctrl/Cmd Shift Z or Y','Redo'],['Ctrl/Cmd J','Duplicate layers'],['Ctrl/Cmd A','Select all'],['Ctrl/Cmd D','Deselect'],['Delete or Backspace','Delete selected layers, or the selected path point'],['Arrows','Nudge 1 px (Shift 10 px)'],['Esc','Cancel, close, or deselect']]],
+    ['View',[['Space + drag','Pan temporarily'],['0 or Ctrl/Cmd 0','Fit to screen'],['F','Full screen canvas'],["'",'Show or hide the grid'],["Shift '",'Snap to grid on or off'],['Scroll or pinch','Zoom (frozen when the viewport is locked)'],['?','This list']]],
+    ['File',[['Ctrl/Cmd S','Save project'],['Ctrl/Cmd O','Open project']]],
+    ['Modifiers',[['Shift','Add to selection, or constrain rotation to 15°'],['Alt','Bypass snapping, or break a path handle'],['Double-click path','Add a point'],['Double-click point','Smooth or corner']]]
+  ];
+  function openShortcuts() {
+    const el = (t,props = {},...kids) => { const e = Object.assign(document.createElement(t),props); e.append(...kids); return e; };
+    $('modaltitle').textContent = 'Keyboard shortcuts'; $('modalcancel').textContent = 'Close';
+    const content = $('modalcontent'); content.className = 'shortcuts'; content.replaceChildren();
+    for (const [title,rows] of SHORTCUTS) {
+      const dl = el('dl',{className:'keylist'});
+      for (const [key,what] of rows) dl.append(el('dt',{},el('kbd',{textContent:key})),el('dd',{textContent:what}));
+      content.append(el('h3',{textContent:title}),dl);
+    }
+    content.append(el('p',{className:'muted compact',textContent:'Shortcuts pause while you type in a field, edit text, or have a dialog open.'}));
+    $('modal').showModal();
+  }
+  window.n0iseShortcuts = SHORTCUTS;
   $('modalcancel').onclick = () => $('modal').close();
   $('export').onclick = exportOptions;
   $('fit').onclick = fit;
@@ -2252,6 +2331,8 @@
     if (launcher.open || $('modal').open || e.defaultPrevented || e.target.matches('input,textarea,select,[contenteditable=true]')) return;
     if (gesture && e.key !== 'Escape') return;
     const key = e.key.toLowerCase(), modifier = e.ctrlKey || e.metaKey;
+    if (modifier && key === 'd') { e.preventDefault(); select([]); return; }
+    if (modifier && key === '0') { e.preventDefault(); (view === 'graph' ? graph.fit : fit)(); return; }
     if (modifier && ['z','y','s','o','a','j'].includes(key)) {
       e.preventDefault();
       finishNudge();
@@ -2264,6 +2345,9 @@
       return;
     }
     if (modifier) return;
+    if (e.key === '?') { e.preventDefault(); openShortcuts(); return; }
+    if (e.key === "'") { e.preventDefault(); toggleGrid(); return; }
+    if (e.key === '"') { e.preventDefault(); toggleGridSnap(); return; }
     if (e.code === 'Space' && !e.target.closest('button')) {
       e.preventDefault();
       space = true;
