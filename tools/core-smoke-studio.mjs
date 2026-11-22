@@ -120,3 +120,20 @@ t('studio mobile: tools sit in the artboard footer, scroll sideways, keep 44px t
  const z=document.getElementById('zoomLock'),r=z.getBoundingClientRect();if(r.width>32)return 'lock is still large '+r.width;const hit=document.elementFromPoint(r.left+r.width/2+18,r.top+r.height/2),hit2=document.elementFromPoint(r.left+r.width/2-18,r.top+r.height/2);if((hit!==z&&!z.contains(hit))||(hit2!==z&&!z.contains(hit2)))return 'lock hit area is smaller than 44px';
  document.querySelector('[data-tool=text]').click();await wait(150);if(!document.querySelector('[data-tool=text]').classList.contains('active'))return 'tool selection from the footer does not work';
  const head=document.querySelector('.stagehead').getBoundingClientRect();if(head.height>40)return 'top chrome is tall: '+head.height;return true}`);
+
+t('studio motion: fit sequence, fit selection, dynamic zoom limits, pinch and ctrl-wheel zoom, touch selects before it edits (N0I-40)', '/studio-app.html', `async()=>{${OPEN}await open();const M=window.n0iseMotion,D=StudioDocument;
+ M.add([D.layer('shape',{shape:'rectangle',width:200,height:100,fill:'#d33',stroke:'#d33',strokeWidth:0,start:2,dur:3})]);M.add([D.layer('shape',{shape:'ellipse',width:100,height:100,fill:'#39c',stroke:'#39c',strokeWidth:0,start:40,dur:5})]);
+ M.doc.duration=60;await wait(300);window.n0iseMotionUI.toggle();await wait(600);const P=document.getElementById('nst-timeline'),sc=document.getElementById('nst-scroll'),canvas=document.getElementById('nst-canvas');
+ const pps=()=>{const e=[...canvas.querySelectorAll('.nst-tick')];if(e.length<2)return 0;return (parseFloat(e[1].style.left)-parseFloat(e[0].style.left))/(parseFloat(e[1].textContent)-parseFloat(e[0].textContent))};
+ const w=sc.clientWidth;if(pps()*60>w)return 'a 60 s sequence does not fit the width at open: '+Math.round(pps()*60)+' > '+w;
+ const click=k=>P.querySelector('[data-nst='+k+']').click();const f0=pps();click('zoomin');await wait(200);if(!(pps()>f0*1.4))return 'zoom in did nothing';
+ click('fit');await wait(200);if(Math.abs(pps()-f0)>.05)return 'Fit did not return to the full sequence';
+ click('zoomout');await wait(200);if(!(pps()<f0))return 'could not zoom out below fit';
+ click('fit');await wait(200);M.select([M.doc.layers[0].id]);click('fitsel');await wait(250);const p1=pps();if(!(p1>f0*3))return 'fit selection did not zoom in ('+p1+')';const vis=[sc.scrollLeft/p1,(sc.scrollLeft+sc.clientWidth)/p1];if(!(vis[0]<=40.01&&vis[1]>=45))return 'selection not in view: '+vis.join('-');
+ click('fit');await wait(200);
+ const before=pps();sc.dispatchEvent(new WheelEvent('wheel',{deltaY:-120,ctrlKey:true,clientX:sc.getBoundingClientRect().left+200,clientY:sc.getBoundingClientRect().top+40,bubbles:true,cancelable:true}));await wait(200);if(!(pps()>before*1.5))return 'ctrl-wheel did not zoom';
+ click('fit');await wait(200);const r=sc.getBoundingClientRect(),tp=(id,ty,x)=>sc.dispatchEvent(new PointerEvent(ty,{pointerId:id,pointerType:'touch',isPrimary:id===41,clientX:x,clientY:r.top+60,bubbles:true,cancelable:true}));
+ const b2=pps();tp(41,'pointerdown',r.left+100);tp(42,'pointerdown',r.left+160);for(let i=1;i<=6;i++){tp(41,'pointermove',r.left+100-i*10);tp(42,'pointermove',r.left+160+i*10)}await wait(250);tp(41,'pointerup',r.left+40);tp(42,'pointerup',r.left+220);if(!(pps()>b2*1.8))return 'pinch did not zoom ('+b2+' -> '+pps()+')';
+ click('fit');await wait(200);M.select([]);await wait(100);const clip=canvas.querySelector('.nst-clip'),l0=M.doc.layers[0],start0=l0.start;const cr=clip.getBoundingClientRect();
+ const ce=(ty,x)=>clip.dispatchEvent(new PointerEvent(ty,{pointerId:51,pointerType:'touch',isPrimary:true,button:0,clientX:x,clientY:cr.top+10,bubbles:true,cancelable:true}));ce('pointerdown',cr.left+cr.width/2);ce('pointermove',cr.left+cr.width/2+40);await wait(120);ce('pointerup',cr.left+cr.width/2+40);await wait(150);
+ if(l0.start!==start0)return 'a touch drag on an unselected clip moved it';return true}`);
