@@ -248,19 +248,27 @@ export function generateGeometry(definition) {
   }));
 }
 
-export function pathData({points,closed}) {
+export function pathData({points,closed,breaks}) {
   if (!points.length) return 'M 0 0';
-  const [x,y] = points[0];
-  if (points.length === 1) return `M ${x} ${y} l 0.01 0`;
-  let d = `M ${x} ${y}`;
-  for (let i = 1; i < points.length+Number(!!closed); i++) {
-    const [px,py,pdx = 0,pdy = 0] = points[i-1];
-    const next = points[i % points.length], [nx,ny,ndx = 0,ndy = 0] = next;
-    /* a fifth and sixth number set the incoming handle on its own; with four it mirrors the outgoing one */
-    const ix = next.length >= 6 ? nx+(next[4] || 0) : nx-ndx, iy = next.length >= 6 ? ny+(next[5] || 0) : ny-ndy;
-    d += ` C ${px+pdx} ${py+pdy} ${ix} ${iy} ${nx} ${ny}`;
-  }
-  return d+(closed ? ' Z' : '');
+  /* breaks lists the index where each further closed outline starts (compound paths such as letters with holes) */
+  const starts = [0,...(Array.isArray(breaks) ? breaks.filter(b => Number.isInteger(b) && b > 0 && b < points.length) : [])], ends = [...starts.slice(1),points.length];
+  let d = '';
+  starts.forEach((a,k) => {
+    const part = points.slice(a,ends[k]), close = closed || starts.length > 1;
+    if (!part.length) return;
+    const [x,y] = part[0];
+    if (part.length === 1) { d += (d ? ' ' : '')+`M ${x} ${y} l 0.01 0`; return; }
+    d += (d ? ' ' : '')+`M ${x} ${y}`;
+    for (let i = 1; i < part.length+Number(!!close); i++) {
+      const [px,py,pdx = 0,pdy = 0] = part[i-1];
+      const next = part[i % part.length], [nx,ny,ndx = 0,ndy = 0] = next;
+      /* a fifth and sixth number set the incoming handle on its own; with four it mirrors the outgoing one */
+      const ix = next.length >= 6 ? nx+(next[4] || 0) : nx-ndx, iy = next.length >= 6 ? ny+(next[5] || 0) : ny-ndy;
+      d += ` C ${px+pdx} ${py+pdy} ${ix} ${iy} ${nx} ${ny}`;
+    }
+    if (close) d += ' Z';
+  });
+  return d;
 }
 
 export function geometryBounds(paths, pad = VECTOR_SIZE/2) {

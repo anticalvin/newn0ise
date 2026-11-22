@@ -153,7 +153,7 @@ t('effects hardware: four rendering profiles render real output, join the stack 
  return true}`);
 
 t('studio graph: a procedural graph layer renders, animates with time, edits with undo, saves and reopens (N0I-41)', '/studio-app.html', `async()=>{${OPEN}await open();const M=window.n0iseMotion,D=StudioDocument,P=StudioProc;
- M.add([D.layer('procgraph',{name:'Graph',graph:P.templates['Noise threshold']()})]);await wait(900);const cv=document.getElementById('preview');
+ M.add([D.layer('procgraph',{name:'Graph',graph:P.templates['Noise threshold']()})]);await wait(2500);const cv=document.getElementById('preview');
  const stat=()=>{const g=cv.getContext('2d').getImageData(0,0,cv.width,cv.height).data;let lo=0,hi=0,n=0,sum=0;for(let i=0;i<g.length;i+=4*997){const v=g[i];n++;sum+=v;if(v<40)lo++;if(v>215)hi++}return {lo:lo/n,hi:hi/n,mean:sum/n}};
  const a=stat();if(!(a.lo>.1&&a.hi>.1))return 'the graph did not render a black and white picture: '+JSON.stringify(a);
  M.setTime(2.5,true);await wait(500);const b=stat();if(Math.abs(a.mean-b.mean)<1&&a.hi===b.hi&&a.lo===b.lo)return 'the picture did not change with time';M.setTime(0,true);
@@ -181,3 +181,69 @@ t('studio graph: image input feeds Threshold -> Blend with animated noise, and a
  const left=px(.1),right=px(.9);if(!(left<60&&right>200))return 'threshold of the image ramp is wrong: left '+left+' right '+right;
  const st=window.n0iseMotion.R.procStatus(M.doc.layers.find(x=>x.type==='procgraph').id);if(!st||![...st.errors.values()].some(e=>/No video layer/.test(e)))return 'the missing video was not reported on its node';
  return st.errors.size===1?true:'unexpected errors: '+[...st.errors.values()].join('|')}`);
+
+t('studio: sliders preview while dragging, and a whole drag is one undo step', '/studio-app.html', `async()=>{${OPEN}await open();const M=window.n0iseMotion,D=StudioDocument;
+ M.add([D.layer('adjustment',{name:'Filter',adj:{kind:'look'},look:{...StudioLooks.blank(),preset:'film'}}),D.layer('shape',{shape:'rectangle',width:600,height:600,fill:'#808080',stroke:'#808080',strokeWidth:0})]);await wait(500);
+ const cv=document.getElementById('preview'),mid=()=>cv.getContext('2d').getImageData(Math.floor(cv.width/2),Math.floor(cv.height/2),1,1).data[0];
+ M.select([M.doc.layers[0].id]);await wait(400);const sl=[...document.querySelectorAll('input[type=range]')].find(i=>/brightness/i.test(i.closest('label')?.textContent||''));if(!sl)return 'no Brightness slider on the filter';
+ const before=mid(),undoBefore=document.getElementById('undo').disabled;sl.value=Math.min(+sl.max,(+sl.value)+80);sl.dispatchEvent(new Event('input',{bubbles:true}));await wait(500);const during=mid();if(Math.abs(during-before)<3)return 'the picture did not change while dragging ('+before+' -> '+during+')';
+ sl.value=Math.min(+sl.max,(+sl.value)+30);sl.dispatchEvent(new Event('input',{bubbles:true}));sl.dispatchEvent(new Event('change',{bubbles:true}));await wait(400);
+ document.getElementById('undo').click();await wait(400);if(Math.abs(mid()-before)>3)return 'one undo did not restore the whole drag ('+mid()+' vs '+before+')';return true}`);
+
+t('studio: a layer can be dragged from anywhere on its row (mouse), and a plain click still selects', '/studio-app.html', `async()=>{${OPEN}await open();const M=window.n0iseMotion,D=StudioDocument;document.querySelector('[data-mobile=left]')?.click();
+ M.add([D.layer('shape',{name:'One',shape:'rectangle',width:100,height:100,fill:'#d33',stroke:'#d33',strokeWidth:0})]);M.add([D.layer('shape',{name:'Two',shape:'ellipse',width:100,height:100,fill:'#39c',stroke:'#39c',strokeWidth:0})]);await wait(500);
+ const rowsEl=()=>[...document.querySelectorAll('#layerlist [data-layer-id]')],names=()=>M.doc.layers.map(l=>l.name).join(',');if(names()!=='Two,One')return 'unexpected order '+names();
+ const first=rowsEl()[0],label=first.querySelector('button:not(.layer-grip):not(.eye)')||first,r=label.getBoundingClientRect(),last=rowsEl()[1].getBoundingClientRect();
+ const pe=(ty,x,y,t)=>(t||label).dispatchEvent(new PointerEvent(ty,{pointerId:81,pointerType:'mouse',isPrimary:true,button:0,buttons:ty==='pointerup'?0:1,clientX:x,clientY:y,bubbles:true}));
+ pe('pointerdown',r.left+r.width/2,r.top+r.height/2);for(let i=1;i<=6;i++)pe('pointermove',r.left+r.width/2,r.top+r.height/2+(last.top+last.height-r.top)*i/6);pe('pointerup',r.left+r.width/2,last.top+last.height-2);await wait(400);
+ if(names()!=='One,Two')return 'dragging from the row body did not reorder: '+names();
+ M.select([]);await wait(200);const row=rowsEl()[0],lb=row.querySelector('button:not(.layer-grip):not(.eye)');lb.click();await wait(250);return M.selection.length===1?true:'a plain click no longer selects'}`);
+
+t('studio: importing a photo finds its key colours and shows them', '/studio-app.html', `async()=>{${OPEN}await open();const board=document.getElementById('artboard').getBoundingClientRect();
+ const c=document.createElement('canvas');c.width=300;c.height=300;const g=c.getContext('2d');g.fillStyle='#d62b2b';g.fillRect(0,0,300,170);g.fillStyle='#1e50c8';g.fillRect(0,170,300,80);g.fillStyle='#f2e8c8';g.fillRect(0,250,300,50);
+ const b=await new Promise(r=>c.toBlob(r,'image/png'));await dropAt([new File([b],'colours.png',{type:'image/png'})],board.left+board.width/2,board.top+board.height/2);await until(1);await wait(500);
+ const l=window.n0iseMotion.doc.layers.find(x=>x.type==='image');if(!l||!l.palette||l.palette.length<3)return 'no key colours were read: '+JSON.stringify(l&&l.palette);
+ const near=(h,c)=>{const v=[1,3,5].map(i=>parseInt(h.slice(i,i+2),16));return Math.hypot(v[0]-c[0],v[1]-c[1],v[2]-c[2])<40};
+ if(!l.palette.some(h=>near(h,[214,43,43]))||!l.palette.some(h=>near(h,[30,80,200])))return 'the main colours are missing: '+l.palette.join(',');
+ if(document.querySelectorAll('.photopalette .swatch').length!==l.palette.length)return 'the colours are not shown in the inspector';
+ const copy=StudioDocument.normalize(JSON.parse(JSON.stringify(window.n0iseMotion.doc)));return copy.layers.find(x=>x.type==='image').palette.length===l.palette.length?true:'the colours did not survive save and reopen'}`);
+
+t('studio: eyedropper shows a magnified loupe, arrow keys move one pixel, release picks, Esc cancels', '/studio-app.html', `async()=>{${OPEN}await open();const M=window.n0iseMotion,D=StudioDocument;
+ M.add([D.layer('shape',{shape:'rectangle',width:900,height:900,fill:'#336699',stroke:'#336699',strokeWidth:0})]);await wait(600);
+ const key=(k,sh)=>document.body.dispatchEvent(new KeyboardEvent('keydown',{key:k,shiftKey:!!sh,bubbles:true,cancelable:true}));key('i');await wait(150);
+ if(document.querySelector('[data-tool=picker]').getAttribute('aria-pressed')!=='true'&&!document.querySelector('[data-tool=picker]').classList.contains('active'))return 'I did not select the eyedropper';
+ const body=document.getElementById('stagebody'),r=document.getElementById('artboard').getBoundingClientRect(),x=r.left+r.width/2,y=r.top+r.height/2;
+ const pe=(ty,px,py)=>body.dispatchEvent(new PointerEvent(ty,{pointerId:91,pointerType:'mouse',isPrimary:true,button:0,buttons:ty==='pointerup'?0:1,clientX:px,clientY:py,bubbles:true}));
+ pe('pointerdown',x,y);await wait(150);const lp=document.querySelector('.loupe');if(!lp||lp.hidden)return 'the loupe did not appear';
+ const hex1=lp.querySelector('.loupehex').textContent;if(!/^#336699$/i.test(hex1))return 'wrong colour under the pointer: '+hex1;
+ const raw1=lp.querySelector('.louperaw').textContent;key('ArrowRight');await wait(100);const raw2=lp.querySelector('.louperaw').textContent;if(raw1===raw2)return 'arrow keys did not move the sample';
+ pe('pointerup',x,y);await wait(200);if(!lp.hidden)return 'the loupe stayed after release';
+ const before=document.querySelector('[data-tool=picker]').style.getPropertyValue('--paint-color');key('i');pe('pointerdown',x,y);await wait(100);key('Escape');await wait(100);pe('pointerup',x,y);await wait(100);if(!document.querySelector('.loupe').hidden)return 'Esc did not close the loupe';return true}`);
+
+t('studio: direct select (A) edits points of paths, shapes and text; text becomes compound outlines', '/studio-app.html', `async()=>{${OPEN}await open();const M=window.n0iseMotion,D=StudioDocument;
+ M.add([D.layer('text',{name:'Type',text:'Oo',font:'sans-serif',fontSize:300,fill:'#e9e5db',stroke:'#e9e5db',strokeWidth:0})]);await wait(500);M.select([]);await wait(100);
+ const key=(k)=>document.body.dispatchEvent(new KeyboardEvent('keydown',{key:k,bubbles:true,cancelable:true}));key('a');await wait(150);const dt=document.querySelector('[data-tool=direct]');if(!dt||!dt.classList.contains('active'))return 'A did not select the direct tool';
+ const body=document.getElementById('stagebody'),ab=document.getElementById('artboard').getBoundingClientRect(),[w,h]=M.dims(),sc=ab.width/w;
+ const pe=(ty,px,py)=>body.dispatchEvent(new PointerEvent(ty,{pointerId:95,pointerType:'mouse',isPrimary:true,button:0,buttons:ty==='pointerup'?0:1,clientX:px,clientY:py,bubbles:true}));
+ const l0=M.doc.layers[0],o=D.layer?0:0;const cx=ab.left+(w/2+l0.x)*sc,cy=ab.top+(h/2+l0.y)*sc;pe('pointerdown',cx-60*sc,cy);pe('pointerup',cx-60*sc,cy);await wait(700);
+ const l=M.doc.layers.find(x=>x.name==='Type');if(l.type!=='path')return 'the text was not converted to outlines (type '+l.type+')';if(!l.breaks||l.breaks.length<1)return 'the letters should be a compound path (O has a hole)';if(l.points.length<10)return 'too few outline points '+l.points.length;
+ const dots=document.querySelectorAll('#overlay [data-anchor]:not([data-tangent])').length;if(dots<l.points.length*.8)return 'anchors are not shown for the outline ('+dots+' of '+l.points.length+')';
+ document.getElementById('undo').click();await wait(400);const back=M.doc.layers.find(x=>x.name==='Type');if(back.type!=='text'||back.text!=='Oo')return 'undo did not bring the editable text back';
+ M.add([D.layer('shape',{name:'Box',shape:'rectangle',width:300,height:300,fill:'#d33',stroke:'#d33',strokeWidth:0,x:500,y:-400})]);await wait(400);M.select([]);
+ const bx=ab.left+(w/2+500)*sc,by=ab.top+(h/2-400)*sc;pe('pointerdown',bx,by);pe('pointerup',bx,by);await wait(500);const box=M.doc.layers.find(x=>x.name==='Box');return box.type==='path'&&box.points.length>=4?true:'the rectangle did not become an editable path'}`);
+
+t('studio: several artboards: add, switch, duplicate, rename, reorder, delete, undo, save and reopen, export all', '/studio-app.html', `async()=>{${OPEN}await open();const M=window.n0iseMotion,D=StudioDocument,A=window.n0iseArtboards;
+ M.add([D.layer('shape',{name:'On first',shape:'rectangle',width:200,height:200,fill:'#d33',stroke:'#d33',strokeWidth:0})]);await wait(300);
+ const names=()=>A.list.map(a=>(a.active?'*':'')+a.name).join('|');const label=()=>document.getElementById('artboardBtn').textContent;
+ if(!/ARTBOARD 01/.test(label()))return 'unexpected label '+label();A.add({ratio:'portrait'});await wait(400);
+ if(A.list.length!==2||!A.list[1].active)return 'the new artboard is not active: '+names();if(M.doc.layers.length!==0)return 'a new artboard should start empty';if(M.doc.ratio!=='portrait')return 'size of the new artboard not applied';
+ M.add([D.layer('shape',{name:'On second',shape:'ellipse',width:200,height:200,fill:'#39c',stroke:'#39c',strokeWidth:0})]);await wait(300);
+ A.switch(A.list[0].id);await wait(500);if(!M.doc.layers.some(l=>l.name==='On first')||M.doc.layers.some(l=>l.name==='On second'))return 'switching did not swap the layers';
+ if(document.getElementById('abPrev').hidden&&document.getElementById('abNext').hidden)return 'no previous or next buttons';
+ A.add({duplicate:true});await wait(400);if(A.list.length!==3||!M.doc.layers.some(l=>l.name==='On first'))return 'duplicate failed: '+names();
+ const U=()=>document.getElementById('undo').click();U();await wait(400);if(A.list.length!==2||!M.doc.layers.some(l=>l.name==='On first'))return 'undo of the duplicate failed: '+names();document.getElementById('redo').click();await wait(400);if(A.list.length!==3)return 'redo failed';
+ A.move(-1);await wait(300);const order=A.list.map(a=>a.id);A.move(1);await wait(300);if(order.join()===A.list.map(a=>a.id).join())return 'reorder had no effect';
+ const copy=D.normalize(JSON.parse(JSON.stringify(M.doc)));if(copy.artboards.length!==3||copy.artboards.filter(a=>a.layers).length!==2)return 'artboards did not survive save and reopen';
+ A.remove();await wait(400);if(A.list.length!==2)return 'delete failed';U();await wait(400);if(A.list.length!==3)return 'undo of delete failed';
+ const old=JSON.parse(JSON.stringify(M.doc));delete old.artboards;delete old.activeArtboard;if(D.normalize(old).artboards)return 'single-artboard projects should stay single';
+ document.getElementById('artboardBtn').click();await wait(200);const items=[...document.querySelectorAll('#modalcontent button')].map(b=>b.textContent);if(!items.some(t=>/New artboard/.test(t))||!items.some(t=>/Export every artboard/.test(t)))return 'artboard menu is missing actions: '+items.join('|');document.getElementById('modal').close();return true}`);

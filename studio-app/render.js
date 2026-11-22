@@ -81,7 +81,7 @@ function createStudioRender(vector) {
   }
 
   function project(l) {
-    const key = [l.type,l.videoId,l.fill,l.stroke,l.strokeWidth,l.shape,l.width,l.height,l.text,l.font,l.fontSize,l.src,l.crop,l.points,l.points?.length,l.closed];
+    const key = [l.type,l.videoId,l.fill,l.stroke,l.strokeWidth,l.shape,l.width,l.height,l.text,l.font,l.fontSize,l.src,l.crop,l.points,l.points?.length,l.closed,l.breaks];
     const cached = projections.get(l);
     if (cached && (cached.key === key || (Array.isArray(key) && key.every((v,i) => v === cached.key[i])))) return cached.value;
     const style = {originX:'center',originY:'center',objectCaching:false,fill:l.fill,
@@ -107,7 +107,7 @@ function createStudioRender(vector) {
       /* geometry only (selection, hit tests); the frame itself is drawn straight from the <video> in drawLayer */
       object = new Rect({...style,fill:'transparent',stroke:null,strokeWidth:0,width:l.width,height:l.height});
     } else if (l.type === 'brush' || l.type === 'path') {
-      object = new Path(pathData(l),{...style,fill:l.closed ? l.fill : null,
+      object = new Path(pathData(l),{...style,fill:l.closed || l.breaks ? l.fill : null,fillRule:'evenodd',
         strokeWidth:l.strokeWidth || (l.closed ? 0 : 4)});
       x = object.pathOffset.x;
       y = object.pathOffset.y;
@@ -344,7 +344,7 @@ function createStudioRender(vector) {
   function rasterSignature(layer,projection) {
     const transform = JSON.stringify([layer.x,layer.y,layer.scale,layer.rotation,layer.gradient,layer.fill,
       layer.stroke,layer.strokeWidth,layer.width,layer.height,layer.shape,layer.text,layer.fontSize,
-      layer.points,layer.crop,layer.type === 'procgraph' ? [liveDoc?.time,JSON.stringify(layer.graph)] : null,layer.type === 'video' ? [layer.start,layer.trim,media.video(layer)?.currentTime] : null]);
+      layer.points,layer.breaks,layer.crop,layer.type === 'procgraph' ? [liveDoc?.time,JSON.stringify(layer.graph)] : null,layer.type === 'video' ? [layer.start,layer.trim,media.video(layer)?.currentTime] : null]);
     const key = rasterKeys.get(layer);
     if (key && key.transform === transform && key.projection === projection) return key;
     const next = {projection,transform};
@@ -393,7 +393,7 @@ function createStudioRender(vector) {
       const path = new Path2D(pathData(l));
       hitContext.lineWidth = Math.max(l.strokeWidth || 4,tolerance*200/l.scale);
       hitContext.lineCap = 'round';
-      return (l.closed && l.fill && hitContext.isPointInPath(path,q.x,q.y)) || hitContext.isPointInStroke(path,q.x,q.y);
+      return ((l.closed || l.breaks) && l.fill && hitContext.isPointInPath(path,q.x,q.y,'evenodd')) || hitContext.isPointInStroke(path,q.x,q.y);
     }
     return object.containsPoint(new Point(q.x,q.y));
   }
@@ -422,5 +422,6 @@ function createStudioRender(vector) {
       top:Math.min(...p.map(a => a.y)),bottom:Math.max(...p.map(a => a.y))};
   }
 
-  return {media,activeAt,draw,toSVG,prepare,image,inside,bounds,corners,local,dimensions,center,transform,radians,pathData,vectorImage,procStatus};
+  const textObject = l => project(l)?.object || null;
+  return {media,activeAt,draw,toSVG,prepare,image,inside,bounds,corners,local,dimensions,center,transform,radians,pathData,vectorImage,procStatus,textObject};
 }

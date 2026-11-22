@@ -102,6 +102,7 @@ const StudioChroma = (() => {
       const v2 = views.swatches; v2.replaceChildren();
       const group = (title, list, label, extra) => { v2.append(el('div', 'chroma-label', title)); const g = el('div', 'chroma-swatches'); list.forEach(c => g.append(sw(c, label, () => setHex(c)))); if (!list.length) g.append(el('span', 'chroma-empty', extra || 'None yet')); v2.append(g); };
       group('PROJECT SWATCHES', o.saved?.() || [], 'Apply', 'Save a colour with ＋');
+      if ((o.photo?.() || []).length) group('PHOTO COLOURS', o.photo(), 'Apply');
       group('RECENT', o.recent?.() || [], 'Apply');
       group('ANALOGOUS', [-60, -30, 0, 30, 60].map(d => toHex(hsvToRgb((h + d + 360) % 360, s, v))), 'Try');
       const row = el('div', 'chroma-actions');
