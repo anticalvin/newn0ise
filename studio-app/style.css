@@ -365,3 +365,11 @@ a.brand:focus-visible { outline:2px solid var(--accent); outline-offset:4px; }
 .toolpal .seg button{flex:1;min-height:44px;min-width:44px;padding:0 10px;border-radius:12px;border:1px solid #ffffff22;background:transparent;color:inherit;font:inherit;font-size:13px}
 .toolpal .seg button[aria-pressed=true]{background:#e9e4d8;color:#161714}
 .tool svg{display:block;margin:auto;pointer-events:none}
+
+/* delete: toolbar button, layer bin, drop target while dragging files over the artboard */
+.tool:disabled{opacity:.35}#deleteTool:not(:disabled):hover{background:#5a2f2c;color:#ffd9d4}
+.layerbin{display:flex;align-items:center;justify-content:center;gap:8px;min-height:44px;border:1px dashed #4a4b4d;border-radius:12px;color:#9c9a93;font-size:11px;letter-spacing:.8px;text-transform:uppercase;cursor:pointer;transition:background .12s,border-color .12s,color .12s}
+.layerbin:focus-visible{outline:2px solid #e9e5db;outline-offset:2px}
+.layerbin.dragging{border-color:#8a8780;color:#e9e5db}.layerbin.armed{background:#5a2f2c;border-color:#d86a5e;color:#ffd9d4}
+.stage.dropping{outline:2px dashed #e9e5db;outline-offset:-8px}
+@media (prefers-reduced-motion:reduce){.layerbin{transition:none}}

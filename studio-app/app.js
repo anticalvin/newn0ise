@@ -238,12 +238,14 @@
     list.scrollTop = scrollTop;
     if (focused) [...list.querySelectorAll('button')].find(b => b.dataset.action === focused.dataset.action)?.focus({preventScroll:true});
     $('removeLayer').disabled = !selection.length;
+    $('deleteTool').disabled = !selection.length;
     $('moveUp').disabled = !canReorder(-1);
     $('moveDown').disabled = !canReorder(1);
   }
 
-  studioLayerDrag($('layerlist'),(id,beforeId) => {
+  studioLayerDrag($('layerlist'),(id,beforeId,toBin) => {
     const moving = selection.includes(id) ? selection : [id];
+    if (toBin) { deleteLayers(moving); return; }
     const kept = doc.layers.filter(l => !moving.includes(l.id));
     const original = doc.layers;
     const target = original.findIndex(l => l.id === beforeId);
@@ -251,7 +253,7 @@
     kept.splice(index,0,...original.filter(l => moving.includes(l.id)));
     if (kept.every((l,i) => l === original[i])) return;
     change(() => { doc.layers = kept; selection = [...moving]; });
-  });
+  },$('layerBin'));
 
   function canReorder(direction) {
     return doc.layers.some((l,i) => selection.includes(l.id) && doc.layers[i+direction] &&
@@ -270,15 +272,20 @@
       }
     });
   }
-  function remove() {
-    if (!selection.length) return;
-    if (selected().every(l => l.locked)) { notice('Unlock the selected layer before deleting it.'); return; }
+  /* the one deletion command: toolbar, Delete and Backspace, the layer bin, the context menu and the API all end up here. Locked layers are kept, one undo step restores everything. */
+  function deleteLayers(ids = selection) {
+    const wanted = doc.layers.filter(l => ids.includes(l.id));
+    if (!wanted.length) return 0;
+    const removable = wanted.filter(l => !l.locked).map(l => l.id);
+    if (!removable.length) { notice(wanted.length > 1 ? 'Those layers are locked. Unlock them before deleting.' : 'Unlock the layer before deleting it.'); return 0; }
     change(() => {
-      const removable = selected().filter(l => !l.locked).map(l => l.id);
       doc.layers = doc.layers.filter(l => !removable.includes(l.id));
       selection = selection.filter(id => !removable.includes(id));
     });
+    if (removable.length < wanted.length) notice((wanted.length-removable.length)+' locked layer'+(wanted.length-removable.length > 1 ? 's were' : ' was')+' kept.');
+    return removable.length;
   }
+  function remove() { deleteLayers(selection); }
   function toggleId(ids,id) { return ids.includes(id) ? ids.filter(x => x !== id) : [...ids,id]; }
 
   function insert(layers) {
@@ -1833,7 +1840,8 @@
   }
   async function decodeImages(files,[w,h],background) {
     const results = await Promise.allSettled(files.map(async file => {
-      if (!/^image\/(png|jpeg|webp|gif|avif|bmp)$/i.test(file.type)) throw Error('Unsupported image.');
+      if (!/^image\/(png|jpeg|webp|gif|avif|bmp|svg\+xml)$/i.test(file.type)) throw Error('Unsupported image.');
+      if (file.type === 'image/svg+xml' && file.size > 5e6) throw Error('That SVG is larger than 5 MB.');
       const url = URL.createObjectURL(file);
       try {
         const img = new Image();
@@ -1860,14 +1868,16 @@
     return results.filter(r => r.status === 'fulfilled').map(r => r.value);
   }
 
-  async function importImages(files,background = false) {
+  async function importImages(files,background = false,at = null) {
     if (!files.length) return;
     const current = doc;
+    if (files.some(f => f.size > 2e6)) notice('Importing '+(files.length > 1 ? files.length+' images' : files[0].name)+'…');
     const layers = await decodeImages(files,dims(),background);
     if (doc !== current) return;
     if (gesture) endGesture(true);
     if (doc !== current) return;
     if (layers.length) {
+      if (at && !background) { const [w,h] = dims(); layers.forEach((l,i) => { l.x = Math.round(at.x-w/2+i*36); l.y = Math.round(at.y-h/2+i*36); }); }
       change(() => {
         insert(layers);
         if (background) {
@@ -1937,14 +1947,23 @@
     importImages(files.filter(f => !f.type.startsWith('video/')),background);
   };
   $('imageFile').addEventListener('cancel',e => { delete e.target.dataset.background; });
+  /* dropping files: images become layers centred where they land; video goes to the timeline; anything else says why it was ignored */
   stage.addEventListener('dragover',e => {
-    if ([...e.dataTransfer.types].includes('Files')) e.preventDefault();
+    if ([...(e.dataTransfer?.types ?? [])].includes('Files')) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; stage.classList.add('dropping'); }
   });
+  for (const type of ['dragleave','dragend']) stage.addEventListener(type,e => { if (e.target === stage || type === 'dragend') stage.classList.remove('dropping'); });
   stage.addEventListener('drop',e => {
     e.preventDefault();
-    const dropped = [...e.dataTransfer.files], videos = dropped.filter(f => f.type.startsWith('video/'));
+    stage.classList.remove('dropping');
+    const dropped = [...(e.dataTransfer?.files ?? [])];
+    if (!dropped.length) return;
+    const videos = dropped.filter(f => f.type.startsWith('video/')), audio = dropped.filter(f => f.type.startsWith('audio/'));
+    const images = dropped.filter(f => /^image\//.test(f.type));
+    const other = dropped.length-videos.length-audio.length-images.length;
     if (videos.length) window.n0iseMotionUI?.importVideos(videos);
-    importImages(dropped.filter(f => !f.type.startsWith('video/')));
+    if (images.length) importImages(images,false,view === 'spatial' ? null : position(e.clientX,e.clientY));
+    if (audio.length) notice('Audio cannot be a layer yet. Drop video or images.');
+    else if (other) notice('That file type is not supported. Use PNG, JPEG, WebP, GIF, AVIF, BMP, SVG or video.');
   });
 
   $('menu').onclick = () => menu('Studio',[
@@ -2002,6 +2021,9 @@
   $('moveUp').onclick = () => reorder(-1);
   $('moveDown').onclick = () => reorder(1);
   $('removeLayer').onclick = remove;
+  $('deleteTool').onclick = remove;
+  $('layerBin').onclick = () => { if (selection.length) remove(); else notice('Drag a layer here to delete it.'); };
+  $('layerBin').onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('layerBin').click(); } };
   $('undo').onclick = () => traverse('undo');
   $('redo').onclick = () => traverse('redo');
   $('graphAdd').onclick = openEffects;
