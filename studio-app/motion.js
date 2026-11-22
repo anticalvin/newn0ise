@@ -100,7 +100,7 @@
       if (on) {
         if (play) {
           tap(v);
-          if (Math.abs(v.currentTime - want) > 0.3) v.currentTime = want;
+          if (Math.abs(v.currentTime - want) > 0.6) v.currentTime = want;
           if (v.paused) v.play().catch(() => {});
         } else {
           if (!v.paused) v.pause();
@@ -118,12 +118,22 @@
   function tick(now) {
     if (!playing) return;
     let t = (now - t0) / 1000;
+    /* the playing video is the master clock: ease the timeline toward it so frames are never skipped or re-seeked */
+    for (const l of doc().layers) {
+      if (l.type !== 'video' || !l.visible) continue;
+      const v = M().R.media.video(l), c = clipOf(l);
+      if (!v || v.paused || v.readyState < 2 || t < c.start || t >= c.start + c.dur) continue;
+      const tv = c.start + v.currentTime - (l.trim || 0);
+      if (Math.abs(tv - t) > 0.5) break;
+      t0 -= (tv - t) * 1000 * 0.35; t += (tv - t) * 0.35;
+      break;
+    }
     const d = doc().duration;
     if (t >= d) {
       if (loop && !exporting) { t0 = now; t = 0; } else { M().setTime(d); pause(); paintHead(); onEnd?.(); return; }
     }
-    M().setTime(t);
     syncVideos(t, true);
+    M().setTime(t, true);
     paintHead();
     raf = requestAnimationFrame(tick);
   }

@@ -229,6 +229,7 @@ function createStudioRender(vector) {
           rasterSignature(l,projection));
       }
       if (!frame && l.type === 'procedure' && (l.opacity !== 100 || l.blend !== 'source-over')) frame = makeRaster();
+      if (l.look) { frame = StudioLooks.apply(frame || makeRaster(),l.look,w,h,doc.time ?? 0); }
       if (frame) {
         ctx.save();
         ctx.globalAlpha = l.opacity/100;
@@ -275,7 +276,7 @@ function createStudioRender(vector) {
     const fragments = [];
     for (const l of [...doc.layers].reverse()) {
       if (!l.visible || !l.opacity) continue;
-      const vector = ['shape','text','path','brush','procedure'].includes(l.type) &&
+      const vector = ['shape','text','path','brush','procedure'].includes(l.type) && !l.look &&
         !l.chain?.nodes.some(n => n.type === 'effect');
       let markup;
       if (vector) {

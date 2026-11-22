@@ -541,6 +541,77 @@
       contextKey = '';
       change(() => { delete l.crop; });
     }));
+    if (l.type !== 'crt' && l.type !== 'background') context.append(...lookControls(l));
+  }
+
+  /* Looks: filters, LUTs and code over a layer (looks.js). One look is plain JSON so people and AI can both edit it. */
+  const lookOf = l => l.look ?? StudioLooks.blank();
+  const lookSet = (l,fn) => { const k = lookOf(l); fn(k); if (StudioLooks.isPlain(k)) delete l.look; else l.look = k; contextKey = ''; };
+  function lookControls(l) {
+    const k = lookOf(l), out = [];
+    const head = Object.assign(document.createElement('span'),{className:'fieldlabel',textContent:'LOOK'});
+    out.push(head,
+      field('Filter','select',k.preset,v => lookSet(l,x => { x.preset = v; }),{choices:Object.entries(StudioLooks.presets).map(([id,p]) => [id,p[0]])}));
+    if (l.look) {
+      out.push(field('Amount','range',k.amount,v => lookSet(l,x => { x.amount = v; }),{min:0,max:100}),
+        field('Brightness','range',k.brightness,v => lookSet(l,x => { x.brightness = v; }),{min:0,max:200}),
+        field('Contrast','range',k.contrast,v => lookSet(l,x => { x.contrast = v; }),{min:0,max:200}),
+        field('Saturation','range',k.saturate,v => lookSet(l,x => { x.saturate = v; }),{min:0,max:300}),
+        field('Hue','range',k.hue,v => lookSet(l,x => { x.hue = v; }),{min:-180,max:180}));
+    }
+    out.push(action(k.lut ? 'LUT: '+k.lut.name : 'Load LUT (.cube)',() => lookFile(l)));
+    if (k.lut) out.push(action('Remove LUT',() => change(() => lookSet(l,x => { delete x.lut; }))));
+    if (k.code && !StudioLooks.codeLive(k)) out.push(action('Run code',() => { StudioLooks.trusted.add(k.code); contextKey = ''; schedule(); syncInspector(); }));
+    out.push(action('Source',() => lookSource(l)));
+    if (l.look) out.push(action('Reset look',() => change(() => { delete l.look; contextKey = ''; })));
+    return out;
+  }
+  function lookFile(l) {
+    const input = Object.assign(document.createElement('input'),{type:'file',accept:'.cube,text/plain'});
+    input.onchange = async () => {
+      const file = input.files[0];
+      if (!file) return;
+      try {
+        if (file.size > 3e6) throw new Error('This LUT is larger than 3 MB. Export a 33-point .cube.');
+        const cube = await file.text();
+        StudioLooks.cube(cube);
+        change(() => lookSet(l,x => { x.lut = {name:file.name.replace(/\.cube$/i,'').slice(0,80),cube}; }));
+        notice('LUT loaded.');
+      } catch (e) { notice(e.message || 'This file is not a .cube LUT.'); }
+    };
+    input.click();
+  }
+  function lookSource(l) {
+    const k = lookOf(l), view = {...k, lut:k.lut ? k.lut.name : null};
+    delete view.code;
+    $('modaltitle').textContent = 'Look source';
+    $('modalcancel').textContent = 'Close';
+    const content = $('modalcontent');
+    content.className = 'looksource';
+    content.replaceChildren();
+    const note = (t) => Object.assign(document.createElement('p'),{className:'muted compact',textContent:t});
+    const json = Object.assign(document.createElement('textarea'),{className:'field',rows:8,spellcheck:false,value:JSON.stringify(view,null,2)});
+    const code = Object.assign(document.createElement('textarea'),{className:'field',rows:9,spellcheck:false,value:k.code || '',placeholder:'// return [r, g, b]\nreturn [r, g, b];'});
+    const err = note('');
+    const fix = () => { err.textContent = StudioLooks.status.error ? 'Error: '+StudioLooks.status.error : ''; };
+    const apply = () => {
+      try {
+        const raw = JSON.parse(json.value), next = {...raw, lut:k.lut, code:code.value.trim() || (typeof raw.code === 'string' ? raw.code : '')};
+        const clean = StudioLooks.normalize(next);
+        if (clean?.code) { StudioLooks.status.error = ''; StudioLooks.trusted.add(clean.code); if (!StudioLooks.compile(clean.code)) { fix(); return; } }
+        change(() => { if (clean) l.look = clean; else delete l.look; contextKey = ''; });
+        $('modal').close();
+      } catch (e) { err.textContent = 'Error: '+(e.message || 'Settings are not valid JSON.'); }
+    };
+    const copy = action('Copy for AI',async () => {
+      const text = JSON.stringify({...view,code:code.value.trim() || undefined},null,2);
+      try { await navigator.clipboard.writeText(text); notice('Copied.'); } catch { json.select(); notice('Copy failed. Select the text and copy it.'); }
+    });
+    const row = Object.assign(document.createElement('div'),{className:'modalactions'});
+    row.append(action('Apply',apply),copy);
+    content.append(note('Settings: preset (none, film, mono, noir, warm, cool, fade, vivid, sepia, invert), amount 0 to 100, brightness, contrast, saturate (percent), hue (degrees).'),json,
+      note('Code runs once per pixel. Arguments: r g b a (0 to 1), x y (pixels), t (seconds), w h. Return [r, g, b] or [r, g, b, a]. It runs only after you press Apply or Run code.'),code,err,row);
+    $('modal').showModal();
   }
 
   function sync() {
@@ -673,8 +744,13 @@
       } else if (axis === 'x') line(at,from,at,to,'guide');
       else line(from,at,to,at,'guide');
     }
-    if (draft?.line) svg('line',{x1:draft.x1,y1:draft.y1,x2:draft.x2,y2:draft.y2,class:'draft'});
-    else if (draft?.path) svg('path',{d:draft.path,class:'draft'});
+    if (draft?.line) {
+      if (draft.paint) svg('line',{x1:draft.x1,y1:draft.y1,x2:draft.x2,y2:draft.y2,stroke:draft.paint,'stroke-width':draft.thick,'stroke-linecap':'round',class:'ghost'});
+      svg('line',{x1:draft.x1,y1:draft.y1,x2:draft.x2,y2:draft.y2,class:'draft'});
+    } else if (draft?.path) {
+      if (draft.paint) svg('path',{d:draft.path,fill:draft.paint,stroke:draft.edge||'none','stroke-width':draft.edgeWidth||0,class:'ghost'});
+      svg('path',{d:draft.path,class:'draft'});
+    }
     else if (draft) svg(draft.points ? 'polygon' : 'rect',{...draft,class:'draft'});
     if (pen.length) {
       const tail = hover && gesture?.kind !== 'pen' ? [[hover.x,hover.y,0,0]] : [];
@@ -789,6 +865,15 @@
       contextKey = '';
     });
     if (!editAnchors) toggleAnchors();
+  }
+  /* live preview while dragging out a shape: the real outline in the current paint, not just a box */
+  function shapeDraft(a,b) {
+    const r = rectangle(a,b), look = build('shape',{});
+    if (shape === 'line') { draft = {line:true,x1:a.x,y1:a.y,x2:b.x,y2:b.y,paint:look.stroke,thick:6}; return; }
+    if (r.width < 2 && r.height < 2) { draft = r; return; }
+    const cx = r.x+r.width/2, cy = r.y+r.height/2;
+    const points = V.outline(shape,Math.max(2,r.width),Math.max(2,r.height)).map(([x,y,dx,dy]) => [x+cx,y+cy,dx,dy]);
+    draft = {path:R.pathData({points,closed:true}),paint:look.fill,edge:look.stroke,edgeWidth:look.strokeWidth};
   }
   function placeShape(props = {}) {
     const l = build('shape',props);
@@ -1179,7 +1264,11 @@
       g.now = p;
       draft = {line:true,x1:g.p.x,y1:g.p.y,x2:p.x,y2:p.y};
       drawOverlay();
-    } else if (g.kind === 'marquee' || g.kind === 'shape') {
+    } else if (g.kind === 'shape') {
+      g.now = p;
+      shapeDraft(g.p,p);
+      drawOverlay();
+    } else if (g.kind === 'marquee') {
       g.now = p;
       draft = rectangle(g.p,p);
       drawOverlay();
@@ -2148,7 +2237,7 @@
     R, canvas,
     get doc() { return doc; },
     get selection() { return selection; },
-    setTime(t) { doc.time = Math.max(0,t); schedule(); },
+    setTime(t,now) { doc.time = Math.max(0,t); if (now) { if (frame) { cancelAnimationFrame(frame); frame = 0; } if (view !== 'spatial') renderComposition(); } else schedule(); },
     schedule, change, select, notice, dims,
     capture, finish,
     add(layers,extra) { change(() => { extra?.(); insert(layers); }); },
