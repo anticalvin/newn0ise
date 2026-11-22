@@ -2,6 +2,7 @@ import {GENERATORS,STYLE_CONTROLS,MAX_DEFINITION_LENGTH,createDefinition,parseDe
   applyVectorPatch,createVectorVariation,generateGeometry,geometryMarkup,exportVectorSVG,viewBox} from './vector-generator.js';
 import {openVectorTab,returnVector,takeVector} from './vector-handoff.js';
 import {createVectorAPI,connectVectorBridge} from './vector-api.js';
+import {normalize as normCanvas,dimsFor,frameViewBox,mountCanvasControls} from './lab-canvas.js';
 
 const STORAGE = 'n0ise-lab-vector-v1';
 const $ = id => document.getElementById(id);
@@ -57,6 +58,20 @@ export function mountVectorLab({editor,applyPause}) {
     }
   } catch {}
   cleanSource = json(definition);
+  /* the vector canvas size: the preview frame, the viewBox and the exported SVG all follow it */
+  let frame = {ratio:'code',w:1000,h:1000,flip:false};
+  try { frame = normCanvas(JSON.parse(localStorage.getItem('n0ise-lab-vector-frame') || 'null')); } catch {}
+  const frameBox = base => { const d = dimsFor(frame); return d ? frameViewBox(base,d.w,d.h) : base; };
+  const stage = $('vector-preview').parentElement, frameEl = $('vector-preview');
+  function fitFrame() {
+    const box = preview.viewBox.baseVal, aw = stage.clientWidth, ah = stage.clientHeight;
+    if (!box || !box.width || !box.height || !aw || !ah) return;
+    const ar = box.width/box.height; let w = aw, h = w/ar; if (h > ah) { h = ah; w = h*ar; }
+    frameEl.style.width = Math.floor(w)+'px'; frameEl.style.height = Math.floor(h)+'px';
+  }
+  new ResizeObserver(fitFrame).observe(stage);
+  mountCanvasControls($('vector-size-host'),{get:() => frame,set:v => { frame = v; try { localStorage.setItem('n0ise-lab-vector-frame',JSON.stringify(v)); } catch {} },
+    onChange:() => { rendered = undefined; render(); }});
   const status = text => { $('vector-status').textContent = text; };
   const error = text => { $('vector-error').textContent = text; };
   const readSource = () => editor ? editor.get() : code.value;
@@ -110,7 +125,8 @@ export function mountVectorLab({editor,applyPause}) {
     if (shown === rendered) return;
     geometry = generateGeometry(shown);
     rendered = shown;
-    preview.setAttribute('viewBox',viewBox(geometry).join(' '));
+    preview.setAttribute('viewBox',frameBox(viewBox(geometry)).join(' '));
+    fitFrame();
     preview.innerHTML = geometryMarkup(geometry);
     $('vector-name').textContent = GENERATORS[shown.generator].name;
     $('vector-info').textContent = `${geometry.length} paths · seed ${shown.seed}`;
@@ -370,7 +386,7 @@ export function mountVectorLab({editor,applyPause}) {
   };
   $('vector-svg').onclick = () => attempt(() => {
     requireApplied();
-    download(definition.generator+'.svg',exportVectorSVG(definition),'image/svg+xml');
+    download(definition.generator+'.svg',exportVectorSVG(definition,dimsFor(frame)),'image/svg+xml');
   });
   $('vector-copy').onclick = async () => {
     try {

@@ -12,6 +12,7 @@
   <script defer src="studio-app/looks.js"></script>
   <script defer src="studio-app/document.js"></script>
   <script defer src="studio-app/snapping.js"></script>
+  <script defer src="studio-app/viewport.js"></script>
   <script defer src="studio-app/render.js"></script>
   <script defer src="studio-app/graph.js"></script>
   <script defer src="studio-app/layer-drag.js"></script>
@@ -56,7 +57,7 @@
       <div class="panel-handle" data-resize="left" role="separator" aria-label="Resize layers" aria-orientation="vertical" tabindex="0"></div>
     </aside>
     <section class="stage viewcanvas" id="stage" aria-label="Composition">
-      <div class="stagehead"><span>ARTBOARD 01</span><span><span id="dimension"></span><button id="zoomLock" aria-label="Lock zoom anchor" aria-pressed="false" title="Lock zoom anchor: zooming keeps the artboard where it is">LOCK</button><button id="fit" aria-label="Zoom to fit" title="Zoom to fit (0)">FIT</button></span></div>
+      <div class="stagehead"><span>ARTBOARD 01</span><span><span id="dimension"></span><button id="zoomLock" class="iconlock" aria-label="Lock viewport" aria-pressed="false" title="Lock viewport: freeze the current zoom and position"></button><button id="fit" aria-label="Zoom to fit" title="Zoom to fit (0)">FIT</button></span></div>
       <div class="stagebody" id="stagebody" tabindex="0" aria-label="Artwork workspace">
         <div class="artboard" id="artboard">
           <canvas id="preview" aria-label="Composition preview"></canvas>

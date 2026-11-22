@@ -647,9 +647,8 @@
     const [w,h] = dims(), width = stage.clientWidth, height = stage.clientHeight;
     if (!width || !height) return;
     if (fitted) {
-      const flush = Math.abs((w/h)/(width/height)-1) < .03;
-      zoom = flush ? Math.max(.01,Math.min(width/w,height/h)) : Math.max(.01,Math.min((width-30)/w,(height-66)/h,1));
-      pan = {x:0,y:flush ? 0 : -18};
+      const f = StudioViewport.fitTransform(w,h,width,height);
+      zoom = f.zoom; pan = f.pan;
     }
     board.classList.toggle('flush',Math.abs((w/h)/(width/height)-1) < .03);
     board.style.width = w*zoom+'px';
@@ -828,10 +827,16 @@
     const r = board.getBoundingClientRect();
     return {x:(x-r.left)/zoom,y:(y-r.top)/zoom};
   }
-  let zoomLocked = false;
+  /* viewport lock: freezes the current zoom and position. Wheel, trackpad pinch, touch pinch and pan are ignored until you unlock; Fit still works. It is not the same as locking a layer or the artboard's contents. */
+  let zoomLocked = false, lockNoticeAt = 0;
   try { zoomLocked = localStorage.getItem('n0ise.zoomlock') === '1'; } catch {}
+  const viewBlocked = () => {
+    if (!zoomLocked) return false;
+    if (performance.now()-lockNoticeAt > 2500) { lockNoticeAt = performance.now(); notice('Viewport is locked. Unlock it to zoom or pan, or press Fit.'); }
+    return true;
+  };
   function zoomAt(x,y,value) {
-    if (zoomLocked) { const q = stage.getBoundingClientRect(); x = q.left+q.width/2+pan.x; y = q.top+q.height/2+pan.y; } /* locked: zoom about the artboard's own centre, so it never drifts */
+    if (viewBlocked()) return;
     const p = position(x,y), r = stage.getBoundingClientRect(), [w,h] = dims();
     const min = Math.min(.05,zoom);
     zoom = clamp(value,min,4);
@@ -1223,8 +1228,7 @@
     const g = gesture;
     if (g?.kind === 'pinch' && pointers.size === 2) {
       const pair = touchPair();
-      zoomAt(g.center.x,g.center.y,g.z*pair.distance/g.distance);
-      if (!zoomLocked) { pan.x += pair.center.x-g.center.x; pan.y += pair.center.y-g.center.y; }
+      if (!viewBlocked()) { zoomAt(g.center.x,g.center.y,g.z*pair.distance/g.distance); pan.x += pair.center.x-g.center.x; pan.y += pair.center.y-g.center.y; }
       Object.assign(g,pair,{z:zoom});
       layout();
       return;
@@ -1241,6 +1245,7 @@
     const [w,h] = dims();
     const update = () => { g.edited = true; schedule(); syncInspector(); };
     if (g.kind === 'pan') {
+      if (viewBlocked()) return;
       fitted = false;
       pan = {x:g.pan.x+dx,y:g.pan.y+dy};
       layout();
@@ -1496,7 +1501,7 @@
       if (selection.length) actions.push(['Deselect',() => select([])]);
       actions.push([doc.artboardLocked ? 'Unlock artboard' : 'Lock artboard',() => change(() => { doc.artboardLocked = !doc.artboardLocked; })],
         ['Rename artboard',() => { $('docname').focus(); $('docname').select(); }],['Export…',() => $('export').click()],
-        ['Fit to screen',fit],[zoomLocked ? 'Unlock zoom anchor' : 'Lock zoom anchor',() => $('zoomLock').click()]);
+        ['Fit to screen',fit],[zoomLocked ? 'Unlock viewport' : 'Lock viewport',() => $('zoomLock').click()]);
     }
     const rect = e.target.getBoundingClientRect();
     contextMenu.show(e.clientX || rect.left,e.clientY || rect.bottom,actions);
@@ -1961,8 +1966,16 @@
   $('modalcancel').onclick = () => $('modal').close();
   $('export').onclick = exportOptions;
   $('fit').onclick = fit;
-  { const zl = $('zoomLock'), paintZl = () => { zl.setAttribute('aria-pressed',zoomLocked); zl.classList.toggle('on',zoomLocked); };
-    zl.onclick = () => { zoomLocked = !zoomLocked; try { localStorage.setItem('n0ise.zoomlock',zoomLocked?'1':'0'); } catch {} paintZl(); };
+  { const zl = $('zoomLock'), LOCKED = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="9.5" rx="2.2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>',
+      OPEN = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="9.5" rx="2.2"/><path d="M8 11V8a4 4 0 0 1 7.6-1.7"/></svg>';
+    const paintZl = () => {
+      const label = zoomLocked ? 'Unlock viewport' : 'Lock viewport';
+      zl.innerHTML = zoomLocked ? LOCKED : OPEN; zl.setAttribute('aria-pressed',zoomLocked); zl.classList.toggle('on',zoomLocked);
+      zl.setAttribute('aria-label',label); zl.title = zoomLocked ? 'Viewport locked: zoom and pan are frozen. Click to unlock.' : 'Lock viewport: freeze the current zoom and position';
+      stage.classList.toggle('viewlocked',zoomLocked);
+    };
+    zl.onclick = () => { zoomLocked = !zoomLocked; try { localStorage.setItem('n0ise.zoomlock',zoomLocked?'1':'0'); } catch {} paintZl(); notice(zoomLocked ? 'Viewport locked' : 'Viewport unlocked'); };
+    window.n0iseViewport = {get locked() { return zoomLocked; },get zoom() { return zoom; },get pan() { return {...pan}; },get fitted() { return fitted; },toggleLock: () => zl.click(),fit};
     paintZl(); }
   /* the plus above the layers: blank layer, adjustment layers, then everything else */
   function addAdjustment(name,adj,look) { add('adjustment',{name,adj,look:{...StudioLooks.blank(),...look}}); }

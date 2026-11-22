@@ -304,7 +304,7 @@ a.brand:focus-visible { outline:2px solid var(--accent); outline-offset:4px; }
 .tool{position:relative}
 .tool[data-tool=picker]{font-size:0}.tool[data-tool=picker]::after{content:'';position:absolute;left:50%;top:50%;width:20px;height:20px;margin:-10px 0 0 -10px;border-radius:50%;background:var(--paint-color,#e9e5db);border:2px solid #ffffffb0;box-sizing:border-box}
 
-#zoomLock{margin-right:6px;min-height:44px;min-width:44px}#zoomLock[aria-pressed=true]{background:#e9e5db;color:#111;border-radius:8px}
+#zoomLock{margin-right:6px;min-height:44px;min-width:44px;display:inline-grid;place-items:center;padding:0;border-radius:999px;background:transparent;color:inherit;border:0;vertical-align:middle}#zoomLock svg{display:block}#zoomLock:hover{background:rgba(255,255,255,.08)}#zoomLock[aria-pressed=true]{background:#e9e5db;color:#111}#zoomLock:focus-visible{outline:2px solid #e9e5db;outline-offset:2px}.viewlocked .stagebody{cursor:default}
 
 .colourfield{display:grid;gap:6px}.colourrow{display:grid;grid-template-columns:44px repeat(3,minmax(0,1fr));gap:6px}.colourrow .hex{grid-column:span 3}.colourrow .hex+.rgb{grid-column:2}
 .colourrow .field{min-height:44px;padding:0 6px;text-align:center}.colourrow input[type=color]{padding:3px;cursor:pointer}.colourrow .hex{font-family:ui-monospace,monospace;text-transform:lowercase}
