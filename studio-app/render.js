@@ -198,14 +198,42 @@ function createStudioRender(vector) {
       projected.object.globalCompositeOperation = composite ? l.blend : 'source-over';
       projected.object.render(ctx);
     } else if (l.type === 'procedure') drawVector(ctx,l);
+    else if (l.type === 'procgraph') drawProcGraph(ctx,l,w,h);
     else drawProcedural(ctx,l.type,w,h,scale,l);
     ctx.restore();
   }
+
+  /* ---- procedural graph layers: the runtime (StudioProc) renders pixels at the graph's resolution, scaled into the artboard ---- */
+  let liveDoc = null;
+  const procEntries = new Map(), procScratch = document.createElement('canvas');
+  function procSource(kind,type,layerId,W,H,fit) {
+    const layers = liveDoc?.__sources || liveDoc?.layers || [], l = (layerId && layers.find(x => x.id === layerId && x.type === type)) || layers.find(x => x.type === type);
+    if (kind === 'key') return l ? [l.id,type === 'image' ? String(l.src).length : 0,JSON.stringify(l.crop || null)] : null;
+    if (!l) return null;
+    let src, sw, sh;
+    if (type === 'video') { const v = media.video(l); if (!v || !v.videoWidth || v.readyState < 2) return null; src = v; sw = v.videoWidth; sh = v.videoHeight; }
+    else { const im = image(l.src).img; if (!im || !im.naturalWidth) return null; src = im; sw = im.naturalWidth; sh = im.naturalHeight; }
+    if (procScratch.width !== W) procScratch.width = W; if (procScratch.height !== H) procScratch.height = H;
+    const g = procScratch.getContext('2d',{willReadFrequently:true}); g.clearRect(0,0,W,H);
+    const k = fit === 'stretch' ? null : fit === 'contain' ? Math.min(W/sw,H/sh) : Math.max(W/sw,H/sh), dw = k ? sw*k : W, dh = k ? sh*k : H;
+    g.drawImage(src,(W-dw)/2,(H-dh)/2,dw,dh);
+    return g.getImageData(0,0,W,H).data;
+  }
+  function drawProcGraph(ctx,l,w,h) {
+    if (!l.graph) return;
+    let e = procEntries.get(l.id); if (!e) { e = {rt:new StudioProc.Runtime(l.graph,{}),cv:document.createElement('canvas'),errors:new Map()}; procEntries.set(l.id,e); }
+    e.rt.setGraph(l.graph); e.rt.source = procSource;
+    const res = l.graph.res || 480, ar = w/h, W = Math.round(ar >= 1 ? res : res*ar), H = Math.round(ar >= 1 ? res/ar : res);
+    const r = e.rt.render(liveDoc?.time ?? 0,W,H); e.errors = r.errors; e.stats = r.stats;
+    if (r.image) { if (e.cv.width !== W) e.cv.width = W; if (e.cv.height !== H) e.cv.height = H; e.cv.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(r.image),W,H),0,0); ctx.imageSmoothingEnabled = true; ctx.drawImage(e.cv,-w/2,-h/2,w,h); }
+  }
+  const procStatus = id => { const e = procEntries.get(id); return e ? {errors:e.errors,stats:e.stats,canvas:e.cv} : null; };
 
   let adjSnap = null;
   /* scale > 1 re-renders the vectors at screen resolution so shapes and text stay crisp when zoomed in */
   function draw(canvas,doc,gpu,scale = 1) {
     const [w,h] = dimensions(doc), cw = Math.round(w*scale), ch = Math.round(h*scale);
+    liveDoc = doc;
     if (canvas.width !== cw) canvas.width = cw;
     if (canvas.height !== ch) canvas.height = ch;
     const ctx = canvas.getContext('2d');
@@ -303,7 +331,7 @@ function createStudioRender(vector) {
         const drawing = l.type === 'procedure' ? geometryMarkup(procedural(l).geometry) : project(l).object.toSVG();
         markup = `<g transform="${transform}">${drawing}</g>`;
       } else {
-        draw(surface,{...doc,layers:[{...l,opacity:100,blend:'source-over'}]},gpu);
+        draw(surface,{...doc,layers:[{...l,opacity:100,blend:'source-over'}],__sources:doc.layers},gpu);
         markup = image(surface);
       }
       const style = Object.hasOwn(blends,l.blend) ? ` style="mix-blend-mode:${blends[l.blend]}"` : '';
@@ -316,7 +344,7 @@ function createStudioRender(vector) {
   function rasterSignature(layer,projection) {
     const transform = JSON.stringify([layer.x,layer.y,layer.scale,layer.rotation,layer.gradient,layer.fill,
       layer.stroke,layer.strokeWidth,layer.width,layer.height,layer.shape,layer.text,layer.fontSize,
-      layer.points,layer.crop,layer.type === 'video' ? [layer.start,layer.trim,media.video(layer)?.currentTime] : null]);
+      layer.points,layer.crop,layer.type === 'procgraph' ? [liveDoc?.time,JSON.stringify(layer.graph)] : null,layer.type === 'video' ? [layer.start,layer.trim,media.video(layer)?.currentTime] : null]);
     const key = rasterKeys.get(layer);
     if (key && key.transform === transform && key.projection === projection) return key;
     const next = {projection,transform};
@@ -332,7 +360,7 @@ function createStudioRender(vector) {
 
   function inside(l,p,w,h,tolerance) {
     if (!l.visible || !l.opacity || l.type === 'crt' || l.type === 'background' || l.type === 'adjustment') return false;
-    if (l.type === 'gradient') return p.x >= 0 && p.x <= w && p.y >= 0 && p.y <= h;
+    if (l.type === 'gradient' || l.type === 'procgraph') return p.x >= 0 && p.x <= w && p.y >= 0 && p.y <= h;
     const q = local(l,p,w,h);
     if (l.type === 'scene') return Math.hypot(q.x,q.y) <= Math.min(w,h)*.39;
     if (l.type === 'chrome') {
@@ -394,5 +422,5 @@ function createStudioRender(vector) {
       top:Math.min(...p.map(a => a.y)),bottom:Math.max(...p.map(a => a.y))};
   }
 
-  return {media,activeAt,draw,toSVG,prepare,image,inside,bounds,corners,local,dimensions,center,transform,radians,pathData,vectorImage};
+  return {media,activeAt,draw,toSVG,prepare,image,inside,bounds,corners,local,dimensions,center,transform,radians,pathData,vectorImage,procStatus};
 }

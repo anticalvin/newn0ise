@@ -553,6 +553,7 @@
       context.append(sized('Width','width','height'),sized('Height','height','width'),toggle);
     }
     if (l.type === 'shape') context.append(action('Edit points',() => pathFromShape(l)));
+    if (l.type === 'procgraph') context.append(action('Edit graph…',() => openProcEditor(l)));
     if (l.type === 'path') {
       context.append(action(editAnchors ? 'Done editing anchors' : 'Edit anchors',toggleAnchors));
       if (editAnchors && !l.locked) {
@@ -662,6 +663,7 @@
     layout();
     schedule();
     graph.render();
+    procEditor?.redraw();
   }
 
   function layout() {
@@ -909,6 +911,22 @@
     if (!hit || hit.dist*l.scale/100*zoom > 18) return false;
     change(() => { const r = StudioPath.split(l.points,!!l.closed,hit.seg,hit.t); l.points = r.points; anchorSel = r.index; contextKey = ''; });
     return true;
+  }
+  /* procedural graph layers: the graph lives on the layer, so undo, save and Motion treat it like any other layer data */
+  function addProcGraph(template) {
+    const graph = template ? StudioProc.templates[template]() : StudioProc.create();
+    add('procgraph',{name:template || 'Procedural graph',graph});
+    const l = visibleSelection()[0]; if (l) openProcEditor(l);
+  }
+  let procEditor = null;
+  function openProcEditor(l) {
+    if (!l || l.type !== 'procgraph') return;
+    procEditor?.close?.();
+    const ctx = {layer:l,current:() => doc.layers.find(x => x.id === l.id),begin:() => capture(),end:before => { finish(before); },live:() => schedule(),notice,close:() => { procEditor = null; syncInspector(); },
+      errors:() => R.procStatus(l.id)?.errors,preview:() => R.procStatus(l.id)?.canvas};
+    procEditor = StudioProcUI.open($('stage'),ctx);
+    const redraw = () => { if (procEditor) procEditor.redraw(); };
+    ctx.onFrame = redraw;
   }
   function deleteAnchor() {
     const l = editable(); if (!l || anchorSel < 0) return false;
@@ -1242,6 +1260,7 @@
       if (addAnchorAt(editing,p)) return;
     }
     const top = doc.layers.find(l => R.inside(l,p,w,h,5/zoom));
+    if (top?.type === 'procgraph' && !top.locked) { select([top.id]); openProcEditor(top); return; }
     if (top?.type === 'text') startTextEdit(top);
     else if (top?.type === 'shape' && !top.locked && !doc.artboardLocked) pathFromShape(top);
     else if (top?.type === 'path' && !top.locked && !editAnchors) { select([top.id]); toggleAnchors(); }
@@ -2130,6 +2149,7 @@
     const [w,h] = dims();
     menu('New layer',[
       ['Blank layer',() => add('shape',{name:'Blank layer',shape:'rectangle',width:w,height:h,x:0,y:0,strokeWidth:0})],
+      ['Procedural graph…',() => menu('Procedural graph',[...Object.keys(StudioProc.templates).map(k => [k,() => addProcGraph(k)]),['Empty graph',() => addProcGraph(null)]])],
       ['Filter',() => addAdjustment('Filter',{kind:'look'},{preset:'film'})],
       ['Brightness / contrast',() => addAdjustment('Brightness / contrast',{kind:'look'},{brightness:110,contrast:115})],
       ['Hue / saturation',() => addAdjustment('Hue / saturation',{kind:'look'},{hue:20,saturate:130})],

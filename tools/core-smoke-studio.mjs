@@ -80,7 +80,7 @@ t('studio: grid shows and snaps independently; guides snap; settings persist', '
  M.add([D.layer('shape',{shape:'rectangle',width:200,height:100,fill:'#d33',stroke:'#d33',strokeWidth:0})]);await wait(500);const l=M.doc.layers.find(x=>x.type==='shape'),[w,h]=M.dims();const x0=l.x;
  const r=document.getElementById('artboard').getBoundingClientRect(),sc=r.width/w,cx=r.left+(w/2+l.x)*sc,cy=r.top+(h/2+l.y)*sc;
  const pe=(ty,x,y)=>body.dispatchEvent(new PointerEvent(ty,{pointerId:9,pointerType:'mouse',isPrimary:true,button:0,buttons:ty==='pointerup'?0:1,clientX:x,clientY:y,bubbles:true}));
- const left=w/2+l.x-100,gl=Math.ceil(left/100)*100,d=(gl-left)+3;pe('pointerdown',cx,cy);for(let i=1;i<=6;i++)pe('pointermove',cx+d*sc*i/6,cy+0);pe('pointerup',cx+d*sc,cy);await wait(300);
+ const left=w/2+l.x-100;let gl=Math.ceil(left/100)*100;while(Math.abs(gl+100-w/2)<70||Math.abs(gl+100-w)<70||gl+100<70||Math.abs(gl+100-(w/2-100))<70)gl+=100;gl+=100;const d=(gl-left)+3;pe('pointerdown',cx,cy);for(let i=1;i<=6;i++)pe('pointermove',cx+d*sc*i/6,cy+0);pe('pointerup',cx+d*sc,cy);await wait(300);
  const edges=[w/2+l.x-100,w/2+l.x,w/2+l.x+100];if(!edges.some(e=>Math.abs(e/100-Math.round(e/100))<.001))return 'dragged layer did not snap to the hidden grid: edges '+edges.join(',')+' moved '+(l.x-x0)+' wanted a snap to '+gl;
  document.body.dispatchEvent(new KeyboardEvent('keydown',{key:"'",bubbles:true,cancelable:true}));await wait(200);if(!hasGrid())return "the ' shortcut did not show the grid";
  const saved=JSON.parse(localStorage.getItem('n0ise.gridcfg'));if(!saved.show||!saved.snapGrid)return 'settings were not saved';
@@ -151,3 +151,33 @@ t('effects hardware: four rendering profiles render real output, join the stack 
   [...document.querySelectorAll('button')].find(x=>x.textContent.trim()==='Hardware')?.click();await wait(900);}
  for(let i=1;i<out.length;i++)if(diff(out[i],out[i-1])<2)return 'profiles look identical at '+ids[i];
  return true}`);
+
+t('studio graph: a procedural graph layer renders, animates with time, edits with undo, saves and reopens (N0I-41)', '/studio-app.html', `async()=>{${OPEN}await open();const M=window.n0iseMotion,D=StudioDocument,P=StudioProc;
+ M.add([D.layer('procgraph',{name:'Graph',graph:P.templates['Noise threshold']()})]);await wait(900);const cv=document.getElementById('preview');
+ const stat=()=>{const g=cv.getContext('2d').getImageData(0,0,cv.width,cv.height).data;let lo=0,hi=0,n=0,sum=0;for(let i=0;i<g.length;i+=4*997){const v=g[i];n++;sum+=v;if(v<40)lo++;if(v>215)hi++}return {lo:lo/n,hi:hi/n,mean:sum/n}};
+ const a=stat();if(!(a.lo>.1&&a.hi>.1))return 'the graph did not render a black and white picture: '+JSON.stringify(a);
+ M.setTime(2.5,true);await wait(500);const b=stat();if(Math.abs(a.mean-b.mean)<1&&a.hi===b.hi&&a.lo===b.lo)return 'the picture did not change with time';M.setTime(0,true);
+ const st=window.n0iseProcStatus;const opener=[...document.querySelectorAll('button')].find(x=>x.textContent.trim()==='Edit graph…');if(!opener)return 'no Edit graph action for a graph layer';opener.click();await wait(600);
+ const box=document.querySelector('.procbox');if(!box)return 'the graph editor did not open';const nodes=()=>box.querySelectorAll('.pnode').length;const n0=nodes();if(n0<4)return 'expected the template nodes, saw '+n0;
+ [...box.querySelectorAll('button')].find(x=>x.textContent.trim()==='+ Node').click();await wait(200);const item=[...box.querySelectorAll('.procitem')].find(x=>x.textContent==='Blur');if(!item)return 'no Blur in the node list';item.click();await wait(300);if(nodes()!==n0+1)return 'adding a node failed';
+ const U=()=>document.getElementById('undo').click();U();await wait(300);if(nodes()!==n0)return 'undo did not remove the node';document.getElementById('redo').click();await wait(300);if(nodes()!==n0+1)return 'redo did not restore the node';
+ const l=M.doc.layers.find(x=>x.type==='procgraph'),blur=l.graph.nodes.find(x=>x.type==='blur'),noise=l.graph.nodes.find(x=>x.type==='noise');
+ blur.x=noise.x+60;blur.y=noise.y+220;box.querySelector('.procsvg').dispatchEvent(new PointerEvent('pointerdown',{pointerId:70,pointerType:'mouse',isPrimary:true,button:0,buttons:1,clientX:5,clientY:5,bubbles:true}));box.querySelector('.procsvg').dispatchEvent(new PointerEvent('pointerup',{pointerId:70,pointerType:'mouse',isPrimary:true,button:0,buttons:0,clientX:5,clientY:5,bubbles:true}));[...box.querySelectorAll('button')].find(x=>x.textContent.trim()==='Fit').click();await wait(250);
+ const out=box.querySelector('[data-node="'+noise.id+'"] [data-out]'),inp=box.querySelector('[data-node="'+blur.id+'"] [data-in]');const r1=out.getBoundingClientRect(),r2=inp.getBoundingClientRect(),svg=box.querySelector('.procsvg');
+ const pe=(ty,x,y,t)=>(t||svg).dispatchEvent(new PointerEvent(ty,{pointerId:61,pointerType:'mouse',isPrimary:true,button:0,buttons:ty==='pointerup'?0:1,clientX:x,clientY:y,bubbles:true}));
+ pe('pointerdown',r1.x+r1.width/2,r1.y+r1.height/2,out);pe('pointermove',r2.x+r2.width/2,r2.y+r2.height/2);pe('pointerup',r2.x+r2.width/2,r2.y+r2.height/2);await wait(300);
+ const L2=M.doc.layers.find(x=>x.type==='procgraph');if(!L2.graph.edges.some(e=>e.from===noise.id&&e.to===blur.id)){const hh=document.elementFromPoint(r2.x+r2.width/2,r2.y+r2.height/2);return 'dragging between ports did not connect (target at drop: '+(hh&&(hh.getAttribute('class')+'/'+hh.dataset.in+'/'+(hh.dataset.node===blur.id)))+'; port rect '+Math.round(r2.x)+','+Math.round(r2.y)+' vs viewport '+innerWidth+'x'+innerHeight+'): '+JSON.stringify(L2.graph.edges.map(e=>e.from.slice(0,5)+'>'+e.to.slice(0,5)+':'+e.in));}
+ const gg=P.normalize(JSON.parse(JSON.stringify(M.doc.layers.find(x=>x.type==='procgraph').graph))),lfo=P.createNode('lfo');gg.nodes.push(lfo);const err=P.connect(gg,lfo.id,'output','input');if(!/image/.test(String(err)))return 'type mismatch was not refused';
+ const copy=D.normalize(JSON.parse(JSON.stringify({...M.doc})));const back=copy.layers.find(x=>x.type==='procgraph');if(!back||back.graph.nodes.length!==l.graph.nodes.length||back.graph.edges.length!==l.graph.edges.length)return 'graph did not survive save and reopen';
+ box.querySelector('.procbox button.pri:last-child,.proctop .pri:last-child').click();await wait(200);return document.querySelector('.procbox')?'editor did not close':true}`);
+
+t('studio graph: image input feeds Threshold -> Blend with animated noise, and a failing node does not stop the graph', '/studio-app.html', `async()=>{${OPEN}await open();const M=window.n0iseMotion,D=StudioDocument,P=StudioProc;
+ const c=document.createElement('canvas');c.width=300;c.height=300;const g=c.getContext('2d');const gr=g.createLinearGradient(0,0,300,0);gr.addColorStop(0,'#000');gr.addColorStop(1,'#fff');g.fillStyle=gr;g.fillRect(0,0,300,300);
+ const b=await new Promise(r=>c.toBlob(r,'image/png'));const r=document.getElementById('artboard').getBoundingClientRect();await dropAt([new File([b],'ramp.png',{type:'image/png'})],r.left+r.width/2,r.top+r.height/2);await until(1);if(rows()!==1)return 'image did not import';
+ const gp=P.create(),im=P.createNode('image'),th=P.createNode('threshold'),vd=P.createNode('video'),bl=P.createNode('blend');gp.nodes.push(im,th,vd,bl);th.params.level=.5;th.params.soft=.01;bl.params.mode='normal';
+ P.connect(gp,im.id,th.id,'input');P.connect(gp,th.id,bl.id,'a');P.connect(gp,vd.id,bl.id,'b');P.connect(gp,bl.id,'output','input');
+ M.add([D.layer('procgraph',{name:'Graph',graph:gp})]);await wait(1200);const cv=document.getElementById('preview'),ctx=cv.getContext('2d');
+ const px=fr=>{const x=Math.floor(cv.width/2+(fr-.5)*cv.width*.5),y=Math.floor(cv.height/2);const d=ctx.getImageData(x,y,1,1).data;return d[0]};
+ const left=px(.1),right=px(.9);if(!(left<60&&right>200))return 'threshold of the image ramp is wrong: left '+left+' right '+right;
+ const st=window.n0iseMotion.R.procStatus(M.doc.layers.find(x=>x.type==='procgraph').id);if(!st||![...st.errors.values()].some(e=>/No video layer/.test(e)))return 'the missing video was not reported on its node';
+ return st.errors.size===1?true:'unexpected errors: '+[...st.errors.values()].join('|')}`);
