@@ -79,3 +79,6 @@ No new dependencies. The Character page and Sculpt are our own code on three.js 
 - manifold-3d 3.5.5, Apache-2.0, https://github.com/elalish/manifold , loaded on demand from jsDelivr (Combine shapes).
 - @gltf-transform/core and /functions 4.5.1, MIT, https://github.com/donmccurdy/glTF-Transform , loaded on demand (smaller GLB export).
 - three-mesh-bvh 0.9.17, MIT, already used by the path tracer; now also accelerates picking on heavy meshes.
+
+## Sketchfab (model browser)
+The 3D model browser calls the Sketchfab Data API v3 from the visitor's browser. Models belong to their authors and carry their own Creative Commons licences, shown in the browser and in the import message. Nothing is bundled; the visitor supplies their own API token.

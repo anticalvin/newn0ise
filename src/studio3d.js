@@ -21,6 +21,7 @@ import {createMaterials,PRESETS as MATPRESETS,normMat} from './matsys.js';
 import {openMatLab} from './matlab.js';
 import {openNodeMat} from './nodemat-ui.js';
 import {createMatStudio,recipeMP} from './matstudio.js';
+import {openModelBrowser} from './sketchfab.js';
 import {openRender} from './render.js';
 import {createBuild} from './build.js';
 import {createGamepad} from './gamepad.js';
@@ -719,6 +720,7 @@ async function importOne(f){
   }else{toast('Unsupported file: '+f.name);return;}
   toast('Imported '+f.name);
 }
+const browseModels=()=>openModelBrowser({importFiles,toast});
 async function importFiles(list){
   const files=[...list];if(!files.length)return;
   if(files.length===1&&/\.n0form$/i.test(files[0].name)){await importFormFile(files[0]);return;}
@@ -2092,7 +2094,7 @@ function buildScenePane(){
   const s1=sec(p,'Objects');
   objListEl=el('div','olist');s1.appendChild(objListEl);
   const grp=(title,open)=>{const d=el('details','acc');if(open)d.open=true;d.innerHTML=`<summary>${title}</summary>`;const inn=el('div','in');inn.classList.add('chips');d.appendChild(inn);s1.appendChild(d);return inn;};
-  const top=el('div','chips');top.style.margin='8px 0';top.append(btn('Import files','pri',()=>$('#file').click()),btn('Sigil: draw in 3D','',()=>{setTab('draw');if(!mqDesk.matches)sheet.setIdx(1);}),btn('Sample photo','',()=>addPhoto('fold',sampleCanvas())));s1.appendChild(top);
+  const top=el('div','chips');top.style.margin='8px 0';top.append(btn('Import files','pri',()=>$('#file').click()),btn('Browse models','pri',()=>browseModels()),btn('Sigil: draw in 3D','',()=>{setTab('draw');if(!mqDesk.matches)sheet.setIdx(1);}),btn('Sample photo','',()=>addPhoto('fold',sampleCanvas())));s1.appendChild(top);
   const gS=grp('Shapes',true);Object.keys(PRIMS).forEach(k=>gS.appendChild(btn('+ '+k,'',()=>addPrimitive(k))));gS.appendChild(btn('+ My character','pri',()=>addMyCharacter()));
   {const gB=grp('Combine shapes');const note=el('div','note','Union joins two solids. Cut removes the second from the first, like drilling a hole. Overlap keeps only what they share. Select the first shape (list or scene), pick the second here. Works on closed solids; the originals are hidden, and Undo brings them back.');note.style.flexBasis='100%';
    const sel=el('select','field');sel.setAttribute('aria-label','Second shape');sel.style.flex='1 1 100%';
@@ -2461,7 +2463,7 @@ function buildHud(){
   {const cx=$('#ctx');let last='';const TN={scene:'Scene',world:'World',build:'Build',draw:'Sigil',scan:'Scan',look:'Look',mat:'Material',export:'Export'};
    const upd=()=>{if(document.hidden)return;const o=objById(S.sel),tool=S.gizmo?{translate:'Move',rotate:'Rotate',scale:'Scale'}[S.gizmo]:'Orbit';const h=(TN[S.tab]||S.tab||'')+' · '+(o?'<b>'+o.name.replace(/[<>&]/g,'')+'</b> selected · '+tool:'nothing selected');if(h!==last){last=h;cx.innerHTML=h;}};
    upd();setInterval(upd,400);}
-  $('#eImport').addEventListener('click',()=>$('#file').click());$('#eDraw').addEventListener('click',()=>{try{SGS.open();}catch(e){setTab('draw');}});
+  $('#eImport').addEventListener('click',()=>$('#file').click());{const eb=$('#eBrowse');if(eb)eb.addEventListener('click',browseModels);}$('#eDraw').addEventListener('click',()=>{try{SGS.open();}catch(e){setTab('draw');}});
   $('#eShape').addEventListener('click',()=>{const o=addPrimitive('Cube');selectObj(o.id);bump();});
   $('#eDemo').addEventListener('click',()=>{try{setTab('world');worldEd.starter();wsShow();}catch(e){toast('Open the World tab for the demo.');}});
   $('#bTools').addEventListener('click',()=>{const on=!document.body.hasAttribute('data-tools');document.body.toggleAttribute('data-tools',on);$('#bTools').setAttribute('aria-expanded',String(on));});
@@ -3131,6 +3133,7 @@ if(/^#world/.test(location.hash)){S._wsChosen=true;setTab('world');worldEd.start
       world:()=>{close();setTab('world');worldEd.starter();wsShow();},
       photo:()=>{close();const f=$('#file');f.accept='image/*';f.onchange=async()=>{await importFiles(f.files);f.value='';f.accept=FILE_ACCEPT;f.onchange=null;};f.click();},
       model:()=>{close();$('#file').click();},
+      browse:()=>{close();setTab('scene');if(!mqDesk.matches)sheet.setIdx(1);setTimeout(browseModels,250);},
       scan:()=>{close();setTab('scan');},
       sigil:()=>{close();SGS.open();},
       material:()=>{close();if(!S.objs.length){try{addPrimitive('Sphere');}catch(e){}}setTab('mat');if(!mqDesk.matches&&sheet.idx<2)sheet.setIdx(2);},

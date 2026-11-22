@@ -45,7 +45,7 @@
       <div class="hud tr"><span id="fxnote" class="fxnote" aria-live="polite"></span><button class="chipb" id="bLight" title="Brighten dark scenes">Light</button><button class="chipb" id="bMat" title="Open the Material tab">Material</button><button class="chipb" id="bFx" title="Effects on the whole picture" aria-pressed="true">FX</button></div>
       <div class="hud bl" id="hudBL"><button class="chipb" id="bFrame" title="Frame everything">Frame</button><button class="chipb" id="bGrid" title="Show or hide the floor grid" aria-pressed="true">Grid</button><button class="chipb" id="bWalk" title="Walk inside the scene">Walk</button><button class="chipb" id="bSpin" title="Turn the scene slowly" aria-pressed="false">Spin</button></div>
       <div class="hud br" id="hudBR"><button class="chipb" id="bHold">Hold: original</button></div>
-      <div class="empty" id="empty"><b>Bring a model, a photo or a scan.</b>glb · gltf · obj · stl · ply · splat · spz · audio — or use the Scan tab<div class="eacts"><button class="btn pri" id="eImport" type="button">Import</button><button class="btn" id="eDraw" type="button">Draw</button><button class="btn" id="eShape" type="button">Add shape</button><button class="btn" id="eDemo" type="button">Try a demo</button></div></div>
+      <div class="empty" id="empty"><b>Bring a model, a photo or a scan.</b>glb · gltf · obj · stl · ply · splat · spz · audio — or use the Scan tab<div class="eacts"><button class="btn pri" id="eImport" type="button">Import</button><button class="btn pri" id="eBrowse" type="button">Browse models</button><button class="btn" id="eDraw" type="button">Draw</button><button class="btn" id="eShape" type="button">Add shape</button><button class="btn" id="eDemo" type="button">Try a demo</button></div></div>
       <div class="drop">Drop files to import</div>
       <div class="err" id="err" hidden></div>
     </div>
@@ -71,6 +71,7 @@
 <button class="card big" data-go="sculpt"><svg viewBox="0 0 40 40"><path d="M8 28c0-10 6-18 14-18s10 8 4 14-8 8-18 4z"/><path d="M26 6l8 8"/></svg><b>Sculpt</b><span>Push, pull and smooth clay, with a pen or a controller.</span></button>
 <button class="card big" data-go="character"><svg viewBox="0 0 40 40"><circle cx="20" cy="9" r="5"/><path d="M10 36c0-9 4-15 10-15s10 6 10 15M12 22l-5 8M28 22l5 8"/></svg><b>Character</b><span>Make a person, then open it here to pose and render.</span></button>
 <button class="card" data-go="photo"><svg viewBox="0 0 40 40"><rect x="5" y="8" width="30" height="24" rx="3"/><circle cx="14" cy="17" r="3"/><path d="M5 28l9-7 7 6 6-5 8 7"/></svg><b>Photo to 3D</b><span>Pick a picture and it becomes a relief you can orbit and light.</span></button>
+<button class="card" data-go="browse"><svg viewBox="0 0 40 40"><circle cx="17" cy="17" r="10"/><path d="m25 25 10 10"/></svg><b>Browse models</b><span>Search free models online and import one directly.</span></button>
 <button class="card" data-go="model"><svg viewBox="0 0 40 40"><path d="M20 4l14 8v16l-14 8-14-8V12z"/><path d="M6 12l14 8 14-8M20 20v16"/></svg><b>Open a model</b><span>glb, obj, stl, ply, splats, or a saved project.</span></button>
 <button class="card" data-go="scan"><svg viewBox="0 0 40 40"><path d="M6 14V8h6M28 8h6v6M34 26v6h-6M12 32H6v-6"/><circle cx="20" cy="20" r="6"/></svg><b>Scan</b><span>Use the camera or a turntable video.</span></button>
 <button class="card" data-go="scene"><svg viewBox="0 0 40 40"><path d="M7 28l13-7 13 7-13 7z"/><rect x="15" y="9" width="10" height="12"/></svg><b>Empty scene</b><span>Add shapes and shape your own.</span></button>
@@ -99,7 +100,7 @@
 </dialog>
 <template id="globalbtns"><button class="desk-btn icon" id="bUndo" type="button" title="Undo (Ctrl+Z)" aria-label="Undo"><svg viewBox="0 0 24 24"><path d="m8 4-5 5 5 5M3 9h10a6 6 0 0 1 0 12h-3"/></svg></button><button class="desk-btn icon" id="bRedo" type="button" title="Redo (Ctrl+Shift+Z)" aria-label="Redo"><svg viewBox="0 0 24 24" style="transform:scaleX(-1)"><path d="m8 4-5 5 5 5M3 9h10a6 6 0 0 1 0 12h-3"/></svg></button><button class="desk-btn" id="bSave" type="button" title="Save the project to a file">Save</button></template>
 <script>document.getElementById('globalslot').append(document.getElementById('globalbtns').content);</script>
-<script type="module" src="assets/studio.js?v=495327ef"></script>
+<script type="module" src="assets/studio.js?v=6bce82eb"></script>
 <script type="module">
 const dlg=document.getElementById('dialog');
 document.getElementById('menubtn').addEventListener('click',()=>dlg.showModal());
