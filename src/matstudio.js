@@ -230,6 +230,49 @@ export function createMatStudio(c){
     return q;
   }
 
+
+  /* ---- My materials: keep what you made, reuse it on any object or project, share it as a file ---- */
+  const LIBK='n0.matlib',LIBMAX=60;
+  const lib={
+    load(){try{const a=JSON.parse(localStorage.getItem(LIBK)||'[]');return Array.isArray(a)?a.filter(r=>r&&r.id&&r.name):[];}catch(e){return [];}},
+    save(a){try{localStorage.setItem(LIBK,JSON.stringify(a.slice(0,LIBMAX)));return true;}catch(e){toast('Couldn’t save: this browser’s storage is full. Delete a material or export your library first.',5200);return false;}}
+  };
+  const newId=()=>'m'+Date.now().toString(36)+Math.random().toString(36).slice(2,5);
+  /* what the object's material is made of: surface layers, a photographed texture, a node pattern. Paint is per object (it is saved with the project), so it is not part of this. */
+  function capture(o,name){
+    if(!o||!surfaceOk(o))return null;
+    let pbr=o.pbr?clone(o.pbr):null;const ptex=o.ptex?clone(o.ptex):null,nmat=o.nmat?clone(o.nmat):null;
+    if(!pbr&&!ptex&&!nmat){upgrade(o);const m=phys(o)[0];if(!m)return null;pbr={...PB,col:'#'+m.color.getHexString(),met:m.metalness,rou:m.roughness};}
+    return {v:1,id:newId(),name:String(name||'Material').slice(0,40),t:Date.now(),pbr,ptex,nmat,thumb:''};
+  }
+  function thumbFor(r){
+    if(r.ptex&&r.ptex.id)return thumb(r.ptex.id,160,160);
+    try{const cv=document.createElement('canvas');cv.width=cv.height=112;renderTiles([norm(r.pbr||{})],[cv]);return cv.toDataURL('image/jpeg',.82);}catch(e){return '';}
+  }
+  const refreshView=()=>{const x=cur();pv&&pv.setObj(x&&surfaceOk(x)?x:null);bump();};
+  async function useMat(o,r){
+    if(!o||!surfaceOk(o)){toast('Pick an object first, or add a shape.');return false;}
+    try{
+      clearTex(o);if(o.nmat)ngClear(o);clearPbr(o);
+      if(r.ptex)await applyTex(o,clone(r.ptex));
+      if(r.nmat)ngApply(o,clone(r.nmat));
+      if(r.pbr)setPbr(o,clone(r.pbr));
+      refreshView();commit&&commit();toast('“'+r.name+'” on '+o.name);return true;
+    }catch(e){console.error(e);toast('That material could not be applied. Try another object.',4200);return false;}
+  }
+  const matFile=a=>JSON.stringify({n0ise:'materials',v:1,materials:a.map(r=>({...r,thumb:r.ptex?'':r.thumb}))});
+  function readMats(text){
+    let j;try{j=JSON.parse(text);}catch(e){throw new Error('That file is not a material library.');}
+    const a=Array.isArray(j)?j:(j&&j.n0ise==='materials'&&Array.isArray(j.materials)?j.materials:null);if(!a)throw new Error('That file is not a material library.');
+    return a.filter(r=>r&&typeof r==='object'&&(r.pbr||r.ptex||r.nmat)).slice(0,LIBMAX).map(r=>({v:1,id:newId(),name:String(r.name||'Imported').slice(0,40),t:Date.now(),pbr:r.pbr&&typeof r.pbr==='object'?norm(r.pbr):null,ptex:r.ptex&&typeof r.ptex.id==='string'?{id:String(r.ptex.id).slice(0,80),name:String(r.ptex.name||r.ptex.id).slice(0,60),author:String(r.ptex.author||'').slice(0,80),res:r.ptex.res==='2k'?'2k':'1k',rep:clamp(+r.ptex.rep||1,.1,32),nk:clamp(+r.ptex.nk||1,0,4),rk:clamp(r.ptex.rk==null?1:+r.ptex.rk,0,2),tint:/^#[0-9a-f]{6}$/i.test(r.ptex.tint)?r.ptex.tint:'#ffffff'}:null,nmat:r.nmat&&typeof r.nmat==='object'?r.nmat:null,thumb:typeof r.thumb==='string'&&r.thumb.startsWith('data:image/')&&r.thumb.length<40000?r.thumb:''}));
+  }
+  function saveCurrent(name,after){
+    const o=cur();if(!o||!surfaceOk(o)){toast('Pick an object with a material first.');return false;}
+    const r=capture(o,name||(o.ptex&&o.ptex.name)||'Material '+(lib.load().length+1));if(!r){toast('Nothing to save yet. Pick a quick material, a texture or set the Surface first.',4200);return false;}
+    r.thumb=thumbFor(r);const a=lib.load();if(a.length>=LIBMAX){toast('Your library is full ('+LIBMAX+'). Delete one first.',4200);return false;}
+    a.unshift(r);if(!lib.save(a))return false;toast('Saved “'+r.name+'” to My materials');after&&after();return true;
+  }
+
   /* ---- the tab ---- */
   const CSS=`.ms-stk{display:contents}
 .ms-top{position:sticky;top:0;z-index:3;background:var(--panel,#16171b);padding:0 0 6px;margin:6px -2px 6px;border-bottom:1px solid var(--line)}
@@ -357,6 +400,32 @@ export function createMatStudio(c){
       if(B.use.hgt)sliderRow(s,'Height (low dents, high bumps)',()=>B.ch.hgt,v=>{B.ch.hgt=v;},0,1,.01);
       if(B.use.em)colorRow(s,'Glow colour',()=>B.ch.em,v=>{B.ch.em=v;});
       s.appendChild(el('div','ms-cr','Paint is saved with the project (Scene → Save project) and also exports as PNG maps.'));}
+    SEC.mine=host=>{const s=sec(host,'My materials','saved on this device');
+      s.appendChild(el('div','note','Make a material anywhere in this tab, name it here, and it stays in your library. Tap one to put it on the selected object. Export to share it or move it to another device.'));
+      const o2=cur(),row=el('div','chips');
+      const nm=document.createElement('input');nm.className='ms-q';nm.type='text';nm.maxLength=40;nm.placeholder='Name this material';nm.setAttribute('aria-label','Material name');nm.value=o2&&o2.ptex?o2.ptex.name:'';nm.style.flex='1 1 160px';nm.style.width='auto';
+      const sv=btn('Save to library','pri',()=>{if(saveCurrent(nm.value.trim(),()=>build2()))nm.value='';});sv.disabled=!(o2&&surfaceOk(o2));
+      nm.addEventListener('keydown',e=>{if(e.key==='Enter')sv.click();});row.append(nm,sv);s.appendChild(row);
+      const row2=el('div','chips');row2.append(btn('New blank material','',()=>{const x=cur();if(!x||!surfaceOk(x)){toast('Pick an object first, or add a shape.');return;}clearTex(x);if(x.nmat)ngClear(x);clearPbr(x);put({...PB,col:'#d8d8d8',met:0,rou:.5});commit&&commit();curSec='surface';lsSet('n0.matsec','surface');build();toast('Blank material. Shape it in Surface, then come back and save it.',4200);}));s.appendChild(row2);
+      const a=lib.load(),grid=el('div','ms-grid');
+      if(!a.length)s.appendChild(el('div','note','Nothing saved yet. Try Quick, Textures or Surface, then save the result here.'));
+      a.forEach(r=>{const cell=el('div');cell.style.cssText='border:1px solid var(--line);background:var(--raise);border-radius:14px;overflow:hidden;display:flex;flex-direction:column';
+        const b=el('button');b.type='button';b.style.cssText='padding:0;border:0;background:none;color:inherit;text-align:left;min-height:44px';b.title='Put “'+r.name+'” on '+(o2?o2.name:'the selected object');
+        if(r.thumb){const im=document.createElement('img');im.loading='lazy';im.alt='';im.src=r.thumb;im.style.cssText='width:100%;aspect-ratio:1;object-fit:cover;display:block;background:#15161a';b.appendChild(im);}
+        else{const ph=el('div');ph.style.cssText='aspect-ratio:1;display:grid;place-items:center;background:#15161a;font:600 10px var(--lab,monospace);color:var(--mute)';ph.textContent=r.nmat?'PATTERN':'MATERIAL';b.appendChild(ph);}
+        const lb=el('span','',r.name);lb.style.cssText='display:block;padding:4px 6px 2px;font:600 10px var(--lab,monospace);letter-spacing:.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis';b.appendChild(lb);
+        b.addEventListener('click',async()=>{b.style.opacity=.5;const ok=await useMat(cur(),r);b.style.opacity='';if(ok)build2();});
+        const act=el('div');act.style.cssText='display:flex;gap:2px;padding:0 4px 4px';
+        const mini=(t,label,f)=>{const x=el('button','chip',t);x.type='button';x.setAttribute('aria-label',label+' '+r.name);x.style.cssText='flex:1;min-height:44px;padding:0';x.addEventListener('click',f);return x;};
+        act.append(mini('✎','Rename',()=>{const n=(prompt('Rename material',r.name)||'').trim().slice(0,40);if(!n)return;const l=lib.load(),k=l.find(z=>z.id===r.id);if(k){k.name=n;lib.save(l);build2();}}),
+          mini('⧉','Duplicate',()=>{const l=lib.load(),k=l.find(z=>z.id===r.id);if(k&&l.length<LIBMAX){l.unshift({...clone(k),id:newId(),name:(k.name+' copy').slice(0,40),t:Date.now()});lib.save(l);build2();}}),
+          mini('✕','Delete',()=>{if(!confirm('Delete “'+r.name+'” from your library?'))return;lib.save(lib.load().filter(z=>z.id!==r.id));build2();}));
+        cell.append(b,act);grid.appendChild(cell);});
+      s.appendChild(grid);
+      const io=el('div','chips');io.append(btn('Export library','',()=>{const l=lib.load();if(!l.length){toast('Nothing to export yet.');return;}const bl=new Blob([matFile(l)],{type:'application/json'}),u=URL.createObjectURL(bl),an=document.createElement('a');an.href=u;an.download='n0ise-materials.n0mat.json';an.click();setTimeout(()=>URL.revokeObjectURL(u),4000);}),
+        btn('Import library','',()=>{const f=document.createElement('input');f.type='file';f.accept='.json,.n0mat,application/json';f.onchange=async()=>{try{const t=await f.files[0].text(),add=readMats(t);if(!add.length)throw new Error('No materials found in that file.');add.forEach(r=>{if(!r.thumb)r.thumb=thumbFor(r);});const l=lib.load();lib.save(add.concat(l));toast('Added '+add.length+' material'+(add.length>1?'s':''));build2();}catch(e){toast(String(e.message||e),4200);}};f.click();}));s.appendChild(io);
+      if(a.some(r=>r.ptex))s.appendChild(el('div','ms-cr','Texture materials keep a link to Poly Haven (CC0), so they need a connection the first time they load.'));
+    };
     SEC.quick=host=>{const s=sec(host,'Quick materials');const r=el('div','chips');
       RECIPES.forEach(([n,d])=>r.appendChild(btn(n,'',()=>{const x=cur();if(!x){toast('Pick an object first, or add a shape.');return;}if(x.ptex)clearTex(x);if(x.nmat){ngClear(x);}put({...PB,...d});build2();})));
       r.appendChild(btn('Use on Sigil brush','pri',()=>{const x=cur(),d=x&&x.pbr?x.pbr:null;if(!d){toast('Pick a quick material or set the Surface sliders first.');return;}if(sigilUse){sigilUse({met:d.met,rou:d.rou,cc:d.cc,ccr:d.ccr,sh:d.sh,shc:d.shc,shr:d.shr,tr:d.tr,th:d.th,ior:d.ior,iri:d.iri,iriI:d.iriI,an:d.an,em:d.em,emc:d.emc,col:d.col});}}));
@@ -429,7 +498,7 @@ export function createMatStudio(c){
         SURF.SURF.forEach(([id,label])=>{const b=el('button','chip',label);b.type='button';b.setAttribute('aria-pressed',!!(x.surf&&x.surf.m===id));b.addEventListener('click',()=>{SURF.pick(x,id);bump();build2();});b.addEventListener('pointerenter',()=>SB&&SB.set({m:id,amt:1,sp:1,...SURF.defaults(id)}));b.addEventListener('pointerleave',()=>SB&&SB.set(x.surf));ch.appendChild(b);});
         row.appendChild(ch);s.appendChild(row);}
       const r=el('div','chips');r.append(btn('Edit n0ise effects','pri',()=>{fxOpen&&fxOpen();}),btn('Hardware looks','',()=>{openLook&&openLook();}),btn('Open Look tab','',()=>{gotoTab&&gotoTab('look');}));s.appendChild(r);}
-    const NAMES=[['quick','Quick'],['paint','Paint'],['tex','Textures'],['surface','Surface'],['evolve','Evolve'],['pattern','Pattern'],['light','Light'],['env','Environment'],['fx','Effects']];
+    const NAMES=[['mine','My materials'],['quick','Quick'],['paint','Paint'],['tex','Textures'],['surface','Surface'],['evolve','Evolve'],['pattern','Pattern'],['light','Light'],['env','Environment'],['fx','Effects']];
     const nav=el('div','ms-nav');nav.setAttribute('role','tablist');nav.setAttribute('aria-label','Material sections');
     const body=el('div','ms-body');
     renderBody=()=>{const sc=pane.parentElement,y=sc?sc.scrollTop:0;body.innerHTML='';
@@ -446,7 +515,7 @@ export function createMatStudio(c){
     const doReset=()=>{const x=cur();if(!x||!surfaceOk(x)){toast('Pick an object first.');return;}
       try{clearPbr(x);clearTex(x);if(SURF&&SURF.clear)SURF.clear(x);if(x.nmat&&ngClear)ngClear(x);if(x.paint)PNT.reset(x);}catch(e){console.error(e);}
       live();commit&&commit();build();toast('Material reset. Undo brings it back.',2600);};
-    tgt.append(who,mk('↶','Undo',()=>undo&&undo()),mk('↷','Redo',()=>redo&&redo()),mk('Reset','Reset this object’s material',doReset));
+    tgt.append(who,mk('Save','Save this material to My materials',()=>{const x=cur();if(!x||!surfaceOk(x)){toast('Pick an object with a material first.');return;}const n=(prompt('Name this material',x.ptex?x.ptex.name:'')||'').trim();if(!n)return;saveCurrent(n,()=>{if(curSec==='mine')build2();});}),mk('↶','Undo',()=>undo&&undo()),mk('↷','Redo',()=>redo&&redo()),mk('Reset','Reset this object’s material',doReset));
     top.append(tgt,nav);stk.appendChild(top);pane.appendChild(body);renderBody();
     lastKey=keyOf(o);
   }
@@ -454,5 +523,5 @@ export function createMatStudio(c){
   let t2=0;const build2=()=>{clearTimeout(t2);t2=setTimeout(()=>{renderBody&&renderBody();},20);};
   /* rebuild when another object is picked while the tab is open */
   setInterval(()=>{if(pane.hidden)return;const o=cur();const id=o?o.id:null;if(id!==shown){build();}},500);
-  return {paintOff(){PNT.setOn(false);},paintFiles:(o,p)=>PNT.toFiles(o,p),paintLoad:(o,i,p,g)=>PNT.fromFiles(o,i,p,g),show(){build();},refresh(){if(!pane.hidden)build();},applyTex,clearTex,setPbr,clearPbr,upgrade,physProps:o=>{if(o&&o.pbr){upgrade(o);phys(o).forEach(m=>physProps(THREE,m,norm(o.pbr)));}}};
+  return {matLib:{load:lib.load,capture,use:useMat,readMats},paintOff(){PNT.setOn(false);},paintFiles:(o,p)=>PNT.toFiles(o,p),paintLoad:(o,i,p,g)=>PNT.fromFiles(o,i,p,g),show(){build();},refresh(){if(!pane.hidden)build();},applyTex,clearTex,setPbr,clearPbr,upgrade,physProps:o=>{if(o&&o.pbr){upgrade(o);phys(o).forEach(m=>physProps(THREE,m,norm(o.pbr)));}}};
 }

@@ -1184,6 +1184,97 @@ vec4 fx(vec2 uv){
   vec3 col=u_pap*(1.-.05*u_grain/100.*vnoise(px*.4/S));
   col*=mix(vec3(1.),u_ia,ca);col*=mix(vec3(1.),u_ib,cb);col*=mix(vec3(1.),u_ic,cc);
   return vec4(col,1.);}`});
+
+/* ---------- Toon: clean flat colour, ink lines and honest halftone ---------- */
+const GLSL_TOON=`
+vec3 ok2rgb(vec3 c){float l=c.x+.3963377774*c.y+.2158037573*c.z,m=c.x-.1055613458*c.y-.0638541728*c.z,s=c.x-.0894841775*c.y-1.291485548*c.z;l=l*l*l;m=m*m*m;s=s*s*s;
+  return clamp(vec3(4.0767416621*l-3.3077115913*m+.2309699292*s,-1.2684380046*l+2.6097574011*m-.3413193965*s,-.0041960863*l-.7034186147*m+1.707614701*s),0.,1.);}
+vec3 soft5(vec2 uv,float r){vec2 d=r/uRes;return (texture(uSrc,uv).rgb*2.+texture(uSrc,uv+vec2(d.x,0.)).rgb+texture(uSrc,uv-vec2(d.x,0.)).rgb+texture(uSrc,uv+vec2(0.,d.y)).rgb+texture(uSrc,uv-vec2(0.,d.y)).rgb)/6.;}
+float bandQ(float x,float n,float soft){float v=clamp(x,0.,1.)*n,f=floor(v),t=fract(v),e=soft*.48+.002;return (f+smoothstep(.5-e,.5+e,t))/n;}
+/* line strength from tone and colour change around a pixel; w is the line half-width in pixels */
+float inkEdge(vec2 uv,float w,float th){
+  vec2 d=w/uRes;vec3 a=rgb2ok(soft5(uv,1.)),b=rgb2ok(soft5(uv+vec2(d.x,0.),1.)),c=rgb2ok(soft5(uv-vec2(d.x,0.),1.)),e=rgb2ok(soft5(uv+vec2(0.,d.y),1.)),f=rgb2ok(soft5(uv-vec2(0.,d.y),1.));
+  float gl=length(vec2(b.x-c.x,e.x-f.x)),gc=length(vec2(length(b.yz-c.yz),length(e.yz-f.yz)))*.8;
+  return smoothstep(th,th+.05,max(gl,gc));}
+float dotScreen(vec2 px,float ang,float cell,float tone){float s=sin(ang),c=cos(ang);vec2 p=vec2(c*px.x+s*px.y,-s*px.x+c*px.y)/cell,f=fract(p)-.5;float r=sqrt(clamp(tone,0.,1.))*.72;return smoothstep(r+.05,r-.05,length(f));}
+`;
+defineModule({id:'cel',family:'Toon',name:'Cel Shade',
+  defaultLook:{paper:'#ffffff',ink:'#14110f',palette:null},
+  presets:[
+    {name:'Clean',v:{bands:4,soft:12,contrast:12,sat:112,shade:'#7d86a8',shadeAmt:35,line:'#16130f',lineAmt:75,lw:1.2,lth:18,smooth:1}},
+    {name:'Anime',v:{bands:3,soft:6,contrast:22,sat:118,shade:'#6f78b0',shadeAmt:45,line:'#241a22',lineAmt:70,lw:1,lth:16,smooth:1.5}},
+    {name:'Game',v:{bands:5,soft:20,contrast:8,sat:108,shade:'#8f8aa0',shadeAmt:28,line:'#1a1612',lineAmt:85,lw:1.6,lth:20,smooth:1}},
+    {name:'Soft paint',v:{bands:6,soft:55,contrast:0,sat:100,shade:'#8a8f9f',shadeAmt:20,line:'#3a342e',lineAmt:35,lw:1,lth:26,smooth:2}},
+    {name:'Flat poster',v:{bands:2,soft:3,contrast:30,sat:120,shade:'#5a6190',shadeAmt:50,line:'#101010',lineAmt:90,lw:1.4,lth:18,smooth:1}}],
+  params:[
+    {k:'bands',label:'Tone bands',min:2,max:8,def:4,step:1,sec:'Shading',hero:true},{k:'soft',label:'Band edge softness',min:0,max:100,def:12,sec:'Shading',hero:true},
+    {k:'contrast',label:'Tone contrast',min:-50,max:80,def:12,sec:'Shading'},{k:'sat',label:'Colour',min:0,max:200,def:112,sec:'Shading'},
+    {k:'smooth',label:'Clean up detail',min:0,max:4,def:1,step:.25,sec:'Shading'},
+    {k:'shade',t:'color',label:'Shadow tint',def:'#7d86a8',sec:'Shadow'},{k:'shadeAmt',label:'Shadow tint amount',min:0,max:100,def:35,sec:'Shadow'},
+    {k:'lineAmt',label:'Line strength',min:0,max:100,def:75,sec:'Lines',hero:true},{k:'lw',label:'Line width',min:.5,max:4,def:1.2,step:.1,sec:'Lines'},{k:'lth',label:'Line sensitivity',min:2,max:60,def:18,sec:'Lines'},
+    {k:'line',t:'color',label:'Line colour',def:'#16130f',sec:'Lines'}],
+  frag:SS+GLSL_TOON+`
+vec4 fx(vec2 uv){
+  vec3 src=soft5(uv,u_smooth*S*1.3),k=rgb2ok(src);
+  float L=clamp((k.x-.5)*(1.+u_contrast/50.)+.5,0.,1.),Q=bandQ(L,u_bands,u_soft/100.);
+  vec3 c=ok2rgb(vec3(mix(k.x,Q,.92),k.yz*u_sat/100.));
+  float dark=1.-Q;c*=mix(vec3(1.),u_shade*1.15,clamp(dark*dark*1.6,0.,1.)*u_shadeAmt/100.);
+  float e=inkEdge(uv,u_lw*S,u_lth/100.)*u_lineAmt/100.;
+  return vec4(mix(c,u_line,e),1.);}`});
+defineModule({id:'comic',family:'Toon',name:'Comic Ink',
+  defaultLook:{paper:'#ffffff',ink:'#14110f',palette:null},
+  presets:[
+    {name:'Graphic novel',v:{levels:4,flat:9,sat:110,line:'#14110f',lw:1.6,lth:16,dots:55,cell:7,ang:45,paper:'#faf7f0',dotmix:80}},
+    {name:'Newsprint',v:{levels:3,flat:6,sat:70,line:'#1b1a18',lw:1.3,lth:18,dots:80,cell:6,ang:45,paper:'#eae4d2',dotmix:90}},
+    {name:'Clean ink',v:{levels:5,flat:14,sat:104,line:'#101010',lw:1.2,lth:20,dots:25,cell:9,ang:45,paper:'#ffffff',dotmix:60}},
+    {name:'Pop',v:{levels:3,flat:7,sat:135,line:'#111111',lw:1.8,lth:15,dots:70,cell:10,ang:30,paper:'#fffdf6',dotmix:75}},
+    {name:'Noir panel',v:{levels:3,flat:5,sat:15,line:'#0b0b0b',lw:2,lth:14,dots:60,cell:6,ang:45,paper:'#f1eee6',dotmix:90}}],
+  params:[
+    {k:'levels',label:'Tone levels',min:2,max:7,def:4,step:1,sec:'Colour',hero:true},{k:'flat',label:'Flat colour steps',min:3,max:24,def:9,step:1,sec:'Colour',hero:true},
+    {k:'sat',label:'Colour',min:0,max:200,def:110,sec:'Colour'},{k:'paper',t:'color',label:'Paper',def:'#faf7f0',sec:'Colour'},
+    {k:'lw',label:'Line weight',min:.5,max:4,def:1.6,step:.1,sec:'Ink',hero:true},{k:'lth',label:'Line sensitivity',min:2,max:60,def:16,sec:'Ink'},{k:'line',t:'color',label:'Ink',def:'#14110f',sec:'Ink'},
+    {k:'dots',label:'Shadow halftone',min:0,max:100,def:55,sec:'Halftone',hero:true},{k:'cell',label:'Dot size',min:3,max:20,def:7,step:.5,sec:'Halftone'},
+    {k:'ang',label:'Screen angle',min:0,max:90,def:45,sec:'Halftone'},{k:'dotmix',label:'Dot ink strength',min:0,max:100,def:80,sec:'Halftone'}],
+  frag:SS+GLSL_TOON+`
+vec4 fx(vec2 uv){
+  vec2 px=uv*uRes;vec3 k=rgb2ok(soft5(uv,1.4*S));
+  float L=clamp((k.x-.5)*1.15+.5,0.,1.),Q=bandQ(L,u_levels,.04);
+  float q=u_flat;vec2 ab=floor(k.yz*u_sat/100.*q*2.4+.5)/(q*2.4);
+  vec3 c=ok2rgb(vec3(Q,ab));
+  float shadow=smoothstep(.62,.18,Q);
+  float m=dotScreen(px,radians(u_ang),u_cell*S,shadow*u_dots/100.*1.35);
+  c=mix(c,mix(c,u_line,.82),m*u_dotmix/100.);
+  c*=mix(vec3(1.),u_paper,.9);
+  float e=inkEdge(uv,u_lw*S,u_lth/100.);
+  return vec4(mix(c,u_line,e),1.);}`});
+defineModule({id:'tonedot',family:'Toon',name:'Clean Halftone',
+  defaultLook:{paper:'#f6f2e8',ink:'#16130f',palette:null},
+  presets:[
+    {name:'Mono print',v:{mode:0,shape:0,cell:8,ang:45,con:20,gain:0,ink:'#16130f',paper:'#f6f2e8',under:0}},
+    {name:'Blue ink',v:{mode:0,shape:0,cell:7,ang:30,con:25,gain:5,ink:'#1b3a8a',paper:'#f4f1e6',under:0}},
+    {name:'Colour dots',v:{mode:1,shape:0,cell:10,ang:45,con:15,gain:10,ink:'#16130f',paper:'#f6f2e8',under:0}},
+    {name:'Line screen',v:{mode:0,shape:1,cell:6,ang:15,con:30,gain:0,ink:'#16130f',paper:'#f6f2e8',under:0}},
+    {name:'Photo + dots',v:{mode:0,shape:0,cell:9,ang:45,con:10,gain:0,ink:'#16130f',paper:'#f6f2e8',under:55}},
+    {name:'Reverse',v:{mode:2,shape:0,cell:8,ang:45,con:20,gain:0,ink:'#f6f2e8',paper:'#121212',under:0}}],
+  params:[
+    {k:'mode',t:'c',label:'Dots',opts:['Ink on paper','Source colour','Light on dark'],def:0,sec:'Screen',hero:true},{k:'shape',t:'c',label:'Shape',opts:['Round','Line','Square','Diamond'],def:0,sec:'Screen'},
+    {k:'cell',label:'Dot size',min:3,max:28,def:8,step:.5,sec:'Screen',hero:true},{k:'ang',label:'Angle',min:0,max:90,def:45,sec:'Screen'},
+    {k:'con',label:'Contrast',min:-40,max:100,def:20,sec:'Tone'},{k:'gain',label:'Dot gain',min:-50,max:100,def:0,sec:'Tone'},{k:'under',label:'Keep photo underneath',min:0,max:100,def:0,sec:'Tone'},
+    {k:'ink',t:'color',label:'Ink',def:'#16130f',sec:'Colour'},{k:'paper',t:'color',label:'Paper',def:'#f6f2e8',sec:'Colour'}],
+  frag:SS+GLSL_TOON+`
+vec4 fx(vec2 uv){
+  vec2 px=uv*uRes;float cell=u_cell*S,a=radians(u_ang),sn=sin(a),cs=cos(a);
+  vec2 p=vec2(cs*px.x+sn*px.y,-sn*px.x+cs*px.y)/cell,g=floor(p),f=fract(p)-.5;
+  vec2 cen=vec2(cs*(g.x+.5)-sn*(g.y+.5),sn*(g.x+.5)+cs*(g.y+.5))*cell;
+  vec3 src=(texture(uSrc,cen/uRes).rgb*2.+texture(uSrc,(cen+vec2(cell*.3,0.))/uRes).rgb+texture(uSrc,(cen-vec2(cell*.3,0.))/uRes).rgb+texture(uSrc,(cen+vec2(0.,cell*.3))/uRes).rgb+texture(uSrc,(cen-vec2(0.,cell*.3))/uRes).rgb)/6.;
+  float L=clamp((luma(src)-.5)*(1.+u_con/50.)+.5,0.,1.),tone=u_mode==2.?L:1.-L;
+  float r=sqrt(clamp(tone,0.,1.))*.72*(1.+u_gain/100.),aa=.7/cell*S*1.4;
+  float d=u_shape<.5?length(f)-r:u_shape<1.5?abs(f.y)-r*.62:u_shape<2.5?max(abs(f.x),abs(f.y))-r*.82:abs(f.x)+abs(f.y)-r*1.1;
+  float cover=smoothstep(aa,-aa,d)*step(.002,tone);
+  vec3 ink=u_mode==1.?ok2rgb(vec3(rgb2ok(src).x*.92,rgb2ok(src).yz*1.35)):u_ink;
+  vec3 col=mix(u_paper,ink,cover);
+  col=mix(col,texture(uSrc,uv).rgb,u_under/100.*(1.-cover*.5));
+  return vec4(col,1.);}`});
 defineModule({colorBound:true,hideOnOrig:['ink','bg'],id:'engrave',family:'Lines',name:'Engraving',
   defaultLook:{paper:'#f2ead3',ink:'#1a1208',palette:null},
   params:[
@@ -4114,7 +4205,7 @@ const CAM_FAMILY={clean:'Color',chrome:'Color',aqua:'Color',solar:'Color',therma
  noir:'Film',lomo:'Film',vintage:'Film',kodak:'Film',fuji:'Film',cinema:'Film',super8:'Film',night:'Film',vhs:'Signal / CRT',crt:'Signal / CRT',
  bubble:'Y2K',lchrome:'Y2K',holo:'Y2K',aero:'Y2K',digicam:'Y2K',webcam:'Y2K',lcd:'Y2K',vapor:'Y2K',vga:'Y2K',gboy:'Pixel',ps1:'Pixel',bayer:'Dither',ign:'Dither',linedith:'Lines',hatch:'Lines',contour:'Lines',wavel:'Lines',sketch:'Lines',stitch:'Pixel',mosaic:'Pixel',lego:'Pixel',ledm:'Pixel',emboss:'Light',tilt:'Light',streak:'Light',longexp:'Time',rgbtear:'Glitch',fish:'Warp',swirl:'Warp',ripple:'Warp',acid:'Color',pop:'Color',halftone:'Print',pixel:'Pixel',ascii:'Glyph',matrix:'Glyph',glitch:'Glitch',mosh:'Glitch',bloom:'Light',dream:'Light',
  prism:'Warp',kaleido:'Warp',mirror:'Warp',liquid:'Warp',paint:'Warp',grid:'Warp',ghost:'Time',tunnel:'Time',slit:'Time'};
-const UFAM_ORDER=['Mine','Source','Subject','Mix','Color','Y2K','Film','Signal / CRT','Dither','Print','Pixel','Glyph','Lines','Glitch','Light','Warp','Time','Studio','Face'];
+const UFAM_ORDER=['Mine','Source','Subject','Mix','Color','Y2K','Film','Signal / CRT','Dither','Print','Toon','Pixel','Glyph','Lines','Glitch','Light','Warp','Time','Studio','Face'];
 const camFam=f=>f.face?'Face':(f.custom||f.cat==='custom')?'Mine':CAM_FAMILY[f.id]||'Color';
 const modFam=m=>RAIL_FAMILY[m.id]||m.family;
 const famRank=f=>{const i=UFAM_ORDER.indexOf(f);return i<0?99:i;};
@@ -4264,7 +4355,7 @@ function wireHero(){
 function pickCam(id){const l=layer();if(l.module!=='fuse'){l.module='fuse';l.params=MODULES.fuse.defaults();for(let s=2;s<=4;s++)l.params['f'+s]=0;}fuseSet(l,1,id);INS.gallery=false;renderInspector();}
 function loadRecipeLayer(r){const l=layer();if(l.module!=='fuse'){l.module='fuse';l.params=MODULES.fuse.defaults();}Object.assign(l.params,r.p);INS.gallery=false;renderInspector();}
 const camOn=(l,fx)=>l.module==='fuse'&&+l.params.f1===fxIndex(fx.id);
-const RAIL_FAMILY={patdith:'Dither',contour:'Lines',ridge:'Lines',dither:'Dither',orb:'Dither',multithr:'Dither',cmyk:'Print',shapes:'Print',stipple:'Print',patmerge:'Print',crusher:'Pixel',pixelmania:'Pixel',ascii:'Glyph',linemod:'Lines',displace:'Glitch',epsilon:'Light',crtlab:'Signal / CRT',fuse:'Mix',psort:'Glitch',mosh:'Glitch',riso:'Print',engrave:'Lines',seccam:'Signal / CRT'};
+const RAIL_FAMILY={patdith:'Dither',contour:'Lines',ridge:'Lines',dither:'Dither',orb:'Dither',multithr:'Dither',cmyk:'Print',shapes:'Print',stipple:'Print',patmerge:'Print',crusher:'Pixel',pixelmania:'Pixel',ascii:'Glyph',linemod:'Lines',displace:'Glitch',epsilon:'Light',crtlab:'Signal / CRT',fuse:'Mix',psort:'Glitch',mosh:'Glitch',riso:'Print',engrave:'Lines',seccam:'Signal / CRT',cel:'Toon',comic:'Toon',tonedot:'Toon'};
 const RAIL_ORDER=['★ Favorites','Recent','Mine',...UFAM_ORDER];
 const THUMBS=new Map();   /* key: module id + source version -> canvas */
 function cachedThumb(id){const k=id+'|'+SRC.ver;if(id!=='crtlab'&&THUMBS.has(k))return THUMBS.get(k);const rc=id.startsWith('recipe:')&&loadRecipes().find(r=>'recipe:'+r.id===id);const fx=id.startsWith('fuse:')&&FXBY[id.slice(5)];const c=rc?moduleThumb('fuse',112,84,rc.p):fx?moduleThumb('fuse',112,84,{f1:fxIndex(fx.id),i1:fx.i,m1:fx.m}):moduleThumb(id,112,84);if(id!=='crtlab'){THUMBS.set(k,c);if(THUMBS.size>60)THUMBS.delete(THUMBS.keys().next().value);}return c;}
