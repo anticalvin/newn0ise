@@ -159,9 +159,9 @@ const app = {
   setTool(t) { this.tool = t; }, setMode(m) { if (m === this.mode) return; this.mode = m; ui.setMode(m);
     if (m === 'edit') { this.cam.dist = 46; this.cam.pitch = 0.78; this.cam.target.set(player.pos.x, terrain.hAt(player.pos.x, player.pos.z), player.pos.z); }
     else { this.cam.dist = 5.2; this.cam.pitch = 0.28; this.input.endBrush(); } },
-  toggleMode() { this.setMode(this.mode === 'explore' ? 'edit' : 'explore'); },
+  toggleMode() { if (this.geo && this.geo.active) return this.geo.swapMode(); this.setMode(this.mode === 'explore' ? 'edit' : 'explore'); },
   radius(d) { this.R = clamp(this.R + d * 2, 2, 40); ui.syncRadius(); ui.toast('Radius ' + this.R); },
-  zoom(f) { const c = this.cam; c.dist = clamp(c.dist * f, this.mode === 'explore' ? 2 : 8, this.mode === 'explore' ? 14 : 160); },
+  zoom(f) { const c = this.cam; if (this.geo && this.geo.god) { c.dist = Math.max(40, Math.min(4.2e6, c.dist * f)); return; } c.dist = clamp(c.dist * f, this.mode === 'explore' ? 2 : 8, this.mode === 'explore' ? 14 : 160); },
   orbit(dx, dy) { const c = this.cam; c.yaw -= dx * 0.005; c.pitch = clamp(c.pitch + dy * 0.005, 0.03, 1.45); },
   pan(dx, dy) { if (this.mode !== 'edit') return; const c = this.cam, k = c.dist * 0.0016, fx = -Math.sin(c.yaw), fz = -Math.cos(c.yaw), rx = Math.cos(c.yaw), rz = -Math.sin(c.yaw);
     c.target.x = clamp(c.target.x + (-rx * dx + fx * dy) * k, -124, 124); c.target.z = clamp(c.target.z + (-rz * dx + fz * dy) * k, -124, 124); },

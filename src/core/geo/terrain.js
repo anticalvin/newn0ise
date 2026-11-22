@@ -17,14 +17,14 @@ export class HeightField {
 }
 
 const C = c => new THREE.Color(c);
-const SEA = C(0x2c3a40), SAND = C(0xcdbb90), DRY = C(0x8f8d63), GREEN = C(0x6f8656), ROCK = C(0x8c8579), HIGH = C(0xa89c88), PARK = C(0x5f8148), WOOD = C(0x4a6a3c), CITY = C(0x77746c);
+const DRYB = C(0xa3926a), LUSH = C(0x56703d), SEA = C(0x2c3a40), SAND = C(0xcdbb90), DRY = C(0x8f8d63), GREEN = C(0x6f8656), ROCK = C(0x8c8579), HIGH = C(0xa89c88), PARK = C(0x5f8148), WOOD = C(0x4a6a3c), CITY = C(0x77746c);
 const tmp = new THREE.Color();
 export function landColor(h, slope, kind, out = tmp) {
   if (h < -0.5) return out.copy(SEA).lerp(SAND, Math.min(1, (h + 40) / 60) * 0.4);
   if (kind === 'water') return out.copy(SEA);
   if (h < 3.5) out.copy(SAND).lerp(DRY, Math.max(0, (h - 1.5) / 2));
   else out.copy(DRY).lerp(GREEN, Math.min(1, (h - 3) / 60));
-  if (kind === 'park') out.lerp(PARK, 0.8); else if (kind === 'wood') out.lerp(WOOD, 0.85); else if (kind === 'beach') out.copy(SAND);
+  if (kind === 'park') out.lerp(PARK, 0.8); else if (kind === 'wood') out.lerp(WOOD, 0.85); else if (kind === 'beach') out.copy(SAND); else if (kind === 'dry') out.lerp(DRYB, 0.75); else if (kind === 'lush') out.lerp(LUSH, 0.6);
   else if (kind === 'residential' || kind === 'commercial' || kind === 'industrial') out.lerp(CITY, 0.5);
   const alt = Math.min(1, Math.max(0, (h - 250) / 500));
   out.lerp(HIGH, alt * 0.7);
@@ -51,7 +51,8 @@ export function terrainGeometry(hf, mask, stride) {
   const g = hf.n - 1, m = g / stride | 0, pos = [], col = [], idx = [], step = hf.step;
   const grid = (m + 1) * (m + 1);
   for (let j = 0; j <= m; j++) for (let i = 0; i <= m; i++) {
-    const x = i * stride * step, z = j * stride * step, h = hf.at(x, z);
+    const x = i * stride * step, z = j * stride * step; let h = hf.at(x, z);
+    if (stride > 1) { const q = stride * step / 2; h = Math.min(h, hf.at(x - q, z), hf.at(x + q, z), hf.at(x, z - q), hf.at(x, z + q)); }   // coarse ground sits low so roads and buildings are never buried
     const dx = hf.at(x + step, z) - hf.at(Math.max(0, x - step), z), dz = hf.at(x, z + step) - hf.at(x, Math.max(0, z - step));
     const slope = Math.hypot(dx, dz) / (2 * step);
     landColor(h, slope, mask[j * stride * hf.n + i * stride], tmp);
