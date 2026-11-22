@@ -4,7 +4,7 @@ const StudioDocument = (() => {
   const sizes = {landscape:[1920,1080], portrait:[1080,1920], square:[1440,1440]};
   const ratios = {landscape:'16:9', portrait:'9:16', square:'1:1'};
   const labels = {video:'Video',chrome:'Chrome form', crt:'CRT effect', background:'Background', shape:'Shape',
-    brush:'Brush stroke', image:'Image', text:'Text', path:'Path', scene:'Metallic torus',gradient:'Gradient',procedure:'Procedural vector'};
+    brush:'Brush stroke', image:'Image', text:'Text', path:'Path', scene:'Metallic torus',gradient:'Gradient',procedure:'Procedural vector',adjustment:'Adjustment'};
   const blends = ['source-over','screen','multiply','lighter','destination-out'];
   const graph = () => ({
     nodes:[{id:'source',type:'source',x:35,y:55},{id:'output',type:'output',x:450,y:55}],
@@ -95,6 +95,10 @@ const StudioDocument = (() => {
             !asset.transform.rotation.every(Number.isFinite)) throw Error('Invalid scene rotation.');
         }
       }
+      if (l.type === 'adjustment') {
+        l.adj = StudioLooks.normalizeAdj(item.adj);
+        l.look = StudioLooks.normalize(item.look) || StudioLooks.blank();
+      } else
       { const look = l.type === 'crt' || l.type === 'background' ? null : StudioLooks.normalize(item.look); if (look) l.look = look; }
       if (item.chain || l.type === 'scene') l.chain = StudioGraph.normalize(item.chain,l.type);
       if (l.type === 'image') {

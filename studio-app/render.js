@@ -202,16 +202,34 @@ function createStudioRender(vector) {
     ctx.restore();
   }
 
-  function draw(canvas,doc,gpu) {
-    const [w,h] = dimensions(doc);
-    if (canvas.width !== w) canvas.width = w;
-    if (canvas.height !== h) canvas.height = h;
+  let adjSnap = null;
+  /* scale > 1 re-renders the vectors at screen resolution so shapes and text stay crisp when zoomed in */
+  function draw(canvas,doc,gpu,scale = 1) {
+    const [w,h] = dimensions(doc), cw = Math.round(w*scale), ch = Math.round(h*scale);
+    if (canvas.width !== cw) canvas.width = cw;
+    if (canvas.height !== ch) canvas.height = ch;
     const ctx = canvas.getContext('2d');
-    ctx.clearRect(0,0,w,h);
+    ctx.setTransform(1,0,0,1,0,0);
+    ctx.clearRect(0,0,cw,ch);
+    ctx.setTransform(cw/w,0,0,ch/h,0,0);
     gpu?.begin();
     for (let i=doc.layers.length-1;i>=0;i--) {
       const l = doc.layers[i];
       if (!l.visible || !l.opacity || !activeAt(l,doc.time ?? 0)) continue;
+      if (l.type === 'adjustment') {
+        if (!adjSnap) adjSnap = document.createElement('canvas');
+        adjSnap.width = cw; adjSnap.height = ch;
+        adjSnap.getContext('2d').drawImage(canvas,0,0);
+        const out = StudioLooks.adjust(adjSnap,l,cw,ch,doc.time ?? 0);
+        ctx.save();
+        ctx.setTransform(1,0,0,1,0,0);
+        ctx.clearRect(0,0,cw,ch);
+        ctx.drawImage(adjSnap,0,0);
+        ctx.globalAlpha = l.opacity/100;
+        ctx.drawImage(out,0,0);
+        ctx.restore();
+        continue;
+      }
       let frame;
       const makeRaster = () => {
         if (raster.width !== w) raster.width = w;
@@ -270,7 +288,7 @@ function createStudioRender(vector) {
     const image = surface => `<image width="${w}" height="${h}" href="${surface.toDataURL('image/png')}"/>`;
     // The legacy whole-composition CRT reads the finished stack.
     if (pipeline(doc.graph)?.some(node => node.amount > 0) ||
-      doc.layers.some(l => l.visible && l.blend === 'destination-out')) return root+image(preview)+'</svg>';
+      doc.layers.some(l => l.visible && (l.blend === 'destination-out' || (l.type === 'adjustment' && l.opacity)))) return root+image(preview)+'</svg>';
     const surface = document.createElement('canvas');
     const blends = {screen:'screen',multiply:'multiply',lighter:'plus-lighter'};
     const fragments = [];
@@ -313,7 +331,7 @@ function createStudioRender(vector) {
   }
 
   function inside(l,p,w,h,tolerance) {
-    if (!l.visible || !l.opacity || l.type === 'crt' || l.type === 'background') return false;
+    if (!l.visible || !l.opacity || l.type === 'crt' || l.type === 'background' || l.type === 'adjustment') return false;
     if (l.type === 'gradient') return p.x >= 0 && p.x <= w && p.y >= 0 && p.y <= h;
     const q = local(l,p,w,h);
     if (l.type === 'scene') return Math.hypot(q.x,q.y) <= Math.min(w,h)*.39;

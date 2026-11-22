@@ -164,7 +164,7 @@
     list.replaceChildren();
     $('railtitle').textContent = rail.toUpperCase();
     stateButtons('[data-rail]',rail,'rail');
-    const glyphs = {scene:'◉',shape:'□',image:'▧',brush:'✎',path:'◇',text:'T',crt:'≋',gradient:'◒',procedure:'◎',video:'▶'};
+    const glyphs = {scene:'◉',shape:'□',image:'▧',brush:'✎',path:'◇',text:'T',crt:'≋',gradient:'◒',procedure:'◎',video:'▶',adjustment:'◐'};
     function row(name,type,activate,id) {
       const box = document.createElement('div');
       box.className = 'layer';
@@ -288,14 +288,19 @@
     rail = 'layers';
     editAnchors = false;
   }
+  /* options for each tool, remembered between sessions (shown in the palette above the tool) */
+  const toolOpts = {brushSize:12,smooth:58,taper:55,eraserSize:40,lineWidth:6,shapeStroke:0,penWidth:4,textFont:'sans-serif',textSize:0,gradKind:'linear',cropAspect:0};
+  try { Object.assign(toolOpts,JSON.parse(localStorage.getItem('n0ise.toolopts') || '{}')); } catch {}
+  const saveOpts = () => { try { localStorage.setItem('n0ise.toolopts',JSON.stringify(toolOpts)); } catch {} };
   function build(type,props = {}) {
     const [w,h] = dims();
     const size = Math.min(w,h)*.24;
     const defaults = {
-      shape:{shape,width:size,height:size,fill:paintColor,stroke:paintColor,strokeWidth:0},
-      text:{text:'Type here',font:'sans-serif',fontSize:Math.round(size*.38),fill:paintColor},
-      path:{points:[],closed:false,fill:paintColor,stroke:paintColor,strokeWidth:4},
-      brush:{points:[],stroke:paintColor,strokeWidth:Math.max(4,w*.007)},
+      shape:{shape,width:size,height:size,fill:paintColor,stroke:paintColor,strokeWidth:toolOpts.shapeStroke},
+      text:{text:'Type here',font:toolOpts.textFont,fontSize:toolOpts.textSize || Math.round(size*.38),fill:paintColor},
+      path:{points:[],closed:false,fill:paintColor,stroke:paintColor,strokeWidth:toolOpts.penWidth},
+      brush:{points:[],stroke:paintColor,strokeWidth:toolOpts.brushSize},
+      adjustment:{adj:{kind:'look'},look:StudioLooks.blank()},
       background:{fill:'#151617'},
       gradient:{gradient:{kind:'linear',from:[-w/2,0],to:[w/2,0],start:paintColor,end:'#101112'}}
     };
@@ -541,12 +546,18 @@
       contextKey = '';
       change(() => { delete l.crop; });
     }));
-    if (l.type !== 'crt' && l.type !== 'background') context.append(...lookControls(l));
+    if (l.type === 'adjustment') {
+      const a = l.adj || {kind:'look'}, set = (key,min,max) => field(({black:'Black point',white:'White point',gamma:'Gamma',level:'Level',levels:'Levels'})[key],'range',a[key],v => { a[key] = v; },{min,max});
+      if (a.kind === 'levels') context.append(set('black',0,254),set('gamma',.1,4),set('white',1,255));
+      else if (a.kind === 'threshold') context.append(set('level',0,255));
+      else if (a.kind === 'posterize') context.append(set('levels',2,32));
+      else context.append(...lookControls(l));
+    } else if (l.type !== 'crt' && l.type !== 'background') context.append(...lookControls(l));
   }
 
   /* Looks: filters, LUTs and code over a layer (looks.js). One look is plain JSON so people and AI can both edit it. */
   const lookOf = l => l.look ?? StudioLooks.blank();
-  const lookSet = (l,fn) => { const k = lookOf(l); fn(k); if (StudioLooks.isPlain(k)) delete l.look; else l.look = k; contextKey = ''; };
+  const lookSet = (l,fn) => { const k = lookOf(l); fn(k); if (StudioLooks.isPlain(k) && l.type !== 'adjustment') delete l.look; else l.look = k; contextKey = ''; };
   function lookControls(l) {
     const k = lookOf(l), out = [];
     const head = Object.assign(document.createElement('span'),{className:'fieldlabel',textContent:'LOOK'});
@@ -563,7 +574,7 @@
     if (k.lut) out.push(action('Remove LUT',() => change(() => lookSet(l,x => { delete x.lut; }))));
     if (k.code && !StudioLooks.codeLive(k)) out.push(action('Run code',() => { StudioLooks.trusted.add(k.code); contextKey = ''; schedule(); syncInspector(); }));
     out.push(action('Source',() => lookSource(l)));
-    if (l.look) out.push(action('Reset look',() => change(() => { delete l.look; contextKey = ''; })));
+    if (l.look && l.type !== 'adjustment') out.push(action('Reset look',() => change(() => { delete l.look; contextKey = ''; })));
     return out;
   }
   function lookFile(l) {
@@ -661,8 +672,17 @@
       if (view !== 'spatial') renderComposition();
     });
   }
+  /* vectors are re-rasterised at screen resolution, so shapes and text stay sharp when you zoom in */
+  let forceScale = 0;
+  function renderScale() {
+    if (forceScale) return forceScale;
+    const [w,h] = dims();
+    let s = clamp(zoom*(window.devicePixelRatio || 1),1,4);
+    while (s > 1 && w*h*s*s > 24e6) s -= .25;
+    return Math.max(1,s);
+  }
   function renderComposition() {
-    const warnings = R.draw(canvas,doc,gpu);
+    const warnings = R.draw(canvas,doc,gpu,renderScale());
     const warning = warnings[0] ?? '';
     if (warning && warning !== renderWarning) notice(warning);
     renderWarning = warning;
@@ -832,9 +852,9 @@
     return inside;
   }
   function pickColor(p) {
-    const [w,h] = dims(), x = Math.round(p.x), y = Math.round(p.y);
+    const [w,h] = dims(), x = Math.round(p.x), y = Math.round(p.y), k = canvas.width/w;
     if (x < 0 || y < 0 || x >= w || y >= h) return;
-    const [r,g,b] = canvas.getContext('2d').getImageData(x,y,1,1).data;
+    const [r,g,b] = canvas.getContext('2d').getImageData(Math.min(canvas.width-1,Math.round(x*k)),Math.min(canvas.height-1,Math.round(y*k)),1,1).data;
     setPaint('#'+[r,g,b].map(n => n.toString(16).padStart(2,'0')).join(''));
     contextKey = '';
     setTool('select');
@@ -869,7 +889,7 @@
   /* live preview while dragging out a shape: the real outline in the current paint, not just a box */
   function shapeDraft(a,b) {
     const r = rectangle(a,b), look = build('shape',{});
-    if (shape === 'line') { draft = {line:true,x1:a.x,y1:a.y,x2:b.x,y2:b.y,paint:look.stroke,thick:6}; return; }
+    if (shape === 'line') { draft = {line:true,x1:a.x,y1:a.y,x2:b.x,y2:b.y,paint:look.stroke,thick:toolOpts.lineWidth}; return; }
     if (r.width < 2 && r.height < 2) { draft = r; return; }
     const cx = r.x+r.width/2, cy = r.y+r.height/2;
     const points = V.outline(shape,Math.max(2,r.width),Math.max(2,r.height)).map(([x,y,dx,dy]) => [x+cx,y+cy,dx,dy]);
@@ -884,7 +904,7 @@
     const points = V.outline(shape,l.width,l.height);
     const line = shape === 'line';
     add('path',{name:V.shapes[shape],x:l.x,y:l.y,rotation:l.rotation,points,closed:!line,
-      fill:l.fill,stroke:l.stroke,strokeWidth:line ? 6 : 0});
+      fill:l.fill,stroke:l.stroke,strokeWidth:line ? toolOpts.lineWidth : toolOpts.shapeStroke});
   }
 
   function penFinish(closed = false) {
@@ -914,7 +934,7 @@
     }
     if (g.kind === 'marquee' && g.moved) {
       const [w,h] = dims(), b = rectangle(g.p,g.now);
-      const ids = doc.layers.filter(l => l.visible && !l.locked && l.opacity && !['background','crt'].includes(l.type)).filter(l => {
+      const ids = doc.layers.filter(l => l.visible && !l.locked && l.opacity && !['background','crt','adjustment'].includes(l.type)).filter(l => {
         const bounds = R.bounds(l,w,h);
         return bounds.left <= b.x+b.width && bounds.right >= b.x &&
           bounds.top <= b.y+b.height && bounds.bottom >= b.y;
@@ -923,14 +943,14 @@
     }
     if (g.kind === 'gradient') {
       const [w,h] = dims(), end = g.now ?? {x:g.p.x+Math.min(w*.55,500),y:g.p.y};
-      add('gradient',{gradient:{kind:'linear',from:[g.p.x-w/2,g.p.y-h/2],
+      add('gradient',{gradient:{kind:toolOpts.gradKind,from:[g.p.x-w/2,g.p.y-h/2],
         to:[end.x-w/2,end.y-h/2],start:paintColor,end:'#101112'}});
       setTool('select');
     }
     if (g.kind === 'lasso') {
       const [w,h] = dims();
       if (g.points.length >= 3) {
-        const ids = doc.layers.filter(l => l.visible && !l.locked && l.opacity && !['background','crt'].includes(l.type)).filter(l => {
+        const ids = doc.layers.filter(l => l.visible && !l.locked && l.opacity && !['background','crt','adjustment'].includes(l.type)).filter(l => {
           const b = R.bounds(l,w,h);
           return inPolygon({x:(b.left+b.right)/2,y:(b.top+b.bottom)/2},g.points);
         }).map(l => l.id);
@@ -960,7 +980,7 @@
       const [w,h] = dims(), l = g.l;
       const bounds = S.union(l.points.map(([x,y]) => ({left:x,right:x,top:y,bottom:y})));
       const cx = (bounds.left+bounds.right)/2, cy = (bounds.top+bounds.bottom)/2;
-      const outline = V.stroke(l.points,g.pressure,l.strokeWidth);
+      const outline = V.stroke(l.points,g.pressure,l.strokeWidth,toolOpts);
       Object.assign(l,{x:cx-w/2,y:cy-h/2,type:'path',name:g.eraser ? 'Eraser stroke' : 'Vector stroke',
         closed:true,fill:l.stroke,strokeWidth:0,
         points:outline.map(([x,y,dx,dy]) => [x-cx,y-cy,dx,dy])});
@@ -1020,7 +1040,7 @@
         if (hit && !selection.includes(hit.id)) select([hit.id]);
         const moving = visibleSelection();
         const targets = doc.layers.filter(l => l.visible && l.opacity && !selection.includes(l.id) &&
-          l.type !== 'background' && l.type !== 'crt').map(l => R.bounds(l,w,h));
+          l.type !== 'background' && l.type !== 'crt' && l.type !== 'adjustment').map(l => R.bounds(l,w,h));
         gesture = {...base,kind:'move',items:snapshotTransforms(moving),bounds:boxFor(moving),targets,before:capture()};
       } else {
         const keep = multi ? [...selection] : [];
@@ -1035,7 +1055,7 @@
       return;
     } else if (tool === 'brush' || tool === 'eraser') {
       const before = capture();
-      const l = build('brush',{points:[[p.x,p.y]],x:-w/2,y:-h/2,
+      const l = build('brush',{points:[[p.x,p.y]],x:-w/2,y:-h/2,strokeWidth:tool === 'eraser' ? toolOpts.eraserSize : toolOpts.brushSize,
         ...(tool === 'eraser' ? {name:'Eraser stroke',blend:'destination-out'} : {})});
       insert([l]);
       const pressure = e.pointerType === 'pen' ? [e.pressure] : undefined;
@@ -1165,6 +1185,7 @@
   function cropPreview(g,p,w,h) {
     const l = g.l;
     const a = R.local(l,g.p,w,h), b = R.local(l,p,w,h);
+    if (toolOpts.cropAspect > 0) b.y = a.y+(b.y < a.y ? -1 : 1)*Math.abs(b.x-a.x)/toolOpts.cropAspect;
     const rect = rectangle(a,b), old = l.crop ?? [0,0,1,1];
     const x = clamp(rect.x/l.width+.5,old[0],old[0]+old[2]);
     const y = clamp(rect.y/l.height+.5,old[1],old[1]+old[3]);
@@ -1188,7 +1209,7 @@
   stage.addEventListener('pointermove',e => {
     if (e.pointerType === 'touch' || gesture || tool !== 'select' || view === 'spatial' || doc.artboardLocked) return setHover(null);
     const p = position(e.clientX,e.clientY), [w,h] = dims();
-    const top = doc.layers.find(l => !['background','crt'].includes(l.type) && !l.locked && R.inside(l,p,w,h,5/zoom));
+    const top = doc.layers.find(l => !['background','crt','adjustment'].includes(l.type) && !l.locked && R.inside(l,p,w,h,5/zoom));
     setHover(top?.id ?? null);
   });
   stage.addEventListener('pointerleave',() => setHover(null));
@@ -1513,36 +1534,92 @@
     pal.remove();
     document.removeEventListener('pointerdown',pal._out,true);
     document.removeEventListener('keydown',pal._key,true);
-    if (restore) document.querySelector('[data-tool="shape"]')?.focus();
+    if (restore) document.querySelector(`#tools [data-tool="${pal._tool}"]`)?.focus();
   }
-  function shapePicker() {
+  /* options shown above a tool: [type,label,key,min,max] for sliders, [type,label,key,choices] for segmented choices */
+  const PALETTES = {
+    brush:[['range','Size','brushSize',2,160],['range','Smoothing','smooth',0,100],['range','Pressure taper','taper',0,100]],
+    eraser:[['range','Size','eraserSize',4,300]],
+    pen:[['range','Stroke width','penWidth',1,60]],
+    line:[['range','Width','lineWidth',1,80]],
+    shape:[['range','Outline','shapeStroke',0,40]],
+    text:[['choice','Font','textFont',[['sans-serif','Sans'],['serif','Serif'],['monospace','Mono']]],['range','Size (0 is auto)','textSize',0,600]],
+    gradient:[['choice','Type','gradKind',[['linear','Linear'],['radial','Radial']]]],
+    crop:[['choice','Aspect','cropAspect',[[0,'Free'],[1,'1:1'],[4/3,'4:3'],[16/9,'16:9'],[9/16,'9:16']]]]
+  };
+  function toolPalette(name) {
     closeShapePalette(false);
-    const anchor = document.querySelector('[data-tool="shape"]');
+    const anchor = document.querySelector(`#tools [data-tool="${name}"]`);
     const pal = document.createElement('div');
-    pal.id = 'shapePalette'; pal.className = 'shapepal'; pal.setAttribute('role','menu'); pal.setAttribute('aria-label','Vector shapes');
-    for (const [id,name] of Object.entries(V.shapes)) {
-      const b = document.createElement('button');
-      b.type = 'button'; b.className = 'tool'+(id === shape ? ' on' : ''); b.setAttribute('role','menuitem');
-      b.setAttribute('aria-label',name); b.title = name;
-      b.innerHTML = `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round">${shapeIcons[id] || ''}</svg>`;
-      b.onclick = () => { closeShapePalette(false); chooseShape(id); };
-      pal.append(b);
+    pal.id = 'shapePalette'; pal._tool = name; pal.className = 'shapepal toolpal'; pal.setAttribute('role','group'); pal.setAttribute('aria-label',(anchor?.getAttribute('aria-label') || name)+' options');
+    if (name === 'shape') {
+      const icons = document.createElement('div'); icons.className = 'palicons'; icons.setAttribute('role','menu');
+      for (const [id,label] of Object.entries(V.shapes)) {
+        const b = document.createElement('button');
+        b.type = 'button'; b.className = 'tool'+(id === shape ? ' on' : ''); b.setAttribute('role','menuitem');
+        b.setAttribute('aria-label',label); b.title = label;
+        b.innerHTML = `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round">${shapeIcons[id] || ''}</svg>`;
+        b.onclick = () => { closeShapePalette(false); chooseShape(id); };
+        icons.append(b);
+      }
+      pal.append(icons);
     }
+    for (const [type,label,key,a,b] of PALETTES[name] || []) {
+      const row = document.createElement('div'); row.className = 'optrow';
+      const head = document.createElement('span'); head.className = 'optlabel'; head.textContent = label;
+      row.append(head);
+      if (type === 'range') {
+        const out = document.createElement('output'), input = document.createElement('input');
+        input.type = 'range'; input.className = 'slider'; input.min = a; input.max = b; input.step = 1; input.value = toolOpts[key]; input.setAttribute('aria-label',label);
+        const show = () => { out.textContent = key === 'textSize' && !toolOpts[key] ? 'Auto' : String(toolOpts[key]); };
+        input.oninput = () => { toolOpts[key] = input.valueAsNumber; show(); saveOpts(); };
+        show(); head.append(out); row.append(input);
+      } else {
+        const seg = document.createElement('div'); seg.className = 'seg';
+        for (const [value,text] of a) {
+          const btn = document.createElement('button'); btn.type = 'button'; btn.textContent = text;
+          const on = () => Math.abs(Number(toolOpts[key])-Number(value)) < 1e-6 || toolOpts[key] === value;
+          btn.setAttribute('aria-pressed',String(on()));
+          btn.onclick = () => { toolOpts[key] = value; saveOpts(); for (const o of seg.children) o.setAttribute('aria-pressed','false'); btn.setAttribute('aria-pressed','true'); };
+          seg.append(btn);
+        }
+        row.append(seg);
+      }
+      pal.append(row);
+    }
+    if (name === 'lasso') {
+      const row = document.createElement('div'); row.className = 'optrow seg';
+      for (const [text,run] of [['Select all',() => select(doc.layers.filter(l => l.visible && !l.locked && !['background','crt','adjustment'].includes(l.type)).map(l => l.id))],['Select none',() => select([])]]) {
+        const b = action(text,() => { run(); closeShapePalette(false); }); row.append(b);
+      }
+      pal.append(row);
+    }
+    if (name === 'picker') {
+      const row = document.createElement('div'); row.className = 'optrow';
+      const head = document.createElement('span'); head.className = 'optlabel'; head.textContent = 'Recent colours';
+      const sw = document.createElement('div'); sw.className = 'swatchbar';
+      for (const c of recentColors()) { const b = document.createElement('button'); b.type = 'button'; b.className = 'swatch'; b.style.background = c; b.title = c; b.setAttribute('aria-label','Use '+c); b.onclick = () => { setPaint(c); closeShapePalette(false); }; sw.append(b); }
+      row.append(head,sw); pal.append(row);
+    }
+    if (!pal.children.length) return;
+    pal.style.left = '8px'; pal.style.top = '8px';
     document.body.append(pal);
     const r = anchor.getBoundingClientRect(), pw = pal.offsetWidth, ph = pal.offsetHeight;
     pal.style.left = Math.max(8,Math.min(innerWidth-pw-8,r.left+r.width/2-pw/2))+'px';
     pal.style.top = Math.max(8,r.top-ph-10)+'px';
-    pal._out = e => { if (!pal.contains(e.target) && !e.target.closest('[data-tool="shape"]')) closeShapePalette(false); };
+    pal._out = e => { if (!pal.contains(e.target) && !e.target.closest(`#tools [data-tool="${name}"]`)) closeShapePalette(false); };
     pal._key = e => {
-      const items = [...pal.querySelectorAll('button')], i = items.indexOf(document.activeElement);
+      const items = [...pal.querySelectorAll('.palicons button')], i = items.indexOf(document.activeElement);
       if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeShapePalette(); }
+      else if (!items.length || i < 0) return;
       else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { e.preventDefault(); e.stopPropagation(); items[(i+1)%items.length].focus(); }
       else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { e.preventDefault(); e.stopPropagation(); items[(i-1+items.length)%items.length].focus(); }
     };
     document.addEventListener('pointerdown',pal._out,true);
     document.addEventListener('keydown',pal._key,true);
-    (pal.querySelector('.on') || pal.querySelector('button')).focus();
+    if (name === 'shape') (pal.querySelector('.on') || pal.querySelector('button')).focus();
   }
+  const shapePicker = () => toolPalette('shape');
   function chooseShape(next) {
     shape = next;
     setTool('shape');
@@ -1565,11 +1642,10 @@
   }
   function renderExport() {
     finishTextEdit();
-    if (frame) {
-      cancelAnimationFrame(frame);
-      frame = 0;
-      renderComposition();
-    }
+    if (frame) { cancelAnimationFrame(frame); frame = 0; }
+    forceScale = 1;                       /* exports are always artboard size */
+    renderComposition();
+    setTimeout(() => { forceScale = 0; schedule(); },0);
   }
   function exportPNG() {
     renderExport();
@@ -1888,7 +1964,26 @@
   { const zl = $('zoomLock'), paintZl = () => { zl.setAttribute('aria-pressed',zoomLocked); zl.classList.toggle('on',zoomLocked); };
     zl.onclick = () => { zoomLocked = !zoomLocked; try { localStorage.setItem('n0ise.zoomlock',zoomLocked?'1':'0'); } catch {} paintZl(); };
     paintZl(); }
-  $('addLayer').onclick = openAdd;
+  /* the plus above the layers: blank layer, adjustment layers, then everything else */
+  function addAdjustment(name,adj,look) { add('adjustment',{name,adj,look:{...StudioLooks.blank(),...look}}); }
+  function openLayerMenu() {
+    if (view === 'graph' || view === 'spatial') setView('canvas');
+    const [w,h] = dims();
+    menu('New layer',[
+      ['Blank layer',() => add('shape',{name:'Blank layer',shape:'rectangle',width:w,height:h,x:0,y:0,strokeWidth:0})],
+      ['Filter',() => addAdjustment('Filter',{kind:'look'},{preset:'film'})],
+      ['Brightness / contrast',() => addAdjustment('Brightness / contrast',{kind:'look'},{brightness:110,contrast:115})],
+      ['Hue / saturation',() => addAdjustment('Hue / saturation',{kind:'look'},{hue:20,saturate:130})],
+      ['Levels',() => addAdjustment('Levels',{kind:'levels',black:12,white:243,gamma:1})],
+      ['Threshold',() => addAdjustment('Threshold',{kind:'threshold',level:128})],
+      ['Posterize',() => addAdjustment('Posterize',{kind:'posterize',levels:5})],
+      ['Black and white',() => addAdjustment('Black and white',{kind:'look'},{preset:'mono'})],
+      ['Invert',() => addAdjustment('Invert',{kind:'look'},{preset:'invert'})],
+      ['More: import, shapes, 3D…',openAdd]
+    ]);
+  }
+  $('addLayer').onclick = openLayerMenu;
+  $('addLayer').title = $('addLayer').ariaLabel = 'New layer';
   $('moveUp').onclick = () => reorder(-1);
   $('moveDown').onclick = () => reorder(1);
   $('removeLayer').onclick = remove;
@@ -1981,6 +2076,27 @@
     toolstrip.insertBefore(button,toolstrip.querySelector('[data-tool="add"]'));
   }
 
+  /* toolbar icons: one stroke family, drawn on a 24 grid (the eyedropper stays a circle of the active colour) */
+  const toolIcons = {
+    select:'<path d="M6 3.5 18.5 11l-5.6 1.4L10.2 18z"/>',
+    brush:'<path d="M20 4 11.5 12.5"/><path d="M11.5 12.5c-2.6-.6-4.6 1-4.6 3.2 0 1.6-.9 2.5-2.9 3.3 4.4 1.4 8.600-.4 8.600-3.800"/>',
+    pen:'<path d="M12 3.5 18 11.500 12 14.500 6 11.500z"/><path d="M12 14.500V21"/><circle cx="12" cy="10.500" r="1.200"/>',
+    text:'<path d="M5.500 7V5h13v2M12 5v14M9 19h6"/>',
+    shape:'<rect x="4" y="4.500" width="10" height="10" rx="1.800"/><circle cx="15" cy="15" r="5"/>',
+    crop:'<path d="M7 3v14h14M3 7h14v14"/>',
+    lasso:'<path d="M12 4.500c4.700 0 8 1.800 8 4.500s-3.300 4.500-8 4.500S4 11.700 4 9s3.300-4.500 8-4.500z" stroke-dasharray="3 2.600"/><path d="M8.500 13.200c-1.100 2.200-.2 5 2.800 6.300"/>',
+    eraser:'<path d="M3.500 15.500 13.500 5.500a2 2 0 0 1 2.800 0l3.200 3.200a2 2 0 0 1 0 2.800L11.500 19.500H6.500z"/><path d="M9 10l6 6M11.500 19.500H20"/>',
+    line:'<path d="M5 19 19 5"/><circle cx="5" cy="19" r="1.400"/><circle cx="19" cy="5" r="1.400"/>',
+    gradient:'<circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor"/>',
+    add:'<path d="M12 5v14M5 12h14"/>',
+    effect:'<path d="M3 9c3-3 6 3 9 0s6 3 9 0M3 15c3-3 6 3 9 0s6 3 9 0"/>'
+  };
+  for (const b of all('.toolstrip .tool')) {
+    const name = b.dataset.tool || (b.id === 'effectTool' ? 'effect' : '');
+    if (name === 'picker' || !toolIcons[name]) continue;
+    b.innerHTML = `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${toolIcons[name]}</svg>`;
+  }
+
   const homeUrl = new URL('./index.html',location.href).href;
   for (const brand of all('a.brand')) {
     brand.href = homeUrl;
@@ -1997,10 +2113,13 @@
   for (const b of all('[data-tool]')) b.onclick = () => {
     const next = b.dataset.tool;
     if (next === 'add') openAdd();
-    else if (next === 'shape') shapePicker();
+    else if (next === 'shape') { if ($('shapePalette')?._tool === 'shape') closeShapePalette(false); else shapePicker(); }
     else if (next === 'pen' && tool === 'pen' && pen.length >= 2) penFinish();
     else {
+      const wasOpen = $('shapePalette')?._tool === next;
+      closeShapePalette(false);
       setTool(next);
+      if (!wasOpen && (PALETTES[next] || next === 'lasso' || next === 'picker')) toolPalette(next);
       if (next === 'pen') notice('Tap points or drag handles. Enter or tap Pen to finish.');
       if (next === 'crop') notice('Select an image, then drag the area to keep.');
     }
@@ -2241,7 +2360,8 @@
     schedule, change, select, notice, dims,
     capture, finish,
     add(layers,extra) { change(() => { extra?.(); insert(layers); }); },
-    remove() { $('removeLayer').click(); }
+    remove() { $('removeLayer').click(); },
+    holdScale(v) { forceScale = v; if (!v) schedule(); }
   };
   R.media.onFrame = () => schedule();
 })();

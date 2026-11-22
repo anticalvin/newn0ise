@@ -22,9 +22,9 @@ const StudioVector = (() => {
     return [[-x,-y],[x,-y],[x,y],[-x,y]].map(p => [...p,0,0]);
   }
 
-  function stroke(points,pressure,width) {
+  function stroke(points,pressure,width,o = {}) {
     const result = StudioFreehand.getStroke(points.map(([x,y],i) => [x,y,pressure?.[i] ?? .5]),{
-      size:width,thinning:.55,smoothing:.58,streamline:.35,simulatePressure:!pressure,last:true
+      size:width,thinning:(o.taper ?? 55)/100,smoothing:(o.smooth ?? 58)/100,streamline:.35,simulatePressure:!pressure,last:true
     });
     return result.map(([x,y],i) => {
       const a = result[(i+result.length-1)%result.length], b = result[(i+1)%result.length];

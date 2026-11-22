@@ -328,6 +328,7 @@
     pause(); exporting = true;
     const btn = q('[data-nst=export]'), d = doc(); btn.disabled = true;
     for (const l of d.layers) if (l.type === 'video') { const v = M().R.media.video(l); if (v) tap(v); }
+    M().holdScale?.(1); M().setTime(M().doc.time, true);
     const stream = M().canvas.captureStream(fps());
     adest?.stream.getAudioTracks().forEach(tr => stream.addTrack(tr));
     const chunks = [], rec = new MediaRecorder(stream, { mimeType: type, videoBitsPerSecond: 8e6 });
@@ -340,7 +341,7 @@
     onEnd = () => { onEnd = null; setTimeout(() => rec.state !== 'inactive' && rec.stop(), 250); };
     play();
     await finished;
-    exporting = false; btn.disabled = false;
+    exporting = false; btn.disabled = false; M().holdScale?.(0);
     const blob = new Blob(chunks, { type: type.split(';')[0] });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = (d.name || 'n0ise-motion').replace(/[^\w-]+/g, '-') + (type.startsWith('video/mp4') ? '.mp4' : '.webm');
     document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
