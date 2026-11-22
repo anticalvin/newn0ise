@@ -1,9 +1,15 @@
 .lab [hidden], #vector-status-line[hidden], #vector-drawers[hidden] { display: none !important; }
 .lab .lab-modes { display: inline-flex; gap: 3px; }
 .lab-modes button[aria-pressed="true"] { background: #e9e4d8; color: #171615; }
-#vector-preview { position: absolute; inset: 0; display: grid; place-items: center; padding: 12px; }
+/* the preview frame is the artwork: it takes the drawing's ratio (set in JS), has no padding, and clips to rounded corners, so nothing sits between the art and its edge */
+#vector-preview { position: relative; display: block; padding: 0; overflow: hidden; border-radius: 18px; background: #0c0c0d; box-shadow: 0 0 0 1px rgba(255,255,255,.08); }
 #vector-preview svg { display: block; width: 100%; height: 100%; min-height: 0; }
 #vector-preview.light { background: #8b8880; }
+.lab .lab-preview.stage { background: transparent !important; border-radius: 0; display: grid; place-items: center; }
+.lab .lab-preview #preview { border: 0; display: block; border-radius: 18px; overflow: hidden; background: #050505; box-shadow: 0 0 0 1px rgba(255,255,255,.08); }
+.canvas-size { align-items: center; }
+.canvas-size .canvas-dim { width: 5.5em; flex: 0 0 auto; text-align: center; }
+.canvas-size .canvas-note { margin: 0 4px; font-variant-numeric: tabular-nums; }
 #vector-info { display: block; color: var(--dim); font-size: 11px; }
 #vector-status-line { min-height: 26px; }
 #vector-error:empty, #vector-status:empty { display: none; }

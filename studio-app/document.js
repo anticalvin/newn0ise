@@ -102,7 +102,7 @@ const StudioDocument = (() => {
       { const look = l.type === 'crt' || l.type === 'background' ? null : StudioLooks.normalize(item.look); if (look) l.look = look; }
       if (item.chain || l.type === 'scene') l.chain = StudioGraph.normalize(item.chain,l.type);
       if (l.type === 'image') {
-        if (typeof item.src !== 'string' || !/^data:image\/(png|jpeg|webp|gif|avif|bmp);base64,[a-z0-9+/=]+$/i.test(item.src)) {
+        if (typeof item.src !== 'string' || !/^data:image\/(png|jpeg|webp|gif|avif|bmp|svg\+xml);base64,[a-z0-9+/=]+$/i.test(item.src)) {
           throw new Error('This project contains an unsupported image.');
         }
         l.src = item.src;
@@ -142,7 +142,7 @@ const StudioDocument = (() => {
       }
       if (l.type === 'path' || l.type === 'brush') {
         if (!Array.isArray(item.points) || item.points.length > 100000 || !item.points.every(point =>
-          Array.isArray(point) && point.length === (l.type === 'path' ? 4 : 2) &&
+          Array.isArray(point) && (l.type === 'path' ? (point.length === 4 || point.length === 6) : point.length === 2) &&
           point.every(v => Number.isFinite(v) && Math.abs(v) <= 1e6))) {
           throw new Error('This project contains invalid path geometry.');
         }

@@ -9,7 +9,7 @@ const assert = require('node:assert/strict');
 
 const input = name => readFileSync(join(__dirname,'..',name+'.js'),'utf8');
 const {G,D,S} = runInNewContext(
-  ['graph-model','document','snapping'].map(input).join('\n')+
+  ['graph-model','looks','document','snapping'].map(input).join('\n')+
   '\n;({G:StudioGraph,D:StudioDocument,S:StudioSnap})',{crypto:webcrypto,structuredClone});
 const plain = value => JSON.parse(JSON.stringify(value));
 
@@ -68,4 +68,19 @@ test('custom canvas dimensions round-trip and reject oversized or fractional sur
   assert.equal(D.ratioName(restored),'3:2');
   assert.throws(() => D.create('custom',false,[4096,4096]),/dimensions/);
   assert.throws(() => D.normalize({...plain(doc),size:[1050.5,700]}),/supported/);
+});
+
+test('text, shapes and paths stay editable objects through save and reopen (N0I-31)',() => {
+  const d = D.create('square',false);
+  const text = D.layer('text',{text:'Resolution independent',font:'serif',fontSize:144,fill:'#ff3b30',stroke:'#101010',strokeWidth:2});
+  const shape = D.layer('shape',{shape:'ellipse',width:320,height:180,fill:'#d5d0c5',stroke:'#e9e5db',strokeWidth:4});
+  const pts = [[-100,0,0,-60],[0,80,60,0],[100,0,0,60]];
+  const path = D.layer('path',{points:pts,closed:true,fill:null,stroke:'#e9e5db',strokeWidth:6});
+  d.layers.push(text,shape,path);
+  const back = D.normalize(plain(d));
+  const [t,s,p] = back.layers;
+  assert.equal(t.type,'text'); assert.equal(t.text,'Resolution independent'); assert.equal(t.font,'serif'); assert.equal(t.fontSize,144);
+  assert.equal(s.type,'shape'); assert.equal(s.shape,'ellipse'); assert.equal(s.width,320); assert.equal(s.height,180);
+  assert.equal(p.type,'path'); assert.deepEqual(plain(p.points),pts); assert.equal(p.closed,true);
+  for (const l of back.layers) assert.ok(!('src' in l),l.type+' was flattened into a bitmap');
 });

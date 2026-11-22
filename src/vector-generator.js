@@ -255,8 +255,10 @@ export function pathData({points,closed}) {
   let d = `M ${x} ${y}`;
   for (let i = 1; i < points.length+Number(!!closed); i++) {
     const [px,py,pdx = 0,pdy = 0] = points[i-1];
-    const [nx,ny,ndx = 0,ndy = 0] = points[i % points.length];
-    d += ` C ${px+pdx} ${py+pdy} ${nx-ndx} ${ny-ndy} ${nx} ${ny}`;
+    const next = points[i % points.length], [nx,ny,ndx = 0,ndy = 0] = next;
+    /* a fifth and sixth number set the incoming handle on its own; with four it mirrors the outgoing one */
+    const ix = next.length >= 6 ? nx+(next[4] || 0) : nx-ndx, iy = next.length >= 6 ? ny+(next[5] || 0) : ny-ndy;
+    d += ` C ${px+pdx} ${py+pdy} ${ix} ${iy} ${nx} ${ny}`;
   }
   return d+(closed ? ' Z' : '');
 }
@@ -280,16 +282,21 @@ export function geometryMarkup(paths) {
     paths.map(path => `<path d="${pathData(path)}" stroke="${path.stroke}" stroke-width="${path.strokeWidth}"/>`).join('')+'</g>';
 }
 
+import {frameViewBox} from './lab-canvas.js';
 export function viewBox(paths) {
   const {left,top,right,bottom} = geometryBounds(paths);
   const radius = Math.ceil(Math.max(-left,-top,right,bottom));
   return [-radius,-radius,radius*2,radius*2];
 }
 
-export function exportVectorSVG(definition) {
-  const paths = generateGeometry(definition);
-  const box = viewBox(paths);
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${box[2]}" height="${box[3]}" viewBox="${box.join(' ')}">${geometryMarkup(paths)}</svg>`;
+/* frame: optional {w,h} from Lab's canvas size. The viewBox is framed to that ratio and the SVG's width and height are the chosen pixels, so the file and the preview agree. */
+export function exportVectorSVG(definition,frame) {
+  const paths = generateGeometry(definition), base = viewBox(paths);
+  if (frame && frame.w > 0 && frame.h > 0) {
+    const box = frameViewBox(base,frame.w,frame.h).map(n => Math.round(n*1000)/1000);
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${frame.w}" height="${frame.h}" viewBox="${box.join(' ')}">${geometryMarkup(paths)}</svg>`;
+  }
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${base[2]}" height="${base[3]}" viewBox="${base.join(' ')}">${geometryMarkup(paths)}</svg>`;
 }
 
 function random(seed) {

@@ -38,9 +38,12 @@
   let textEdit = null, inlineText = null, launchMode = 'new', launchTicket = 0;
   let view = 'canvas', tool = 'select', rail = 'layers', sheet = 'canvas', shape = 'rectangle';
   let paintColor = '#e9e5db', constrain = true, hoverId = null;
-  let dirty = false, opening = 0, revision = 0, space = false, grid = false, snapping = true, angular = false;
+  let dirty = false, opening = 0, revision = 0, space = false, snapping = true, angular = false;
+  /* grid, guides and snap switches (StudioGrid): showing the grid and snapping to it are separate */
+  let gridCfg = StudioGrid.normalize((() => { try { return JSON.parse(localStorage.getItem('n0ise.gridcfg') || 'null'); } catch { return null; } })());
+  const saveGrid = () => { gridCfg = StudioGrid.normalize(gridCfg); try { localStorage.setItem('n0ise.gridcfg',JSON.stringify(gridCfg)); } catch {} };
   let pan = {x:0,y:0}, zoom = 1, fitted = true, frame = 0, gesture = null, pen = [], hover = null;
-  let guides = [], draft = null, editAnchors = false, toastTimer = 0, contextKey = '';
+  let guides = [], draft = null, editAnchors = false, anchorSel = -1, toastTimer = 0, contextKey = '';
   const pointers = new Map();
   let graphLayerId = null, graphPreview = null, renderWarning = '';
   const gpu = runtimeModule?.createRuntime($('spatialCanvas'),beforeRotation => {
@@ -123,7 +126,9 @@
     selection = entry.selection.filter(id => doc.layers.some(l => l.id === id));
     contextKey = '';
     pen = [];
-    editAnchors = false;
+    /* undoing a node edit keeps you in node editing as long as the same path is still selected */
+    editAnchors = editAnchors && selection.length === 1 && doc.layers.find(l => l.id === selection[0])?.type === 'path';
+    if (!editAnchors) anchorSel = -1;
     graph.clear();
     if (view === 'spatial' && activeLayer()?.type !== 'scene') setView('canvas');
     sync();
@@ -238,12 +243,14 @@
     list.scrollTop = scrollTop;
     if (focused) [...list.querySelectorAll('button')].find(b => b.dataset.action === focused.dataset.action)?.focus({preventScroll:true});
     $('removeLayer').disabled = !selection.length;
+    $('deleteTool').disabled = !selection.length;
     $('moveUp').disabled = !canReorder(-1);
     $('moveDown').disabled = !canReorder(1);
   }
 
-  studioLayerDrag($('layerlist'),(id,beforeId) => {
+  studioLayerDrag($('layerlist'),(id,beforeId,toBin) => {
     const moving = selection.includes(id) ? selection : [id];
+    if (toBin) { deleteLayers(moving); return; }
     const kept = doc.layers.filter(l => !moving.includes(l.id));
     const original = doc.layers;
     const target = original.findIndex(l => l.id === beforeId);
@@ -251,7 +258,7 @@
     kept.splice(index,0,...original.filter(l => moving.includes(l.id)));
     if (kept.every((l,i) => l === original[i])) return;
     change(() => { doc.layers = kept; selection = [...moving]; });
-  });
+  },$('layerBin'));
 
   function canReorder(direction) {
     return doc.layers.some((l,i) => selection.includes(l.id) && doc.layers[i+direction] &&
@@ -270,15 +277,20 @@
       }
     });
   }
-  function remove() {
-    if (!selection.length) return;
-    if (selected().every(l => l.locked)) { notice('Unlock the selected layer before deleting it.'); return; }
+  /* the one deletion command: toolbar, Delete and Backspace, the layer bin, the context menu and the API all end up here. Locked layers are kept, one undo step restores everything. */
+  function deleteLayers(ids = selection) {
+    const wanted = doc.layers.filter(l => ids.includes(l.id));
+    if (!wanted.length) return 0;
+    const removable = wanted.filter(l => !l.locked).map(l => l.id);
+    if (!removable.length) { notice(wanted.length > 1 ? 'Those layers are locked. Unlock them before deleting.' : 'Unlock the layer before deleting it.'); return 0; }
     change(() => {
-      const removable = selected().filter(l => !l.locked).map(l => l.id);
       doc.layers = doc.layers.filter(l => !removable.includes(l.id));
       selection = selection.filter(id => !removable.includes(id));
     });
+    if (removable.length < wanted.length) notice((wanted.length-removable.length)+' locked layer'+(wanted.length-removable.length > 1 ? 's were' : ' was')+' kept.');
+    return removable.length;
   }
+  function remove() { deleteLayers(selection); }
   function toggleId(ids,id) { return ids.includes(id) ? ids.filter(x => x !== id) : [...ids,id]; }
 
   function insert(layers) {
@@ -427,7 +439,7 @@
       $('opacityLabel').textContent = l.opacity+'%';
     }
     const key = view+':'+(node ? node.id+':'+JSON.stringify(node.params) : edge ? 'edge:'+edge.to :
-      l ? [l.id,l.locked,l.asset?.transform?.rotation,l.chain?.nodes.map(n => n.id),editAnchors].join(':') : selection.join(','));
+      l ? [l.id,l.locked,l.asset?.transform?.rotation,l.chain?.nodes.map(n => n.id),editAnchors,anchorSel,l.points?.length,l.closed,l.points?.[anchorSel] ? StudioPath.isSmooth(l.points[anchorSel]) : ''].join(':') : selection.join(','));
     if (contextKey === key) return;
     contextKey = key;
     const context = $('context');
@@ -541,7 +553,16 @@
       context.append(sized('Width','width','height'),sized('Height','height','width'),toggle);
     }
     if (l.type === 'shape') context.append(action('Edit points',() => pathFromShape(l)));
-    if (l.type === 'path') context.append(action(editAnchors ? 'Done editing anchors' : 'Edit anchors',toggleAnchors));
+    if (l.type === 'path') {
+      context.append(action(editAnchors ? 'Done editing anchors' : 'Edit anchors',toggleAnchors));
+      if (editAnchors && !l.locked) {
+        const has = anchorSel >= 0 && l.points[anchorSel];
+        const smooth = action(has && StudioPath.isSmooth(l.points[anchorSel]) ? 'Make corner' : 'Make smooth',toggleSmooth), del = action('Delete point',deleteAnchor);
+        smooth.disabled = del.disabled = !has;
+        context.append(smooth,del,action(l.closed ? 'Open path' : 'Close path',toggleClosed));
+        context.append(Object.assign(document.createElement('p'),{className:'muted compact',textContent:'Double-click the outline to add a point. Double-click a point for smooth or corner. Alt-drag a handle to move it on its own.'}));
+      }
+    }
     if (l.type === 'image' && l.crop) context.append(action('Reset crop',() => {
       contextKey = '';
       change(() => { delete l.crop; });
@@ -647,10 +668,11 @@
     const [w,h] = dims(), width = stage.clientWidth, height = stage.clientHeight;
     if (!width || !height) return;
     if (fitted) {
-      const flush = Math.abs((w/h)/(width/height)-1) < .03;
-      zoom = flush ? Math.max(.01,Math.min(width/w,height/h)) : Math.max(.01,Math.min((width-30)/w,(height-66)/h,1));
-      pan = {x:0,y:flush ? 0 : -18};
+      const f = StudioViewport.fitTransform(w,h,width,height);
+      zoom = f.zoom; pan = f.pan;
     }
+    /* the composition is drawn at screen resolution, so a change of zoom must redraw it (debounced), otherwise vectors stay soft until the next edit */
+    { const rs = renderScale(); if (Math.abs(rs-lastRenderScale) > .01) { lastRenderScale = rs; clearTimeout(scaleTimer); scaleTimer = setTimeout(() => { if (view !== 'spatial') schedule(); },90); } }
     board.classList.toggle('flush',Math.abs((w/h)/(width/height)-1) < .03);
     board.style.width = w*zoom+'px';
     board.style.height = h*zoom+'px';
@@ -673,7 +695,7 @@
     });
   }
   /* vectors are re-rasterised at screen resolution, so shapes and text stay sharp when you zoom in */
-  let forceScale = 0;
+  let forceScale = 0, lastRenderScale = 1, scaleTimer = 0;
   function renderScale() {
     if (forceScale) return forceScale;
     const [w,h] = dims();
@@ -705,13 +727,12 @@
     overlay.replaceChildren();
     if (view === 'spatial') return;
     const [w,h] = dims();
-    if (grid) {
-      let d = '';
-      const step = zoom < .3 ? 200 : 100;
-      for (let x=step;x<w;x+=step) d += `M ${x} 0 V ${h} `;
-      for (let y=step;y<h;y+=step) d += `M 0 ${y} H ${w} `;
-      svg('path',{d,class:'grid'});
+    if (gridCfg.show) {
+      const g = StudioGrid.lines(gridCfg,w,h), o = gridCfg.opacity/100;
+      if (g.minor) svg('path',{d:g.minor,class:'grid',style:`opacity:${(o*.55).toFixed(3)}`});
+      if (g.major) svg('path',{d:g.major,class:'grid',style:`opacity:${o.toFixed(3)}`});
     }
+    for (const gd of gridCfg.guides) svg('line',gd.axis === 'x' ? {x1:gd.at,y1:0,x2:gd.at,y2:h,class:'userguide'} : {x1:0,y1:gd.at,x2:w,y2:gd.at,class:'userguide'});
     function line(x1,y1,x2,y2,cls) { svg('line',{x1,y1,x2,y2,class:cls}); }
     function handle(p,attrs,shape = 'rect') {
       const r = 3.4/zoom, hit = 11/zoom;
@@ -733,13 +754,13 @@
           const p = R.transform(x*l.scale/100,y*l.scale/100,R.radians(l.rotation));
           return {x:c.x+p.x,y:c.y+p.y};
         };
-        l.points.forEach(([x,y,dx,dy],i) => {
-          const p = world(x,y), q = world(x+dx,y+dy), b = world(x-dx,y-dy);
-          if (dx || dy) line(b.x,b.y,q.x,q.y,'outline');
-          const tangent = dx || dy ? q : world(x+20*100/l.scale/zoom,y);
-          if (!(dx || dy)) line(p.x,p.y,tangent.x,tangent.y,'outline');
-          handle(tangent,{'data-anchor':i,'data-tangent':'true'},'circle');
+        l.points.forEach((pt,i) => {
+          const [x,y] = pt, o = StudioPath.outOf(pt), n = StudioPath.inOf(pt), p = world(x,y), q = world(x+o[0],y+o[1]), b = world(x+n[0],y+n[1]);
+          const has = StudioPath.hasHandles(pt), stub = !has && i === anchorSel ? world(x+20*100/l.scale/zoom,y) : null;
+          if (has) { line(b.x,b.y,p.x,p.y,'outline'); line(p.x,p.y,q.x,q.y,'outline'); handle(b,{'data-anchor':i,'data-tangent':'in'},'circle'); handle(q,{'data-anchor':i,'data-tangent':'out'},'circle'); }
+          else if (stub) { line(p.x,p.y,stub.x,stub.y,'outline'); handle(stub,{'data-anchor':i,'data-tangent':'out'},'circle'); }
           handle(p,{'data-anchor':i});
+          if (i === anchorSel) svg('circle',{cx:p.x,cy:p.y,r:7/zoom,class:'handle selected'});
         });
       } else if (tool === 'select') {
         points.forEach((p,i) => handle(p,{'data-handle':i}));
@@ -828,10 +849,16 @@
     const r = board.getBoundingClientRect();
     return {x:(x-r.left)/zoom,y:(y-r.top)/zoom};
   }
-  let zoomLocked = false;
+  /* viewport lock: freezes the current zoom and position. Wheel, trackpad pinch, touch pinch and pan are ignored until you unlock; Fit still works. It is not the same as locking a layer or the artboard's contents. */
+  let zoomLocked = false, lockNoticeAt = 0;
   try { zoomLocked = localStorage.getItem('n0ise.zoomlock') === '1'; } catch {}
+  const viewBlocked = () => {
+    if (!zoomLocked) return false;
+    if (performance.now()-lockNoticeAt > 2500) { lockNoticeAt = performance.now(); notice('Viewport is locked. Unlock it to zoom or pan, or press Fit.'); }
+    return true;
+  };
   function zoomAt(x,y,value) {
-    if (zoomLocked) { const q = stage.getBoundingClientRect(); x = q.left+q.width/2+pan.x; y = q.top+q.height/2+pan.y; } /* locked: zoom about the artboard's own centre, so it never drifts */
+    if (viewBlocked()) return;
     const p = position(x,y), r = stage.getBoundingClientRect(), [w,h] = dims();
     const min = Math.min(.05,zoom);
     zoom = clamp(value,min,4);
@@ -868,7 +895,39 @@
     return S.union(layers.map(l => R.bounds(l,w,h)));
   }
 
+  /* anchors snap to guides and the grid too: local point -> artboard point -> snapped -> local again */
+  function snapPoint(q,l) {
+    if (!(gridCfg.snapGrid || (gridCfg.snapGuides && gridCfg.guides.length))) return q;
+    const [w,h] = dims(), c = R.center(l,w,h), t = R.transform(q.x*l.scale/100,q.y*l.scale/100,R.radians(l.rotation));
+    const r = StudioGrid.snapPoint(gridCfg,{x:c.x+t.x,y:c.y+t.y},w,h,8/zoom);
+    return r.on.length ? R.local(l,{x:r.x,y:r.y},w,h) : q;
+  }
+  /* node commands: every one is a single undoable change */
+  const editable = () => { const l = visibleSelection()[0]; return editAnchors && l?.type === 'path' && !l.locked ? l : null; };
+  function addAnchorAt(l,p) {
+    const [w,h] = dims(), q = R.local(l,p,w,h), hit = StudioPath.nearest(l.points,!!l.closed,q);
+    if (!hit || hit.dist*l.scale/100*zoom > 18) return false;
+    change(() => { const r = StudioPath.split(l.points,!!l.closed,hit.seg,hit.t); l.points = r.points; anchorSel = r.index; contextKey = ''; });
+    return true;
+  }
+  function deleteAnchor() {
+    const l = editable(); if (!l || anchorSel < 0) return false;
+    const next = StudioPath.removeAt(l.points,!!l.closed,anchorSel);
+    if (!next) { notice(l.closed ? 'A closed path needs at least three points.' : 'A path needs at least two points. Delete the layer instead.'); return true; }
+    change(() => { l.points = next; anchorSel = Math.min(anchorSel,next.length-1); contextKey = ''; });
+    return true;
+  }
+  function toggleSmooth() {
+    const l = editable(); if (!l || anchorSel < 0) return;
+    const smooth = StudioPath.isSmooth(l.points[anchorSel]);
+    change(() => { l.points = smooth ? StudioPath.toCorner(l.points,anchorSel) : StudioPath.toSmooth(l.points,!!l.closed,anchorSel); contextKey = ''; });
+  }
+  function toggleClosed() {
+    const l = editable(); if (!l) return;
+    change(() => { l.closed = !l.closed; if (l.closed && l.fill === null) l.fill = paintColor; contextKey = ''; });
+  }
   function toggleAnchors() {
+    anchorSel = -1;
     if (view === 'graph' || view === 'spatial') setView('canvas');
     setTool('select');
     editAnchors = !editAnchors;
@@ -1022,7 +1081,8 @@
       gesture = {...base,kind:'pan',pan:{...pan}};
       stage.dataset.drag = 'true';
     } else if (tool === 'select' && anchor !== undefined && active?.type === 'path') {
-      gesture = {...base,kind:'anchor',l:active,index:Number(anchor),tangent:e.target.dataset.tangent === 'true',before:capture()};
+      anchorSel = Number(anchor); contextKey = ''; syncInspector();
+      gesture = {...base,kind:'anchor',l:active,index:Number(anchor),tangent:e.target.dataset.tangent || '',before:capture()};
     } else if (tool === 'select' && handle !== undefined && layers.length) {
       const corners = selectionGeometry(layers);
       const rotate = handle === 'rotate';
@@ -1176,6 +1236,11 @@
   stage.addEventListener('dblclick',e => {
     if (tool !== 'select' || view === 'spatial' || e.target.closest('button,#textEdit,#inlineText')) return;
     const p = position(e.clientX,e.clientY), [w,h] = dims();
+    const editing = editable();
+    if (editing) {
+      if (e.target.dataset?.anchor !== undefined && !e.target.dataset.tangent) { anchorSel = Number(e.target.dataset.anchor); toggleSmooth(); return; }
+      if (addAnchorAt(editing,p)) return;
+    }
     const top = doc.layers.find(l => R.inside(l,p,w,h,5/zoom));
     if (top?.type === 'text') startTextEdit(top);
     else if (top?.type === 'shape' && !top.locked && !doc.artboardLocked) pathFromShape(top);
@@ -1223,8 +1288,7 @@
     const g = gesture;
     if (g?.kind === 'pinch' && pointers.size === 2) {
       const pair = touchPair();
-      zoomAt(g.center.x,g.center.y,g.z*pair.distance/g.distance);
-      if (!zoomLocked) { pan.x += pair.center.x-g.center.x; pan.y += pair.center.y-g.center.y; }
+      if (!viewBlocked()) { zoomAt(g.center.x,g.center.y,g.z*pair.distance/g.distance); pan.x += pair.center.x-g.center.x; pan.y += pair.center.y-g.center.y; }
       Object.assign(g,pair,{z:zoom});
       layout();
       return;
@@ -1241,6 +1305,7 @@
     const [w,h] = dims();
     const update = () => { g.edited = true; schedule(); syncInspector(); };
     if (g.kind === 'pan') {
+      if (viewBlocked()) return;
       fitted = false;
       pan = {x:g.pan.x+dx,y:g.pan.y+dy};
       layout();
@@ -1252,6 +1317,11 @@
         x += result.x;
         y += result.y;
         guides = result.guides;
+      }
+      if (!e.altKey && g.bounds && (gridCfg.snapGrid || (gridCfg.snapGuides && gridCfg.guides.length))) {
+        const adj = StudioGrid.snapBox(gridCfg,S.translate(g.bounds,x,y),w,h,6/zoom);
+        if (adj.snappedX && !guides.some(q => q.axis === 'x')) x += adj.x;
+        if (adj.snappedY && !guides.some(q => q.axis === 'y')) y += adj.y;
       }
       for (const item of g.items) Object.assign(item.l,{x:round(item.x+x),y:round(item.y+y)});
       update();
@@ -1308,10 +1378,12 @@
       last[3] = p.y-last[1];
       drawOverlay();
     } else if (g.kind === 'anchor') {
-      const q = R.local(g.l,p,w,h), point = [...g.l.points[g.index]];
-      if (g.tangent) [point[2],point[3]] = [q.x-point[0],q.y-point[1]];
-      else [point[0],point[1]] = [q.x,q.y];
-      g.l.points = g.l.points.map((v,i) => i === g.index ? point : v);
+      const q = R.local(g.l,p,w,h), point = g.l.points[g.index];
+      if (g.tangent) g.l.points = StudioPath.setHandle(g.l.points,g.index,g.tangent,[q.x-point[0],q.y-point[1]],e.altKey);
+      else {
+        const at = snapPoint(q,g.l);
+        g.l.points = g.l.points.map((v,i) => i === g.index ? [at.x,at.y,...v.slice(2)] : v);
+      }
       update();
     }
   });
@@ -1496,7 +1568,7 @@
       if (selection.length) actions.push(['Deselect',() => select([])]);
       actions.push([doc.artboardLocked ? 'Unlock artboard' : 'Lock artboard',() => change(() => { doc.artboardLocked = !doc.artboardLocked; })],
         ['Rename artboard',() => { $('docname').focus(); $('docname').select(); }],['Export…',() => $('export').click()],
-        ['Fit to screen',fit],[zoomLocked ? 'Unlock zoom anchor' : 'Lock zoom anchor',() => $('zoomLock').click()]);
+        ['Fit to screen',fit],[zoomLocked ? 'Unlock viewport' : 'Lock viewport',() => $('zoomLock').click()]);
     }
     const rect = e.target.getBoundingClientRect();
     contextMenu.show(e.clientX || rect.left,e.clientY || rect.bottom,actions);
@@ -1826,7 +1898,8 @@
   }
   async function decodeImages(files,[w,h],background) {
     const results = await Promise.allSettled(files.map(async file => {
-      if (!/^image\/(png|jpeg|webp|gif|avif|bmp)$/i.test(file.type)) throw Error('Unsupported image.');
+      if (!/^image\/(png|jpeg|webp|gif|avif|bmp|svg\+xml)$/i.test(file.type)) throw Error('Unsupported image.');
+      if (file.type === 'image/svg+xml' && file.size > 5e6) throw Error('That SVG is larger than 5 MB.');
       const url = URL.createObjectURL(file);
       try {
         const img = new Image();
@@ -1853,14 +1926,16 @@
     return results.filter(r => r.status === 'fulfilled').map(r => r.value);
   }
 
-  async function importImages(files,background = false) {
+  async function importImages(files,background = false,at = null) {
     if (!files.length) return;
     const current = doc;
+    if (files.some(f => f.size > 2e6)) notice('Importing '+(files.length > 1 ? files.length+' images' : files[0].name)+'…');
     const layers = await decodeImages(files,dims(),background);
     if (doc !== current) return;
     if (gesture) endGesture(true);
     if (doc !== current) return;
     if (layers.length) {
+      if (at && !background) { const [w,h] = dims(); layers.forEach((l,i) => { l.x = Math.round(at.x-w/2+i*36); l.y = Math.round(at.y-h/2+i*36); }); }
       change(() => {
         insert(layers);
         if (background) {
@@ -1930,14 +2005,23 @@
     importImages(files.filter(f => !f.type.startsWith('video/')),background);
   };
   $('imageFile').addEventListener('cancel',e => { delete e.target.dataset.background; });
+  /* dropping files: images become layers centred where they land; video goes to the timeline; anything else says why it was ignored */
   stage.addEventListener('dragover',e => {
-    if ([...e.dataTransfer.types].includes('Files')) e.preventDefault();
+    if ([...(e.dataTransfer?.types ?? [])].includes('Files')) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; stage.classList.add('dropping'); }
   });
+  for (const type of ['dragleave','dragend']) stage.addEventListener(type,e => { if (e.target === stage || type === 'dragend') stage.classList.remove('dropping'); });
   stage.addEventListener('drop',e => {
     e.preventDefault();
-    const dropped = [...e.dataTransfer.files], videos = dropped.filter(f => f.type.startsWith('video/'));
+    stage.classList.remove('dropping');
+    const dropped = [...(e.dataTransfer?.files ?? [])];
+    if (!dropped.length) return;
+    const videos = dropped.filter(f => f.type.startsWith('video/')), audio = dropped.filter(f => f.type.startsWith('audio/'));
+    const images = dropped.filter(f => /^image\//.test(f.type));
+    const other = dropped.length-videos.length-audio.length-images.length;
     if (videos.length) window.n0iseMotionUI?.importVideos(videos);
-    importImages(dropped.filter(f => !f.type.startsWith('video/')));
+    if (images.length) importImages(images,false,view === 'spatial' ? null : position(e.clientX,e.clientY));
+    if (audio.length) notice('Audio cannot be a layer yet. Drop video or images.');
+    else if (other) notice('That file type is not supported. Use PNG, JPEG, WebP, GIF, AVIF, BMP, SVG or video.');
   });
 
   $('menu').onclick = () => menu('Studio',[
@@ -1947,9 +2031,11 @@
     ['Import image…',() => $('imageFile').click()],
     ['Import video…',() => { $('imageFile').click(); }],
     ['Timeline',() => window.n0iseMotionUI?.toggle()],
-    [`Grid · ${grid ? 'On' : 'Off'}`,() => { grid = !grid; drawOverlay(); notice(grid ? 'Grid on' : 'Grid off'); }],
+    [`Grid · ${gridCfg.show ? 'On' : 'Off'}`,() => toggleGrid()],
+    ['Grid, guides and snapping…',openGridSettings],
     [`Smart snapping · ${snapping ? 'On' : 'Off'}`,() => { snapping = !snapping; notice(snapping ? 'Smart snapping on' : 'Smart snapping off'); }],
     [`15° rotation snapping · ${angular ? 'On' : 'Off'}`,() => { angular = !angular; notice(angular ? 'Rotation snapping on' : 'Rotation snapping off'); }],
+    ['Keyboard shortcuts',() => openShortcuts()],
     ['Keyboard and gestures',() => {
       $('modaltitle').textContent = 'Keyboard and gestures';
       const help = document.createElement('p');
@@ -1958,11 +2044,84 @@
       $('modal').showModal();
     }]
   ]);
+  function toggleGrid(force) { gridCfg.show = force ?? !gridCfg.show; saveGrid(); drawOverlay(); notice(gridCfg.show ? 'Grid on' : 'Grid off'); }
+  function toggleGridSnap() { gridCfg.snapGrid = !gridCfg.snapGrid; saveGrid(); notice(gridCfg.snapGrid ? 'Snap to grid on' : 'Snap to grid off'); }
+  /* grid, guides and snapping: one dialog, every control applies live */
+  function openGridSettings() {
+    const el = (t,props = {},...kids) => { const e = Object.assign(document.createElement(t),props); e.append(...kids); return e; };
+    const content = $('modalcontent'); content.className = 'gridsettings'; content.replaceChildren();
+    $('modaltitle').textContent = 'Grid, guides and snapping'; $('modalcancel').textContent = 'Done';
+    const apply = () => { saveGrid(); drawOverlay(); };
+    const row = (label,input) => el('label',{className:'gridrow'},el('span',{textContent:label}),input);
+    const num = (key,min,max,step = 1) => { const i = el('input',{type:'number',className:'field',min,max,step,value:gridCfg[key],inputMode:'decimal'}); i.setAttribute('aria-label',key); i.onchange = () => { gridCfg[key] = Number(i.value); apply(); i.value = gridCfg[key]; }; return i; };
+    const check = (label,key,after) => { const i = el('input',{type:'checkbox',checked:!!gridCfg[key]}); i.onchange = () => { gridCfg[key] = i.checked; apply(); after?.(); }; return row(label,i); };
+    const kind = el('select',{className:'field'}); for (const [v,t] of [['square','Square'],['columns','Columns and rows'],['baseline','Baseline'],['isometric','Isometric']]) kind.append(el('option',{value:v,textContent:t,selected:gridCfg.kind === v}));
+    const fields = el('div',{className:'gridfields'});
+    const paint = () => {
+      fields.replaceChildren();
+      if (gridCfg.kind === 'square' || gridCfg.kind === 'isometric') fields.append(row('Spacing (px)',num('size',4,2000)));
+      if (gridCfg.kind === 'square') fields.append(row('Subdivisions',num('subs',1,16)));
+      if (gridCfg.kind === 'columns') fields.append(row('Columns',num('cols',1,64)),row('Rows (0 for none)',num('rows',0,64)));
+      if (gridCfg.kind === 'baseline') fields.append(row('Line height (px)',num('baseline',2,400)));
+    };
+    kind.onchange = () => { gridCfg.kind = kind.value; apply(); paint(); };
+    const op = el('input',{type:'range',min:2,max:100,step:1,value:gridCfg.opacity}); op.setAttribute('aria-label','Grid opacity'); op.oninput = () => { gridCfg.opacity = Number(op.value); apply(); };
+    const list = el('div',{className:'guidelist'});
+    const guides = () => {
+      list.replaceChildren();
+      gridCfg.guides.forEach((gd,i) => {
+        const at = el('input',{type:'number',className:'field',value:gd.at,step:1}); at.setAttribute('aria-label',(gd.axis === 'x' ? 'Vertical' : 'Horizontal')+' guide position'); at.onchange = () => { gd.at = Number(at.value) || 0; apply(); };
+        const rm = el('button',{className:'softbtn compact',type:'button',textContent:'Remove'}); rm.setAttribute('aria-label','Remove guide'); rm.onclick = () => { gridCfg.guides.splice(i,1); apply(); guides(); };
+        list.append(el('div',{className:'gridrow'},el('span',{textContent:gd.axis === 'x' ? 'Vertical guide at' : 'Horizontal guide at'}),at,rm));
+      });
+      if (!gridCfg.guides.length) list.append(el('p',{className:'muted compact',textContent:'No guides yet.'}));
+    };
+    const addGuide = axis => { const [w,h] = dims(); gridCfg.guides.push({axis,at:Math.round((axis === 'x' ? w : h)/2)}); apply(); guides(); };
+    content.append(
+      el('h3',{textContent:'Grid'}),check('Show grid','show'),row('Layout',kind),fields,row('Grid opacity',op),
+      el('h3',{textContent:'Snapping'}),check('Snap to grid','snapGrid'),
+      (() => { const r = check('Snap to objects','__objects'); const i = r.querySelector('input'); i.checked = snapping; i.onchange = () => { snapping = i.checked; notice(snapping ? 'Smart snapping on' : 'Smart snapping off'); }; return r; })(),
+      check('Snap to guides','snapGuides'),
+      el('h3',{textContent:'Guides'}),list,
+      el('div',{className:'modalactions'},el('button',{className:'softbtn',type:'button',textContent:'Add vertical guide',onclick:() => addGuide('x')}),el('button',{className:'softbtn',type:'button',textContent:'Add horizontal guide',onclick:() => addGuide('y')}),
+        el('button',{className:'softbtn',type:'button',textContent:'Reset grid',onclick:() => { gridCfg = StudioGrid.defaults(); apply(); openGridSettings(); }})),
+      el('p',{className:'muted compact',textContent:'Alt while dragging bypasses snapping. Showing the grid and snapping to it are separate.'}));
+    paint(); guides(); $('modal').showModal();
+  }
+  /* the shortcut reference: one list, used for the dialog and for the conflict test */
+  const SHORTCUTS = [
+    ['Tools',[['V','Select'],['L','Lasso'],['B','Freehand brush'],['E','Eraser'],['P','Pen'],['T','Text'],['R','Shape'],['C','Crop'],['G','Gradient'],['I','Eyedropper']]],
+    ['Edit',[['Ctrl/Cmd Z','Undo'],['Ctrl/Cmd Shift Z or Y','Redo'],['Ctrl/Cmd J','Duplicate layers'],['Ctrl/Cmd A','Select all'],['Ctrl/Cmd D','Deselect'],['Delete or Backspace','Delete selected layers, or the selected path point'],['Arrows','Nudge 1 px (Shift 10 px)'],['Esc','Cancel, close, or deselect']]],
+    ['View',[['Space + drag','Pan temporarily'],['0 or Ctrl/Cmd 0','Fit to screen'],['F','Full screen canvas'],["'",'Show or hide the grid'],["Shift '",'Snap to grid on or off'],['Scroll or pinch','Zoom (frozen when the viewport is locked)'],['?','This list']]],
+    ['File',[['Ctrl/Cmd S','Save project'],['Ctrl/Cmd O','Open project']]],
+    ['Modifiers',[['Shift','Add to selection, or constrain rotation to 15°'],['Alt','Bypass snapping, or break a path handle'],['Double-click path','Add a point'],['Double-click point','Smooth or corner']]]
+  ];
+  function openShortcuts() {
+    const el = (t,props = {},...kids) => { const e = Object.assign(document.createElement(t),props); e.append(...kids); return e; };
+    $('modaltitle').textContent = 'Keyboard shortcuts'; $('modalcancel').textContent = 'Close';
+    const content = $('modalcontent'); content.className = 'shortcuts'; content.replaceChildren();
+    for (const [title,rows] of SHORTCUTS) {
+      const dl = el('dl',{className:'keylist'});
+      for (const [key,what] of rows) dl.append(el('dt',{},el('kbd',{textContent:key})),el('dd',{textContent:what}));
+      content.append(el('h3',{textContent:title}),dl);
+    }
+    content.append(el('p',{className:'muted compact',textContent:'Shortcuts pause while you type in a field, edit text, or have a dialog open.'}));
+    $('modal').showModal();
+  }
+  window.n0iseShortcuts = SHORTCUTS;
   $('modalcancel').onclick = () => $('modal').close();
   $('export').onclick = exportOptions;
   $('fit').onclick = fit;
-  { const zl = $('zoomLock'), paintZl = () => { zl.setAttribute('aria-pressed',zoomLocked); zl.classList.toggle('on',zoomLocked); };
-    zl.onclick = () => { zoomLocked = !zoomLocked; try { localStorage.setItem('n0ise.zoomlock',zoomLocked?'1':'0'); } catch {} paintZl(); };
+  { const zl = $('zoomLock'), LOCKED = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="9.5" rx="2.2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>',
+      OPEN = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="9.5" rx="2.2"/><path d="M8 11V8a4 4 0 0 1 7.6-1.7"/></svg>';
+    const paintZl = () => {
+      const label = zoomLocked ? 'Unlock viewport' : 'Lock viewport';
+      zl.innerHTML = zoomLocked ? LOCKED : OPEN; zl.setAttribute('aria-pressed',zoomLocked); zl.classList.toggle('on',zoomLocked);
+      zl.setAttribute('aria-label',label); zl.title = zoomLocked ? 'Viewport locked: zoom and pan are frozen. Click to unlock.' : 'Lock viewport: freeze the current zoom and position';
+      stage.classList.toggle('viewlocked',zoomLocked);
+    };
+    zl.onclick = () => { zoomLocked = !zoomLocked; try { localStorage.setItem('n0ise.zoomlock',zoomLocked?'1':'0'); } catch {} paintZl(); notice(zoomLocked ? 'Viewport locked' : 'Viewport unlocked'); };
+    window.n0iseViewport = {get locked() { return zoomLocked; },get zoom() { return zoom; },get pan() { return {...pan}; },get fitted() { return fitted; },toggleLock: () => zl.click(),fit};
     paintZl(); }
   /* the plus above the layers: blank layer, adjustment layers, then everything else */
   function addAdjustment(name,adj,look) { add('adjustment',{name,adj,look:{...StudioLooks.blank(),...look}}); }
@@ -1987,6 +2146,9 @@
   $('moveUp').onclick = () => reorder(-1);
   $('moveDown').onclick = () => reorder(1);
   $('removeLayer').onclick = remove;
+  $('deleteTool').onclick = remove;
+  $('layerBin').onclick = () => { if (selection.length) remove(); else notice('Drag a layer here to delete it.'); };
+  $('layerBin').onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('layerBin').click(); } };
   $('undo').onclick = () => traverse('undo');
   $('redo').onclick = () => traverse('redo');
   $('graphAdd').onclick = openEffects;
@@ -2169,6 +2331,8 @@
     if (launcher.open || $('modal').open || e.defaultPrevented || e.target.matches('input,textarea,select,[contenteditable=true]')) return;
     if (gesture && e.key !== 'Escape') return;
     const key = e.key.toLowerCase(), modifier = e.ctrlKey || e.metaKey;
+    if (modifier && key === 'd') { e.preventDefault(); select([]); return; }
+    if (modifier && key === '0') { e.preventDefault(); (view === 'graph' ? graph.fit : fit)(); return; }
     if (modifier && ['z','y','s','o','a','j'].includes(key)) {
       e.preventDefault();
       finishNudge();
@@ -2181,6 +2345,9 @@
       return;
     }
     if (modifier) return;
+    if (e.key === '?') { e.preventDefault(); openShortcuts(); return; }
+    if (e.key === "'") { e.preventDefault(); toggleGrid(); return; }
+    if (e.key === '"') { e.preventDefault(); toggleGridSnap(); return; }
     if (e.code === 'Space' && !e.target.closest('button')) {
       e.preventDefault();
       space = true;
@@ -2200,7 +2367,7 @@
     else if (key === 'delete' || key === 'backspace') {
       e.preventDefault();
       if (view !== 'canvas' && graph.selection) graph.remove();
-      else if (view !== 'graph') remove();
+      else if (view !== 'graph' && !deleteAnchor()) remove();
     } else if (arrows[e.key] && view !== 'graph' && view !== 'spatial' && !graph.selection && selection.length) {
       e.preventDefault();
       const layers = selected().filter(l => !l.locked);
