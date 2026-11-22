@@ -354,3 +354,14 @@ a.brand:focus-visible { outline:2px solid var(--accent); outline-offset:4px; }
 .chiprow .hex{min-width:0;width:100%;padding:0 6px}.chiprow>*{min-width:0}
 
 #overlay .ghost{opacity:.8;pointer-events:none;vector-effect:non-scaling-stroke}
+
+.toolpal{flex-direction:column;align-items:stretch;gap:10px;padding:12px;width:min(260px,calc(100vw - 16px))}
+.toolpal .palicons{display:flex;gap:4px;flex-wrap:wrap}
+.toolpal .optrow{display:grid;gap:6px}
+.toolpal .optlabel{display:flex;justify-content:space-between;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#a8a49b}
+.toolpal .optlabel output{color:#e9e4d8}
+.toolpal .slider{width:100%;min-height:44px}
+.toolpal .seg{display:flex;gap:4px;flex-wrap:wrap}
+.toolpal .seg button{flex:1;min-height:44px;min-width:44px;padding:0 10px;border-radius:12px;border:1px solid #ffffff22;background:transparent;color:inherit;font:inherit;font-size:13px}
+.toolpal .seg button[aria-pressed=true]{background:#e9e4d8;color:#161714}
+.tool svg{display:block;margin:auto;pointer-events:none}

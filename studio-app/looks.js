@@ -138,5 +138,35 @@ const StudioLooks = (() => {
     ctx.putImageData(img,0,0);
     return scratch;
   }
-  return {presets,blank,normalize,isPlain,apply,trusted,status,parseCube,cube,compile,codeLive,filterString};
+  /* ---- adjustment layers: kind look (uses layer.look), levels, threshold, posterize ---- */
+  const adjKinds = {look:'Filter',levels:'Levels',threshold:'Threshold',posterize:'Posterize'};
+  const normalizeAdj = raw => {
+    const k = raw && Object.hasOwn(adjKinds,raw.kind) ? raw.kind : 'look';
+    if (k === 'levels') { const black = num(raw.black,0,0,254); return {kind:k,black,white:Math.max(black+1,num(raw.white,255,1,255)),gamma:num(raw.gamma,1,.1,4)}; }
+    if (k === 'threshold') return {kind:k,level:num(raw.level,128,0,255)};
+    if (k === 'posterize') return {kind:k,levels:Math.round(num(raw.levels,4,2,32))};
+    return {kind:'look'};
+  };
+  let adjCanvas = null;
+  function adjust(src,l,w,h,t = 0) {
+    const a = l.adj || {kind:'look'};
+    if (a.kind === 'look') return apply(src,l.look || blank(),w,h,t);
+    if (!adjCanvas) adjCanvas = document.createElement('canvas');
+    if (adjCanvas.width !== w) adjCanvas.width = w;
+    if (adjCanvas.height !== h) adjCanvas.height = h;
+    const ctx = adjCanvas.getContext('2d',{willReadFrequently:true});
+    ctx.clearRect(0,0,w,h); ctx.drawImage(src,0,0);
+    const img = ctx.getImageData(0,0,w,h), px = img.data, table = new Uint8Array(256);
+    for (let i=0;i<256;i++) {
+      if (a.kind === 'levels') table[i] = clamp(Math.pow(clamp((i-a.black)/(a.white-a.black),0,1),1/a.gamma)*255,0,255);
+      else if (a.kind === 'threshold') table[i] = i >= a.level ? 255 : 0;
+      else table[i] = Math.round(Math.round(i/255*(a.levels-1))/(a.levels-1)*255);
+    }
+    if (a.kind === 'threshold') {
+      for (let i=0;i<px.length;i+=4) { const v = table[Math.round(.2126*px[i]+.7152*px[i+1]+.0722*px[i+2])]; px[i] = px[i+1] = px[i+2] = v; }
+    } else for (let i=0;i<px.length;i+=4) { px[i] = table[px[i]]; px[i+1] = table[px[i+1]]; px[i+2] = table[px[i+2]]; }
+    ctx.putImageData(img,0,0);
+    return adjCanvas;
+  }
+  return {adjKinds,normalizeAdj,adjust,presets,blank,normalize,isPlain,apply,trusted,status,parseCube,cube,compile,codeLive,filterString};
 })();
