@@ -46,6 +46,7 @@ t('api batch + render + camera','/core.html?start=blank',`async()=>{const {creat
 const only=process.argv.slice(2).filter(a=>!a.startsWith('--'));
 const fs=await import('node:fs');let extra=[];
 try{const ex=await import('./core-smoke-extra.mjs');extra=ex.tests||[];}catch(e){}
+try{const wx=await import('./core-smoke-world.mjs');extra=extra.concat(wx.tests||[]);}catch(e){}
 for(const [n,u,b] of extra)T.push([n,u,b]);
 let fail=0;const base0={};
 for(const [name,url,body] of T){

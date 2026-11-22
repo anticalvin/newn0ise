@@ -19,6 +19,8 @@ import { Entities } from './entities.js';
 import { Assets } from './assets.js';
 import { retailPrefab } from './prefabs/retail.js';
 import { createTelemetry } from './debug.js';
+import { GeoWorld } from './geo/manager.js';
+import { OverviewMap } from './geo/map.js';
 
 const canvas = document.getElementById('c');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
@@ -28,6 +30,7 @@ const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(58, 1, 0.1, 6000);
 const shared = makeShared();
 const env = new Environment(renderer, scene, shared);
+const envChildren = scene.children.slice();   // the sky and lights, kept visible when the world takes over
 const terrain = new Terrain(shared);
 const water = new Water(shared, terrain, env);
 const palms = new Palms(shared, terrain), grass = new Grass(shared, terrain);
@@ -97,7 +100,7 @@ const app = {
     if (lo < water.level + 0.3) return null; return { x, z, y: hi + 0.02, spread: hi - lo };
   },
   // E/F/RB/Use: open the door or pick up the nearest product
-  interact() { const r = core.exec({ cmd: 'interact.use' }); ui.toast(r.msg); ui.updHist(); return r; },
+  interact() { if (this.geo && this.geo.active) { const r = this.geo.interact(); ui.toast(r.msg); return r; } const r = core.exec({ cmd: 'interact.use' }); ui.toast(r.msg); ui.updHist(); return r; },
   inventory() { const out = []; entities.rt.forEach((rt, id) => { if (rt.rec && rt.rec.state && rt.rec.state.removed) rt.rec.state.removed.forEach(k => { const s = rt.index.get(k); out.push({ store: id, key: k, name: s ? rt.lib.product[s.type].name : 'Item' }); }); }); return out; },
   defaultSpawn() {
     if (terrain.preset === 'blank') return [0, 0, 0];
@@ -193,9 +196,10 @@ const app = {
   importScene(f) { return this.importFile(f); },
   newIsland() { core.exec({ cmd: 'terrain.reset', seed: Math.floor(Math.random() * 90000) + 100 }); ui.toast('New terrain'); ui.updHist(); },
 };
-app.shared = shared; app.assets = new Assets(shared); app.entities = new Entities(app); const entities = app.entities; app.entities.register('retail.convenience', retailPrefab);
+app.envChildren = envChildren; app.shared = shared; app.assets = new Assets(shared); app.entities = new Entities(app); const entities = app.entities; app.entities.register('retail.convenience', retailPrefab);
 const core = new Core(app); app.core = core; const ui = new UI(app); app.ui = ui; const input = new Input(app, canvas); app.input = input;
 core.on(() => ui.updHist());
+app.geo = new GeoWorld(app); app.map = new OverviewMap(app);
 phys.a = app;
 
 // ---- initial scene: the coast is the backdrop behind the start sheet ----
@@ -204,6 +208,7 @@ app.cam.yaw = Math.PI / 2 + 0.35; app.cam.pitch = 0.2; app.cam.dist = 5.4;
 phys.init().then(ok => { if (!ok) ui.toast('Physics engine could not load, using the simple built-in solver'); });
 
 async function start(choice) {
+  if (choice === 'world') { app.geo.open({ resume: true }).then(() => ui.brand()); return; }
   if (choice === 'continue') { const ok = await core.restore(); if (!ok) { app.newScene('coast'); ui.toast('No saved scene, started the coast'); } else ui.toast('Restored your last scene'); }
   else app.newScene(choice === 'blank' ? 'blank' : 'coast');
   app.cam.yaw = Math.atan2(-Math.sin(app.spawn[2]), -Math.cos(app.spawn[2])) + Math.PI + 0.35; app.cam.pitch = 0.2; app.cam.dist = 5.4;
@@ -211,7 +216,7 @@ async function start(choice) {
 }
 app.start = start;
 { const q = new URLSearchParams(location.search).get('mcp'); if (q) setTimeout(() => connectBridge(app, q.startsWith('ws') ? q : undefined), 800); }
-{ const q = new URLSearchParams(location.search).get('start'); if (q === 'blank' || q === 'coast' || q === 'continue') { ui.hideStart(); start(q); } else ui.showStart(core.hasSave()); }
+{ const sp = new URLSearchParams(location.search), q = sp.get('start'); if (q === 'world') { ui.hideStart(); app.geo.open({ lat: sp.get('lat') ? +sp.get('lat') : undefined, lon: sp.get('lon') ? +sp.get('lon') : undefined, resume: sp.get('resume') === '1' }).then(() => ui.brand()); } else if (q === 'blank' || q === 'coast' || q === 'continue') { ui.hideStart(); start(q); } else ui.showStart(core.hasSave()); }
 
 function resize() { const w = innerWidth, h = innerHeight; camera.aspect = w / h; camera.updateProjectionMatrix(); renderer.setSize(w, h, false); sand.setScale(renderer, camera); }
 const maxPr = () => Math.min(devicePixelRatio, 2);
@@ -226,6 +231,7 @@ function frame(now) {
   acc += dt; frames++; if (acc > 1.5) { const fps = frames / acc; app.fps = fps; if (fps < 38 && pr > 0.7) { pr = Math.max(0.7, pr - 0.25); renderer.setPixelRatio(pr); resize(); } else if (fps > 58 && pr < maxPr()) { pr = Math.min(maxPr(), pr + 0.25); renderer.setPixelRatio(pr); resize(); } app.pr = pr; acc = 0; frames = 0; }
   const inp = input.poll(dt), c = app.cam;
   if (inp.lx || inp.ly) app.orbit(inp.lx * 200, inp.ly * 200);
+  if (app.geo.active) { app.geo.update(dt, inp, now); renderer.render(scene, camera); tele.tick(now); return; }
   // movement relative to camera
   const fx = -Math.sin(c.yaw), fz = -Math.cos(c.yaw), rx = Math.cos(c.yaw), rz = -Math.sin(c.yaw);
   const mvx = fx * inp.mz + rx * inp.mx, mvz = fz * inp.mz + rz * inp.mx;
@@ -261,5 +267,5 @@ function frame(now) {
   renderer.render(scene, camera); tele.tick(now);
 }
 requestAnimationFrame(frame);
-window.n0 = { app, core, telemetry: () => tele.read(), run: l => core.run(l), exec: c => core.exec(c), get fps() { return app.fps; }, get pr() { return app.pr; } };
+window.n0 = { app, core, geo: app.geo, telemetry: () => tele.read(), run: l => core.run(l), exec: c => core.exec(c), get fps() { return app.fps; }, get pr() { return app.pr; } };
 window.Core = { exec: c => core.exec(c), describe: () => core.exec({ cmd: 'describe' }), state: () => core.exec({ cmd: 'state' }) };
