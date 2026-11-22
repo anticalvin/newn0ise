@@ -373,3 +373,5 @@ a.brand:focus-visible { outline:2px solid var(--accent); outline-offset:4px; }
 .layerbin.dragging{border-color:#8a8780;color:#e9e5db}.layerbin.armed{background:#5a2f2c;border-color:#d86a5e;color:#ffd9d4}
 .stage.dropping{outline:2px dashed #e9e5db;outline-offset:-8px}
 @media (prefers-reduced-motion:reduce){.layerbin{transition:none}}
+
+#overlay .handle.selected{fill:none;stroke:#f4e9d6;stroke-width:2;vector-effect:non-scaling-stroke;pointer-events:none}

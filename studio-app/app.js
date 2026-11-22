@@ -40,7 +40,7 @@
   let paintColor = '#e9e5db', constrain = true, hoverId = null;
   let dirty = false, opening = 0, revision = 0, space = false, grid = false, snapping = true, angular = false;
   let pan = {x:0,y:0}, zoom = 1, fitted = true, frame = 0, gesture = null, pen = [], hover = null;
-  let guides = [], draft = null, editAnchors = false, toastTimer = 0, contextKey = '';
+  let guides = [], draft = null, editAnchors = false, anchorSel = -1, toastTimer = 0, contextKey = '';
   const pointers = new Map();
   let graphLayerId = null, graphPreview = null, renderWarning = '';
   const gpu = runtimeModule?.createRuntime($('spatialCanvas'),beforeRotation => {
@@ -123,7 +123,9 @@
     selection = entry.selection.filter(id => doc.layers.some(l => l.id === id));
     contextKey = '';
     pen = [];
-    editAnchors = false;
+    /* undoing a node edit keeps you in node editing as long as the same path is still selected */
+    editAnchors = editAnchors && selection.length === 1 && doc.layers.find(l => l.id === selection[0])?.type === 'path';
+    if (!editAnchors) anchorSel = -1;
     graph.clear();
     if (view === 'spatial' && activeLayer()?.type !== 'scene') setView('canvas');
     sync();
@@ -434,7 +436,7 @@
       $('opacityLabel').textContent = l.opacity+'%';
     }
     const key = view+':'+(node ? node.id+':'+JSON.stringify(node.params) : edge ? 'edge:'+edge.to :
-      l ? [l.id,l.locked,l.asset?.transform?.rotation,l.chain?.nodes.map(n => n.id),editAnchors].join(':') : selection.join(','));
+      l ? [l.id,l.locked,l.asset?.transform?.rotation,l.chain?.nodes.map(n => n.id),editAnchors,anchorSel,l.points?.length,l.closed,l.points?.[anchorSel] ? StudioPath.isSmooth(l.points[anchorSel]) : ''].join(':') : selection.join(','));
     if (contextKey === key) return;
     contextKey = key;
     const context = $('context');
@@ -548,7 +550,16 @@
       context.append(sized('Width','width','height'),sized('Height','height','width'),toggle);
     }
     if (l.type === 'shape') context.append(action('Edit points',() => pathFromShape(l)));
-    if (l.type === 'path') context.append(action(editAnchors ? 'Done editing anchors' : 'Edit anchors',toggleAnchors));
+    if (l.type === 'path') {
+      context.append(action(editAnchors ? 'Done editing anchors' : 'Edit anchors',toggleAnchors));
+      if (editAnchors && !l.locked) {
+        const has = anchorSel >= 0 && l.points[anchorSel];
+        const smooth = action(has && StudioPath.isSmooth(l.points[anchorSel]) ? 'Make corner' : 'Make smooth',toggleSmooth), del = action('Delete point',deleteAnchor);
+        smooth.disabled = del.disabled = !has;
+        context.append(smooth,del,action(l.closed ? 'Open path' : 'Close path',toggleClosed));
+        context.append(Object.assign(document.createElement('p'),{className:'muted compact',textContent:'Double-click the outline to add a point. Double-click a point for smooth or corner. Alt-drag a handle to move it on its own.'}));
+      }
+    }
     if (l.type === 'image' && l.crop) context.append(action('Reset crop',() => {
       contextKey = '';
       change(() => { delete l.crop; });
@@ -741,13 +752,13 @@
           const p = R.transform(x*l.scale/100,y*l.scale/100,R.radians(l.rotation));
           return {x:c.x+p.x,y:c.y+p.y};
         };
-        l.points.forEach(([x,y,dx,dy],i) => {
-          const p = world(x,y), q = world(x+dx,y+dy), b = world(x-dx,y-dy);
-          if (dx || dy) line(b.x,b.y,q.x,q.y,'outline');
-          const tangent = dx || dy ? q : world(x+20*100/l.scale/zoom,y);
-          if (!(dx || dy)) line(p.x,p.y,tangent.x,tangent.y,'outline');
-          handle(tangent,{'data-anchor':i,'data-tangent':'true'},'circle');
+        l.points.forEach((pt,i) => {
+          const [x,y] = pt, o = StudioPath.outOf(pt), n = StudioPath.inOf(pt), p = world(x,y), q = world(x+o[0],y+o[1]), b = world(x+n[0],y+n[1]);
+          const has = StudioPath.hasHandles(pt), stub = !has && i === anchorSel ? world(x+20*100/l.scale/zoom,y) : null;
+          if (has) { line(b.x,b.y,p.x,p.y,'outline'); line(p.x,p.y,q.x,q.y,'outline'); handle(b,{'data-anchor':i,'data-tangent':'in'},'circle'); handle(q,{'data-anchor':i,'data-tangent':'out'},'circle'); }
+          else if (stub) { line(p.x,p.y,stub.x,stub.y,'outline'); handle(stub,{'data-anchor':i,'data-tangent':'out'},'circle'); }
           handle(p,{'data-anchor':i});
+          if (i === anchorSel) svg('circle',{cx:p.x,cy:p.y,r:7/zoom,class:'handle selected'});
         });
       } else if (tool === 'select') {
         points.forEach((p,i) => handle(p,{'data-handle':i}));
@@ -882,7 +893,34 @@
     return S.union(layers.map(l => R.bounds(l,w,h)));
   }
 
+  /* snap hook for anchors; the grid settings (N0I-36) plug in here */
+  function snapPoint(q,l) { return window.n0iseGridSnap ? window.n0iseGridSnap(q,l) : q; }
+  /* node commands: every one is a single undoable change */
+  const editable = () => { const l = visibleSelection()[0]; return editAnchors && l?.type === 'path' && !l.locked ? l : null; };
+  function addAnchorAt(l,p) {
+    const [w,h] = dims(), q = R.local(l,p,w,h), hit = StudioPath.nearest(l.points,!!l.closed,q);
+    if (!hit || hit.dist*l.scale/100*zoom > 18) return false;
+    change(() => { const r = StudioPath.split(l.points,!!l.closed,hit.seg,hit.t); l.points = r.points; anchorSel = r.index; contextKey = ''; });
+    return true;
+  }
+  function deleteAnchor() {
+    const l = editable(); if (!l || anchorSel < 0) return false;
+    const next = StudioPath.removeAt(l.points,!!l.closed,anchorSel);
+    if (!next) { notice(l.closed ? 'A closed path needs at least three points.' : 'A path needs at least two points. Delete the layer instead.'); return true; }
+    change(() => { l.points = next; anchorSel = Math.min(anchorSel,next.length-1); contextKey = ''; });
+    return true;
+  }
+  function toggleSmooth() {
+    const l = editable(); if (!l || anchorSel < 0) return;
+    const smooth = StudioPath.isSmooth(l.points[anchorSel]);
+    change(() => { l.points = smooth ? StudioPath.toCorner(l.points,anchorSel) : StudioPath.toSmooth(l.points,!!l.closed,anchorSel); contextKey = ''; });
+  }
+  function toggleClosed() {
+    const l = editable(); if (!l) return;
+    change(() => { l.closed = !l.closed; if (l.closed && l.fill === null) l.fill = paintColor; contextKey = ''; });
+  }
   function toggleAnchors() {
+    anchorSel = -1;
     if (view === 'graph' || view === 'spatial') setView('canvas');
     setTool('select');
     editAnchors = !editAnchors;
@@ -1036,7 +1074,8 @@
       gesture = {...base,kind:'pan',pan:{...pan}};
       stage.dataset.drag = 'true';
     } else if (tool === 'select' && anchor !== undefined && active?.type === 'path') {
-      gesture = {...base,kind:'anchor',l:active,index:Number(anchor),tangent:e.target.dataset.tangent === 'true',before:capture()};
+      anchorSel = Number(anchor); contextKey = ''; syncInspector();
+      gesture = {...base,kind:'anchor',l:active,index:Number(anchor),tangent:e.target.dataset.tangent || '',before:capture()};
     } else if (tool === 'select' && handle !== undefined && layers.length) {
       const corners = selectionGeometry(layers);
       const rotate = handle === 'rotate';
@@ -1190,6 +1229,11 @@
   stage.addEventListener('dblclick',e => {
     if (tool !== 'select' || view === 'spatial' || e.target.closest('button,#textEdit,#inlineText')) return;
     const p = position(e.clientX,e.clientY), [w,h] = dims();
+    const editing = editable();
+    if (editing) {
+      if (e.target.dataset?.anchor !== undefined && !e.target.dataset.tangent) { anchorSel = Number(e.target.dataset.anchor); toggleSmooth(); return; }
+      if (addAnchorAt(editing,p)) return;
+    }
     const top = doc.layers.find(l => R.inside(l,p,w,h,5/zoom));
     if (top?.type === 'text') startTextEdit(top);
     else if (top?.type === 'shape' && !top.locked && !doc.artboardLocked) pathFromShape(top);
@@ -1322,10 +1366,12 @@
       last[3] = p.y-last[1];
       drawOverlay();
     } else if (g.kind === 'anchor') {
-      const q = R.local(g.l,p,w,h), point = [...g.l.points[g.index]];
-      if (g.tangent) [point[2],point[3]] = [q.x-point[0],q.y-point[1]];
-      else [point[0],point[1]] = [q.x,q.y];
-      g.l.points = g.l.points.map((v,i) => i === g.index ? point : v);
+      const q = R.local(g.l,p,w,h), point = g.l.points[g.index];
+      if (g.tangent) g.l.points = StudioPath.setHandle(g.l.points,g.index,g.tangent,[q.x-point[0],q.y-point[1]],e.altKey);
+      else {
+        const at = snapPoint(q,g.l);
+        g.l.points = g.l.points.map((v,i) => i === g.index ? [at.x,at.y,...v.slice(2)] : v);
+      }
       update();
     }
   });
@@ -2237,7 +2283,7 @@
     else if (key === 'delete' || key === 'backspace') {
       e.preventDefault();
       if (view !== 'canvas' && graph.selection) graph.remove();
-      else if (view !== 'graph') remove();
+      else if (view !== 'graph' && !deleteAnchor()) remove();
     } else if (arrows[e.key] && view !== 'graph' && view !== 'spatial' && !graph.selection && selection.length) {
       e.preventDefault();
       const layers = selected().filter(l => !l.locked);

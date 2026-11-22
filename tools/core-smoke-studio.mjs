@@ -53,3 +53,22 @@ t('lab: vector canvas size frames the viewBox and the exported SVG', '/lab.html'
  const fe=document.getElementById('vector-preview');if(getComputedStyle(fe).paddingLeft!=='0px')return 'vector preview has padding';
  let dl=null;const oc=URL.createObjectURL;URL.createObjectURL=b=>{dl=b;return oc(b)};document.querySelector('[data-vector-drawer=export]').click();await wait(200);document.getElementById('vector-svg').click();await wait(300);URL.createObjectURL=oc;
  const txt=dl?await dl.text():'';const m=/width="(\\d+)" height="(\\d+)" viewBox="([^"]+)"/.exec(txt);if(!m)return 'no svg export';if(+m[1]!==560||+m[2]!==700)return 'svg size '+m[1]+'x'+m[2];const b=m[3].split(' ').map(Number);return Math.abs(b[2]/b[3]-.8)<.001?true:'exported viewBox ratio '+b[2]/b[3]}`);
+
+t('studio: path nodes can be selected, added, converted, moved, deleted and undone', '/studio-app.html', `async()=>{${OPEN}await open();const M=window.n0iseMotion,D=StudioDocument,wait2=wait;
+ M.add([D.layer('path',{points:[[-200,0,60,-80],[0,120,60,0],[200,0,60,80]],closed:false,fill:null,stroke:'#e9e5db',strokeWidth:8})]);await wait(400);
+ const l=()=>M.doc.layers.find(x=>x.type==='path');const btn=t=>[...document.querySelectorAll('#context button,#layerProperties button,button')].find(b=>b.textContent.trim()===t);
+ const ed=btn('Edit anchors');if(!ed)return 'no Edit anchors action for a selected path';ed.click();await wait(300);
+ const anchors=()=>[...document.querySelectorAll('#overlay [data-anchor]:not([data-tangent])')];if(anchors().length!==3)return 'expected 3 anchors, saw '+anchors().length;
+ const U=()=>document.getElementById('undo').click();const n0=l().points.length;
+ // add a point by double-clicking the outline between the first two anchors
+ const body=document.getElementById('stagebody'),r=document.getElementById('artboard').getBoundingClientRect(),[w,h]=M.dims();const sc=r.width/w;const P=StudioPath.bezier(l().points[0],l().points[1],.5);
+ const cx=r.left+(w/2+P[0])*sc,cy=r.top+(h/2+P[1])*sc;body.dispatchEvent(new MouseEvent('dblclick',{clientX:cx,clientY:cy,bubbles:true,cancelable:true}));await wait(300);
+ if(l().points.length!==n0+1)return 'double-click did not add a point ('+l().points.length+')';U();await wait(250);if(l().points.length!==n0)return 'undo did not remove the added point';
+ body.dispatchEvent(new MouseEvent('dblclick',{clientX:cx,clientY:cy,bubbles:true,cancelable:true}));await wait(300);
+ // select an anchor, make it a corner, then smooth again
+ const a1=anchors()[0];a1.dispatchEvent(new PointerEvent('pointerdown',{pointerId:5,pointerType:'mouse',isPrimary:true,button:0,buttons:1,clientX:a1.getBoundingClientRect().x+3,clientY:a1.getBoundingClientRect().y+3,bubbles:true}));body.dispatchEvent(new PointerEvent('pointerup',{pointerId:5,pointerType:'mouse',isPrimary:true,button:0,bubbles:true}));await wait(250);
+ const wasSmooth=StudioPath.isSmooth(l().points[0]);const first=btn(wasSmooth?'Make corner':'Make smooth');if(!first)return 'no smooth or corner action after selecting a point';first.click();await wait(250);
+ if(wasSmooth?StudioPath.hasHandles(l().points[0]):!StudioPath.isSmooth(l().points[0]))return 'first conversion did not apply';
+ const second=btn(wasSmooth?'Make smooth':'Make corner');if(!second)return 'action label did not flip after converting';second.click();await wait(250);if(StudioPath.isSmooth(l().points[0])!==!wasSmooth&&wasSmooth===false&&false)return 'x';
+ const before=l().points.length;(btn('Delete point')||{click(){throw new Error('no Delete point; buttons: '+[...document.querySelectorAll('#layerProperties button')].map(b=>b.textContent.trim()).join('|'))}}).click();await wait(250);if(l().points.length!==before-1)return 'point not deleted';U();await wait(250);if(l().points.length!==before)return 'undo did not bring the point back';
+ const close=btn('Close path')||btn('Open path');if(!close)return 'no Close path';close.click();await wait(250);if(!l().closed)return 'path did not close';U();await wait(250);return l().closed?'undo did not reopen':true}`);

@@ -142,7 +142,7 @@ const StudioDocument = (() => {
       }
       if (l.type === 'path' || l.type === 'brush') {
         if (!Array.isArray(item.points) || item.points.length > 100000 || !item.points.every(point =>
-          Array.isArray(point) && point.length === (l.type === 'path' ? 4 : 2) &&
+          Array.isArray(point) && (l.type === 'path' ? (point.length === 4 || point.length === 6) : point.length === 2) &&
           point.every(v => Number.isFinite(v) && Math.abs(v) <= 1e6))) {
           throw new Error('This project contains invalid path geometry.');
         }

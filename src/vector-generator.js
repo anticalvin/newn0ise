@@ -255,8 +255,10 @@ export function pathData({points,closed}) {
   let d = `M ${x} ${y}`;
   for (let i = 1; i < points.length+Number(!!closed); i++) {
     const [px,py,pdx = 0,pdy = 0] = points[i-1];
-    const [nx,ny,ndx = 0,ndy = 0] = points[i % points.length];
-    d += ` C ${px+pdx} ${py+pdy} ${nx-ndx} ${ny-ndy} ${nx} ${ny}`;
+    const next = points[i % points.length], [nx,ny,ndx = 0,ndy = 0] = next;
+    /* a fifth and sixth number set the incoming handle on its own; with four it mirrors the outgoing one */
+    const ix = next.length >= 6 ? nx+(next[4] || 0) : nx-ndx, iy = next.length >= 6 ? ny+(next[5] || 0) : ny-ndy;
+    d += ` C ${px+pdx} ${py+pdy} ${ix} ${iy} ${nx} ${ny}`;
   }
   return d+(closed ? ' Z' : '');
 }
