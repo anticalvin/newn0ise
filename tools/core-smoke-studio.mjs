@@ -95,3 +95,28 @@ t('studio: shortcut reference has no duplicate keys, shortcuts stay quiet while 
  document.body.dispatchEvent(new KeyboardEvent('keydown',{key:'d',ctrlKey:true,bubbles:true,cancelable:true}));await wait(150);if(M.selection.length!==0)return 'Ctrl+D did not deselect';
  document.body.dispatchEvent(new KeyboardEvent('keydown',{key:'?',bubbles:true,cancelable:true}));await wait(200);const dlg=document.getElementById('modal');if(!dlg.open||!/shortcuts/i.test(document.getElementById('modaltitle').textContent))return 'the ? key did not open the shortcut list';
  document.body.dispatchEvent(new KeyboardEvent('keydown',{key:'t',bubbles:true,cancelable:true}));await wait(100);if(tool()!==t0)return 'shortcuts fired behind an open dialog';dlg.close();return true}`);
+
+t('lab mobile: the fitted preview scrolls away with the page and never covers Run, drawers or source (N0I-37)', '/lab.html', `async()=>{const wait=ms=>new Promise(r=>setTimeout(r,ms));await wait(3500);const lp=document.querySelector('.lab-preview'),cs=getComputedStyle(lp);
+ if(cs.position==='sticky'||cs.position==='fixed')return 'preview is '+cs.position;if(parseFloat(cs.zIndex||0)>0)return 'preview has z-index '+cs.zIndex;
+ const doc=document.scrollingElement;doc.scrollTop=doc.scrollHeight;await wait(300);const r=lp.getBoundingClientRect();const run=document.getElementById('run').getBoundingClientRect();
+ for(const id of ['run','pause']){const e=document.getElementById(id);if(!e)continue;const b=e.getBoundingClientRect();if(b.width&&r.bottom>b.top+1&&r.top<b.bottom-1&&getComputedStyle(e).visibility!=='hidden'&&!lp.contains(e))return 'preview overlaps #'+id}
+ const ed=document.querySelector('.cm-editor')?.getBoundingClientRect();if(ed&&r.bottom>ed.top+1&&r.top<ed.bottom-1)return 'preview overlaps the source editor';
+ const f=document.getElementById('preview');if(Math.abs(f.clientWidth/f.clientHeight-1)>.03&&!/custom|sketch/.test(document.getElementById('status').textContent))return 'aspect changed';return true}`);
+
+t('effects mobile: picture tools are an icon rail on the right; hold is momentary; source menu and compare still work (N0I-39)', '/effects.html', `async()=>{const wait=ms=>new Promise(r=>setTimeout(r,ms));await wait(3000);const foot=document.getElementById('fxfoot');if(!foot)return 'no fxfoot';
+ const cs=getComputedStyle(foot);if(cs.position!=='absolute')return 'rail is '+cs.position;const fr=foot.getBoundingClientRect(),st=document.getElementById('stage').getBoundingClientRect();if(fr.right>st.right+1||fr.left<st.left+st.width*.5)return 'rail is not on the right edge of the picture';
+ const bs=[...foot.querySelectorAll('#srcchip,#hold,#artbar button')];if(bs.length<3)return 'too few tools in the rail '+bs.length;
+ for(const b of bs){const r=b.getBoundingClientRect();if(r.width&&(r.width<43.5||r.height<43.5))return b.id+' target '+r.width+'x'+r.height;if(!b.querySelector('svg'))return 'no icon on '+(b.id||b.textContent);if(!b.getAttribute('aria-label'))return 'no aria-label';}
+ if(foot.getBoundingClientRect().height>=innerHeight*.7)return 'rail is too tall';
+ const h=document.getElementById('hold');h.dispatchEvent(new PointerEvent('pointerdown',{pointerId:3,pointerType:'touch',isPrimary:true,bubbles:true}));if(h.getAttribute('aria-pressed')!=='true')return 'hold did not engage';h.dispatchEvent(new PointerEvent('pointerup',{pointerId:3,pointerType:'touch',isPrimary:true,bubbles:true}));if(h.getAttribute('aria-pressed')==='true')return 'hold stayed on after release';
+ document.getElementById('srcchip').click();await wait(100);if(document.getElementById('srcmenu').hidden)return 'source menu did not open';document.getElementById('srcchip').click();
+ const dock=document.getElementById('dock').getBoundingClientRect();return dock.top<innerHeight*.62?true:'instrument starts too low: '+Math.round(dock.top)}`);
+
+t('studio mobile: tools sit in the artboard footer, scroll sideways, keep 44px targets; lock has a 44px hit area (N0I-38)', '/studio-app.html', `async()=>{${OPEN}await open();const tools=document.getElementById('tools'),foot=document.querySelector('.stagefoot');if(tools.parentElement!==foot)return 'tools are not in the footer';
+ if(getComputedStyle(document.getElementById('stageStatus')).display!=='none')return 'footer metadata still visible on phone';
+ const tb=tools.getBoundingClientRect(),sb=document.getElementById('stagebody').getBoundingClientRect();if(tb.top<sb.bottom-1)return 'toolbar overlaps the artwork area';
+ for(const b of tools.querySelectorAll('.tool')){const r=b.getBoundingClientRect();if(r.width&&(r.width<43.5||r.height<43.5))return 'small tool target '+r.width+'x'+r.height}
+ if(!(tools.scrollWidth>=tools.clientWidth))return 'toolbar cannot scroll';if(document.documentElement.scrollWidth>innerWidth)return 'page overflows horizontally';
+ const z=document.getElementById('zoomLock'),r=z.getBoundingClientRect();if(r.width>32)return 'lock is still large '+r.width;const hit=document.elementFromPoint(r.left+r.width/2+18,r.top+r.height/2),hit2=document.elementFromPoint(r.left+r.width/2-18,r.top+r.height/2);if((hit!==z&&!z.contains(hit))||(hit2!==z&&!z.contains(hit2)))return 'lock hit area is smaller than 44px';
+ document.querySelector('[data-tool=text]').click();await wait(150);if(!document.querySelector('[data-tool=text]').classList.contains('active'))return 'tool selection from the footer does not work';
+ const head=document.querySelector('.stagehead').getBoundingClientRect();if(head.height>40)return 'top chrome is tall: '+head.height;return true}`);

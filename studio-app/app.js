@@ -2259,6 +2259,18 @@
     b.innerHTML = `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${toolIcons[name]}</svg>`;
   }
 
+  /* phones: the one toolstrip moves into the dark footer inside the artboard frame (no second toolbar); it moves back on wider screens and in full screen */
+  { const tools = $('tools'), foot = document.querySelector('.stagefoot'), shell = document.querySelector('.app'), phone = matchMedia('(max-width:680px)');
+    const place = () => {
+      const inFoot = phone.matches && !shell.classList.contains('immersive');
+      if (inFoot && tools.parentElement !== foot) foot.append(tools);
+      else if (!inFoot && tools.parentElement === foot) stage.append(tools);
+      foot.classList.toggle('hastools',inFoot);
+    };
+    phone.addEventListener('change',place);
+    new MutationObserver(place).observe(shell,{attributes:true,attributeFilter:['class']});
+    place(); }
+
   const homeUrl = new URL('./index.html',location.href).href;
   for (const brand of all('a.brand')) {
     brand.href = homeUrl;

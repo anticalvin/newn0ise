@@ -4494,6 +4494,35 @@ function wireSheet(){
       if(a==='open')$i('open').click();else if(a==='audio'){let fi=$('#audfile');if(!fi){fi=document.createElement('input');fi.type='file';fi.id='audfile';fi.accept='audio/*,.mp3,.wav,.m4a,.ogg,.flac,.aac';fi.hidden=true;fi.addEventListener('change',()=>{const f=fi.files[0];fi.value='';if(f)startAudio(f);});document.body.appendChild(fi);}fi.click();}else if(a==='cam')openCamera();else if(a==='animate'){const bt=[...document.querySelectorAll('button')].find(x=>x.textContent.trim()==='Animate');if(bt)bt.click();}else if(a==='rec')$i('rec').click();
       else if(a==='demo'){setSource(demoCanvas(),'Demo');refreshUI();}else if(a==='test'){setSource(testCanvas(),'Test');refreshUI();}});}
 }
+/* phones: Source, Compare, Pause, Hold original and the picture tools become a compact icon rail on the right edge of the picture (same buttons, same handlers, only dressed as icons) */
+(function fxRail(){
+  const foot=document.getElementById('fxfoot');if(!foot)return;const mq=matchMedia('(max-width:959px)');
+  const I=d=>'<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+d+'</svg>';
+  const ICONS=[[/^source/i,I('<rect x="4" y="5" width="16" height="14" rx="2.5"/><circle cx="9" cy="10" r="1.6"/><path d="m5 17 5-4 3 2.500 3-3 3 3"/>')],
+    [/compare|split|before/i,I('<rect x="4" y="5" width="16" height="14" rx="2.5"/><path d="M12 5v14"/><path d="M4 9.500h8M4 14.500h8" opacity=".55"/>')],
+    [/^pause/i,I('<path d="M9 6v12M15 6v12"/>')],[/^(play|resume)/i,I('<path d="M8 5.500v13l11-6.500z"/>')],
+    [/hold|original/i,I('<path d="M2.500 12S6 5.500 12 5.500 21.500 12 21.500 12 18 18.500 12 18.500 2.500 12 2.500 12z"/><circle cx="12" cy="12" r="2.600"/>')],
+    [/^reset/i,I('<path d="M4 12a8 8 0 1 0 2.600-5.900M4 5v4h4"/>')],[/animate/i,I('<path d="M12 3.500v4M12 16.500v4M3.500 12h4M16.500 12h4M6 6l2.500 2.500M15.500 15.500 18 18M18 6l-2.500 2.500M8.500 15.500 6 18"/>')],
+    [/^power/i,I('<path d="M12 4v8"/><path d="M7 7.200a7 7 0 1 0 10 0"/>')],[/shuffle|random/i,I('<path d="M4 7h3.500c4 0 5 10 9 10H20M4 17h3.500c1.500 0 2.600-1 3.500-2.300M20 7h-3.500c-1.500 0-2.600 1-3.500 2.300"/><path d="m18 5 2 2-2 2M18 15l2 2-2 2"/>')],
+    [/beam|paint|brush/i,I('<path d="M20 4 11 13"/><path d="M11 13c-2.600-.6-4.600 1-4.600 3.200 0 1.600-.9 2.500-2.900 3.300 4.400 1.400 8.600-.4 8.600-3.800"/>')],[/place|pin/i,I('<path d="M12 21s6-5.500 6-10a6 6 0 0 0-12 0c0 4.500 6 10 6 10z"/><circle cx="12" cy="11" r="2"/>')]];
+  const dots=I('<circle cx="6" cy="12" r="1.400"/><circle cx="12" cy="12" r="1.400"/><circle cx="18" cy="12" r="1.400"/>');
+  const labelOf=b=>{const r=b.querySelector('.rl');return ((r?r.textContent:b.textContent)||b.getAttribute('aria-label')||'').trim();};
+  let busy=false;
+  function dress(){
+    if(busy)return;busy=true;
+    for(const b of foot.querySelectorAll('#srcchip,#hold,#artbar button,#artbar .pill')){
+      const t=labelOf(b);if(!t)continue;
+      if(mq.matches){
+        if(b.querySelector('.rl')&&b.querySelector('svg'))continue;
+        const ic=(ICONS.find(([re])=>re.test(t))||[0,dots])[1];
+        b.setAttribute('aria-label',t);b.title=t;b.dataset.rail='1';b.innerHTML=ic+'<span class="rl">'+t.replace(/[<>&]/g,'')+'</span>';
+      }else if(b.dataset.rail){b.textContent=t;delete b.dataset.rail;}
+    }
+    busy=false;
+  }
+  new MutationObserver(dress).observe(foot,{childList:true,subtree:true,characterData:true});
+  mq.addEventListener('change',dress);dress();
+})();
 (function boot(){
   applyProfile('studio');
   ST.pwrT0=now();
