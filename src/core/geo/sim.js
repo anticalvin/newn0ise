@@ -6,6 +6,8 @@
 import * as THREE from 'three';
 
 export const NEAR = 160, MEDIUM = 650;
+const rgb = h => [(h >> 16 & 255) / 255, (h >> 8 & 255) / 255, (h & 255) / 255];
+const SKIN = [0xf1c8a5, 0xd9a67e, 0xb97a57, 0x8d5a3c, 0x6a4129, 0x4a2c1c].map(rgb), HAIR = [0x171210, 0x2a1b10, 0x5a3a1f, 0xb9a070, 0x8a8a8a, 0x0e0c0b].map(rgb), TROUSERS = [0x23303f, 0x2c2c30, 0x6a5d44, 0x3a4a5e, 0x1c1c1e, 0x57616b].map(rgb);
 const hash = (s) => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0) / 4294967296; };
 
 export class Sim {
@@ -14,9 +16,16 @@ export class Sim {
     const body = new THREE.BoxGeometry(1.8, 0.7, 4.1); body.translate(0, 0.55, 0); const cab = new THREE.BoxGeometry(1.6, 0.55, 2.0); cab.translate(0, 1.15, -0.2);
     const car = mergeTwo(body, cab);
     this.cars = mk(car, new THREE.MeshStandardMaterial({ roughness: 0.45, metalness: 0.3 }));
-    const ped = new THREE.CapsuleGeometry(0.22, 1.0, 3, 6); ped.translate(0, 0.85, 0);
-    this.peds = mk(ped, new THREE.MeshStandardMaterial({ roughness: 0.8 }));
-    this.group = new THREE.Group(); this.group.add(this.cars, this.peds);
+    // people are small articulated figures: head, hair, torso, two arms and two legs, each its own instanced mesh so limbs can swing. Skin, hair, shirt and trousers vary per person.
+    const box = (w, h, d, x, y, z) => new THREE.BoxGeometry(w, h, d).translate(x, y, z), std = () => new THREE.MeshStandardMaterial({ roughness: 0.78 });
+    const P = this.parts = {
+      head: mk(new THREE.SphereGeometry(0.118, 10, 8).translate(0, 1.64, 0), std()), hair: mk(new THREE.SphereGeometry(0.128, 10, 6, 0, Math.PI * 2, 0, Math.PI * 0.55).translate(0, 1.67, -0.005), std()),
+      torso: mk(box(0.42, 0.6, 0.23, 0, 1.17, 0), std()), armL: mk(box(0.1, 0.58, 0.11, 0, -0.29, 0), std()), armR: mk(box(0.1, 0.58, 0.11, 0, -0.29, 0), std()),
+      legL: mk(box(0.175, 0.86, 0.2, 0, -0.43, 0), std()), legR: mk(box(0.175, 0.86, 0.2, 0, -0.43, 0), std())
+    };
+    for (const m of Object.values(P)) m.castShadow = false; P.torso.castShadow = true;
+    this.peds = P.torso;
+    this.group = new THREE.Group(); this.group.add(this.cars, ...Object.values(P));
   }
   /* deterministic population for a freshly loaded tile; ids like "3_-2#c4", so reloading never duplicates */
   populate(tk, density = 1) {
@@ -94,15 +103,26 @@ export class Sim {
       let x = a.x, z = a.z; if (a.tier === 'medium') { const k = Math.min(1, a.acc / 0.25); x = a.px + (a.x - a.px) * k; z = a.pz + (a.z - a.pz) * k; }
       p.set(x - ox, height(x, z) + (a.kind === 'car' ? 0.02 : 0), z - oz); q.setFromAxisAngle(up, a.yaw); M.compose(p, q, s);
       if (a.kind === 'car') { if (nc >= 320) continue; this.cars.setMatrixAt(nc, M); this.cars.setColorAt(nc++, c.setHSL(a.hue, a.hue > 0.6 ? 0.05 : 0.45, a.hue > 0.6 ? 0.55 : 0.4)); }
-      else { if (np >= 320) continue; this.peds.setMatrixAt(np, M); this.peds.setColorAt(np++, c.setHSL(a.hue, 0.35, 0.45)); }
+      else { if (np >= 320) continue; this.person(np++, x - ox, p.y, z - oz, a, M, q, p, s, up, c); }
     }
-    this.cars.count = nc; this.peds.count = np;
-    for (const m of [this.cars, this.peds]) { m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
+    this.cars.count = nc; for (const m of Object.values(this.parts)) m.count = np;
+    for (const m of [this.cars, ...Object.values(this.parts)]) { m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
+  }
+  person(i, x, y, z, a, M, q, p, s, up, c) {
+    const P = this.parts, ph = this.time * (3.2 + a.speed * 2.4) + a.seed % 628 / 100, sw = Math.sin(ph) * 0.62, bob = Math.abs(Math.cos(ph)) * 0.025, h = (n) => hash(a.id + n);
+    const base = new THREE.Matrix4().compose(p.set(x, y + bob, z), q.setFromAxisAngle(up, a.yaw), s.set(1, 1, 1)), tmp = new THREE.Matrix4(), rot = new THREE.Matrix4();
+    const limb = (m, ox, oy, ang) => { tmp.makeTranslation(ox, oy, 0); rot.makeRotationX(ang); m.setMatrixAt(i, M.multiplyMatrices(base, tmp).multiply(rot)); };
+    for (const k of ['head', 'hair', 'torso']) P[k].setMatrixAt(i, base);
+    limb(P.legL, -0.1, 0.86, sw); limb(P.legR, 0.1, 0.86, -sw); limb(P.armL, -0.27, 1.46, -sw * 0.9); limb(P.armR, 0.27, 1.46, sw * 0.9);
+    const sk = SKIN[Math.floor(h('k') * SKIN.length)], hr = HAIR[Math.floor(h('h') * HAIR.length)], tone = 0.9 + h('l') * 0.2;
+    P.head.setColorAt(i, c.setRGB(sk[0] * tone, sk[1] * tone, sk[2] * tone)); P.hair.setColorAt(i, c.setRGB(hr[0], hr[1], hr[2]));
+    P.torso.setColorAt(i, c.setHSL(a.hue, 0.15 + h('s') * 0.5, 0.28 + h('v') * 0.34)); P.armL.setColorAt(i, c); P.armR.setColorAt(i, c);
+    const tr = TROUSERS[Math.floor(h('t') * TROUSERS.length)]; P.legL.setColorAt(i, c.setRGB(tr[0], tr[1], tr[2])); P.legR.setColorAt(i, c);
   }
   serialize() { return [...this.actors.values()].map(a => ({ id: a.id, k: a.kind, ak: a.ak, bk: a.bk, t: +a.t.toFixed(4), d: a.dir, s: +a.speed.toFixed(3), r: a.seed, h: +a.hue.toFixed(3) })); }
   load(list) { for (const a of list || []) this.actors.set(a.id, { id: a.id, kind: a.k, ak: a.ak, bk: a.bk, t: a.t, dir: a.d, speed: a.s, seed: a.r, hue: a.h, x: 0, z: 0, px: 0, pz: 0, yaw: 0, tier: 'far', last: 0, acc: 0, tile: a.id.split('#')[0] }); }
   inspect() { return { ...this.stats, total: this.actors.size, sample: [...this.actors.values()].slice(0, 5).map(a => ({ id: a.id, kind: a.kind, tier: a.tier, edge: a.ak + '>' + a.bk })) }; }
-  dispose() { this.cars.geometry.dispose(); this.cars.material.dispose(); this.peds.geometry.dispose(); this.peds.material.dispose(); }
+  dispose() { this.cars.geometry.dispose(); this.cars.material.dispose(); for (const m of Object.values(this.parts)) { m.geometry.dispose(); m.material.dispose(); } }
 }
 function mergeTwo(a, b) {
   const g = new THREE.BufferGeometry(), pa = a.attributes.position, pb = b.attributes.position, na = a.attributes.normal, nb = b.attributes.normal;

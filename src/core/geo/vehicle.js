@@ -40,9 +40,9 @@ export class Car {
   setHue(h) { this.hue = h; this.bodyMat.color.setHSL(h, 0.55, 0.38); }
   update(dt, throttle, steerIn, brake, w) {
     const road = w.roadAt(this.x, this.z), onRoad = !!road && road.d < road.edge.cls.w / 2 + 2.5; this.onRoad = onRoad;
-    const top = onRoad ? Math.min(40, Math.max(14, road.edge.cls.speed * 1.5)) : 9;
+    const bo = w.boost || 1, top = (onRoad ? Math.min(40, Math.max(14, road.edge.cls.speed * 1.5)) : 14) * bo;
     let a;
-    if (throttle > 0) a = 7.5 * throttle * (1 - Math.max(0, this.speed) / top);
+    if (throttle > 0) a = 7.5 * Math.sqrt(bo) * throttle * (1 - Math.max(0, this.speed) / top);
     else if (throttle < 0) a = (this.speed > 0.5 ? -13 : -4.5) * -throttle;
     else a = -Math.sign(this.speed) * Math.min(Math.abs(this.speed) / dt, 2.6);
     this.speed += a * dt;

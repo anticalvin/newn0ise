@@ -49,7 +49,18 @@ OpenStreetMap data is ODbL 1.0: © OpenStreetMap contributors. The HUD and the m
 
 ## Commands (`Core.exec`)
 
-`world.open`, `world.close`, `world.goto`, `world.region.describe`, `world.region.load`, `world.region.generate` (explains the offline step), `world.road.inspect`, `world.road.edit` (closed, speed, name; `dryRun`; undoable), `world.building.inspect`, `world.building.populate` (`dryRun`; undoable), `world.assets.place` (`dryRun`; undoable), `world.simulation.inspect`, `world.performance.report`, `world.save`. Errors are `{ok:false, code, msg, path}`. `describe` lists them with the limits.
+`world.open`, `world.close`, `world.goto`, `world.region.describe`, `world.region.load`, `world.region.generate` (explains the offline step), `world.road.inspect`, `world.road.edit` (closed, speed, name; `dryRun`; undoable), `world.building.inspect`, `world.building.populate` (`dryRun`; undoable), `world.assets.place` (`dryRun`; undoable), `world.simulation.inspect`, `world.performance.report`, `world.save`, `world.mode` (play|edit), `world.view.god` (Edit only). Errors are `{ok:false, code, msg, path}`. `describe` lists them with the limits.
+
+## Play, Edit and God view
+- **Play** is the default: walk, drive (F), enter the shop, open the map (M). Only the essentials are on screen.
+- **Edit** (press E, then E or Enter to confirm, Esc to stay; E again returns to Play at once) adds: God view (G), time of day and day cycle, go to a city, place props, close or slow the nearest road, add a crowd, put a car beside you, car boost, undo.
+- **God view** flies a free camera from street level up to 4,200 km. Above 45 km the streamed ground is hidden and a full-size relief mesh of South Africa (about 1,750 x 1,550 km at true scale, hillshaded, height exaggerated 6x, 30 city labels, a marker where you stand) takes over. Enter or "Drop here" puts you at that spot anywhere in the country.
+
+## The rest of the country (`wilds.js`)
+Outside a detailed region the ground is generated, not surveyed: national DEM (about 2.7 km grid) plus deterministic fractal detail keyed to lat/lon, OSM trunk, primary and motorway centrelines (41k polylines) as drivable roads, sparse trees by rough climate, and towns and cities as clusters of simple buildings sized by population. 1 km chunks stream within 6.5 km, share edge samples (no seams), and the frame re-projects (new UTM zone) when you are more than 3.3 degrees from its central meridian. Real streets, buildings, traffic and the shop interior exist only in Cape Town until more regions are imported.
+
+## Roads and ground
+Roads sit on the highest ground across their width plus pavements, are smoothed along their length, and have a 1.2 m bank on both sides so they never float on a slope or let land poke through. Bridges follow a straight line between their ends but never below the ground. Coarse terrain LODs use the lowest nearby sample so they stay under roads and buildings.
 
 ## Tests
 

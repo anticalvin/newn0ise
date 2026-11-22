@@ -8,6 +8,7 @@ import { RoadGraph, roadGeometries, toGeometry, laneInfo, CLASSES } from './road
 import { buildGeometry, tileMaterial, fadeIn, BuildingIndex, streetProps } from './buildings.js';
 import { Sim } from './sim.js';
 import { Walker, Car } from './vehicle.js';
+import { Wilds } from './wilds.js';
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 export const BUDGET = { loadRadius: 1700, unloadRadius: 2300, maxTiles: 26, maxFetch: 3, nearIn: 340, nearOut: 430, midIn: 1100, midOut: 1250, jobMs: 5, edits: 400, actors: 700 };
@@ -17,7 +18,7 @@ const ASSETS = { tree: [0x4d6b3a, 3.2], lamp: [0x3a3a3c, 4.6], bench: [0x8a6a4a,
 export const COMMANDS = {
   'world.open': '{lat?, lon?, region?:"capetown", resume?:true} → enter the streamed South Africa world. Asynchronous: poll world.region.describe until ready is true.',
   'world.close': '{} → leave the world and return to the island.',
-  'world.goto': '{lat, lon} or {x, z} (region metres) or {place:"Johannesburg"} → move the player. Inside a detailed region this streams tiles; elsewhere it stands on coarse national relief.',
+  'world.goto': '{lat, lon} or {x, z} (region metres) or {place:"Johannesburg"} → move the player anywhere in South Africa. Detailed regions stream real streets and buildings; elsewhere the ground is generated from national relief with the OSM trunk roads.',
   'world.region.describe': '{} → region, coverage, loaded tiles, counts, data sources and attribution.',
   'world.region.load': '{tiles?:[[tx,tz]...], radius?:100..3000} → prefetch tile data (no meshes). Max 40 tiles.',
   'world.region.generate': '{region, bbox:[s,w,n,e]} → regions are generated offline (tools/world/import.py); returns the exact command.',
@@ -28,14 +29,16 @@ export const COMMANDS = {
   'world.assets.place': `{type:"${Object.keys(ASSETS).join('|')}", x,z or lat,lon, yaw?, dryRun?} → place a prop; kept as an override (max ${BUDGET.edits}). One undo step.`,
   'world.simulation.inspect': '{} → actors by tier, kind and a sample.',
   'world.performance.report': '{} → frame time, draw calls, triangles, tiles, streaming latency, heap.',
+  'world.mode': '{mode:"play"|"edit"} → Play is the game; Edit adds god view, time, props, road tools and crowds.',
+  'world.view.god': '{on:true|false, lat?, lon?, height?:40..4200000} → fly over the whole country (Edit mode).',
   'world.save': '{} → write the world state now.'
 };
 
 export class GeoWorld {
   constructor(app) {
     this.a = app; this.active = false; this.loading = false; this.ready = false; this.provider = new DataProvider(); this.group = new THREE.Group(); this.group.name = 'geo'; this.group.visible = false; app.scene.add(this.group);
-    this.graph = new RoadGraph(); this.bi = new BuildingIndex(); this.sim = new Sim(this.graph); this.group.add(this.sim.group);
-    this.walker = new Walker(); this.car = new Car(); this.group.add(this.car.root); this.driving = false;
+    this.mode = 'play'; this.god = null; this.boost = 1; this.graph = new RoadGraph(); this.bi = new BuildingIndex(); this.sim = new Sim(this.graph); this.group.add(this.sim.group);
+    this.walker = new Walker(); this.car = new Car(); this.group.add(this.car.root); this.driving = false; this.wilds = new Wilds(this);
     this.tiles = new Map(); this.origin = { x: 0, z: 0 }; this.frame = null; this.region = null; this.regionKey = null; this.tileList = [];
     this.edits = { roads: {}, assets: [] }; this.store = null; this.storeActive = false; this.storeState = null; this.coarse = new Map();
     this.stats = { loaded: 0, built: 0, unloaded: 0, cancelled: 0, lodSwaps: 0, rebases: 0, popIns: 0 }; this.t = { stream: 0, save: 0, env: 0, hud: 0 }; this.hidden = [];
@@ -45,11 +48,11 @@ export class GeoWorld {
   }
   // ---------- coordinates ----------
   get sx() { return this.walker.x - this.origin.x; } get sz() { return this.walker.z - this.origin.z; }
-  focus() { return this.driving ? this.car : this.walker; }
+  focus() { return this.god || (this.driving ? this.car : this.walker); }
   rebase(x, z) {                                   // the floating origin: everything global is double metres, everything on the GPU is relative to this
     this.origin.x = x; this.origin.z = z; this.stats.rebases++;
     for (const t of this.tiles.values()) if (t.group) t.group.position.set(t.ox - x, 0, t.oz - z);
-    this.placeFar(); this.props.position.set(-x, 0, -z);
+    this.placeFar(); this.props.position.set(-x, 0, -z); this.wilds.rebase(); this.placeCountry();
   }
   latLon(x = this.walker.x, z = this.walker.z) { return this.frame.toLatLon(x, z); }
   // ---------- heights ----------
@@ -57,6 +60,7 @@ export class GeoWorld {
   heightAt(x, z) {
     const t = this.tileAt(x, z);
     if (t && t.hf) return t.hf.at(x - t.ox, z - t.oz);
+    const wh = this.wilds.at(x, z); if (wh !== undefined) return wh;
     const k = Math.round(x / 80) + ',' + Math.round(z / 80); let h = this.coarse.get(k);
     if (h === undefined) { const p = this.frame.toLatLon(Math.round(x / 80) * 80, Math.round(z / 80) * 80); h = this.provider.demAt(p.lat, p.lon); if (this.coarse.size > 20000) this.coarse.clear(); this.coarse.set(k, h); }
     return h;
@@ -67,7 +71,7 @@ export class GeoWorld {
     if (f && this.storeActive) { const dx = x - f.cx, dz = z - f.cz, c = Math.cos(f.yaw), s = Math.sin(f.yaw), lx = dx * c - dz * s, lz = dx * s + dz * c; if (Math.abs(lx) < f.w / 2 && Math.abs(lz) < f.d / 2 && f.y > h) h = f.y; }
     return h;
   }
-  roadAt(x, z) { return this.graph.nearest(x, z, 30, true); }
+  roadAt(x, z) { return this.graph.nearest(x, z, 30, true) || this.wilds.roadAt(x, z, 30); }
   resolve(x, z, rad, skip) {
     const r = this.bi.resolve(x, z, rad, this.storeActive && this.store ? this.store.id : skip);
     if (this.storeActive) { const ox = this.origin.x, oz = this.origin.z; for (const b of this.storeBoxes()) { const o = boxPush(r.x - ox, r.z - oz, rad, b, this.walker.y); if (o) { r.x = o.x + ox; r.z = o.z + oz; r.moved = true; } } }
@@ -81,7 +85,7 @@ export class GeoWorld {
     this.loading = true; this.ready = false; this.say('Loading South Africa…');
     try {
       const a = this.a, saved = o.resume ? Storage.load() : null;
-      const man = await this.provider.getManifest(); await this.provider.getNational();
+      const man = await this.provider.getManifest(); await this.provider.getNational(); await this.wilds.ensureRoads();
       this.manifest = man;
       let lat = o.lat, lon = o.lon; if (saved && lat == null) { lat = saved.lat; lon = saved.lon; }
       if (lat == null) { lat = START.lat; lon = START.lon; }
@@ -94,7 +98,7 @@ export class GeoWorld {
       if (saved && saved.car && this.region) { Object.assign(this.car, { x: saved.car.x, z: saved.car.z, yaw: saved.car.yaw }); this.car.setHue(saved.car.hue ?? 0.58); }
       if (saved && saved.yaw != null) this.walker.yaw = saved.yaw;
       this.driving = !!(saved && saved.car && saved.car.driving && this.region);
-      this.ready = true; this.say(this.region ? this.region.name + ' · F to drive · M for the map' : 'Coarse national relief only here');
+      this.ready = true; this.say((this.region ? this.region.name : 'South Africa') + ' · F drives your car · E for Edit · M for the map');
     } catch (e) { this.say('Could not open the world: ' + e.message, 8000); this.ready = false; this.loading = false; this.leave(); return { ok: false, msg: e.message }; }
     this.loading = false; return { ok: true, msg: 'World open' };
   }
@@ -109,10 +113,10 @@ export class GeoWorld {
     a.camera.far = 140000; a.camera.near = 0.4; a.camera.updateProjectionMatrix();
     const sc = a.env.sun.shadow.camera; sc.left = -120; sc.right = 120; sc.top = 120; sc.bottom = -120; sc.updateProjectionMatrix();
     a.env.set({ time: 15.2, cloud: 0.22, wind: 0.4 }); a.character.root.visible = true; a.cam.dist = 5.4; a.cam.pitch = 0.22;
-    this.buildHud(); document.getElementById('ui').dataset.geo = '1'; this.hud.hidden = false;
+    this.mode = 'play'; this.god = null; this.buildHud(); document.getElementById('ui').dataset.geo = '1'; this.hud.hidden = false; this.setMode('play', true);
   }
   leave() {
-    const a = this.a; this.save(); this.unloadAll(); if (this.prevName) a.name = this.prevName; this.group.visible = false; this.active = false; this.ready = false;
+    const a = this.a; this.save(); this.exitGod(true); this.unloadAll(); this.wilds.reset(); if (this.prompting) this.closePrompt(); if (this.prevName) a.name = this.prevName; this.group.visible = false; this.active = false; this.ready = false;
     for (const [c, v] of this.hidden) c.visible = v; this.hidden = []; for (const [o, v] of this.entHidden || []) o.visible = v; this.entHidden = [];
     if (this.saved) { a.camera.far = this.saved.far; a.camera.near = this.saved.near; a.camera.updateProjectionMatrix(); const sc = a.env.sun.shadow.camera; sc.left = -80; sc.right = 80; sc.top = 80; sc.bottom = -80; sc.updateProjectionMatrix(); a.env.set({ time: this.saved.time }); }
     if (this.storeActive) this.deactivateStore();
@@ -124,7 +128,7 @@ export class GeoWorld {
 
   /* choose the region for a coordinate (or none: coarse relief), build its frame, place the player and wait for the ground under them */
   async setFrame(lat, lon, regionKey) {
-    const man = this.manifest; if (this.storeActive) this.deactivateStore(); this.unloadAll(); this.coarse.clear();
+    const man = this.manifest; if (this.storeActive) this.deactivateStore(); this.unloadAll(); this.wilds.reset(); this.disposeCountry(); this.coarse.clear();
     let key = regionKey && man.regions[regionKey] ? regionKey : Object.keys(man.regions).find(k => { const [s, w, n, e] = man.regions[k].bbox; return lat >= s && lat <= n && lon >= w && lon <= e; });
     if (key && regionKey === undefined) { /* inside a detailed region */ }
     this.regionKey = key || null; this.region = key ? man.regions[key] : null;
@@ -145,7 +149,13 @@ export class GeoWorld {
         this.walker.x = r.x - nx * (half + 3); this.walker.z = r.z - nz * (half + 3); this.walker.yaw = this.car.yaw; }
       else { this.car.x = p.x + 4; this.car.z = p.z + 4; }
       this.car.root.visible = true; this.car.y = this.groundAt(this.car.x, this.car.z); this.walker.y = this.groundAt(this.walker.x, this.walker.z);
-    } else { this.car.root.visible = false; this.walker.y = this.groundAt(p.x, p.z); }
+    } else {                                       // open country: generated ground and the national roads, with your car parked on the nearest road if there is one
+      this.wilds.update(p.x, p.z, 90); this.walker.y = this.groundAt(p.x, p.z);
+      const r = this.wilds.roadAt(p.x, p.z, 900);
+      if (r) { const e = r.edge, dx = e.b.x - e.a.x, dz = e.b.z - e.a.z, L = Math.hypot(dx, dz) || 1, nx = -dz / L, nz = dx / L; this.car.x = r.x + nx * 3; this.car.z = r.z + nz * 3; this.car.yaw = Math.atan2(dx, dz); }
+      else { this.car.x = p.x + 4; this.car.z = p.z + 4; this.car.yaw = this.walker.yaw; }
+      this.car.setHue(0.58); this.car.root.visible = true; this.car.y = this.groundAt(this.car.x, this.car.z);
+    }
     this.rebase(Math.round(this.walker.x / 1000) * 1000, Math.round(this.walker.z / 1000) * 1000);
   }
   unloadAll() { for (const k of [...this.tiles.keys()]) this.unloadTile(k); this.group.remove(this.sim.group); this.sim.dispose(); }
@@ -191,11 +201,12 @@ export class GeoWorld {
 
   // ---------- far relief and sea ----------
   buildFar() {
+    const fo = this.focus(), fx = fo.x, fz = fo.z;
     if (this.far) { this.group.remove(this.far); this.far.geometry.dispose(); this.far.material.dispose(); }
     const N = 128, step = 1500, half = N * step / 2, pos = [], col = [], idx = [], c = new THREE.Color();
     for (let j = 0; j <= N; j++) for (let i = 0; i <= N; i++) {
-      const x = i * step - half, z = j * step - half, p = this.frame.toLatLon(this.walker.x + x, this.walker.z + z), h = this.provider.demAt(p.lat, p.lon);
-      const hx = this.provider.demAt(this.frame.toLatLon(this.walker.x + x + step, this.walker.z + z).lat, p.lon + 0.01), slope = Math.min(1.2, Math.abs(hx - h) / 3000);
+      const x = i * step - half, z = j * step - half, p = this.frame.toLatLon(fx + x, fz + z), h = this.provider.demAt(p.lat, p.lon);
+      const hx = this.provider.demAt(this.frame.toLatLon(fx + x + step, fz + z).lat, p.lon + 0.01), slope = Math.min(1.2, Math.abs(hx - h) / 3000);
       landColor(h, slope, '', c); pos.push(x, Math.max(h, -80), z); col.push(c.r, c.g, c.b);
     }
     for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) { const a = j * (N + 1) + i; idx.push(a, a + N + 1, a + 1, a + 1, a + N + 1, a + N + 2); }
@@ -203,9 +214,9 @@ export class GeoWorld {
     const m = tileMaterial({ side: THREE.DoubleSide, rough: 1 }); m.userData.u.uFade.value = 1; this.farHole = new THREE.Vector4(1e9, 1e9, -1e9, -1e9);
     const prev = m.onBeforeCompile; m.onBeforeCompile = sh => { prev(sh); sh.uniforms.uHole = { value: this.farHole }; sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform vec4 uHole;').replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>\nif(vWP.x>uHole.x&&vWP.z>uHole.y&&vWP.x<uHole.z&&vWP.z<uHole.w) discard;'); };
     m.customProgramCacheKey = () => 'geo-far';
-    this.far = new THREE.Mesh(g, m); this.far.frustumCulled = false; this.far.position.set(-this.origin.x + this.walker.x - this.walker.x, -4, -this.origin.z); this.far.userData.cx = this.walker.x; this.far.userData.cz = this.walker.z;
+    this.far = new THREE.Mesh(g, m); this.far.frustumCulled = false; this.far.position.set(-this.origin.x + fx - fx, -4, -this.origin.z); this.far.userData.cx = fx; this.far.userData.cz = fz;
     // vertices are relative to the player's start; keep the mesh anchored there
-    this.far.position.set(this.walker.x - this.origin.x, -4, this.walker.z - this.origin.z); this.far.userData.anchor = { x: this.walker.x, z: this.walker.z };
+    this.far.position.set(fx - this.origin.x, -4, fz - this.origin.z); this.far.userData.anchor = { x: fx, z: fz };
     this.group.add(this.far);
   }
   placeFar() { if (this.far) this.far.position.set(this.far.userData.anchor.x - this.origin.x, -4, this.far.userData.anchor.z - this.origin.z); }
@@ -213,8 +224,10 @@ export class GeoWorld {
   // ---------- streaming ----------
   rectDist(t, x, z) { const T = this.T, dx = Math.max(t.tx * T - x, 0, x - (t.tx + 1) * T), dz = Math.max(t.tz * T - z, 0, z - (t.tz + 1) * T); return Math.hypot(dx, dz); }
   stream(first) {
-    if (!this.region) return;
-    const f = this.focus(), ahead = this.driving ? this.car.speed * 6 : 0, fx = f.x + Math.sin(f.yaw) * ahead, fz = f.z + Math.cos(f.yaw) * ahead;
+    const f = this.focus(); if (this.god && this.god.high) return;
+    const fill = () => { this.wilds.update(f.x, f.z, first ? 60 : 3); if (this.farHole) this.farHole.set(f.x - 4400 - this.origin.x, f.z - 4400 - this.origin.z, f.x + 4400 - this.origin.x, f.z + 4400 - this.origin.z); };
+    if (!this.region) { fill(); return; }
+    const ahead = this.driving && !this.god ? this.car.speed * 6 : 0, fx = f.x + Math.sin(f.yaw) * ahead, fz = f.z + Math.cos(f.yaw) * ahead;
     const want = this.tileList.map(t => ({ ...t, d: Math.min(this.rectDist(t, f.x, f.z), this.rectDist(t, fx, fz)) })).filter(t => t.d < BUDGET.loadRadius).sort((a, b) => a.d - b.d);
     const wantKeys = new Set(want.map(t => t.key)); let fetching = 0; for (const t of this.tiles.values()) if (t.state === 'loading') fetching++;
     for (const t of want) { if (this.tiles.has(t.key)) continue; if (fetching >= BUDGET.maxFetch) break; this.startLoad(t); fetching++; }
@@ -225,10 +238,7 @@ export class GeoWorld {
     }
     while (this.tiles.size > BUDGET.maxTiles) { let far = null, fd = -1; for (const t of this.tiles.values()) { const d = this.rectDist(t, f.x, f.z); if (d > fd) { fd = d; far = t; } } if (!far) break; if (far.state === 'loading') { far.abort.abort(); this.tiles.delete(far.key); } else this.unloadTile(far.key); }
     for (const t of this.tiles.values()) if (t.state === 'ready' || t.state === 'building') this.applyLod(t, this.rectDist(t, f.x, f.z));
-    // the far relief has a hole where real tiles are drawn
-    let x0 = 1e9, z0 = 1e9, x1 = -1e9, z1 = -1e9; for (const t of this.tiles.values()) if (t.hf) { x0 = Math.min(x0, t.ox); z0 = Math.min(z0, t.oz); x1 = Math.max(x1, t.ox + this.T); z1 = Math.max(z1, t.oz + this.T); }
-    if (this.farHole) this.farHole.set(x0 - this.origin.x + 20, z0 - this.origin.z + 20, x1 - this.origin.x - 20, z1 - this.origin.z - 20);
-    void first;
+    fill();
   }
   startLoad(t) {
     const rec = { key: t.key, tx: t.tx, tz: t.tz, ox: t.tx * this.T, oz: t.tz * this.T, state: 'loading', abort: new AbortController(), t0: performance.now(), lod: '', mats: [], meshes: [], terr: {}, jobs: null };
@@ -305,14 +315,15 @@ export class GeoWorld {
     if (!this.ready && !this.active) return;
     // sky time and night windows
     this.t.env += dt; if (this.t.env > 2) { this.t.env = 0; const tm = (a.env.p.time + 2 * this.dayRate * 24) % 24; a.env.set({ time: tm }); for (const t of this.tiles.values()) if (t.mBld) t.mBld.userData.u.uNight.value = 1 - a.env.day; }
-    if (a.scene.fog) a.scene.fog.density = 0.00011;
+    if (a.scene.fog) a.scene.fog.density = this.god ? 0.00011 / (1 + this.god.dist / 6000) ** 2 : 0.00011;
     this.runJobs();
     const fade = [...this.tiles.values()]; for (const t of fade) if (t.mats.length) fadeIn(t.mats, dt);
     if (this.ready) {
       this.t.stream += dt; if (this.t.stream > 0.25) { this.t.stream = 0; this.stream(); this.storeTick(); }
       const yaw = c.yaw, fx = -Math.sin(yaw), fz = -Math.cos(yaw), rx = Math.cos(yaw), rz = -Math.sin(yaw), mvx = fx * inp.mz + rx * inp.mx, mvz = fz * inp.mz + rz * inp.mx;
       const dtc = Math.min(dt, 0.05);
-      if (this.driving) {
+      if (this.god) this.flyGod(dt, inp, mvx, mvz);
+      else if (this.driving) {
         const k = a.input.keys; this.car.update(dtc, clamp(inp.mz, -1, 1), -clamp(inp.mx, -1, 1), k.has(' '), this);
         this.stuck = (Math.abs(this.car.speed) < 0.6 && Math.abs(inp.mz) > 0.5) ? (this.stuck || 0) + dtc : 0;
         if (this.stuck > 2 && !this.hinted) { this.hinted = true; this.say('Stuck? Press R to put the car back on the road.', 4000); } else if (this.stuck === 0) this.hinted = false;
@@ -321,20 +332,21 @@ export class GeoWorld {
       } else if (!this.ui_blocked) { w.update(dtc, mvx, mvz, inp.run, inp.jump, this); inp.jump = false; this.car.update(dtc, 0, 0, true, this); }
       if (!this.driving) this.car.speed *= Math.exp(-3 * dtc);
       // origin rebasing keeps every GPU coordinate small, no matter how far the player has travelled
-      if (!this.storeActive && Math.hypot(w.x - this.origin.x, w.z - this.origin.z) > 1500) this.rebase(Math.round(w.x / 1000) * 1000, Math.round(w.z / 1000) * 1000);
+      { const fo = this.focus(); if (!this.storeActive && Math.hypot(fo.x - this.origin.x, fo.z - this.origin.z) > 1500) this.rebase(Math.round(fo.x / 1000) * 1000, Math.round(fo.z / 1000) * 1000); }
+      this.t.frame = (this.t.frame || 0) + dt; if (this.t.frame > 1) { this.t.frame = 0; this.frameCheck(); }
       this.placeFar();
       this.sim.update(dt, w.x, w.z); this.sim.render(this.origin.x, this.origin.z, (x, z) => this.heightAt(x, z));
       this.car.apply(this.origin.x, this.origin.z);
     }
     // character, Core's player mirror (so the store's door and shelves keep working), camera
     const px = w.x - this.origin.x, pz = w.z - this.origin.z;
-    a.character.root.visible = !this.driving; a.character.root.position.set(px, w.y, pz); a.character.root.rotation.y = w.yaw; a.character.update(dt, w.speed, w.onGround, 0, w.vy);
+    a.character.root.visible = !this.driving && !this.god; a.character.root.position.set(px, w.y, pz); a.character.root.rotation.y = w.yaw; a.character.update(dt, w.speed, w.onGround, 0, w.vy);
     a.player.pos.set(px, w.y, pz); a.player.yaw = w.yaw; a.player.vel.set(0, 0, 0);
-    const target = this.driving ? new THREE.Vector3(px, w.y + 1.3, pz) : new THREE.Vector3(px, w.y + 1.45, pz); c.target.lerp(target, 1 - Math.exp(-14 * dt));
-    if (this.driving && Math.abs(c.yaw - this.lastYaw) < 1e-4 && Math.abs(this.car.speed) > 2) { const want = this.car.yaw + Math.PI; let d = ((want - c.yaw + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI; c.yaw += d * (1 - Math.exp(-2.2 * dt)); }
-    this.lastYaw = c.yaw; const dist = this.driving ? Math.max(c.dist, 8) : c.dist; if (this.driving && c.dist < 8) c.dist = 8; if (!this.driving && c.dist > 14) c.dist = 14;
+    const target = this.driving ? new THREE.Vector3(px, w.y + 1.3, pz) : new THREE.Vector3(px, w.y + 1.45, pz); if (this.god) c.target.set(this.god.x - this.origin.x, Math.max(0, this.heightAt(this.god.x, this.god.z)), this.god.z - this.origin.z); else c.target.lerp(target, 1 - Math.exp(-14 * dt));
+    if (this.driving && !this.god && Math.abs(c.yaw - this.lastYaw) < 1e-4 && Math.abs(this.car.speed) > 2) { const want = this.car.yaw + Math.PI; let d = ((want - c.yaw + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI; c.yaw += d * (1 - Math.exp(-2.2 * dt)); }
+    this.lastYaw = c.yaw; const dist = this.driving ? Math.max(c.dist, 8) : c.dist; if (this.driving && c.dist < 8) c.dist = 8; if (!this.driving && !this.god && c.dist > 14) c.dist = 14;
     const cp = Math.cos(c.pitch), cam = a.camera; cam.position.set(c.target.x + Math.sin(c.yaw) * cp * dist, c.target.y + Math.sin(c.pitch) * dist, c.target.z + Math.cos(c.yaw) * cp * dist);
-    const fl = this.heightAt(cam.position.x + this.origin.x, cam.position.z + this.origin.z) + 0.9; if (cam.position.y < fl) cam.position.y = fl; cam.lookAt(c.target);
+    const fl = this.heightAt(cam.position.x + this.origin.x, cam.position.z + this.origin.z) + 0.9; if (cam.position.y < fl) cam.position.y = fl; cam.lookAt(c.target); if (this.god) this.godCam(); else if (cam.far !== 140000) { cam.far = 140000; cam.near = 0.4; cam.updateProjectionMatrix(); }
     this.sea.position.set(cam.position.x, -0.15, cam.position.z);
     a.env.update(dt, cam, c.target); a.entities.tick(dt);
     this.t.hud += dt; if (this.t.hud > 0.3) { this.t.hud = 0; this.updateHud(); }
@@ -349,6 +361,7 @@ export class GeoWorld {
     if (!this.storeActive && d < 55 && !this.driving) this.activateStore(); else if (this.storeActive && (d > 95 || this.driving && d > 60)) this.deactivateStore();
   }
   interact() {
+    if (this.god) { this.dropFromGod(); return { ok: true, msg: 'Dropping in' }; }
     if (this.driving) { this.driving = false; const c = this.car; this.walker.x = c.x - Math.cos(c.yaw) * 2.4; this.walker.z = c.z + Math.sin(c.yaw) * 2.4; this.walker.y = this.groundAt(this.walker.x, this.walker.z); this.walker.yaw = c.yaw; return { ok: true, msg: 'Out of the car' }; }
     if (this.region && Math.hypot(this.walker.x - this.car.x, this.walker.z - this.car.z) < 5) { this.driving = true; this.a.cam.dist = Math.max(this.a.cam.dist, 8); return { ok: true, msg: 'In the car · W throttle, S brake, A D steer, Space handbrake, F to get out' }; }
     if (this.storeActive) return this.a.core.exec({ cmd: 'interact.use' });
@@ -364,18 +377,152 @@ export class GeoWorld {
 
   // ---------- HUD ----------
   buildHud() {
-    if (this.hud) return; const h = document.createElement('div'); h.id = 'geohud'; h.className = 'glass';
-    h.innerHTML = '<div class="gl" id="gloc"></div><div class="gs" id="gstat"></div><div class="gb"><button id="gmap" title="Map (M)">Map</button><button id="gcar" title="Go to your car, or put it back on the road (R)">Car</button><button id="gexit" title="Back to the island">Island</button></div><div class="ga">© OpenStreetMap contributors · terrain: AWS Terrain Tiles</div>';
+    if (this.hud) return; const h = document.createElement('div'); h.id = 'geohud'; h.className = 'glass'; h.dataset.mode = 'play';
+    const places = (this.provider.national && this.provider.national.places || []).filter(p => p.k === 'city').slice(0, 24).map(p => `<option value="${p.lat},${p.lon}">${p.n}</option>`).join('');
+    h.innerHTML = `<div class="gtop"><div class="gwho"><div class="gl" id="gloc"></div><div class="gs" id="gstat"></div></div><div class="gseg" role="tablist" aria-label="Mode"><button data-m="play" role="tab">Play</button><button data-m="edit" role="tab" title="Edit tools (E)">Edit</button></div></div>
+<div class="gb"><button id="gmap" title="Map (M)">Map</button><button id="gcar" title="Go to your car, or put it back on the road (R)">Car</button><button id="gexit" title="Back to the island">Island</button></div>
+<div class="ged" id="gedit">
+ <div class="gr"><button id="ggod" class="pri" title="Fly over the whole country (G)">God view</button><button id="gdrop" class="gdo" title="Stand here (Enter)">Drop here</button></div>
+ <label class="gr"><span>Time</span><input type="range" id="gtime" min="0" max="24" step="0.05" aria-label="Time of day"><button id="gday" title="Let the day run">Cycle</button></label>
+ <label class="gr"><span>Go to</span><select id="gplace" aria-label="Go to a city"><option value="">City…</option>${places}</select></label>
+ <div class="gr gx"><select id="gprop" aria-label="Prop">${Object.keys(ASSETS).map(k => `<option>${k}</option>`).join('')}</select><button id="gput">Place ahead</button></div>
+ <div class="gr gx"><button id="groad" title="Close or reopen the nearest road">Close road</button><button id="gslow" title="Lower the nearest road's speed limit">Slow road</button><button id="gcrowd">Add crowd</button></div>
+ <div class="gr gx"><button id="gspawn">Car here</button><button id="gboost" aria-pressed="false">Boost ×1</button><button id="gundo">Undo</button></div>
+</div>
+<div class="gh2" id="ghint"></div><div class="ga">© OpenStreetMap contributors · terrain: AWS Terrain Tiles</div>`;
     document.getElementById('ui').appendChild(h); this.hud = h;
-    h.querySelector('#gmap').onclick = () => this.a.map && this.a.map.toggle(); h.querySelector('#gexit').onclick = () => this.close();
-    h.querySelector('#gcar').onclick = () => { if (this.driving) this.recoverCar(); else if (this.region) { this.driving = false; this.walker.x = this.car.x + 3; this.walker.z = this.car.z + 3; this.walker.y = this.groundAt(this.walker.x, this.walker.z); } };
+    const $ = q => h.querySelector(q), core = this.a.core, ex = c => { const r = core.exec(c); this.say(r.msg || (r.ok ? 'Done' : 'Could not do that'), 3000); return r; };
+    $('#gmap').onclick = () => this.a.map && this.a.map.toggle(); $('#gexit').onclick = () => this.close();
+    $('#gcar').onclick = () => { if (this.driving) this.recoverCar(); else if (this.region || this.car.root.visible) { this.walker.x = this.car.x + 3; this.walker.z = this.car.z + 3; this.walker.y = this.groundAt(this.walker.x, this.walker.z); } };
+    h.querySelectorAll('.gseg button').forEach(b => b.onclick = () => { if (b.dataset.m !== this.mode) this.swapMode(); });
+    $('#ggod').onclick = () => this.god ? this.exitGod() : this.enterGod(); $('#gdrop').onclick = () => this.dropFromGod();
+    $('#gtime').oninput = e => { this.a.env.set({ time: +e.target.value }); for (const t of this.tiles.values()) if (t.mBld) t.mBld.userData.u.uNight.value = 1 - this.a.env.day; };
+    $('#gday').onclick = e => { this.dayRate = this.dayRate ? 0 : 1 / 90; e.target.setAttribute('aria-pressed', !!this.dayRate); this.say(this.dayRate ? 'Day cycle on' : 'Time held', 2000); };
+    $('#gplace').onchange = e => { const v = e.target.value; if (!v) return; const [lat, lon] = v.split(',').map(Number); this.exitGod(); ex({ cmd: 'world.goto', lat, lon }); e.target.value = ''; };
+    $('#gput').onclick = () => { const w = this.walker, f = this.driving ? this.car : w, x = f.x + Math.sin(f.yaw) * 4, z = f.z + Math.cos(f.yaw) * 4; ex({ cmd: 'world.assets.place', type: $('#gprop').value, x, z, yaw: f.yaw }); };
+    $('#groad').onclick = () => { const r = this.graph.nearest(this.walker.x, this.walker.z, 40); if (!r) return this.say('No mapped street within 40 m. Road tools work in the detailed regions.', 3500); const id = r.edge.way; ex({ cmd: 'world.road.edit', id, patch: { closed: !this.graph.closed.has(id) } }); };
+    $('#gslow').onclick = () => { const r = this.graph.nearest(this.walker.x, this.walker.z, 40); if (!r) return this.say('No mapped street within 40 m. Road tools work in the detailed regions.', 3500); ex({ cmd: 'world.road.edit', id: r.edge.way, patch: { speed: 8 } }); };
+    $('#gcrowd').onclick = () => ex({ cmd: 'world.building.populate', x: this.walker.x + Math.sin(this.walker.yaw) * 6, z: this.walker.z + Math.cos(this.walker.yaw) * 6, count: 8 });
+    $('#gspawn').onclick = () => { const f = this.walker; this.driving = false; this.car.x = f.x + Math.cos(f.yaw) * 3.2; this.car.z = f.z - Math.sin(f.yaw) * 3.2; this.car.yaw = f.yaw; this.car.speed = 0; this.car.y = this.groundAt(this.car.x, this.car.z); this.car.root.visible = true; this.say('Car placed beside you · F to get in', 3000); };
+    $('#gboost').onclick = e => { this.boost = this.boost === 1 ? 3 : this.boost === 3 ? 8 : 1; e.target.textContent = 'Boost ×' + this.boost; e.target.setAttribute('aria-pressed', this.boost > 1); };
+    $('#gundo').onclick = () => { this.a.undo(); };
+    // the confirm prompt and the keys that belong to the world
+    const pr = document.createElement('div'); pr.id = 'gprompt'; pr.className = 'glass'; pr.hidden = true; pr.setAttribute('role', 'alertdialog');
+    pr.innerHTML = '<b id="gpt"></b><span id="gpb"></span><div class="gr"><button id="gpy" class="pri"></button><button id="gpn">Stay</button></div>'; document.getElementById('ui').appendChild(pr); this.promptEl = pr;
+    pr.querySelector('#gpy').onclick = () => this.answerPrompt(true); pr.querySelector('#gpn').onclick = () => this.answerPrompt(false);
+    addEventListener('keydown', e => {
+      if (!this.active || /^(INPUT|TEXTAREA|SELECT)$/.test((e.target || {}).tagName || '')) return; const k = e.key.toLowerCase();
+      if (this.prompting && e === this.askEv) return;       // the very key press that opened the prompt must not also answer it
+      if (this.prompting) { if (k === 'e' || k === 'enter') { e.preventDefault(); e.stopImmediatePropagation(); this.answerPrompt(true); } else if (k === 'escape' || k === 'n') { e.preventDefault(); e.stopImmediatePropagation(); this.answerPrompt(false); } return; }
+      if (e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (k === 'g' && this.mode === 'edit') { e.preventDefault(); this.god ? this.exitGod() : this.enterGod(); }
+      else if (k === 'enter' && this.god) { e.preventDefault(); this.dropFromGod(); }
+    }, true);
+    this.paintHud();
   }
   say(t, ms = 5000) { this.msg = t; this.a.ui && this.a.ui.say(t, ms); }
+
+  // ---------- Play is the game. Edit adds the tools. E swaps, with a confirm on the way in. ----------
+  setMode(m, quiet) {
+    this.mode = m; if (m === 'play') { this.exitGod(); this.boost = 1; }
+    this.paintHud(); if (!quiet) this.say(m === 'edit' ? 'Edit mode · G for god view · E to go back to Play' : 'Play mode', 3500);
+  }
+  swapMode() {
+    if (!this.active) return { ok: false, msg: 'The world is not open' };
+    if (this.prompting) return this.answerPrompt(true);
+    if (this.mode === 'edit') { this.setMode('play'); return { ok: true, msg: 'Play mode' }; }
+    this.ask('Switch to Edit?', 'Adds god view of the whole country, time of day, props, road tools and crowds.', 'Edit', () => this.setMode('edit'));
+    return { ok: true, msg: 'Press E or Enter to confirm, Esc to stay' };
+  }
+  ask(title, body, yes, run) {
+    const p = this.promptEl; p.querySelector('#gpt').textContent = title; p.querySelector('#gpb').textContent = body; p.querySelector('#gpy').textContent = yes; p.hidden = false; this.prompting = run; this.askEv = window.event || null; p.querySelector('#gpy').focus({ preventScroll: true });
+  }
+  answerPrompt(yes) { const run = this.prompting; this.closePrompt(); if (yes && run) run(); return { ok: true, msg: yes ? 'Confirmed' : 'Cancelled' }; }
+  closePrompt() { this.prompting = null; if (this.promptEl) this.promptEl.hidden = true; const c = document.getElementById('c') || document.querySelector('canvas'); if (c && c.focus) try { c.focus({ preventScroll: true }); } catch (_) {} }
+  paintHud() {
+    const h = this.hud; if (!h) return; h.dataset.mode = this.mode; if (this.god) h.dataset.god = '1'; else delete h.dataset.god;
+    h.querySelectorAll('.gseg button').forEach(b => { const on = b.dataset.m === this.mode; b.classList.toggle('on', on); b.setAttribute('aria-selected', on); });
+    const g = h.querySelector('#ggod'); if (g) g.textContent = this.god ? 'Leave god view' : 'God view';
+    const t = h.querySelector('#gtime'); if (t) t.value = this.a.env.p.time;
+  }
+
+  // ---------- God view: fly over the whole country. Streaming pauses when you are too high to see ground detail. ----------
+  enterGod() {
+    if (this.god || !this.active || !this.ready) return; const f = this.driving ? this.car : this.walker, c = this.a.cam;
+    this.god = { x: f.x, z: f.z, yaw: 0, speed: 0, dist: 1200, high: false }; this.godSaved = { dist: c.dist, pitch: c.pitch }; c.dist = 1200; c.pitch = 0.95; c.yaw = 0;
+    this.buildCountry(); this.paintHud(); this.say('God view · WASD fly, Shift faster, Space up, C down, wheel zoom, Enter drops you in', 6000);
+  }
+  exitGod(quiet) {
+    if (!this.god) return; const c = this.a.cam; if (this.godSaved) { c.dist = Math.min(this.godSaved.dist, 14); c.pitch = this.godSaved.pitch; } this.god = null; this.detail(true); if (this.country) this.country.visible = false;
+    const cam = this.a.camera; cam.far = 140000; cam.near = 0.4; cam.updateProjectionMatrix(); this.paintHud(); if (!quiet) this.say('Back on the ground', 2500);
+  }
+  flyGod(dt, inp, mvx, mvz) {
+    const g = this.god, c = this.a.cam, k = this.a.input.keys, spd = Math.max(60, c.dist * 0.9) * (inp.run ? 4 : 1);
+    g.x += mvx * spd * dt; g.z += mvz * spd * dt;
+    if (k.has(' ')) c.dist *= 1 + 1.6 * dt * (inp.run ? 3 : 1); if (k.has('c')) c.dist /= 1 + 1.6 * dt * (inp.run ? 3 : 1);
+    c.dist = clamp(c.dist, 40, 4.2e6); g.dist = c.dist; const wasHigh = g.high; g.high = c.dist > 45000;
+    if (g.high !== wasHigh) { this.detail(!g.high); if (this.country) this.country.visible = g.high; }
+    this.placeMarker();
+  }
+  godCam() { const cam = this.a.camera, d = this.a.cam.dist, far = Math.max(140000, d * 70), near = clamp(d / 1500, 0.4, 3000); if (Math.abs(cam.far - far) > far * 0.05 || Math.abs(cam.near - near) > near * 0.05) { cam.far = far; cam.near = near; cam.updateProjectionMatrix(); } }
+  detail(on) { for (const t of this.tiles.values()) if (t.group) t.group.visible = on; this.wilds.group.visible = on; if (this.far) this.far.visible = on; this.sim.group.visible = on; this.sea.visible = on; this.car.root.visible = on && (this.region || this.car.root.visible || true); }
+  dropFromGod() {
+    const g = this.god; if (!g) return; const ll = this.frame.toLatLon(g.x, g.z);
+    if (ll.lat < -35.2 || ll.lat > -21.9 || ll.lon < 16.3 || ll.lon > 33.1) return this.say('That is outside South Africa. Move over land first.', 3000);
+    this.exitGod(true); this.driving = false; this.ready = false; this.setFrame(ll.lat, ll.lon).then(() => { this.ready = true; this.a.ui.brand(); this.say('Dropped in · ' + this.placeName(ll.lat, ll.lon), 3500); });
+  }
+  /* the country as one relief mesh in the current frame, textured with the map's hillshade; only drawn when you are very high */
+  async buildCountry() {
+    const m = this.a.map; if (!m) return; await m.load(); if (!this.active || (this.country && this.countryFrame === this.frame)) return this.placeCountry();
+    this.disposeCountry(); const b = m.b, N = 128, pos = [], uv = [], idx = [], f = this.frame;
+    for (let j = 0; j <= N; j++) for (let i = 0; i <= N; i++) { const lon = b.w + (b.e - b.w) * i / N, lat = b.n - (b.n - b.s) * j / N, p = f.toLocal(lat, lon), h = this.provider.demAt(lat, lon); pos.push(p.x, h > 1 ? h * 6 : -60, p.z); uv.push(i / N, 1 - j / N); }
+    for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) { const a = j * (N + 1) + i; idx.push(a, a + N + 1, a + 1, a + 1, a + N + 1, a + N + 2); }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx);
+    const tex = new THREE.CanvasTexture(m.relief); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
+    const mesh = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide, fog: false })); mesh.frustumCulled = false;
+    const grp = new THREE.Group(); grp.add(mesh); grp.name = 'country';
+    const lab = (txt, size) => { const c = document.createElement('canvas'); c.width = 256; c.height = 64; const x = c.getContext('2d'); x.font = `600 ${size}px ui-sans-serif,system-ui`; x.textAlign = 'center'; x.textBaseline = 'middle'; x.lineWidth = 5; x.strokeStyle = 'rgba(0,0,0,.75)'; x.strokeText(txt, 128, 32); x.fillStyle = '#ede8df'; x.fillText(txt, 128, 32); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, depthTest: false, transparent: true, sizeAttenuation: false, fog: false })); sp.scale.set(0.2, 0.05, 1); sp.renderOrder = 10; return sp; };
+    for (const p of (this.provider.national.places || []).filter(q => q.k === 'city').slice(0, 30)) { const q = f.toLocal(p.lat, p.lon), s = lab(p.n, 26); s.position.set(q.x, this.provider.demAt(p.lat, p.lon) * 6 + 4000, q.z); grp.add(s); }
+    const mk = document.createElement('canvas'); mk.width = mk.height = 64; const mx = mk.getContext('2d'); mx.strokeStyle = '#ffd9a0'; mx.lineWidth = 6; mx.beginPath(); mx.arc(32, 32, 20, 0, 7); mx.stroke(); mx.fillStyle = '#ffd9a0'; mx.beginPath(); mx.arc(32, 32, 6, 0, 7); mx.fill();
+    this.marker = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(mk), depthTest: false, transparent: true, sizeAttenuation: false, fog: false })); this.marker.scale.set(0.05, 0.05, 1); this.marker.renderOrder = 11; grp.add(this.marker);
+    this.country = grp; this.countryMesh = mesh; this.countryFrame = f; this.group.add(grp); this.country.visible = !!(this.god && this.god.high); this.placeCountry();
+  }
+  placeCountry() { if (this.country) { this.country.position.set(-this.origin.x, 0, -this.origin.z); this.placeMarker(); } }
+  placeMarker() { if (this.marker) { const w = this.walker, h = this.heightAt(w.x, w.z); this.marker.position.set(w.x, h * 6 + 6000, w.z); } }
+  disposeCountry() { if (!this.country) return; this.group.remove(this.country); this.country.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) { if (o.material.map) o.material.map.dispose(); o.material.dispose(); } }); this.country = null; this.marker = null; this.countryFrame = null; }
+
+  // ---------- keeping the frame honest across a whole country ----------
+  regionAtLL(lat, lon, pad = 0) { const man = this.manifest; return Object.keys(man.regions).find(k => { const [s, w, n, e] = man.regions[k].bbox; return lat >= s - pad && lat <= n + pad && lon >= w - pad && lon <= e + pad; }) || null; }
+  placeName(lat, lon) {
+    let best = null, bd = 0.2; for (const p of (this.provider.national && this.provider.national.places) || []) { const d = Math.hypot((p.lat - lat), (p.lon - lon) * 0.85); if (d < bd) { bd = d; best = p; } }
+    return best ? (bd < 0.03 ? best.n : 'near ' + best.n) : 'South Africa';
+  }
+  frameCheck() {
+    if (!this.ready || this.switching || this.storeActive || this.loading || (this.god && this.god.high)) return;
+    const f = this.focus(), ll = this.frame.toLatLon(f.x, f.z), cm = this.frame.zone * 6 - 183;
+    const want = this.regionAtLL(ll.lat, ll.lon, 0.02);
+    let go = false;
+    if (want && want !== this.regionKey) go = true;
+    else if (!want && this.region && !this.regionAtLL(ll.lat, ll.lon, 0.4)) go = true;                  // far from the detailed region: leave its frame
+    else if (!this.region && Math.abs(ll.lon - cm) > 3.3) go = true;                                    // keep UTM distortion small across a country
+    const fo = this.far && this.far.userData.anchor; if (!go && fo && Math.hypot(f.x - fo.x, f.z - fo.z) > 40000) this.buildFar();
+    if (!go) return;
+    this.switching = true; this.ready = false; const car = { ll: this.frame.toLatLon(this.car.x, this.car.z), yaw: this.car.yaw, driving: this.driving, speed: this.car.speed }, here = this.focus() === this.walker || !this.god;
+    this.setFrame(ll.lat, ll.lon).then(() => {
+      if (car.driving) { const q = this.frame.toLocal(car.ll.lat, car.ll.lon); this.car.x = q.x; this.car.z = q.z; this.car.yaw = car.yaw; this.car.speed = car.speed; this.car.y = this.groundAt(q.x, q.z); this.walker.x = q.x; this.walker.z = q.z; this.walker.y = this.car.y; }
+      this.ready = true; this.switching = false; this.a.ui.brand(); void here; this.say(this.region ? this.region.name + ' · detailed streets, buildings and traffic' : this.placeName(ll.lat, ll.lon) + ' · generated ground and national roads', 4000);
+    });
+  }
   updateHud() {
-    if (!this.hud) return; const ll = this.latLon(), w = this.walker, r = this.region ? this.graph.nearest(w.x, w.z, 25) : null;
-    const kmh = Math.round(Math.abs(this.driving ? this.car.speed : w.speed) * 3.6), S = this.sim.stats;
-    this.hud.querySelector('#gloc').textContent = (this.region ? this.region.name : 'South Africa') + (r && r.edge.r.name ? ' · ' + r.edge.r.name : '');
-    this.hud.querySelector('#gstat').textContent = `${ll.lat.toFixed(4)}, ${ll.lon.toFixed(4)} · ${Math.round(w.y)} m · ${kmh} km/h${this.driving ? ' · driving' : ''} · ${this.tiles.size} tiles · ${S.near + S.medium} actors`;
+    if (!this.hud) return; const ll = this.latLon(), w = this.walker, f = this.focus(), r = this.region ? this.graph.nearest(w.x, w.z, 25) : this.wilds.roadAt(w.x, w.z, 25);
+    const kmh = Math.round(Math.abs(this.driving ? this.car.speed : w.speed) * 3.6), S = this.sim.stats, inReg = this.region && this.regionAtLL(ll.lat, ll.lon, 0);
+    const where = this.god ? this.frame.toLatLon(f.x, f.z) : ll;
+    this.hud.querySelector('#gloc').textContent = (inReg ? this.region.name : this.placeName(where.lat, where.lon)) + (!this.god && r && r.edge.r.name ? ' · ' + r.edge.r.name : '');
+    this.hud.querySelector('#gstat').textContent = this.god ? `${where.lat.toFixed(3)}, ${where.lon.toFixed(3)} · view from ${this.god.dist >= 10000 ? Math.round(this.god.dist / 1000) + ' km' : Math.round(this.god.dist) + ' m'} · ${this.god.high ? 'whole country' : 'streaming ground'}`
+      : `${ll.lat.toFixed(4)}, ${ll.lon.toFixed(4)} · ${Math.round(w.y)} m · ${kmh} km/h${this.driving ? ' · driving' : ''} · ${inReg ? this.tiles.size + ' tiles · ' + (S.near + S.medium) + ' actors' : 'generated ground'}`;
+    this.hud.querySelector('#ghint').textContent = this.god ? 'WASD fly · Shift faster · Space up · C down · wheel zoom · Enter drops you in · G leaves'
+      : this.mode === 'edit' ? 'Edit · G god view · F car · M map · E back to Play' : (this.driving ? 'W throttle · S brake · A D steer · Space handbrake · F get out · E edit' : 'WASD move · Shift run · F car or door · M map · E edit');
+    const t = this.hud.querySelector('#gtime'); if (t && document.activeElement !== t) t.value = this.a.env.p.time;
   }
 
   // ---------- commands ----------
@@ -392,13 +539,22 @@ export class GeoWorld {
     };
     switch (c.cmd) {
       case 'world.close': return this.close();
+      case 'world.mode': { if (c.mode !== 'play' && c.mode !== 'edit') return bad('world.mode', 'mode must be "play" or "edit".', 'mode'); this.setMode(c.mode); return { ok: true, mode: this.mode, msg: this.mode + ' mode' }; }
+      case 'world.view.god': {
+        if (c.on === false) { this.exitGod(); return { ok: true, msg: 'Back on the ground' }; }
+        if (this.mode !== 'edit') return bad('world.mode', 'God view is an Edit tool. Run {"cmd":"world.mode","mode":"edit"} first.', 'mode');
+        if (!this.god) this.enterGod(); if (!this.god) return bad('world.busy', 'The world is not ready yet.');
+        if (Number.isFinite(+c.lat) && Number.isFinite(+c.lon)) { const p = this.frame.toLocal(+c.lat, +c.lon); this.god.x = p.x; this.god.z = p.z; }
+        if (Number.isFinite(+c.height)) { this.a.cam.dist = clamp(+c.height, 40, 4.2e6); this.god.dist = this.a.cam.dist; this.god.high = this.a.cam.dist > 45000; this.detail(!this.god.high); if (this.country) this.country.visible = this.god.high; }
+        return { ok: true, msg: 'God view', height: Math.round(this.a.cam.dist), whole: this.god.high };
+      }
       case 'world.save': return { ok: this.save(), msg: 'Saved' };
       case 'world.goto': {
         let lat = +c.lat, lon = +c.lon;
         if (c.place) { const p = (this.provider.national && this.provider.national.places || []).find(q => q.n.toLowerCase() === String(c.place).toLowerCase()); if (!p) return bad('world.place', `No place called "${c.place}". Try a city name such as Cape Town or Johannesburg.`, 'place'); lat = p.lat; lon = p.lon; }
         else if (Number.isFinite(+c.x) && Number.isFinite(+c.z)) { const ll = this.latLon(+c.x, +c.z); lat = ll.lat; lon = ll.lon; }
         if (!Number.isFinite(lat) || !Number.isFinite(lon) || lat < -35.2 || lat > -21.9 || lon < 16.3 || lon > 33.1) return bad('world.range', 'Give lat in -35.2..-21.9 and lon in 16.3..33.1 (South Africa), or a place name.', 'lat');
-        this.ready = false; this.setFrame(lat, lon).then(() => { this.ready = true; this.a.ui.brand(); this.say(this.region ? this.region.name : 'No detailed region here yet: coarse national relief (2.7 km grid)'); });
+        this.exitGod(true); this.driving = false; this.ready = false; this.setFrame(lat, lon).then(() => { this.ready = true; this.a.ui.brand(); this.say(this.region ? this.region.name : this.placeName(lat, lon) + ' · generated ground and national roads'); });
         return { ok: true, msg: 'Going to ' + lat.toFixed(4) + ', ' + lon.toFixed(4), detailed: !!Object.keys(this.manifest.regions).find(k => { const [s, w, n, e] = this.manifest.regions[k].bbox; return lat >= s && lat <= n && lon >= w && lon <= e; }), pending: true };
       }
       case 'world.region.describe': return { ok: true, ready: this.ready, loading: this.loading, region: this.regionKey, name: this.region ? this.region.name : null, detailed: !!this.region, bbox: this.region && this.region.bbox, zone: this.frame.zone, origin: { ...this.origin }, tileSize: this.T,

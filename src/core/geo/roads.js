@@ -92,12 +92,21 @@ export function roadGeometries(tile, height, closed) {
     const cls = CLASSES[r.c]; if (!cls || r.tunnel === 'yes' || r.tunnel === 'building_passage') continue;
     const a = (MAJOR.has(r.c) ? out.major : out.minor), info = laneInfo(r), width = (info.lanes >= 4 && cls.w < 11 ? cls.w + 2 : cls.w);
     const pts = []; for (let i = 0; i < r.p.length; i += 2) pts.push([r.p[i] / 10, r.p[i + 1] / 10]);
-    const sub = resample(pts, 16); if (sub.length < 2) continue;
+    const sub = resample(pts, 8); if (sub.length < 2) continue;
     const bridge = r.bridge && r.bridge !== 'no';
     const h0 = height(sub[0][0], sub[0][1]), h1 = height(sub.at(-1)[0], sub.at(-1)[1]);
-    const ys = sub.map((p, i) => bridge ? h0 + (h1 - h0) * (i / (sub.length - 1)) + 0.4 : height(p[0], p[1]) + 0.07);
+    // a road is a built surface: it sits on the highest ground across its width (plus its pavements) so the land never rises through it, and a short bank hides any gap on the downhill side
+    const reach = width / 2 + (cls.car && cls.w >= 4 ? 2.6 : 0.4);
+    const ys = sub.map((p, i) => {
+      if (bridge) { let g = height(p[0], p[1]); return Math.max(h0 + (h1 - h0) * (i / (sub.length - 1)) + 0.4, g + 0.3); }   // a bridge spans low ground but never dives into a rise
+      const q0 = sub[Math.max(0, i - 1)], q1 = sub[Math.min(sub.length - 1, i + 1)]; let dx = q1[0] - q0[0], dz = q1[1] - q0[1]; const L = Math.hypot(dx, dz) || 1; dx /= L; dz /= L;
+      let y = height(p[0], p[1]); for (const s of [-1, 1]) y = Math.max(y, height(p[0] - dz * reach * s, p[1] + dx * reach * s));
+      return y + 0.2;
+    });
+    for (let i = 1; i < ys.length; i++) ys[i] = Math.max(ys[i], ys[i - 1] - 0.5);        // smooth: a road never drops like a cliff between samples
     const col = new THREE.Color(closed.has(r.id) ? 0x7a2e2a : cls.col);
     ribbon(a, sub, ys, width, 0, col, 0);
+    if (cls.car && cls.w >= 4 && !bridge) bank(a, sub, ys, width / 2 + (info.sidewalk !== 'none' ? 2.5 : 0), new THREE.Color(0x6c685f));
     if (cls.car && cls.w >= 4) {
       if (info.sidewalk !== 'none' && !bridge) { const sc = new THREE.Color(0x8e8a80); ribbon(a, sub, ys, 1.6, width / 2 + 0.9, sc, 0.07); ribbon(a, sub, ys, 1.6, -width / 2 - 0.9, sc, 0.07); }
       if (cls.w >= 6 && !info.oneway) dashed(a, sub, ys, 0.16, new THREE.Color(0xd9d3c0), 0.03);
@@ -105,13 +114,13 @@ export function roadGeometries(tile, height, closed) {
   }
   return out;
 }
-const acc = () => ({ p: [], c: [], i: [] });
-function resample(pts, maxLen) {
+export const acc = () => ({ p: [], c: [], i: [] });
+export function resample(pts, maxLen) {
   const out = [pts[0]];
   for (let i = 1; i < pts.length; i++) { const [ax, az] = pts[i - 1], [bx, bz] = pts[i], n = Math.max(1, Math.ceil(Math.hypot(bx - ax, bz - az) / maxLen)); for (let k = 1; k <= n; k++) out.push([ax + (bx - ax) * k / n, az + (bz - az) * k / n]); }
   return out;
 }
-function ribbon(a, pts, ys, w, offset, col, lift) {
+export function ribbon(a, pts, ys, w, offset, col, lift) {
   const base = a.p.length / 3;
   for (let i = 0; i < pts.length; i++) {
     const p0 = pts[Math.max(0, i - 1)], p1 = pts[Math.min(pts.length - 1, i + 1)]; let dx = p1[0] - p0[0], dz = p1[1] - p0[1]; const L = Math.hypot(dx, dz) || 1; dx /= L; dz /= L;
@@ -119,6 +128,18 @@ function ribbon(a, pts, ys, w, offset, col, lift) {
     for (const s of [-1, 1]) { a.p.push(pts[i][0] + nx * (offset + s * w / 2), y, pts[i][1] + nz * (offset + s * w / 2)); a.c.push(col.r, col.g, col.b); }
   }
   for (let i = 0; i < pts.length - 1; i++) { const q = base + i * 2; a.i.push(q, q + 1, q + 2, q + 1, q + 3, q + 2); }
+}
+/* vertical-ish banks on both sides, going down 1.2 m, so a road on a slope never floats */
+export function bank(a, pts, ys, half, col) {
+  for (const side of [-1, 1]) {
+    const base = a.p.length / 3;
+    for (let i = 0; i < pts.length; i++) {
+      const p0 = pts[Math.max(0, i - 1)], p1 = pts[Math.min(pts.length - 1, i + 1)]; let dx = p1[0] - p0[0], dz = p1[1] - p0[1]; const L = Math.hypot(dx, dz) || 1; dx /= L; dz /= L;
+      const x = pts[i][0] - dz * half * side, z = pts[i][1] + dx * half * side;
+      a.p.push(x, ys[i] + 0.02, z, x - dz * 0.5 * side, ys[i] - 1.2, z + dx * 0.5 * side); a.c.push(col.r, col.g, col.b, col.r * 0.8, col.g * 0.8, col.b * 0.8);
+    }
+    for (let i = 0; i < pts.length - 1; i++) { const q = base + i * 2; if (side > 0) a.i.push(q, q + 1, q + 2, q + 1, q + 3, q + 2); else a.i.push(q, q + 2, q + 1, q + 1, q + 2, q + 3); }
+  }
 }
 function dashed(a, pts, ys, w, col, lift) {
   let acc2 = 0;
