@@ -429,3 +429,10 @@ a.brand:focus-visible { outline:2px solid var(--accent); outline-offset:4px; }
 .artboardbtn:hover,.abstep:hover{background:#ffffff12}.abstep{min-width:36px;min-height:36px;border-radius:50%;background:transparent;border:0;color:inherit;font-size:18px;line-height:1}
 .artboardbtn:focus-visible,.abstep:focus-visible{outline:2px solid #e9e5db;outline-offset:2px}
 @media(max-width:680px){.artboardbtn{min-height:30px;padding:4px 6px}.abstep{min-width:30px;min-height:30px}}
+
+.fontpicker{display:grid;gap:6px;margin:6px 0}.fontpicker select{min-height:44px}
+.alignrow{display:flex;gap:4px;margin:8px 0;flex-wrap:wrap}.alignbtn{min-width:44px;min-height:44px;padding:0;display:inline-grid;place-items:center;border-radius:12px}
+
+.procbox.embedded{position:relative;inset:auto;z-index:auto;height:100%;min-height:200px;border-radius:0}
+#graph.procmode{display:flex;flex-direction:column;padding:0}#graph.procmode>:not(.procbox){display:none!important}
+.pwire.hot{stroke:#fff;stroke-width:3.5}

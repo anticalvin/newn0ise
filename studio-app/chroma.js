@@ -17,14 +17,15 @@ const StudioChroma = (() => {
 
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
   const NS = 'http://www.w3.org/2000/svg';
-  let uid = 0;
+  let uid = 0, memory = null;      /* the last wheel position, so a colour you just picked reopens exactly where you left it (greys and blacks lose their hue otherwise) */
 
   function mount(o) {
     const id = 'ch' + (++uid);
     const root = el('div', 'chroma');
     const modes = el('div', 'chroma-modes'); modes.setAttribute('role', 'tablist');
     const views = {};
-    let mode = 'wheel', [h, s, v] = rgbToHsv(...(fromHex(o.value) || [0, 0, 0])), dragging = null, kbTimer = 0, began = false;
+    let mode = 'wheel', [h, s, v] = rgbToHsv(...(fromHex(o.value) || [0, 0, 0])), dragging = null, kbTimer = 0, began = false, raf = 0, pending = null;
+    if (memory && memory.hex === norm(o.value)) [h, s, v] = memory.hsv;
     let exact = fromHex(o.value) ? toHex(fromHex(o.value)) : null;
     const cur = () => exact || toHex(hsvToRgb(h, s, v));
 
@@ -56,6 +57,11 @@ const StudioChroma = (() => {
     const svBase = svg.querySelector('.sv-base'), svPoint = svg.querySelector('.sv-point'), huePoint = svg.querySelector('.hue-point');
     const local = e => { const r = svg.getBoundingClientRect(); return { x: (e.clientX - r.left) * 240 / r.width, y: (e.clientY - r.top) * 240 / r.height }; };
     const fromPointer = (e, zone) => {
+      /* pointer moves are coalesced to one update per frame, which keeps dragging smooth on phones */
+      pending = [e.clientX, e.clientY, zone]; if (raf) return;
+      raf = requestAnimationFrame(() => { raf = 0; if (pending) { const [x, y, z] = pending; pending = null; applyPointer({ clientX: x, clientY: y }, z); } });
+    };
+    const applyPointer = (e, zone) => {
       const p = local(e);
       if (zone === 'hue') h = (Math.atan2(p.y - 120, p.x - 120) * 180 / Math.PI + 90 + 360) % 360;
       else { s = clamp((p.x - 64) / 112, 0, 1); v = 1 - clamp((p.y - 64) / 112, 0, 1); }
@@ -68,7 +74,7 @@ const StudioChroma = (() => {
       fromPointer(e, dragging);
     });
     svg.addEventListener('pointermove', e => { if (dragging) fromPointer(e, dragging); });
-    const end = () => { if (dragging) { dragging = null; commit(); } };
+    const end = () => { if (dragging) { if (pending) { const [x, y, z] = pending; pending = null; cancelAnimationFrame(raf); raf = 0; applyPointer({ clientX: x, clientY: y }, z); } dragging = null; commit(); } };
     svg.addEventListener('pointerup', end); svg.addEventListener('pointercancel', end); svg.addEventListener('lostpointercapture', end);
     svg.addEventListener('keydown', e => {
       const k = e.key, step = e.altKey ? 0.1 : 1;
@@ -126,6 +132,7 @@ const StudioChroma = (() => {
       rgbN.inputs.forEach((n, i) => { if (document.activeElement !== n) n.value = rgb[i]; });
       [Math.round(h), Math.round(s * 100), Math.round(v * 100)].forEach((val, i) => { if (document.activeElement !== hsvN.inputs[i]) hsvN.inputs[i].value = val; });
       if (mode === 'swatches' && !dragging) drawSwatches();
+      memory = { hex: c, hsv: [h, s, v] };
       o.onPaint?.(c);
     }
     showMode(); paint();

@@ -4,6 +4,7 @@ function createStudioRender(vector) {
   const {Rect,Ellipse,Triangle,FabricImage,FabricText,Path,Point} = StudioFabric;
   const {dimensions,pipeline} = StudioDocument;
   const assets = new Map();
+  let fontEpoch = 0; const bumpFonts = () => { fontEpoch++; };
   const projections = new WeakMap();
   const radians = degrees => degrees*Math.PI/180;
   const transform = (x,y,a) => ({x:x*Math.cos(a)-y*Math.sin(a),y:x*Math.sin(a)+y*Math.cos(a)});
@@ -81,7 +82,7 @@ function createStudioRender(vector) {
   }
 
   function project(l) {
-    const key = [l.type,l.videoId,l.fill,l.stroke,l.strokeWidth,l.shape,l.width,l.height,l.text,l.font,l.fontSize,l.src,l.crop,l.points,l.points?.length,l.closed,l.breaks];
+    const key = [l.type,l.videoId,l.fill,l.stroke,l.strokeWidth,l.shape,l.width,l.height,l.text,l.font,l.fontSize,l.fontWeight,fontEpoch,l.src,l.crop,l.points,l.points?.length,l.closed,l.breaks];
     const cached = projections.get(l);
     if (cached && (cached.key === key || (Array.isArray(key) && key.every((v,i) => v === cached.key[i])))) return cached.value;
     const style = {originX:'center',originY:'center',objectCaching:false,fill:l.fill,
@@ -93,7 +94,7 @@ function createStudioRender(vector) {
       else if (l.shape === 'triangle') object = new Triangle({...style,width,height});
       else object = new Rect({...style,width,height});
     } else if (l.type === 'text') {
-      object = new FabricText(l.text || ' ',{...style,fontFamily:l.font,fontSize:l.fontSize});
+      object = new FabricText(l.text || ' ',{...style,fontFamily:typeof StudioFonts !== 'undefined' ? StudioFonts.css(l.font) : l.font,fontSize:l.fontSize,fontWeight:l.fontWeight || 400});
     } else if (l.type === 'image') {
       const {img} = image(l.src);
       if (!img.naturalWidth) return null;
@@ -423,5 +424,5 @@ function createStudioRender(vector) {
   }
 
   const textObject = l => project(l)?.object || null;
-  return {media,activeAt,draw,toSVG,prepare,image,inside,bounds,corners,local,dimensions,center,transform,radians,pathData,vectorImage,procStatus,textObject};
+  return {media,activeAt,draw,toSVG,prepare,image,inside,bounds,corners,local,dimensions,center,transform,radians,pathData,vectorImage,procStatus,textObject,bumpFonts};
 }

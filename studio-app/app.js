@@ -426,6 +426,48 @@
     wrapper.append(label,input);
     return wrapper;
   }
+  const fontsAsked = new Set();
+  /* fonts: grouped list of free families plus the weights each one really has; loading is lazy and redraws when the font arrives */
+  function useFont(l,name,weight) {
+    const w = StudioFonts.nearest(name,weight ?? l.fontWeight ?? 400);
+    change(() => { l.font = name; l.fontWeight = w; contextKey = ''; });
+    StudioFonts.load(name,w).then(() => { R.bumpFonts(); schedule(); });
+  }
+  function fontPicker(l) {
+    const box = document.createElement('div'); box.className = 'fontpicker';
+    const label = document.createElement('span'); label.className = 'fieldlabel'; label.textContent = 'Font';
+    const sel = document.createElement('select'); sel.className = 'field'; sel.setAttribute('aria-label','Font');
+    for (const [group,names] of StudioFonts.groups()) { const og = document.createElement('optgroup'); og.label = group; for (const n of names) { const o = new Option(n === 'sans-serif' ? 'Sans serif' : n === 'serif' ? 'Serif' : n === 'monospace' ? 'Monospace' : n,n); o.style.fontFamily = StudioFonts.css(n); og.append(o); } sel.append(og); }
+    if (!StudioFonts.has(l.font)) sel.append(new Option(l.font,l.font)); sel.value = l.font;
+    sel.onchange = () => useFont(l,sel.value);
+    const wl = document.createElement('span'); wl.className = 'fieldlabel'; wl.textContent = 'Weight';
+    const ws = document.createElement('div'); ws.className = 'chips';
+    for (const w of StudioFonts.weights(l.font)) { const b = action(StudioFonts.WEIGHT_NAMES[w],() => change(() => { l.fontWeight = w; contextKey = ''; StudioFonts.load(l.font,w).then(() => { R.bumpFonts(); schedule(); }); })); b.setAttribute('aria-pressed',String((l.fontWeight || 400) === w)); ws.append(b); }
+    const step = document.createElement('div'); step.className = 'chips';
+    const names = [...StudioFonts.list.map(f => f[0])], at = names.indexOf(l.font);
+    for (const [t,d] of [['‹ Previous font',-1],['Next font ›',1]]) step.append(action(t,() => useFont(l,names[(at+d+names.length)%names.length])));
+    box.append(label,sel,step,wl,ws); StudioFonts.load(l.font,l.fontWeight || 400).then(() => { R.bumpFonts(); schedule(); });
+    return box;
+  }
+  /* align the selected layers to the artboard */
+  function alignLayers(layers,axis,where) {
+    const [w,h] = dims();
+    change(() => {
+      for (const l of layers) {
+        const b = R.bounds(l,w,h);
+        if (axis === 'x') l.x = Math.round((l.x+(where === 0 ? -b.left : where === 1 ? w/2-(b.left+b.right)/2 : w-b.right))*10)/10;
+        else l.y = Math.round((l.y+(where === 0 ? -b.top : where === 1 ? h/2-(b.top+b.bottom)/2 : h-b.bottom))*10)/10;
+      }
+    });
+  }
+  function alignRow(layers) {
+    const row = document.createElement('div'); row.className = 'alignrow'; row.setAttribute('role','group'); row.setAttribute('aria-label','Align to the artboard');
+    const I = d => `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+    const items = [['x',0,'Align left',I('<path d="M4 4v16"/><rect x="7" y="6" width="12" height="4" rx="1"/><rect x="7" y="14" width="8" height="4" rx="1"/>')],['x',1,'Align centre',I('<path d="M12 3v18"/><rect x="5" y="6" width="14" height="4" rx="1"/><rect x="8" y="14" width="8" height="4" rx="1"/>')],['x',2,'Align right',I('<path d="M20 4v16"/><rect x="5" y="6" width="12" height="4" rx="1"/><rect x="9" y="14" width="8" height="4" rx="1"/>')],
+      ['y',0,'Align top',I('<path d="M4 4h16"/><rect x="6" y="7" width="4" height="12" rx="1"/><rect x="14" y="7" width="4" height="8" rx="1"/>')],['y',1,'Align middle',I('<path d="M3 12h18"/><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="8" width="4" height="8" rx="1"/>')],['y',2,'Align bottom',I('<path d="M4 20h16"/><rect x="6" y="5" width="4" height="12" rx="1"/><rect x="14" y="9" width="4" height="8" rx="1"/>')]];
+    for (const [axis,where,label,icon] of items) { const b = document.createElement('button'); b.type = 'button'; b.className = 'softbtn alignbtn'; b.innerHTML = icon; b.title = label; b.setAttribute('aria-label',label); b.onclick = () => alignLayers(layers,axis,where); row.append(b); }
+    return row;
+  }
   function action(label,run) {
     const button = document.createElement('button');
     button.textContent = label;
@@ -542,13 +584,14 @@
       }
     }
     const prop = (title,key,type,options) => field(title,type,l[key],v => { l[key] = v; },options);
+    if (!['background','crt','adjustment'].includes(l.type)) context.append(alignRow(selected().filter(x => !x.locked && x.visible)));
     if (l.type === 'background') context.append(field('Colour','color',l.fill || '#1d1e20',v => { l.fill = v; }),
       action('Studio gradient',() => change(() => { delete l.fill; contextKey = ''; })),
       Object.assign(document.createElement('span'),{className:'muted compact',textContent:'Hide this layer for a transparent PNG.'}));
     if (l.type === 'text') context.append(action('Edit on canvas',() => startTextEdit(l)),
 
       prop('Text','text','textarea',{maxLength:2000}),
-      prop('Font','font','select',{choices:[['sans-serif','Sans serif'],['serif','Serif'],['monospace','Monospace']]}),
+      fontPicker(l),
       prop('Font size','fontSize','number',{min:8,max:600}),prop('Fill','fill','color'));
     if (l.type === 'shape' || l.type === 'path' || l.type === 'brush') {
       if (l.type === 'shape' || l.closed) context.append(prop('Fill','fill','color'));
@@ -617,7 +660,12 @@
         field('Saturation','range',k.saturate,v => lookSet(l,x => { x.saturate = v; }),{min:0,max:300}),
         field('Hue','range',k.hue,v => lookSet(l,x => { x.hue = v; }),{min:-180,max:180}));
     }
-    out.push(action(k.lut ? 'LUT: '+k.lut.name : 'Load LUT (.cube)',() => lookFile(l)));
+    const libName = k.lut && StudioLutLib.list.some(e => e.name === k.lut.name) ? k.lut.name : '';
+    out.push(field('Film LUT','select',libName || (k.lut ? '__own' : ''),v => {
+      if (v === '__own') return;
+      change(() => lookSet(l,x => { if (!v) delete x.lut; else x.lut = {name:v,cube:StudioLutLib.cube(v)}; }));
+    },{choices:[['','None'],...(k.lut && !libName ? [['__own','Loaded: '+k.lut.name]] : []),...StudioLutLib.list.map(e => [e.name,e.group+' · '+e.name])]}));
+    out.push(action(k.lut && !libName ? 'LUT: '+k.lut.name : 'Load LUT (.cube)',() => lookFile(l)));
     if (k.lut) out.push(action('Remove LUT',() => change(() => lookSet(l,x => { delete x.lut; }))));
     if (k.code && !StudioLooks.codeLive(k)) out.push(action('Run code',() => { StudioLooks.trusted.add(k.code); contextKey = ''; schedule(); syncInspector(); }));
     out.push(action('Source',() => lookSource(l)));
@@ -689,7 +737,8 @@
     layout();
     schedule();
     graph.render();
-    procEditor?.redraw();
+    procEditor?.redraw(); syncProcEmbed();
+    { const need = [...new Set(doc.layers.filter(l => l.type === 'text' && !fontsAsked.has(l.font+'|'+(l.fontWeight || 400))).map(l => l.font+'|'+(l.fontWeight || 400)))]; for (const k of need) { fontsAsked.add(k); const [n,w] = k.split('|'); StudioFonts.load(n,+w).then(() => { R.bumpFonts(); schedule(); }); } }
   }
 
   function layout() {
@@ -697,7 +746,7 @@
     if (!width || !height) return;
     if (`${w}x${h}` !== lastDims) { lastDims = `${w}x${h}`; fitted = true; }     /* a different artboard size is a new fit, even while the viewport is locked */
     if (fitted) {
-      const f = StudioViewport.fitTransform(w,h,width,height);
+      const f = StudioViewport.fitTransform(w,h,width,height,matchMedia('(max-width:680px)').matches);
       zoom = f.zoom; pan = f.pan;
     }
     /* the composition is drawn at screen resolution, so a change of zoom must redraw it (debounced), otherwise vectors stay soft until the next edit */
@@ -866,7 +915,7 @@
     refreshGraphLayer();
     stateButtons('[data-view]',view,'view');
     requestAnimationFrame(() => { layout(); graph.render(); });
-    syncInspector();
+    syncInspector(); syncProcEmbed();
     schedule();
   }
   function setSheet(next) {
@@ -982,12 +1031,19 @@
     const l = visibleSelection()[0]; if (l) openProcEditor(l);
   }
   let procEditor = null;
-  function openProcEditor(l) {
+  /* in Graph and Split view a procedural graph layer is edited right in the graph panel, in place of the effect chain */
+  function syncProcEmbed() {
+    const l = activeLayer(), want = (view === 'graph' || view === 'split') && l?.type === 'procgraph';
+    if (want && (!procEditor || !procEditor.embedded || procEditor.layerId !== l.id)) openProcEditor(l,$('graph'));
+    else if (!want && procEditor?.embedded) procEditor.close();
+    $('graph').classList.toggle('procmode',!!(procEditor && procEditor.embedded));
+  }
+  function openProcEditor(l,host = null) {
     if (!l || l.type !== 'procgraph') return;
     procEditor?.close?.();
     const ctx = {layer:l,current:() => doc.layers.find(x => x.id === l.id),begin:() => capture(),end:before => { finish(before); },live:() => schedule(),notice,close:() => { procEditor = null; syncInspector(); },
-      errors:() => R.procStatus(l.id)?.errors,preview:() => R.procStatus(l.id)?.canvas};
-    procEditor = StudioProcUI.open($('stage'),ctx);
+      errors:() => R.procStatus(l.id)?.errors,preview:() => R.procStatus(l.id)?.canvas,embedded:!!host};
+    procEditor = StudioProcUI.open(host || $('stage'),ctx); procEditor.embedded = !!host; procEditor.layerId = l.id;
     const redraw = () => { if (procEditor) procEditor.redraw(); };
     ctx.onFrame = redraw;
   }
@@ -1303,7 +1359,7 @@
   function textWidth(l) {
     const ctx = canvas.getContext('2d');
     ctx.save();
-    ctx.font = `${l.fontSize}px ${l.font || 'sans-serif'}`;
+    ctx.font = `${l.fontWeight || 400} ${l.fontSize}px ${StudioFonts.css(l.font || 'sans-serif')}`;
     const width = Math.max(1,...String(l.text || '').split('\n').map(line => ctx.measureText(line).width));
     ctx.restore();
     return width;
@@ -1319,7 +1375,7 @@
     input.style.left = `${anchor.x*100/w}%`;
     input.style.top = `${anchor.y*100/h}%`;
     input.style.fontSize = `${l.fontSize*zoom}px`;
-    input.style.fontFamily = l.font || 'sans-serif';
+    input.style.fontFamily = StudioFonts.css(l.font || 'sans-serif'); input.style.fontWeight = String(l.fontWeight || 400);
     input.style.color = 'transparent'; /* the canvas draws the live text; this box only supplies the caret and selection, so nothing is doubled */
     input.style.lineHeight = '1.2';
     input.style.width = `${Math.max(2,Math.min(46,Math.max(input.value.length,8)+1))}ch`;
@@ -2345,6 +2401,7 @@
     const [w,h] = dims();
     menu('New layer',[
       ['Blank layer',() => add('shape',{name:'Blank layer',shape:'rectangle',width:w,height:h,x:0,y:0,strokeWidth:0})],
+      ['Solid colour',() => add('shape',{name:'Solid colour',shape:'rectangle',width:w,height:h,x:0,y:0,fill:paintColor,stroke:paintColor,strokeWidth:0})],
       ['Procedural graph…',() => menu('Procedural graph',[...Object.keys(StudioProc.templates).map(k => [k,() => addProcGraph(k)]),['Empty graph',() => addProcGraph(null)]])],
       ['Filter',() => addAdjustment('Filter',{kind:'look'},{preset:'film'})],
       ['Brightness / contrast',() => addAdjustment('Brightness / contrast',{kind:'look'},{brightness:110,contrast:115})],
