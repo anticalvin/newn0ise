@@ -6,7 +6,7 @@ import { RegionFrame, zoneOf, fromLatLon, toLatLon } from './georef.js';
 import { HeightField, landMask, terrainGeometry, landColor, lodStride } from './terrain.js';
 import { GeoOcean } from './ocean.js';
 import { RoadGraph, roadGeometries, toGeometry, laneInfo, CLASSES } from './roads.js';
-import { buildGeometry, tileMaterial, fadeIn, BuildingIndex, streetProps } from './buildings.js';
+import { buildGeometry, tileMaterial, fadeIn, BuildingIndex, streetProps, truthOf } from './buildings.js';
 import { Sim } from './sim.js';
 import { Walker, Car } from './vehicle.js';
 import { Wilds } from './wilds.js';
@@ -46,7 +46,7 @@ export class GeoWorld {
     this.pitU = { uPit: { value: new THREE.Vector4(0, 0, 0, 0) }, uPitYaw: { value: 0 } }; this.msg = ''; this.dayRate = 1 / 90; this.lastYaw = 0; this.props = new THREE.Group(); this.group.add(this.props); this.propMeshes = new Map();
     const sea = new THREE.Mesh(new THREE.PlaneGeometry(240000, 240000).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x1b4552, roughness: 0.06, metalness: 0.25 }));
     sea.position.y = -0.4; sea.receiveShadow = false; this.sea = sea; this.group.add(sea);   // cheap far water, under the Gerstner ocean
-    this.ocean = new GeoOcean(this);
+    this.ocean = new GeoOcean(this); this.landmarks = new Set();   // OSM building ids replaced by authored assets (T4); the footprint and coordinates stay untouched
   }
   // ---------- coordinates ----------
   get sx() { return this.walker.x - this.origin.x; } get sz() { return this.walker.z - this.origin.z; }
@@ -262,7 +262,7 @@ export class GeoWorld {
     this.stats.built++; yield;
     const store = this.store && this.store.id, all = d.buildings, chunk = 220; t.bld = [];
     for (let i = 0; i < all.length; i += chunk) {
-      const part = { buildings: all.slice(i, i + chunk) }, r = buildGeometry(part, H, b => b.id !== store);
+      const part = { buildings: all.slice(i, i + chunk) }, r = buildGeometry(part, H, b => b.id !== store && !this.landmarks.has(b.id));
       if (r) { const m = new THREE.Mesh(r.geometry, t.mBld); m.castShadow = true; m.receiveShadow = true; m.userData.kind = 'bld'; t.group.add(m); t.meshes.push(m); t.bld.push(m); }
       yield;
     }
@@ -290,7 +290,7 @@ export class GeoWorld {
     for (const m of t.meshes) if (m.userData.kind === 'road-minor') m.visible = next !== 'far';
     // far tiles show only the skyline: tall or large buildings (built once, on demand)
     if (next === 'far' && !t.sky && t.data) { const T = this.T, H = (x, z) => t.hf.at(clamp(x, 0, T), clamp(z, 0, T)), id = this.store && this.store.id;
-      const r = buildGeometry(t.data, H, b => b.id !== id && (b.h >= 16 || b.p.length > 16)); if (r) { t.sky = new THREE.Mesh(r.geometry, t.mBld); t.group.add(t.sky); t.meshes.push(t.sky); } else t.sky = null; t.skyTried = true; }
+      const r = buildGeometry(t.data, H, b => b.id !== id && !this.landmarks.has(b.id) && (b.h >= 16 || b.p.length > 16), { mid: true }); if (r) { t.sky = new THREE.Mesh(r.geometry, t.mBld); t.group.add(t.sky); t.meshes.push(t.sky); } else t.sky = null; t.skyTried = true; }
     for (const m of t.bld || []) m.visible = next !== 'far';
     if (t.sky) t.sky.visible = next === 'far';
     if (next === 'near' && !t.props) this.addProps(t); else if (next !== 'near' && t.props) this.dropProps(t);
@@ -587,7 +587,7 @@ export class GeoWorld {
         let rec; if (c.id != null) rec = this.bi.byId.get(+c.id); else { const p = find(); rec = this.bi.inside(p.x, p.z); if (!rec) { let bd = 40; for (const q of this.bi.near(p.x, p.z, 40)) { const d = Math.hypot((q.x0 + q.x1) / 2 - p.x, (q.z0 + q.z1) / 2 - p.z); if (d < bd) { bd = d; rec = q; } } } }
         if (!rec) return bad('world.building.none', 'No loaded building there. Go closer, or pass an id.');
         const b = rec.b, t = this.tiles.get(rec.tile);
-        return { ok: true, building: { id: b.id, osm: 'way/' + b.id, kind: b.k, name: b.n || null, levels: b.lv ? +b.lv : null, height: b.h, heightSource: b.hs, heightVerified: b.hs === 'tag', roof: b.rs || null, roofSource: b.rs ? 'tag' : 'inferred', footprintArea: Math.round(polyArea(rec.pts)), vertices: rec.pts.length / 2, interactive: !!(this.store && this.store.id === b.id), lod: t ? t.lod : null, tile: rec.tile, provenance: 'footprint from OSM; heights marked "inferred" are guesses, not survey data' } };
+        const truth = truthOf(b, this.landmarks.has(b.id)); return { ok: true, truth, building: { id: b.id, osm: 'way/' + b.id, kind: b.k, name: b.n || null, levels: b.lv ? +b.lv : null, height: b.h, heightSource: b.hs, heightVerified: b.hs === 'tag' || b.hs === 'levels', tier: truth.tier, tierName: truth.tierName, parts: b.parts ? b.parts.length : 0, roof: b.rs || null, roofSource: b.rs ? 'tag' : 'inferred', footprintArea: Math.round(polyArea(rec.pts)), vertices: rec.pts.length / 2, interactive: !!(this.store && this.store.id === b.id), lod: t ? t.lod : null, tile: rec.tile, provenance: 'footprint from OSM; heights marked "inferred" are guesses, not survey data' } };
       }
       case 'world.building.populate': {
         const p = find(), n = num(c.count, 1, 12, 4); let rec = c.id != null ? this.bi.byId.get(+c.id) : this.bi.inside(p.x, p.z); const cx = rec ? (rec.x0 + rec.x1) / 2 : p.x, cz = rec ? (rec.z0 + rec.z1) / 2 : p.z;

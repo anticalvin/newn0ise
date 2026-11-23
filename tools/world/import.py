@@ -19,6 +19,8 @@ REGIONS = {
     # south, west, north, east
     'capetown': dict(name='Cape Town', bbox=(-33.990, 18.380, -33.900, 18.470), zone=34, tile=1000, grid=96, dem_zoom=14),
 }
+BTAGS = ('building', 'height', 'building:levels', 'roof:shape', 'roof:levels', 'roof:height', 'roof:direction', 'roof:orientation', 'min_height', 'building:min_level', 'name', 'shop', 'amenity', 'addr:housenumber', 'addr:street',
+         'building:colour', 'roof:colour', 'building:material', 'roof:material', 'start_date', 'tourism', 'historic')
 ROAD_ORDER = ['motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'unclassified', 'residential', 'living_street', 'service',
               'motorway_link', 'trunk_link', 'primary_link', 'secondary_link', 'tertiary_link', 'pedestrian', 'footway', 'path', 'cycleway', 'steps', 'track']
 AREA_KEYS = {('natural', 'water'): 'water', ('natural', 'wood'): 'wood', ('natural', 'scrub'): 'scrub', ('natural', 'beach'): 'beach', ('natural', 'sand'): 'beach',
@@ -41,7 +43,7 @@ class Pass:
     def __init__(self, regions):
         self.R = regions
         self.coast, self.nroads, self.places = [], [], []
-        self.data = {k: dict(roads=[], buildings=[], areas=[], pois=[]) for k in regions}
+        self.data = {k: dict(roads=[], buildings=[], parts=[], areas=[], pois=[]) for k in regions}
         self.n = 0
     def inside(self, bbox, coords):
         s, w, n, e = bbox
@@ -59,13 +61,13 @@ class Pass:
     def way(self, o):
         t = {x.k: x.v for x in o.tags}; self.n += 1
         if self.n % 500000 == 0: print('  ways', self.n, file=sys.stderr)
-        hw, bd = t.get('highway'), t.get('building')
+        hw, bd, bp = t.get('highway'), t.get('building'), t.get('building:part')
         nat = t.get('natural')
         if nat == 'coastline':
             try: self.coast.append([(n.lon, n.lat) for n in o.nodes])
             except osmium.InvalidLocationError: pass
             return
-        if not (hw or bd or any((k, t.get(k)) in AREA_KEYS for k in ('natural', 'landuse', 'leisure'))): return
+        if not (hw or bd or bp or any((k, t.get(k)) in AREA_KEYS for k in ('natural', 'landuse', 'leisure'))): return
         try: pts = [(n.lon, n.lat) for n in o.nodes]
         except osmium.InvalidLocationError: return
         if hw in NATIONAL_ROADS: self.nroads.append(dict(c=hw, p=pts, n=t.get('ref', t.get('name', ''))))
@@ -75,7 +77,9 @@ class Pass:
             if hw and hw in ROAD_ORDER:
                 d['roads'].append(dict(id=o.id, c=hw, p=pts, tags={q: tags[q] for q in ('name', 'oneway', 'lanes', 'maxspeed', 'surface', 'bridge', 'tunnel', 'sidewalk', 'cycleway', 'lit', 'ref', 'layer') if q in tags}))
             elif bd and o.is_closed():
-                d['buildings'].append(dict(id=o.id, p=pts, tags={q: tags[q] for q in ('building', 'height', 'building:levels', 'roof:shape', 'roof:levels', 'min_height', 'name', 'shop', 'amenity', 'addr:housenumber', 'building:colour', 'roof:colour') if q in tags}))
+                d['buildings'].append(dict(id=o.id, p=pts, tags={q: tags[q] for q in BTAGS if q in tags}))
+            elif bp and o.is_closed():
+                d['parts'].append(dict(id=o.id, p=pts, tags={q: tags[q] for q in BTAGS + ('building:part',) if q in tags}))
             elif o.is_closed():
                 for kk in ('natural', 'landuse', 'leisure'):
                     kind = AREA_KEYS.get((kk, tags.get(kk)))
@@ -208,6 +212,38 @@ def terrain_only(a):
         r['grid'] = G; r['terrain'] = terrain_meta(dem, T, G); print('terrain rewritten for', key, file=sys.stderr)
     man['generated'] = time.strftime('%Y-%m-%d'); json.dump(man, open(mp, 'w'), indent=1)
 
+def num(v):
+    try: return float(str(v).split()[0].replace(',', '.').rstrip('m'))
+    except (ValueError, IndexError): return None
+
+def pin(x, z, poly):
+    ins = False; j = len(poly) - 1
+    for i in range(len(poly)):
+        xi, zi = poly[i]; xj, zj = poly[j]
+        if (zi > z) != (zj > z) and x < (xj - xi) * (z - zi) / (zj - zi) + xi: ins = not ins
+        j = i
+    return ins
+
+def truth(t, parts):
+    """WorldTruth fields for one building: sourced values with a per-field provenance (tag | levels | parts | inferred). Never invents a surveyed value."""
+    out = {}; src = {}
+    h = num(t.get('height')); hs = 'tag' if h is not None else None
+    if h is None and num(t.get('building:levels')) is not None: h = num(t['building:levels']) * 3.2 + 1.0 + (num(t.get('roof:levels')) or 0) * 2.5 * 0; hs = 'levels'
+    mh = num(t.get('min_height')); 
+    if mh is None and num(t.get('building:min_level')) is not None: mh = num(t['building:min_level']) * 3.2
+    if mh is not None: out['mh'] = round(mh, 1); src['mh'] = 'tag'
+    if t.get('roof:shape'): out['rs'] = t['roof:shape']; src['rs'] = 'tag'
+    rh = num(t.get('roof:height'))
+    if rh is not None: out['rh'] = round(rh, 1); src['rh'] = 'tag'
+    rd = num(t.get('roof:direction') or t.get('roof:orientation'))
+    if rd is not None: out['rd'] = rd; src['rd'] = 'tag'
+    if t.get('building:colour'): out['col'] = t['building:colour']; src['col'] = 'tag'
+    if t.get('roof:colour'): out['rc'] = t['roof:colour']; src['rc'] = 'tag'
+    if t.get('building:material'): out['mat'] = t['building:material']; src['mat'] = 'tag'
+    if t.get('roof:material'): out['rm'] = t['roof:material']; src['rm'] = 'tag'
+    if t.get('start_date'): out['sd'] = t['start_date']; src['sd'] = 'tag'
+    return h, hs, out, src
+
 def build_region(key, r, d, out, cache):
     s, w, n, e = r['bbox']; zone = r['zone']; T = r['tile']; G = r['grid']
     # origin: projected centre, rounded to a whole kilometre so tile edges sit on round numbers
@@ -220,7 +256,7 @@ def build_region(key, r, d, out, cache):
     print(f'[{key}] origin UTM{zone}S E{E0} N{N0}; tiles x {tx0}..{tx1} z {tz0}..{tz1} = {len(tiles)}', file=sys.stderr)
     # elevation
     pad = .02; dem = DEMSRC or Dem(r.get('dem_zoom', 13), (s - pad, w - pad, n + pad, e + pad), cache, cubic=True)
-    tdata = {k: dict(roads=[], buildings=[], areas=[], pois=[]) for k in tiles}
+    tdata = {k: dict(roads=[], buildings=[], areas=[], pois=[]) for k in tiles}; npart = 0
     for road in d['roads']:
         pts = [loc(la, lo) for lo, la in road['p']]
         for tk, runs in split_polyline(pts, T, tiles).items():
@@ -234,20 +270,37 @@ def build_region(key, r, d, out, cache):
         cx, cz = sum(p[0] for p in pts) / len(pts), sum(p[1] for p in pts) / len(pts); tk = (math.floor(cx / T), math.floor(cz / T))
         if tk not in tiles: continue
         t = b['tags']; ox, oz = tk[0] * T, tk[1] * T
-        h = None; hs = 'inferred'
-        try:
-            if 'height' in t: h = float(str(t['height']).split()[0].replace(',', '.')); hs = 'tag'
-            elif 'building:levels' in t: h = float(t['building:levels']) * 3.2 + 1.0; hs = 'levels'
-        except ValueError: h = None; hs = 'inferred'
+        h, hs, extra, src = truth(t, None); hs = hs or 'inferred'
+        kind = t.get('building', 'yes')
         if h is None:
             hh = (b['id'] * 2654435761) % 1000 / 1000   # deterministic, stable between imports
-            kind = t.get('building', 'yes')
-            h = {'house': 5.5 + hh * 2.5, 'detached': 5.5 + hh * 2.5, 'residential': 7 + hh * 8, 'apartments': 12 + hh * 18, 'commercial': 10 + hh * 25, 'office': 14 + hh * 40, 'retail': 5 + hh * 3, 'industrial': 7 + hh * 4, 'warehouse': 8 + hh * 3}.get(kind, 6 + hh * 6)
+            h = {'house': 5.5 + hh * 2.5, 'detached': 5.5 + hh * 2.5, 'residential': 7 + hh * 8, 'apartments': 12 + hh * 18, 'commercial': 10 + hh * 25, 'office': 14 + hh * 40, 'retail': 5 + hh * 3, 'industrial': 7 + hh * 4, 'warehouse': 8 + hh * 3}.get(kind, 4 + hh * 5)
         h = max(2.5, min(h, 320))
-        rec = dict(id=b['id'], k=t.get('building', 'yes'), h=round(h, 1), hs=hs, p=[v for x, z in pts for v in (dm(x - ox), dm(z - oz))])
-        for q, name in (('roof:shape', 'rs'), ('building:levels', 'lv'), ('name', 'n'), ('shop', 'shop'), ('amenity', 'am'), ('building:colour', 'col')):
+        rec = dict(id=b['id'], k=kind, h=round(h, 1), hs=hs, p=[v for x, z in pts for v in (dm(x - ox), dm(z - oz))], **extra)
+        for q, name in (('building:levels', 'lv'), ('name', 'n'), ('shop', 'shop'), ('amenity', 'am'), ('addr:street', 'st'), ('addr:housenumber', 'hn')):
             if q in t: rec[name] = t[q]
-        tdata[tk]['buildings'].append(rec); nb += 1
+        rec['_pts'] = pts; rec['_src'] = src; tdata[tk]['buildings'].append(rec); nb += 1
+    # building parts: attached to the footprint that contains their centroid. OSM convention: parts replace the outline's massing.
+    npart = 0
+    for pt in d.get('parts', []):
+        pp = [loc(la, lo) for lo, la in pt['p'][:-1]]
+        if len(pp) < 3: continue
+        cx, cz = sum(p[0] for p in pp) / len(pp), sum(p[1] for p in pp) / len(pp); tk = (math.floor(cx / T), math.floor(cz / T))
+        if tk not in tiles: continue
+        par = next((r for r in tdata[tk]['buildings'] if pin(cx, cz, r['_pts'])), None)
+        if not par: continue
+        ph, phs, pex, psrc = truth(pt['tags'], None); ox, oz = tk[0] * T, tk[1] * T
+        if ph is None: ph = par['h']; phs = 'parent:' + par['hs']
+        part = dict(id=pt['id'], h=round(max(1.5, min(ph, 320)), 1), hs=phs, p=[v for x, z in pp for v in (dm(x - ox), dm(z - oz))], **pex); part['_src'] = psrc
+        par.setdefault('parts', []).append(part); npart += 1
+    for tk, td in tdata.items():
+        for br in td['buildings']:
+            src = br.pop('_src'); br.pop('_pts'); ps = {k: v for k, v in src.items()}
+            for part in br.get('parts', []): part.pop('_src')
+            kinds = set(src) & {'col', 'rc', 'mat', 'rm', 'rs'}
+            br['tt'] = 3 if (br['hs'] != 'inferred' or br.get('parts')) and kinds else 2 if (br['hs'] != 'inferred' or br.get('parts')) else 1
+            br['ps'] = ps
+    print(f'[{key}] building parts attached: {npart}', file=sys.stderr)
     for a in d['areas']:
         pts = [loc(la, lo) for lo, la in a['p'][:-1]]
         if len(pts) < 3: continue
@@ -273,7 +326,7 @@ def build_region(key, r, d, out, cache):
         with open(p, 'w') as f: json.dump(rec, f, separators=(',', ':'))
         files[f'{i}_{j}'] = dict(file=f'{key}/t_{i}_{j}.json', bytes=os.path.getsize(p), sha256=sha(p), roads=len(rec['roads']), buildings=len(rec['buildings']))
     return dict(name=r['name'], bbox=r['bbox'], zone=zone, south=True, e0=E0, n0=N0, tile=T, grid=G, terrain=terrain_meta(dem, T, G), tiles=files,
-                counts=dict(roads=len(d['roads']), buildings=nb, areas=len(d['areas']), pois=len(d['pois'])))
+                counts=dict(roads=len(d['roads']), buildings=nb, parts=npart, areas=len(d['areas']), pois=len(d['pois'])))
 
 def national_dem(out, cache):
     """Coarse relief for the whole country: 0.025 degree grid, int16 metres."""

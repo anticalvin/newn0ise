@@ -101,3 +101,16 @@ t('world: ocean reuses Core water, follows wind and the same terrain height', '/
  if(o.water.u.uSea.value<0.89)return 'sea state not driven by environment';if(o.water.u.uWindAng.value<1.1)return 'wind direction not driven by environment';
  const i=Math.round((x-(o.cx-4000))/(8000/384)),j=Math.round((z-(o.cz-4000))/(8000/384));const tex=o.h[j*385+i],real=g.heightAt(o.cx-4000+i*8000/384,o.cz-4000+j*8000/384);
  return Math.abs(tex-real)<1e-3?true:'ocean height window disagrees with GeoWorld.heightAt '+tex+' vs '+real}`);
+
+t('world: WorldTruth provenance, parts, min height and roof forms', '/core.html?start=world', `async()=>{const m=await import('/src/core/geo/buildings.js');const H=()=>0,sq=(x,z,w,d)=>[x,z,x+w*10,z,x+w*10,z+d*10,x,z+d*10];
+ const inf={id:1,k:'house',h:6,hs:'inferred',p:sq(0,0,10,8)},lv={id:2,k:'yes',h:13.8,hs:'levels',lv:'4',p:sq(0,0,10,8),tt:2},tag={id:3,k:'yes',h:20,hs:'tag',p:sq(0,0,10,8),rs:'gabled',rh:3,col:'#cc8844',tt:3};
+ const ti=m.truthOf(inf),tl=m.truthOf(lv),tg=m.truthOf(tag),tL=m.truthOf(tag,true);
+ if(ti.fields.height.verified||ti.fields.height.source!=='inferred')return 'inferred height reported as verified';if(!tl.fields.height.verified||tl.fields.height.source!=='levels')return 'levels not flagged';
+ if(tg.fields.roofShape.source!=='tag'||tg.fields.facadeColour.source!=='tag'||ti.fields.roofShape.source!=='inferred')return 'roof/colour provenance wrong';if(tL.tier!==4)return 'landmark tier';
+ const flat=m.buildGeometry({buildings:[{...tag,rs:'flat'}]},H),gab=m.buildGeometry({buildings:[tag]},H),raised=m.buildGeometry({buildings:[{...tag,rs:'flat',mh:12}]},H);
+ if(!(gab.triangles>flat.triangles))return 'gabled roof added no geometry';const ymin=g=>{const a=g.geometry.attributes.position.array;let lo=1e9;for(let i=1;i<a.length;i+=3)lo=Math.min(lo,a[i]);return lo};
+ if(!(ymin(raised)>ymin(flat)+5))return 'min_height ignored';
+ const withParts=m.buildGeometry({buildings:[{...tag,rs:'flat',parts:[{id:9,h:30,hs:'tag',p:sq(0,0,5,8)},{id:10,h:10,hs:'tag',p:sq(50,0,5,8)}]}]},H);
+ const ymax=g=>{const a=g.geometry.attributes.position.array;let hi=-1e9;for(let i=1;i<a.length;i+=3)hi=Math.max(hi,a[i]);return hi};
+ if(withParts.parts!==2||Math.abs(ymax(withParts)-30)>0.01)return 'parts do not drive massing';
+ return m.buildGeometry({buildings:[tag]},H,b=>false)===null?true:'filter ignored'}`);
