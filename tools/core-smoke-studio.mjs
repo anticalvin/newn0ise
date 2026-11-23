@@ -256,3 +256,14 @@ t('studio: fonts, alignment, film LUTs and phone centring', '/studio-app.html', 
  if(typeof StudioLutLib==='undefined'||StudioLutLib.list.length<50)return 'LUT library missing';
  const t=StudioLooks.cube(StudioLutLib.cube('Teal and orange blockbuster'));if(!t)return 'LUT did not parse';
  return true}`);
+
+t('studio mobile: holding a layer on the canvas opens its options; moving or a quick tap does not', '/studio-app.html', `async()=>{${OPEN}await open();const M=window.n0iseMotion,D=M.doc?.constructor;
+ M.add([StudioDocument.layer('shape',{name:'Box',shape:'rectangle',width:400,height:400,fill:'#d33',stroke:'#d33',strokeWidth:0})]);await wait(500);M.select([]);await wait(100);
+ const st=document.getElementById('stagebody'),r=document.querySelector('#stagebody canvas').getBoundingClientRect(),x=r.left+r.width/2,y=r.top+r.height/2;
+ const pe=(ty,id,px,py)=>st.dispatchEvent(new PointerEvent(ty,{pointerId:id,pointerType:'touch',isPrimary:true,clientX:px,clientY:py,bubbles:true,cancelable:true}));
+ const menu=()=>document.querySelector('#studioContext:not([hidden])')&&document.querySelectorAll('#studioContext button').length;
+ pe('pointerdown',31,x,y);pe('pointerup',31,x,y);await wait(700);if(menu())return 'a quick tap opened the menu';
+ pe('pointerdown',32,x,y);pe('pointermove',32,x+40,y);await wait(700);pe('pointerup',32,x+40,y);if(menu())return 'moving opened the menu';
+ const cx=r.left+r.width/2,cy=r.top+r.height/2;pe('pointerdown',33,cx,cy);await wait(700);
+ const labels=[...document.querySelectorAll('#studioContext button')].map(b=>b.textContent);pe('pointerup',33,cx,cy);
+ for(const need of ['Duplicate','Delete','Bring forward','Lock layer'])if(!labels.includes(need))return 'menu lacks '+need+': '+labels.join(',');return true}`);

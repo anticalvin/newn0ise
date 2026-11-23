@@ -1717,15 +1717,20 @@
     svg.addEventListener('pointercancel',stop);
     svg.addEventListener('contextmenu',e => { e.preventDefault(); e.stopPropagation(); stop(); graphMenu(e.clientX,e.clientY,e.target); });
   }
+  let menuAt = 0;
   document.addEventListener('contextmenu',e => {
     if (e.target.closest('#graphsvg')) return;
-    if (launcher.open || $('modal').open || gesture || e.target.closest('input,textarea,select,a,#textEdit') ||
-      !e.target.closest('#workspace')) return;
+    if (Date.now()-menuAt < 900) { e.preventDefault(); return; }   /* a touch long-press already opened the menu */
+    stageMenu(e,e.clientX,e.clientY,!!gesture);
+  });
+  function stageMenu(e,cx,cy,busy) {
+    if (launcher.open || $('modal').open || busy || e.target.closest('input,textarea,select,a,#textEdit') ||
+      !e.target.closest('#workspace')) return false;
     const onStage = stage.contains(e.target), row = e.target.closest('[data-layer-id]');
-    if (!onStage && !row) return;
-    if (view === 'spatial' && onStage) return;
-    e.preventDefault();
-    const point = onStage ? position(e.clientX,e.clientY) : null;
+    if (!onStage && !row) return false;
+    if (view === 'spatial' && onStage) return false;
+    e.preventDefault?.();
+    const point = onStage ? position(cx,cy) : null;
     const [w,h] = dims();
     const hit = row ? doc.layers.find(l => l.id === row.dataset.layerId) :
       point && doc.layers.find(l => R.inside(l,point,w,h,5/zoom));
@@ -1739,6 +1744,8 @@
         if (hit.type === 'path' && selection.length === 1) actions.push(['Edit anchors',toggleAnchors]);
         if (hit.type === 'shape' && selection.length === 1) actions.push(['Edit points',() => pathFromShape(hit)]);
       }
+      if (!hit.locked) actions.push(['Bring forward',() => reorder(-1)],['Send backward',() => reorder(1)],
+        [hit.visible ? 'Hide' : 'Show',() => change(() => { hit.visible = !hit.visible; })],['Lock layer',() => change(() => { hit.locked = true; })]);
       actions.push(['Duplicate',duplicateLayers],['Delete',remove],['Deselect',() => select([])]);
       if (doc.artboardLocked) actions.push(['Unlock artboard',() => change(() => { doc.artboardLocked = false; })]);
     } else {
@@ -1752,8 +1759,30 @@
         ['Fit to screen',fit],[zoomLocked ? 'Unlock viewport' : 'Lock viewport',() => $('zoomLock').click()]);
     }
     const rect = e.target.getBoundingClientRect();
-    contextMenu.show(e.clientX || rect.left,e.clientY || rect.bottom,actions);
-  });
+    contextMenu.show(cx || rect.left,cy || rect.bottom,actions);
+    return true;
+  }
+  /* touch: hold a layer on the canvas (still) to open the same menu; moving, a second finger or lifting cancels it */
+  { let press = null;
+    const stop = () => { clearTimeout(press?.timer); press = null; };
+    stage.addEventListener('pointerdown',e => {
+      stop();
+      if (e.pointerType !== 'touch' || pointers.size > 1 || e.target.closest('#textEdit,#inlineText,button')) return;
+      const target = e.target, x = e.clientX, y = e.clientY;
+      press = {x,y,timer:setTimeout(() => {
+        press = null;
+        if (gesture && gesture.kind !== 'move' && gesture.kind !== 'pan' && gesture.kind !== 'marquee') return;
+        if (gesture && gesture.moved) return;
+        const before = gesture;
+        if (before) { gesture = null; delete stage.dataset.drag; }
+        const e2 = {target,preventDefault() {}};
+        if (stageMenu(e2,x,y,false)) { menuAt = Date.now(); navigator.vibrate?.(12); pointers.clear(); }
+        else if (before) gesture = before;
+      },450)};
+    },true);
+    stage.addEventListener('pointermove',e => { if (press && Math.hypot(e.clientX-press.x,e.clientY-press.y) > 10) stop(); });
+    stage.addEventListener('pointerup',stop); stage.addEventListener('pointercancel',stop);
+  }
   document.addEventListener('pointerdown',e => {
     if (e.button !== 0 || !selection.length || launcher.open || $('modal').open ||
       e.target.closest('button,a,input,select,textarea,label,summary,#studioContext,#graph,#artboard,#textEdit,.panel-handle')) return;
