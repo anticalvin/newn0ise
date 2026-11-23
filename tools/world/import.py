@@ -17,7 +17,7 @@ import geo
 
 REGIONS = {
     # south, west, north, east
-    'capetown': dict(name='Cape Town', bbox=(-33.990, 18.380, -33.900, 18.470), zone=34, tile=1000, grid=40),
+    'capetown': dict(name='Cape Town', bbox=(-33.990, 18.380, -33.900, 18.470), zone=34, tile=1000, grid=96, dem_zoom=14),
 }
 ROAD_ORDER = ['motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'unclassified', 'residential', 'living_street', 'service',
               'motorway_link', 'trunk_link', 'primary_link', 'secondary_link', 'tertiary_link', 'pedestrian', 'footway', 'path', 'cycleway', 'steps', 'track']
@@ -103,8 +103,8 @@ def fetch_terrarium(z, x, y, cache):
 
 class Dem:
     """Mosaic of Terrarium tiles at one zoom, sampled bilinearly by lat/lon."""
-    def __init__(self, z, bounds, cache):
-        s, w, n, e = bounds; self.z = z
+    def __init__(self, z, bounds, cache, cubic=False):
+        s, w, n, e = bounds; self.z = z; self.cubic = cubic
         x0, y1 = mercator_px(s, w, z); x1, y0 = mercator_px(n, e, z)
         self.tx0, self.tx1, self.ty0, self.ty1 = int(x0 // 256) - 1, int(x1 // 256) + 1, int(y0 // 256) - 1, int(y1 // 256) + 1
         w_, h_ = (self.tx1 - self.tx0 + 1) * 256, (self.ty1 - self.ty0 + 1) * 256
@@ -112,13 +112,44 @@ class Dem:
         for ty in range(self.ty0, self.ty1 + 1):
             for tx in range(self.tx0, self.tx1 + 1):
                 self.a[(ty - self.ty0) * 256:(ty - self.ty0 + 1) * 256, (tx - self.tx0) * 256:(tx - self.tx0 + 1) * 256] = fetch_terrarium(z, tx, ty, cache)
+    meta = property(lambda self: dict(name='AWS Terrain Tiles (Terrarium)', kind='terrarium', zoom=self.z, native='SRTM ~30 m (NED/GEBCO elsewhere); zoom-%d grid is resampled' % self.z,
+        interpolation='catmull-rom' if self.cubic else 'bilinear', license='Public/open sources, see https://github.com/tilezen/joerd/blob/master/docs/attribution.md', redistributable=True, version='live tiles fetched ' + time.strftime('%Y-%m-%d')))
     def sample(self, lat, lon):
+        if self.cubic: return self._cubic(lat, lon)
         lat, lon = np.asarray(lat), np.asarray(lon); n = 2 ** self.z * 256
         x = (lon + 180) / 360 * n - self.tx0 * 256 - .5
         y = (1 - np.arcsinh(np.tan(np.radians(lat))) / np.pi) / 2 * n - self.ty0 * 256 - .5
         x0, y0 = np.floor(x).astype(int), np.floor(y).astype(int); fx, fy = x - x0, y - y0
         a = self.a; x0 = np.clip(x0, 0, a.shape[1] - 2); y0 = np.clip(y0, 0, a.shape[0] - 2)
         return a[y0, x0] * (1 - fx) * (1 - fy) + a[y0, x0 + 1] * fx * (1 - fy) + a[y0 + 1, x0] * (1 - fx) * fy + a[y0 + 1, x0 + 1] * fx * fy
+
+def _cubic(self, lat, lon):
+    lat, lon = np.asarray(lat), np.asarray(lon); n = 2 ** self.z * 256
+    x = (lon + 180) / 360 * n - self.tx0 * 256 - .5
+    y = (1 - np.arcsinh(np.tan(np.radians(lat))) / np.pi) / 2 * n - self.ty0 * 256 - .5
+    x0, y0 = np.floor(x).astype(int), np.floor(y).astype(int); fx, fy = x - x0, y - y0; a = self.a
+    def w(t): return [(-t**3 + 2*t**2 - t) / 2, (3*t**3 - 5*t**2 + 2) / 2, (-3*t**3 + 4*t**2 + t) / 2, (t**3 - t**2) / 2]
+    wx, wy = w(fx), w(fy); out = 0
+    for j in range(4):
+        row = 0
+        for i in range(4): row = row + wx[i] * a[np.clip(y0 + j - 1, 0, a.shape[0] - 1), np.clip(x0 + i - 1, 0, a.shape[1] - 1)]
+        out = out + wy[j] * row
+    return out
+Dem._cubic = _cubic
+
+class GeoTiffDem:
+    """Optional user-supplied DEM/DTM (GeoTIFF, metres). Needs `pip install rasterio`. NOT redistributed: only used if --dem is given, and the manifest records it as local-only."""
+    def __init__(self, path, license='unspecified (local R&D input)', name=None):
+        import rasterio
+        self.ds = rasterio.open(path); self.a = self.ds.read(1).astype(np.float64); nd = self.ds.nodata
+        if nd is not None: self.a[self.a == nd] = np.nan
+        self.path = path; self.license = license; self.name = name or os.path.basename(path)
+    meta = property(lambda self: dict(name=self.name, kind='geotiff', native='%.1f m pixels' % abs(self.ds.res[0] * (111320 if self.ds.crs.is_geographic else 1)), interpolation='bilinear', license=self.license, redistributable=False, version=os.path.basename(self.path)))
+    def sample(self, lat, lon):
+        from rasterio.warp import transform
+        xs, ys = transform('EPSG:4326', self.ds.crs, np.asarray(lon).ravel().tolist(), np.asarray(lat).ravel().tolist())
+        r, c = self.ds.index(np.array(xs), np.array(ys)); r = np.clip(np.array(r), 0, self.a.shape[0] - 1); c = np.clip(np.array(c), 0, self.a.shape[1] - 1)
+        v = self.a[r, c].reshape(np.shape(lat)); return np.where(np.isnan(v), 0, v)
 
 def sha(path):
     h = hashlib.sha256()
@@ -153,6 +184,30 @@ def split_polyline(pts, tile, tiles):
     flush()
     return runs
 
+DEMSRC = None
+def terrain_meta(dem, T, G): return dict(dem.meta, grid=G, spacingM=round(T / G, 2), lods=[1, 3, 8], heightUnit='decimetres int16')
+
+def terrain_only(a):
+    """Rewrite only the elevation of existing tile files + manifest provenance. Roads/buildings/areas are untouched (no OSM pass)."""
+    mp = os.path.join(a.out, 'manifest.json'); man = json.load(open(mp))
+    for key, r in man['regions'].items():
+        if a.region and key not in a.region: continue
+        spec = REGIONS.get(key, {}); G = spec.get('grid', r['grid']); T = r['tile']; zone = r['zone']; E0, N0 = r['e0'], r['n0']
+        s, w, n, e = r['bbox']; pad = .02
+        dem = DEMSRC or Dem(spec.get('dem_zoom', 13), (s - pad, w - pad, n + pad, e + pad), a.cache, cubic=True)
+        xs = np.arange(G + 1) * (T / G)
+        for k, ent in r['tiles'].items():
+            i, j = map(int, k.split('_')); p = os.path.join(a.out, ent['file']); rec = json.load(open(p))
+            gx, gz = np.meshgrid(i * T + xs, j * T + xs); lat = np.zeros_like(gx); lon = np.zeros_like(gx)
+            for q in range(gx.shape[0]):
+                for b in range(gx.shape[1]): lat[q, b], lon[q, b] = geo.inv(E0 + gx[q, b], N0 - gz[q, b], zone)
+            hm = np.clip(np.round(dem.sample(lat, lon) * 10), -3000, 32000).astype('<i2')
+            rec.update(grid=G, hm=base64.b64encode(hm.tobytes()).decode())
+            with open(p, 'w') as f: json.dump(rec, f, separators=(',', ':'))
+            ent.update(bytes=os.path.getsize(p), sha256=sha(p))
+        r['grid'] = G; r['terrain'] = terrain_meta(dem, T, G); print('terrain rewritten for', key, file=sys.stderr)
+    man['generated'] = time.strftime('%Y-%m-%d'); json.dump(man, open(mp, 'w'), indent=1)
+
 def build_region(key, r, d, out, cache):
     s, w, n, e = r['bbox']; zone = r['zone']; T = r['tile']; G = r['grid']
     # origin: projected centre, rounded to a whole kilometre so tile edges sit on round numbers
@@ -164,7 +219,7 @@ def build_region(key, r, d, out, cache):
     tiles = {(i, j) for i in range(tx0, tx1 + 1) for j in range(tz0, tz1 + 1)}
     print(f'[{key}] origin UTM{zone}S E{E0} N{N0}; tiles x {tx0}..{tx1} z {tz0}..{tz1} = {len(tiles)}', file=sys.stderr)
     # elevation
-    pad = .02; dem = Dem(13, (s - pad, w - pad, n + pad, e + pad), cache)
+    pad = .02; dem = DEMSRC or Dem(r.get('dem_zoom', 13), (s - pad, w - pad, n + pad, e + pad), cache, cubic=True)
     tdata = {k: dict(roads=[], buildings=[], areas=[], pois=[]) for k in tiles}
     for road in d['roads']:
         pts = [loc(la, lo) for lo, la in road['p']]
@@ -217,7 +272,7 @@ def build_region(key, r, d, out, cache):
         p = os.path.join(out, key, f't_{i}_{j}.json')
         with open(p, 'w') as f: json.dump(rec, f, separators=(',', ':'))
         files[f'{i}_{j}'] = dict(file=f'{key}/t_{i}_{j}.json', bytes=os.path.getsize(p), sha256=sha(p), roads=len(rec['roads']), buildings=len(rec['buildings']))
-    return dict(name=r['name'], bbox=r['bbox'], zone=zone, south=True, e0=E0, n0=N0, tile=T, grid=G, tiles=files,
+    return dict(name=r['name'], bbox=r['bbox'], zone=zone, south=True, e0=E0, n0=N0, tile=T, grid=G, terrain=terrain_meta(dem, T, G), tiles=files,
                 counts=dict(roads=len(d['roads']), buildings=nb, areas=len(d['areas']), pois=len(d['pois'])))
 
 def national_dem(out, cache):
@@ -231,8 +286,13 @@ def national_dem(out, cache):
     return dict(file='national_dem.bin', west=w, north=n, step=step, cols=len(lons), rows=len(lats), unit='m', encoding='int16le row-major from the north-west', bytes=os.path.getsize(p), sha256=sha(p))
 
 def main():
-    ap = argparse.ArgumentParser(); ap.add_argument('--pbf', required=True); ap.add_argument('--out', default='data/world/za'); ap.add_argument('--region', action='append'); ap.add_argument('--cache', default='tmp/world-cache')
-    a = ap.parse_args(); os.makedirs(a.out, exist_ok=True); os.makedirs(a.cache, exist_ok=True)
+    ap = argparse.ArgumentParser(); ap.add_argument('--pbf'); ap.add_argument('--out', default='data/world/za'); ap.add_argument('--region', action='append'); ap.add_argument('--cache', default='tmp/world-cache')
+    ap.add_argument('--dem', help='optional local GeoTIFF DEM/DTM (not redistributed)'); ap.add_argument('--dem-license', default='unspecified (local R&D input)'); ap.add_argument('--terrain-only', action='store_true', help='rewrite elevation only, keep existing OSM data')
+    a = ap.parse_args(); global DEMSRC
+    if not a.pbf and not a.terrain_only: ap.error('--pbf is required')
+    if a.dem: DEMSRC = GeoTiffDem(a.dem, a.dem_license)
+    if a.terrain_only: os.makedirs(a.cache, exist_ok=True); return terrain_only(a)
+    os.makedirs(a.out, exist_ok=True); os.makedirs(a.cache, exist_ok=True)
     keys = a.region or list(REGIONS); regs = {k: REGIONS[k] for k in keys}
     t0 = time.time(); h = Pass(regs)
     print('reading OSM (takes a few minutes)...', file=sys.stderr)

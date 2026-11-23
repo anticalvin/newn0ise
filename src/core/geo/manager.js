@@ -3,7 +3,8 @@
 import * as THREE from 'three';
 import { DataProvider, Storage } from './data.js';
 import { RegionFrame, zoneOf, fromLatLon, toLatLon } from './georef.js';
-import { HeightField, landMask, terrainGeometry, landColor } from './terrain.js';
+import { HeightField, landMask, terrainGeometry, landColor, lodStride } from './terrain.js';
+import { GeoOcean } from './ocean.js';
 import { RoadGraph, roadGeometries, toGeometry, laneInfo, CLASSES } from './roads.js';
 import { buildGeometry, tileMaterial, fadeIn, BuildingIndex, streetProps } from './buildings.js';
 import { Sim } from './sim.js';
@@ -44,7 +45,8 @@ export class GeoWorld {
     this.stats = { loaded: 0, built: 0, unloaded: 0, cancelled: 0, lodSwaps: 0, rebases: 0, popIns: 0 }; this.t = { stream: 0, save: 0, env: 0, hud: 0 }; this.hidden = [];
     this.pitU = { uPit: { value: new THREE.Vector4(0, 0, 0, 0) }, uPitYaw: { value: 0 } }; this.msg = ''; this.dayRate = 1 / 90; this.lastYaw = 0; this.props = new THREE.Group(); this.group.add(this.props); this.propMeshes = new Map();
     const sea = new THREE.Mesh(new THREE.PlaneGeometry(240000, 240000).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x1b4552, roughness: 0.06, metalness: 0.25 }));
-    sea.position.y = -0.15; sea.receiveShadow = false; this.sea = sea; this.group.add(sea);
+    sea.position.y = -0.4; sea.receiveShadow = false; this.sea = sea; this.group.add(sea);   // cheap far water, under the Gerstner ocean
+    this.ocean = new GeoOcean(this);
   }
   // ---------- coordinates ----------
   get sx() { return this.walker.x - this.origin.x; } get sz() { return this.walker.z - this.origin.z; }
@@ -281,7 +283,7 @@ export class GeoWorld {
     else if (dr < BUDGET.midIn) next = dr < BUDGET.nearIn ? 'near' : 'mid';
     if (next === cur && !force) return;
     t.lod = next; this.stats.lodSwaps++;
-    const stride = next === 'near' ? 1 : next === 'mid' ? 2 : 4;
+    const stride = lodStride(t.data.grid, next === 'near' ? 1 : next === 'mid' ? 3 : 8);
     if (!t.terr[stride]) t.terr[stride] = terrainGeometry(t.hf, t.mask, stride);
     if (!t.terrain) { t.terrain = new THREE.Mesh(t.terr[stride], t.mTerrain); t.terrain.receiveShadow = true; t.group.add(t.terrain); t.meshes.push(t.terrain); } else t.terrain.geometry = t.terr[stride];
     t.mBld.userData.u.uDetail.value = next === 'near' ? 1 : 0;
@@ -347,7 +349,7 @@ export class GeoWorld {
     this.lastYaw = c.yaw; const dist = this.driving ? Math.max(c.dist, 8) : c.dist; if (this.driving && c.dist < 8) c.dist = 8; if (!this.driving && !this.god && c.dist > 14) c.dist = 14;
     const cp = Math.cos(c.pitch), cam = a.camera; cam.position.set(c.target.x + Math.sin(c.yaw) * cp * dist, c.target.y + Math.sin(c.pitch) * dist, c.target.z + Math.cos(c.yaw) * cp * dist);
     const fl = this.heightAt(cam.position.x + this.origin.x, cam.position.z + this.origin.z) + 0.9; if (cam.position.y < fl) cam.position.y = fl; cam.lookAt(c.target); if (this.god) this.godCam(); else if (cam.far !== 140000) { cam.far = 140000; cam.near = 0.4; cam.updateProjectionMatrix(); }
-    this.sea.position.set(cam.position.x, -0.15, cam.position.z);
+    this.sea.position.set(cam.position.x, -0.4, cam.position.z); this.ocean.update(dt, cam);
     a.env.update(dt, cam, c.target); a.entities.tick(dt);
     this.t.hud += dt; if (this.t.hud > 0.3) { this.t.hud = 0; this.updateHud(); }
     this.t.save += dt; if (this.t.save > 12) { this.t.save = 0; this.save(); }
@@ -465,7 +467,7 @@ export class GeoWorld {
     this.placeMarker();
   }
   godCam() { const cam = this.a.camera, d = this.a.cam.dist, far = Math.max(140000, d * 70), near = clamp(d / 1500, 0.4, 3000); if (Math.abs(cam.far - far) > far * 0.05 || Math.abs(cam.near - near) > near * 0.05) { cam.far = far; cam.near = near; cam.updateProjectionMatrix(); } }
-  detail(on) { for (const t of this.tiles.values()) if (t.group) t.group.visible = on; this.wilds.group.visible = on; if (this.far) this.far.visible = on; this.sim.group.visible = on; this.sea.visible = on; this.car.root.visible = on && (this.region || this.car.root.visible || true); }
+  detail(on) { for (const t of this.tiles.values()) if (t.group) t.group.visible = on; this.wilds.group.visible = on; if (this.far) this.far.visible = on; this.sim.group.visible = on; this.sea.visible = on; this.ocean.mesh.visible = on; this.car.root.visible = on && (this.region || this.car.root.visible || true); }
   dropFromGod() {
     const g = this.god; if (!g) return; const ll = this.frame.toLatLon(g.x, g.z);
     if (ll.lat < -35.2 || ll.lat > -21.9 || ll.lon < 16.3 || ll.lon > 33.1) return this.say('That is outside South Africa. Move over land first.', 3000);

@@ -3,6 +3,9 @@ import * as THREE from 'three';
 
 export function decodeHM(b64) { const bin = atob(b64), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return new Int16Array(u.buffer); }
 
+/* the largest stride <= want that divides the tile grid, so any grid resolution gets clean LODs */
+export function lodStride(grid, want) { let s = want; while (s > 1 && grid % s) s--; return s; }
+
 export class HeightField {
   constructor(tile) {
     this.n = tile.grid + 1; this.size = tile.size; this.step = tile.size / tile.grid;

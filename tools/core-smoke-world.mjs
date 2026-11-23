@@ -88,3 +88,16 @@ t('world: people are articulated figures with their own skin, hair and clothes',
  const names=['head','hair','torso','armL','armR','legL','legR'];for(const k of names)if(!P[k])return 'missing part '+k;const n=P.torso.count;if(n<5)return 'few people drawn '+n;for(const k of names)if(P[k].count!==n)return k+' count '+P[k].count+' != '+n;
  const cols=new Set();for(let i=0;i<n;i++){const c=new n0.app.camera.constructor().position.constructor;void c;const a=P.head.instanceColor.array;cols.add([a[i*3],a[i*3+1],a[i*3+2]].map(v=>v.toFixed(2)).join())}
  return cols.size>=3?true:'all people share one skin tone'}`);
+
+t('world: terrain is multiresolution, provenance recorded, heightAt independent of LOD', '/core.html?start=world', `async()=>{${UP}if(!(await up()))return 'not ready';const g=n0.geo,m=await g.provider.getManifest(),tr=m.regions[g.regionKey].terrain;
+ if(!tr||!tr.name||!tr.license||!tr.spacingM)return 'terrain provenance missing in manifest';if(tr.spacingM>12)return 'detail terrain coarser than 12 m: '+tr.spacingM;
+ const ts=await import('/src/core/geo/terrain.js');const t=[...g.tiles.values()].find(x=>x.hf&&x.data);if(!t)return 'no tile';const gr=t.data.grid;
+ const lods=[1,3,8].map(s=>ts.lodStride(gr,s));if(lods.some(s=>gr%s))return 'stride does not divide grid';const h0=g.heightAt(t.ox+300.3,t.oz+411.7);
+ for(const s of lods)ts.terrainGeometry(t.hf,t.mask,s).dispose();return Math.abs(g.heightAt(t.ox+300.3,t.oz+411.7)-h0)<1e-9?true:'heightAt changed with LOD'}`);
+
+t('world: ocean reuses Core water, follows wind and the same terrain height', '/core.html?start=world', `async()=>{${UP}if(!(await up()))return 'not ready';const g=n0.geo,o=g.ocean;if(!o||!o.water)return 'no ocean';
+ for(let i=0;i<40&&!o.ready;i++)await new Promise(r=>setTimeout(r,200));if(!o.ready)return 'ocean height window never built';
+ const x=g.walker.x,z=g.walker.z,a=n0.app;a.env.set({sea:0.9,windAng:0});const y0=o.heightAt(x+500,z-300,3);a.env.set({windAng:1.2});await new Promise(r=>setTimeout(r,300));const y1=o.heightAt(x+500,z-300,3);
+ if(o.water.u.uSea.value<0.89)return 'sea state not driven by environment';if(o.water.u.uWindAng.value<1.1)return 'wind direction not driven by environment';
+ const i=Math.round((x-(o.cx-4000))/(8000/384)),j=Math.round((z-(o.cz-4000))/(8000/384));const tex=o.h[j*385+i],real=g.heightAt(o.cx-4000+i*8000/384,o.cz-4000+j*8000/384);
+ return Math.abs(tex-real)<1e-3?true:'ocean height window disagrees with GeoWorld.heightAt '+tex+' vs '+real}`);
