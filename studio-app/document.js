@@ -139,7 +139,8 @@ const StudioDocument = (() => {
       }
       if (l.type === 'text') {
         l.text = String(item.text ?? 'Type here').slice(0,2000);
-        l.font = ['sans-serif','serif','monospace'].includes(item.font) ? item.font : 'sans-serif';
+        l.font = typeof item.font === 'string' && /^[A-Za-z0-9 ]{2,40}$|^(sans-serif|serif|monospace)$/.test(item.font) ? item.font : 'sans-serif';
+        if (Number.isFinite(item.fontWeight)) l.fontWeight = Math.max(100,Math.min(900,Math.round(item.fontWeight/100)*100));
         l.fontSize = number(item.fontSize,96,8,600);
       }
       if (l.type === 'path' || l.type === 'brush') {

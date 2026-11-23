@@ -13,7 +13,7 @@ const StudioProcUI = (() => {
   function open(host,ctx) {
     let layer = ctx.layer;
     let g = layer.graph, sel = null, view = {x:0,y:0,k:1}, drag = null, wire = null, ticker = 0, searching = false;
-    const root = el('div',{className:'procbox',role:'dialog',ariaLabel:'Procedural graph editor'});
+    const root = el('div',{className:'procbox'+(ctx.embedded ? ' embedded' : ''),role:ctx.embedded ? 'region' : 'dialog',ariaLabel:'Procedural graph editor'});
     const svg = sv('svg',{class:'procsvg',tabindex:0,'aria-label':'Graph canvas'}), gWires = sv('g'), gNodes = sv('g'), gTemp = sv('g'), content = sv('g');
     content.append(gWires,gNodes,gTemp); svg.append(content);
     const preview = el('canvas',{className:'procpreview',width:160,height:90,ariaLabel:'Graph output'});
@@ -83,6 +83,27 @@ const StudioProcUI = (() => {
       q.oninput = paint; q.onkeydown = e => { if (e.key === 'Escape') { e.stopPropagation(); close(); } else if (e.key === 'Enter') list.querySelector('.procitem')?.click(); };
       box.append(q,list,btn('Cancel',close)); root.append(box); paint(); q.focus();
     }
+    /* ---- drop a node on a wire to connect it in between ---- */
+    const imageIn = n => Object.entries(P.NODES[n.type].inputs).find(([,t]) => t === 'image')?.[0];
+    function wireUnder(n) {
+      if (n.type === 'output' || !P.NODES[n.type].out || g.edges.some(e => e.from === n.id || e.to === n.id)) return null;
+      const cx = n.x+W/2, cy = n.y+heightOf(n)/2; let best = null, bd = 28/view.k+W*.15;
+      for (const e of g.edges) {
+        const a = node(e.from), b = node(e.to); if (!a || !b || a.id === n.id || b.id === n.id) continue;
+        const kind = P.NODES[a.type].out, want = P.NODES[b.type].inputs[e.in]; if (kind !== want) continue;
+        if (kind === 'image' ? !(imageIn(n) && P.NODES[n.type].out === 'image') : !(P.NODES[n.type].inputs.input === 'number' && P.NODES[n.type].out === 'number')) continue;
+        const p0 = outPos(a), p3 = inPos(b,Object.keys(P.NODES[b.type].inputs).indexOf(e.in));
+        for (let t = 0; t <= 1; t += .04) { const u = 1-t, x = u*u*u*p0.x+3*u*u*t*(p0.x+60)+3*u*t*t*(p3.x-60)+t*t*t*p3.x, y = u*u*u*p0.y+3*u*u*t*p0.y+3*u*t*t*p3.y+t*t*t*p3.y, d = Math.hypot(x-cx,y-cy); if (d < bd) { bd = d; best = e; } }
+      }
+      return best;
+    }
+    function spliceInto(e,id) {
+      const n = node(id), inName = P.NODES[n.type].inputs.input === 'number' ? 'input' : imageIn(n), old = {...e};
+      g.edges = g.edges.filter(x => x !== e && !(x.to === old.to && x.in === old.in));
+      let err = P.connect(g,old.from,id,inName); if (!err) err = P.connect(g,id,old.to,old.in);
+      if (err) { g.edges = g.edges.filter(x => x.to !== id && x.from !== id); P.connect(g,old.from,old.to,old.in); }
+      return err;
+    }
     /* ---- pointer: move nodes, pan, wire, pinch ---- */
     const touches = new Map(); let pinch = null;
     svg.addEventListener('pointerdown',e => {
@@ -101,8 +122,9 @@ const StudioProcUI = (() => {
       if (wire) { const p = toGraph(e),a = outPos(node(wire.from)); gTemp.replaceChildren(sv('path',{d:`M ${a.x} ${a.y} C ${a.x+60} ${a.y} ${p.x-60} ${p.y} ${p.x} ${p.y}`,class:'pwire temp'})); return; }
       if (!drag) return;
       if (drag.kind === 'pan') { view.x = drag.vx+e.clientX-drag.sx; view.y = drag.vy+e.clientY-drag.sy; apply(); return; }
+      const p0 = toGraph(e); void p0;
       const p = toGraph(e); if (!drag.moved) { if (Math.hypot(p.x-drag.n.x-drag.dx,p.y-drag.n.y-drag.dy) < 4/view.k) return; drag.moved = true; drag.before = ctx.begin(); }
-      drag.n.x = Math.round(p.x-drag.dx); drag.n.y = Math.round(p.y-drag.dy); draw();
+      drag.n.x = Math.round(p.x-drag.dx); drag.n.y = Math.round(p.y-drag.dy); drag.hot = wireUnder(drag.n); draw(); if (drag.hot) gWires.children[g.edges.indexOf(drag.hot)]?.classList.add('hot');
     });
     const end = e => {
       touches.delete(e.pointerId); if (touches.size < 2) pinch = null;
@@ -112,7 +134,11 @@ const StudioProcUI = (() => {
         else if (wire.reconnect) edit(() => { g.edges = g.edges.filter(x => x !== wire.reconnect); });
         wire = null; return;
       }
-      if (drag && drag.kind === 'node' && drag.moved) { ctx.end(drag.before); draw(); }
+      if (drag && drag.kind === 'node' && drag.moved) {
+        ctx.end(drag.before); draw();
+        /* dropped on a wire between two nodes: splice the node into that wire */
+        const hot = drag.hot, n = drag.n; if (hot) edit(() => { const err = spliceInto(hot,n.id); if (err) ctx.notice(err); });
+      }
       drag = null;
     };
     svg.addEventListener('pointerup',end); svg.addEventListener('pointercancel',end);
@@ -126,7 +152,7 @@ const StudioProcUI = (() => {
     top.append(el('b',{textContent:'Procedural graph'}),status,btn('+ Node',addMenu,'softbtn compact pri'),btn('Fit',fit),
       (() => { const s = el('select',{className:'field',ariaLabel:'Start from a template'}); s.append(el('option',{value:'',textContent:'Template…'})); for (const k of Object.keys(P.templates)) s.append(el('option',{value:k,textContent:k})); s.onchange = () => { if (!s.value) return; edit(() => { layer.graph = P.templates[s.value](); sel = null; }); g = layer.graph; s.value = ''; fit(); }; return s; })(),
       (() => { const s = el('select',{className:'field',ariaLabel:'Resolution'}); for (const r of [240,360,480,720]) s.append(el('option',{value:r,textContent:r+' px',selected:g.res === r})); s.onchange = () => edit(() => { g.res = +s.value; }); return s; })(),
-      btn('Done',done,'softbtn compact pri'));
+      ...(ctx.embedded ? [] : [btn('Done',done,'softbtn compact pri')]));
     root.append(top,el('div',{className:'procmain'},svg,el('div',{className:'procright'},preview,side))); host.append(root);
     ctx.onFrame = draw; ticker = setInterval(() => { if (!root.isConnected) clearInterval(ticker); else { const r = preview.getContext('2d'),src = ctx.preview?.(); if (src) { r.clearRect(0,0,160,90); r.drawImage(src,0,0,160,90); } } },250);
     draw(); requestAnimationFrame(() => { fit(); svg.focus(); });

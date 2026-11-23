@@ -247,3 +247,12 @@ t('studio: several artboards: add, switch, duplicate, rename, reorder, delete, u
  A.remove();await wait(400);if(A.list.length!==2)return 'delete failed';U();await wait(400);if(A.list.length!==3)return 'undo of delete failed';
  const old=JSON.parse(JSON.stringify(M.doc));delete old.artboards;delete old.activeArtboard;if(D.normalize(old).artboards)return 'single-artboard projects should stay single';
  document.getElementById('artboardBtn').click();await wait(200);const items=[...document.querySelectorAll('#modalcontent button')].map(b=>b.textContent);if(!items.some(t=>/New artboard/.test(t))||!items.some(t=>/Export every artboard/.test(t)))return 'artboard menu is missing actions: '+items.join('|');document.getElementById('modal').close();return true}`);
+
+t('studio: fonts, alignment, film LUTs and phone centring', '/studio-app.html', `async()=>{${OPEN}await open();const M=window.n0iseMotion,D=M.doc?.constructor;await wait(300);
+ const V=window.n0iseViewport;document.getElementById('fit').click();await wait(200);
+ const body=document.getElementById('stagebody').getBoundingClientRect(),ab=document.querySelector('#stagebody canvas')?.getBoundingClientRect();
+ if(ab){const dy=Math.abs((ab.top+ab.height/2)-(body.top+body.height/2));if(dy>6)return 'artboard is '+dy.toFixed(1)+'px off vertical centre'}
+ if(typeof StudioFonts==='undefined'||[...StudioFonts.groups()].length<5)return 'font library missing';if(!StudioFonts.has('Inter')&&!StudioFonts.has('Archivo Black'))return 'expected fonts absent';
+ if(typeof StudioLutLib==='undefined'||StudioLutLib.list.length<50)return 'LUT library missing';
+ const t=StudioLooks.cube(StudioLutLib.cube('Teal and orange blockbuster'));if(!t)return 'LUT did not parse';
+ return true}`);
