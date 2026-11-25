@@ -267,3 +267,11 @@ t('studio mobile: holding a layer on the canvas opens its options; moving or a q
  const cx=r.left+r.width/2,cy=r.top+r.height/2;pe('pointerdown',33,cx,cy);await wait(700);
  const labels=[...document.querySelectorAll('#studioContext button')].map(b=>b.textContent);pe('pointerup',33,cx,cy);
  for(const need of ['Duplicate','Delete','Bring forward','Lock layer'])if(!labels.includes(need))return 'menu lacks '+need+': '+labels.join(',');return true}`);
+
+t('mobile polish: no text selection or double-tap zoom, canvas centred between the bars, timeline scrub is one seek per frame', '/studio-app.html', `async()=>{${OPEN}await open();
+ if(getComputedStyle(document.body).userSelect!=='none')return 'body text is selectable';if(getComputedStyle(document.body).touchAction!=='manipulation')return 'double-tap zoom is not disabled: '+getComputedStyle(document.body).touchAction;
+ if(!/user-scalable=no/.test(document.querySelector('meta[name=viewport]').content))return 'viewport allows zoom';
+ const q=s=>document.querySelector(s).getBoundingClientRect();await wait(600);const a=q('#artboard'),t=q('.documentbar'),n=q('.mobilebar'),c=a.top+a.height/2,f=(t.bottom+n.top)/2;
+ if(Math.abs(c-f)>3)return 'canvas centre '+c.toFixed(1)+' vs free space centre '+f.toFixed(1);
+ const inp=document.createElement('input');document.body.append(inp);const ok=getComputedStyle(inp).userSelect==='text';inp.remove();if(!ok)return 'text fields lost selection';
+ return true}`);
