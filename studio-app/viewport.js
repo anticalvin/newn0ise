@@ -8,7 +8,7 @@ const StudioViewport = (() => {
   /* phone: the toolbar sits in the footer outside the artwork area, so nothing needs to be lifted and the margins are even */
   function fitTransform(w,h,sw,sh,phone = false) {
     const flush = Math.abs((w/h)/(sw/sh)-1) < .03;
-    const zoom = flush ? Math.max(.01,Math.min(sw/w,sh/h)) : phone ? Math.max(.01,Math.min((sw-24)/w,(sh-24)/h,1)) : Math.max(.01,Math.min((sw-30)/w,(sh-66)/h,1));
+    const zoom = phone && flush ? Math.max(.01,Math.min((sw-24)/w,(sh-24)/h)) : flush ? Math.max(.01,Math.min(sw/w,sh/h)) : phone ? Math.max(.01,Math.min((sw-24)/w,(sh-24)/h,1)) : Math.max(.01,Math.min((sw-30)/w,(sh-66)/h,1));
     return {zoom,pan:{x:0,y:flush || phone ? 0 : -18},flush};
   }
   const create = (locked = false) => ({zoom:1,pan:{x:0,y:0},fitted:true,locked:!!locked,blocked:0});
