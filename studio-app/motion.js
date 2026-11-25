@@ -160,7 +160,12 @@
   const visibleW = () => Math.max(q('#nst-scroll').clientWidth, 200);
   const limits = () => TV.limits(doc()?.duration || 8, visibleW(), fps());
   /* zoom and scroll move together; the view is UI state (the clips themselves stay in the document and its undo history) */
-  function applyView(v) { pps = v.pps; refresh(); q('#nst-scroll').scrollLeft = v.scrollLeft; paintHead(); }
+  let viewNext = null, viewRaf = 0;
+  function applyView(v) {
+    pps = v.pps; viewNext = v;
+    if (viewRaf) return;
+    viewRaf = requestAnimationFrame(() => { viewRaf = 0; const n = viewNext; viewNext = null; if (!n) return; refresh(); q('#nst-scroll').scrollLeft = n.scrollLeft; paintHead(); });
+  }
   const here = () => ({ pps, scrollLeft: q('#nst-scroll').scrollLeft });
   /* while playing, zoom about the playhead if it is on screen; otherwise about the middle of the window */
   function anchorPx() { const sc = q('#nst-scroll'), px = x(time()) - sc.scrollLeft; return playing && px >= 0 && px <= sc.clientWidth ? px : sc.clientWidth / 2; }
@@ -229,13 +234,14 @@
     const tol = 8 / pps;
     let best = v, bd = tol;
     for (const p of points) { const dd = Math.abs(p - v); if (dd < bd) { best = p; bd = dd; } }
+    if (drag && drag.mode !== 'scrub') { const hit = best !== v ? best : null; if (hit !== null && hit !== drag.snapAt) navigator.vibrate?.(5); drag.snapAt = hit; }
     return best;
   }
   const canvasX = e => e.clientX - q('#nst-canvas').getBoundingClientRect().left;
   q('#nst-canvas').addEventListener('pointerdown', e => {
     const clipEl = e.target.closest('.nst-clip');
     if (!clipEl) {
-      if (e.target.closest('[data-scrub]') && e.button === 0) { drag = { mode: 'scrub' }; q('#nst-canvas').setPointerCapture(e.pointerId); if (playing) pause(); seek(canvasX(e) / pps); }
+      if (e.target.closest('[data-scrub]') && e.button === 0) { drag = { mode: 'scrub' }; try { q('#nst-canvas').setPointerCapture(e.pointerId); } catch {} if (playing) pause(); seek(canvasX(e) / pps); }
       return;
     }
     if (e.button !== 0) return;
@@ -246,16 +252,38 @@
     if (!M().selection.includes(l.id)) M().select([l.id]);
     const c = clipOf(l);
     const mode = e.target.classList.contains('nst-hl') ? 'l' : e.target.classList.contains('nst-hr') ? 'r' : 'move';
-    drag = { mode, l, before: M().capture(), sx: e.clientX, start: c.start, dur: c.dur, trim: l.trim || 0, clipEl, moved: false };
-    q('#nst-canvas').setPointerCapture(e.pointerId);
+    drag = { mode, l, before: M().capture(), sl: q('#nst-scroll').scrollLeft, sx: e.clientX, start: c.start, dur: c.dur, trim: l.trim || 0, clipEl, moved: false };
+    try { q('#nst-canvas').setPointerCapture(e.pointerId); } catch {}
+    navigator.vibrate?.(8);
     e.preventDefault();
   });
   q('#nst-canvas').addEventListener('pointermove', e => {
     if (!drag) return;
-    if (drag.mode === 'scrub') { seek(canvasX(e) / pps); return; }
-    const dt = (e.clientX - drag.sx) / pps, { l } = drag;
+    drag.cx = e.clientX;
+    if (drag.mode === 'scrub') { drag.scrubX = e.clientX; if (!drag.raf) drag.raf = requestAnimationFrame(frameDrag); return; }
     if (Math.abs(e.clientX - drag.sx) > 2) drag.moved = true;
     if (!drag.moved) return;
+    if (!drag.raf) drag.raf = requestAnimationFrame(frameDrag);
+  });
+  /* one update per frame: scrub, move, trim, and edge auto-scroll while a finger holds a clip near the side */
+  function frameDrag() {
+    const dr = drag; if (!dr) return; dr.raf = 0;
+    const sc = q('#nst-scroll'), r = sc.getBoundingClientRect();
+    if (dr.mode === 'scrub') {
+      const edge = 28, left = dr.scrubX - r.left, right = r.right - dr.scrubX;
+      if (left < edge && sc.scrollLeft > 0) sc.scrollLeft -= Math.ceil((edge - left) / 2); else if (right < edge) sc.scrollLeft += Math.ceil((edge - right) / 2);
+      seek((dr.scrubX - q('#nst-canvas').getBoundingClientRect().left) / pps);
+      if (left < edge || right < edge) dr.raf = requestAnimationFrame(frameDrag);
+      return;
+    }
+    const e = { clientX: dr.cx };
+    if (dr.moved) {
+      const edge = 36, left = e.clientX - r.left, right = r.right - e.clientX;
+      if (left < edge && sc.scrollLeft > 0) { sc.scrollLeft -= Math.ceil((edge - left) / 2); dr.raf = requestAnimationFrame(frameDrag); }
+      else if (right < edge) { sc.scrollLeft += Math.ceil((edge - right) / 2); dr.raf = requestAnimationFrame(frameDrag); }
+    }
+    const dt = (e.clientX - dr.sx + sc.scrollLeft - dr.sl) / pps, { l } = dr;
+    const drag = dr;
     const video = l.type === 'video', srcDur = l.srcDur ?? 1e9;
     let start = drag.start, dur = drag.dur, trim = drag.trim;
     if (drag.mode === 'move') start = Math.max(0, snapTo(drag.start + dt, l.id));
@@ -273,10 +301,10 @@
     drag.clipEl.style.left = x(l.start) + 'px'; drag.clipEl.style.width = Math.max(6, x(l.dur)) + 'px';
     drag.clipEl.querySelector('.nst-clipname').textContent = l.name + ' · ' + (Math.round(l.dur * 10) / 10) + 's';
     syncVideos(time(), false); M().schedule();
-  });
+  }
   const endDrag = () => {
     if (!drag) return;
-    const d = drag; drag = null;
+    const d = drag; drag = null; cancelAnimationFrame(d.raf);
     if (d.mode === 'scrub') return;
     if (d.moved) {
       const end = (d.l.start ?? 0) + (d.l.dur ?? 0);

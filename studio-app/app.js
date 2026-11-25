@@ -748,6 +748,14 @@
     if (fitted) {
       const f = StudioViewport.fitTransform(w,h,width,height,matchMedia('(max-width:680px)').matches);
       zoom = f.zoom; pan = f.pan;
+      /* phone: centre the artwork in the space between the top bars and the dock, not just inside the stage (the footer tools sit below the stage) */
+      if (matchMedia('(max-width:680px)').matches) {
+        const sr = stage.getBoundingClientRect(), top = document.querySelector('.documentbar')?.getBoundingClientRect(), dock = document.querySelector('.mobilebar')?.getBoundingClientRect();
+        if (top && dock && dock.top > top.bottom) {
+          const want = (top.bottom+dock.top)/2-(sr.top+sr.height/2), room = Math.max(0,(height-h*zoom)/2);
+          pan = {x:pan.x,y:Math.max(-room,Math.min(room,want))};
+        }
+      }
     }
     /* the composition is drawn at screen resolution, so a change of zoom must redraw it (debounced), otherwise vectors stay soft until the next edit */
     { const rs = renderScale(); if (Math.abs(rs-lastRenderScale) > .01) { lastRenderScale = rs; clearTimeout(scaleTimer); scaleTimer = setTimeout(() => { if (view !== 'spatial') schedule(); },90); } }

@@ -52,3 +52,17 @@
 
 .nst-clip.selected{touch-action:none}.nst-scroll{overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch}
 @media(pointer:coarse){.nst-h{width:22px!important}.nst-clip{height:36px;top:2px}}
+
+/* touch: roomy, steady and GPU-friendly */
+.nst-playhead{will-change:transform}.nst-canvas{contain:layout style}.nst-lane{contain:layout paint}
+.nst-scroll{scroll-behavior:auto;touch-action:pan-x pan-y;-webkit-user-select:none;user-select:none}
+.nst-clip{transition:box-shadow .12s,border-color .12s}.nst-clip.selected{box-shadow:0 0 0 1px #f3efe4,0 4px 14px #0008}
+@media(pointer:coarse) and (max-width:750px){.nst-timeline{height:300px}}
+@media(pointer:coarse){
+  .nst-ruler{height:44px}.nst-tick{padding-top:15px;font-size:10px}
+  .nst-lane{height:52px}.nst-clip{height:44px;top:4px;border-radius:9px}
+  .nst-clip.selected .nst-h{width:30px!important}.nst-clip.selected .nst-h::after{top:12px;bottom:12px;left:11px;width:4px;background:#fff}
+  .nst-playhead{border-left-width:3px}.nst-playhead::before{left:-9px;border-width:8px 8px 0}
+  .nst-track-name{height:52px}.nst-label-head{height:44px;padding-top:16px}
+}
+@media(prefers-reduced-motion:reduce){.nst-clip{transition:none}}

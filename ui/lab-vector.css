@@ -59,3 +59,14 @@
   .vector-field .pill, .vector-tools input[type="color"] { min-width: 44px; }
 }
 #vector-status-line:not(:has(#vector-status:not(:empty), #vector-error:not(:empty), #vector-proposal:not([hidden]))) { display: none; }
+/* phone: the mode switch and Source sit in the true middle of the bar, wordmark left, pause and menu right */
+@media (max-width: 959px) {
+  .lab .widebar { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 4px; }
+  .lab .widebar .actions { display: contents; }
+  .lab .widebar .lab-word { grid-column: 1; grid-row: 1; justify-self: start; }
+  .lab .widebar .lab-modes { grid-column: 2; grid-row: 1; justify-self: center; }
+  .lab .widebar .desk-src { grid-column: 2; grid-row: 1; justify-self: center; display: none; }
+  .lab[data-mode="vector"] .widebar .desk-src { display: inline-flex; grid-row: 2; margin-top: 2px; }
+  .lab .widebar #pause { grid-column: 3; grid-row: 1; justify-self: end; margin-right: 52px; }
+  .lab .widebar #lab-menu { grid-column: 3; grid-row: 1; justify-self: end; }
+}
