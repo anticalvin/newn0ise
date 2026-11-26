@@ -64,6 +64,7 @@ export class Core {
   exec(cmd) {
     const a = this.a; let c; try { c = typeof cmd === 'string' ? JSON.parse(cmd) : cmd; } catch (e) { return { ok: false, msg: 'Bad JSON' }; }
     if (!c || typeof c.cmd !== 'string') return { ok: false, msg: 'Missing "cmd". Run {"cmd":"describe"} for the list.' };
+    if (a.firstLight?.active) return a.firstLight.exec(c);
     try {
       if (c.cmd.startsWith('world.') && c.cmd !== 'world.import' && c.cmd !== 'world.remove' && a.geo) return a.geo.exec(c, this);
       switch (c.cmd) {

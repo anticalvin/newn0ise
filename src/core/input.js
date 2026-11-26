@@ -14,6 +14,7 @@ export class Input {
     this.pinch = 0; this.jumpEdge = false;
     const typing = e => /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) && e.target.type !== 'range';
     addEventListener('keydown', e => {
+      if (app.firstLight?.active) return;
       if (typing(e)) return; this.pad.active = false;
       if (app.ui.modalOpen()) { if (e.key === 'Escape') app.ui.closeAll(); return; }   // sheets own the keyboard
       const k = e.key.toLowerCase(), mod = e.ctrlKey || e.metaKey;
@@ -39,13 +40,15 @@ export class Input {
     addEventListener('gamepadconnected', () => { this.pad.connected = true; app.ui.toast('Gamepad connected'); });
     addEventListener('gamepaddisconnected', () => { this.pad.connected = false; this.pad.active = false; });
     canvas.addEventListener('contextmenu', e => e.preventDefault());
-    canvas.addEventListener('wheel', e => { e.preventDefault(); app.zoom(Math.exp(e.deltaY * 0.0011)); }, { passive: false });
+    canvas.addEventListener('wheel', e => { if (app.firstLight?.active) return; e.preventDefault(); app.zoom(Math.exp(e.deltaY * 0.0011)); }, { passive: false });
     canvas.addEventListener('pointerdown', e => {
+      if (app.firstLight?.active) return;
       canvas.setPointerCapture(e.pointerId); this.pad.active = false;
       this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, button: e.button, type: e.pointerType, shift: e.shiftKey, t: 0, moved: 0 });
       this.ptr.x = e.clientX; this.ptr.y = e.clientY; this.ptr.in = true; this.decide(e);
     });
     canvas.addEventListener('pointermove', e => {
+      if (app.firstLight?.active) return;
       this.ptr.x = e.clientX; this.ptr.y = e.clientY; this.ptr.in = true;
       const p = this.pointers.get(e.pointerId); if (!p) return;
       const dx = e.clientX - p.x, dy = e.clientY - p.y; p.x = e.clientX; p.y = e.clientY; p.moved += Math.abs(dx) + Math.abs(dy);
