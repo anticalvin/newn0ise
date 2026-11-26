@@ -441,3 +441,15 @@ a.brand:focus-visible { outline:2px solid var(--accent); outline-offset:4px; }
 .context-menu.peek{opacity:.2;pointer-events:none;transition:opacity .12s}
 .context-menu.peek.near{opacity:.96}
 .context-menu button.hot{background:#5a5957}
+
+/* sizing and vector controls */
+#overlay .hit.rot{cursor:grab}
+#overlay .hit.edgehit{cursor:ew-resize}
+#overlay .handle.edge{fill:#e8e1d5;stroke:#262624;stroke-width:1;vector-effect:non-scaling-stroke}
+.xhud{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);z-index:9;display:flex;gap:6px;max-width:calc(100% - 16px);overflow-x:auto;padding:5px;border-radius:26px;background:rgba(32,33,35,.92);border:1px solid #353638;touch-action:pan-x;scrollbar-width:none}
+.xhud[hidden]{display:none}
+.xhud::-webkit-scrollbar{display:none}
+.xhud button{flex:none;min-height:44px;min-width:44px;padding:0 16px;border-radius:22px;color:#d8d8d6;font:inherit;font-size:13px;white-space:nowrap;background:transparent;border:0}
+.xhud button[aria-pressed=true]{background:#454543;color:#fff}
+.xhud button:disabled{opacity:.35}
+.xhud button:active{background:#3a3b3d}
