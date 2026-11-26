@@ -3997,7 +3997,11 @@ function colorRow(host,l){
 }
 const recolors=o=>!!(o&&(o.pal&&o.pal!=='src'));
 /* Fuse bar: up to 4 steps as chips with a power dot (tap = on/off, hold = solo), tap name = pick effect */
-const thumbCopy=(id,w=104,h=104)=>{const c=document.createElement('canvas');c.width=w;c.height=h;try{const t=cachedThumb(id),g=c.getContext('2d');const k=Math.max(w/t.width,h/t.height),dw=t.width*k,dh=t.height*k;g.drawImage(t,(w-dw)/2,(h-dh)/2,dw,dh);}catch(e){}return c;};
+const thumbBlank=t=>{try{const d=t.getContext('2d').getImageData(0,0,t.width,t.height).data;for(let i=0;i<d.length;i+=53)if(d[i]+d[i+1]+d[i+2])return false;return true;}catch(e){return false;}};
+/* a look's preview is its own output on your picture; if the first frame comes back empty (picture or shader still loading) it is not kept, and it is redrawn shortly */
+const thumbCopy=(id,w=104,h=104)=>{const c=document.createElement('canvas');c.width=w;c.height=h;let tries=0;
+  const draw=()=>{try{const t=cachedThumb(id),g=c.getContext('2d');const k=Math.max(w/t.width,h/t.height),dw=t.width*k,dh=t.height*k;g.drawImage(t,(w-dw)/2,(h-dh)/2,dw,dh);if(thumbBlank(t)&&tries++<8)setTimeout(draw,500);}catch(e){}};
+  draw();return c;};
 function fuseBar(host,l){
   const V=l.params,bar=el('div','fbar');
   const filled=[1,2,3,4].filter(s=>CAMFX[+V['f'+s]-1]),empty=[1,2,3,4].filter(s=>!CAMFX[+V['f'+s]-1]);
@@ -4036,11 +4040,18 @@ function fuseBar(host,l){
   const cost=fuseCost(V),meter=el('span','fcost','Cost '+'●'.repeat(Math.min(cost,9))+'○'.repeat(Math.max(0,9-cost)));meter.title='How heavy this chain is for the device';
   const top=el('div','fx-acts');top.append(add,meter);bar.appendChild(top);
   if(cost>=9&&matchMedia('(pointer:coarse)').matches)bar.appendChild(el('div','fx-note','Heavy on a phone. Switch a step off if it stutters.'));
-  if(FUSEPICK){const pk=el('div','fpick');pk.appendChild(el('div','fx-sec','<b>'+(CAMFX[+V['f'+FUSEPICK]-1]?'Change look':'Add look')+'</b><span>Step '+FUSEPICK+'</span>'));
-    UFAM_ORDER.concat(['Mine']).filter(n=>n!=='Mix'&&(n!=='Face'||FUSEFACE)).forEach(n=>{const fs=CAMFX.filter(f=>f.cat!=='draft'&&camFam(f)===n).sort((a,b)=>a.label.localeCompare(b.label));if(!fs.length)return;pk.appendChild(el('div','cl',n));const w=el('div','pe');
-      fs.forEach(f=>{const b=el('button','',esc0(f.label));b.type='button';b.addEventListener('click',()=>{fuseSet(l,FUSEPICK,f.id);IS.fstep=FUSEPICK;FUSEPICK=0;rerender();});w.appendChild(b);});pk.appendChild(w);});
+  if(FUSEPICK){const pk=el('div','fpick');
+    if(FUSESAVE_FOR!==FUSEPICK){FUSESAVE=['f','i','m','on'].map(k=>V[k+FUSEPICK]);FUSESAVE_FOR=FUSEPICK;}
+    const cur=CAMFX[+V['f'+FUSEPICK]-1];
+    pk.appendChild(el('div','fx-sec','<b>'+(FUSESAVE[0]?'Change look':'Add look')+'</b><span>Step '+FUSEPICK+(cur?' · '+esc0(cur.label):'')+'</span>'));
+    pk.appendChild(el('div','fx-note','Tap a look to try it on your picture. Keep going until you like one, then press Done.'));
+    UFAM_ORDER.concat(['Mine']).filter(n=>n!=='Mix'&&(n!=='Face'||FUSEFACE)).forEach(n=>{const fs=CAMFX.filter(f=>f.cat!=='draft'&&camFam(f)===n).sort((a,b)=>a.label.localeCompare(b.label));if(!fs.length)return;pk.appendChild(el('div','cl',n));const w=el('div','ftiles');
+      fs.forEach(f=>{const on=cur&&cur.id===f.id,b=el('button','ftile'+(on?' on':''));b.type='button';b.setAttribute('aria-pressed',on);b.setAttribute('aria-label',f.label);b.append(thumbCopy('fuse:'+f.id,120,120),el('span','',esc0(f.label)));
+        b.addEventListener('click',()=>{fuseSet(l,FUSEPICK,f.id);IS.fstep=FUSEPICK;buzz(6);snap();renderInspector();});w.appendChild(b);});pk.appendChild(w);});
     {const fb=el('button','chip act',FUSEFACE?'Hide face effects':'Face effects…');fb.type='button';fb.addEventListener('click',()=>{FUSEFACE=!FUSEFACE;renderInspector();});const fw=el('div','pe');fw.appendChild(fb);pk.appendChild(fw);}
-    const cx=el('button','chip act','Cancel');cx.type='button';cx.addEventListener('click',()=>{FUSEPICK=0;renderInspector();});const cw=el('div','pe');cw.appendChild(cx);pk.appendChild(cw);
+    const dn=el('button','chip act primary','Done');dn.type='button';dn.addEventListener('click',()=>{FUSEPICK=0;FUSESAVE_FOR=0;renderInspector();});
+    const cx=el('button','chip act','Cancel');cx.type='button';cx.addEventListener('click',()=>{const st=FUSEPICK;['f','i','m','on'].forEach((k,i)=>{V[k+st]=FUSESAVE[i];});FUSEPICK=0;FUSESAVE_FOR=0;snap();renderInspector();});const cw=el('div','pe fdone');cw.append(dn,cx);
+    pk.appendChild(cw);
     bar.appendChild(pk);}
   /* mask tool */
   if([1,2,3,4].some(s=>+V['f'+s]&&+V['mk'+s]===4)||ST.mpaint){
@@ -4069,7 +4080,7 @@ function fuseBar(host,l){
   host.appendChild(bar);
 }
 const esc0=t=>String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-let FUSEPICK=0,FUSEFACE=false;
+let FUSEPICK=0,FUSEFACE=false,FUSESAVE=[],FUSESAVE_FOR=0;
 function renderInspector(){PAINTS.clear();
   const h=$i('insp'),st=h?h.scrollTop:0,g0=INS.gallery,m0=layer().module;
   renderInspector0();if(NODES&&NODES.open)NODES.refresh();
@@ -4226,6 +4237,9 @@ function useRenderProfile(mod){
     const fresh=mkLayer(mod);if(ps)Object.assign(fresh.params,JSON.parse(JSON.stringify(ps.v)));
     if(other>=0){STACK.layers[other]=fresh;at=other;}else{STACK.layers.push(fresh);at=STACK.layers.length-1;}
   }
+  /* a rendering profile is the display look: it replaces the CRT Lab look instead of being combined with it */
+  STACK.layers.forEach(x=>{if(x.module==='crtlab')x.visible=false;});
+  STACK.layers[at].visible=true;
   STACK.sel=at;snap();refreshUI();buzz(8);renderInspector();
 }
 function renderRenderProfiles(host){
@@ -4247,8 +4261,13 @@ function renderHardware(host){
   host.appendChild(fxHead('Hardware','Choose a physical character, then tune its signal.'));
   renderRenderProfiles(host);
   if(l.module!=='crtlab'){
-    const n=el('div','fx-note','There is no CRT Lab layer in this composition. Hardware profiles live on that layer.');host.appendChild(n);
-    const b=el('button','fx-add','+ Add CRT Lab');b.type='button';b.addEventListener('click',()=>{STACK.layers.unshift(mkLayer('crtlab'));STACK.sel=0;snap();renderInspector();});host.appendChild(b);return;
+    const crt=STACK.layers.findIndex(x=>x.module==='crtlab'),ids=HW_RENDER.map(x=>x[0]);
+    const n=el('div','fx-note',crt>=0?'A rendering profile is active, so the CRT Lab is off. Switch back to use the CRT presets.':'There is no CRT Lab layer in this composition. Hardware profiles live on that layer.');host.appendChild(n);
+    const b=el('button','fx-add',crt>=0?'Use CRT Lab':'+ Add CRT Lab');b.type='button';b.addEventListener('click',()=>{
+      STACK.layers=STACK.layers.filter(x=>!ids.includes(x.module));
+      let at=STACK.layers.findIndex(x=>x.module==='crtlab');
+      if(at<0){STACK.layers.unshift(mkLayer('crtlab'));at=0;}
+      STACK.layers[at].visible=true;STACK.sel=at;snap();refreshUI();renderInspector();});host.appendChild(b);return;
   }
   const st0=hwState(),cur=el('div','fx-current');host.appendChild(cur);
   const grid=el('div','fx-cards');
@@ -4480,7 +4499,7 @@ const camOn=(l,fx)=>l.module==='fuse'&&+l.params.f1===fxIndex(fx.id);
 const RAIL_FAMILY={patdith:'Dither',contour:'Lines',ridge:'Lines',dither:'Dither',orb:'Dither',multithr:'Dither',cmyk:'Print',shapes:'Print',stipple:'Print',patmerge:'Print',crusher:'Pixel',pixelmania:'Pixel',ascii:'Glyph',linemod:'Lines',displace:'Glitch',epsilon:'Light',crtlab:'Signal / CRT',fuse:'Mix',psort:'Glitch',mosh:'Glitch',riso:'Print',engrave:'Lines',seccam:'Signal / CRT',cel:'Toon',comic:'Toon',tonedot:'Toon',orderedmatrix:'Hardware',inkscreen:'Hardware',eink:'Hardware'};
 const RAIL_ORDER=['★ Favorites','Recent','Mine',...UFAM_ORDER];
 const THUMBS=new Map();   /* key: module id + source version -> canvas */
-function cachedThumb(id){const k=id+'|'+SRC.ver;if(id!=='crtlab'&&THUMBS.has(k))return THUMBS.get(k);const rc=id.startsWith('recipe:')&&loadRecipes().find(r=>'recipe:'+r.id===id);const fx=id.startsWith('fuse:')&&FXBY[id.slice(5)];const c=rc?moduleThumb('fuse',112,84,rc.p):fx?moduleThumb('fuse',112,84,{f1:fxIndex(fx.id),i1:fx.i,m1:fx.m}):moduleThumb(id,112,84);if(id!=='crtlab'){THUMBS.set(k,c);if(THUMBS.size>60)THUMBS.delete(THUMBS.keys().next().value);}return c;}
+function cachedThumb(id){const k=id+'|'+SRC.ver;if(id!=='crtlab'&&THUMBS.has(k))return THUMBS.get(k);const rc=id.startsWith('recipe:')&&loadRecipes().find(r=>'recipe:'+r.id===id);const fx=id.startsWith('fuse:')&&FXBY[id.slice(5)];const c=rc?moduleThumb('fuse',112,84,rc.p):fx?moduleThumb('fuse',112,84,{f1:fxIndex(fx.id),i1:fx.i,m1:fx.m}):moduleThumb(id,112,84);if(id!=='crtlab'&&!thumbBlank(c)){THUMBS.set(k,c);if(THUMBS.size>60)THUMBS.delete(THUMBS.keys().next().value);}return c;}
 function heroAt(l,n){const m=MODULES[l.module],h=(m.schema.hero||[])[n];if(!h)return null;
   if(l.module==='crtlab'){const c=CTL[h];return c&&c.t==='r'?{V:P,p:{k:c.k,label:c.l,min:c.min,max:c.max,step:c.step,t:'r'}}:null;}
   const p=m.params.find(x=>x.k===h);return p&&p.t==='r'?{V:l.params,p}:null;}

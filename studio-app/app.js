@@ -1229,6 +1229,9 @@
     else drawOverlay();
   }
 
+  /* iOS draws its text magnifier and callout on a long press unless touchstart is cancelled; the canvas never needs the browser's touch defaults */
+  stage.addEventListener('touchstart',e => { if (view !== 'spatial' && !e.target.closest('input,textarea,select,button,#textEdit,#inlineText,[contenteditable]')) e.preventDefault(); },{passive:false});
+  stage.addEventListener('selectstart',e => { if (!e.target.closest('input,textarea,#textEdit,#inlineText,[contenteditable]')) e.preventDefault(); });
   stage.addEventListener('pointerdown',e => {
     if (view === 'spatial' || e.target.closest('button,#textEdit,#inlineText') || e.button > 1) return;
     if (doc.artboardLocked && e.button === 0 && pointers.size < 2) { if (e.pointerType !== 'touch') notice('Artboard is locked. Right-click it to unlock.'); return; }
