@@ -15,6 +15,7 @@ export class Input {
     const typing = e => /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) && e.target.type !== 'range';
     addEventListener('keydown', e => {
       if (typing(e)) return; this.pad.active = false;
+      if (app.ui.modalOpen()) { if (e.key === 'Escape') app.ui.closeAll(); return; }   // sheets own the keyboard
       const k = e.key.toLowerCase(), mod = e.ctrlKey || e.metaKey;
       if (mod && k === 'z') { e.preventDefault(); e.shiftKey ? app.redo() : app.undo(); return; }
       if (mod && k === 'y') { e.preventDefault(); app.redo(); return; }
@@ -77,7 +78,7 @@ export class Input {
     mx += this.stick[0]; mz -= this.stick[1];
     let padApply = false, padInv = false;
     const gp = navigator.getGamepads ? [...navigator.getGamepads()].find(g => g && g.connected) : null;
-    if (gp) {
+    if (gp && !a.ui.modalOpen()) {
       const P = this.pad, b = i => gp.buttons[i] && gp.buttons[i].value, down = (i, on = 0.5, off = 0.3) => { const v = b(i); P.held[i] = P.held[i] ? v > off : v > on; return P.held[i]; };
       const C = cfg(), sw = C.swap ? 2 : 0, [lsx, lsy] = dz(gp.axes[sw] || 0, gp.axes[sw + 1] || 0), [rsx, rsy0] = dz(gp.axes[2 - sw] || 0, gp.axes[3 - sw] || 0), rsy = C.invY ? -rsy0 : rsy0;
       const any = lsx || lsy || rsx || rsy || gp.buttons.some(x => x.pressed); if (any && !P.active) { P.active = true; a.ui.pad(true); }

@@ -21,6 +21,7 @@ import { retailPrefab } from './prefabs/retail.js';
 import { createTelemetry } from './debug.js';
 import { GeoWorld } from './geo/manager.js';
 import { OverviewMap } from './geo/map.js';
+import { mountWorkspace } from './workspace-ui.js';
 
 const canvas = document.getElementById('c');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
@@ -230,12 +231,13 @@ function frame(now) {
   // adaptive pixel ratio: drop resolution when the frame rate sags, climb back when there is headroom
   acc += dt; frames++; if (acc > 1.5) { const fps = frames / acc; app.fps = fps; if (fps < 38 && pr > 0.7) { pr = Math.max(0.7, pr - 0.25); renderer.setPixelRatio(pr); resize(); } else if (fps > 58 && pr < maxPr()) { pr = Math.min(maxPr(), pr + 0.25); renderer.setPixelRatio(pr); resize(); } app.pr = pr; acc = 0; frames = 0; }
   const inp = input.poll(dt), c = app.cam;
+  if (ui.modalOpen()) { inp.mx = inp.mz = inp.lx = inp.ly = 0; inp.jump = false; inp.run = false; }
   if (inp.lx || inp.ly) app.orbit(inp.lx * 200, inp.ly * 200);
   if (app.geo.active) { app.geo.update(dt, inp, now); renderer.render(scene, camera); tele.tick(now); return; }
   // movement relative to camera
   const fx = -Math.sin(c.yaw), fz = -Math.cos(c.yaw), rx = Math.cos(c.yaw), rz = -Math.sin(c.yaw);
   const mvx = fx * inp.mz + rx * inp.mx, mvz = fz * inp.mz + rz * inp.mx;
-  const explore = app.mode === 'explore', startOpen = ui.startOpen;
+  const explore = app.mode === 'explore', startOpen = ui.modalOpen();
   if (!explore) { const k = c.dist * 0.6 * dt; c.target.x = clamp(c.target.x + mvx * k, -124, 124); c.target.z = clamp(c.target.z + mvz * k, -124, 124); }
   // one fixed 60 Hz step for the character and the boulders (Rapier when it is ready, the simple solver until then)
   physAcc += dt; let n = 0;
@@ -268,4 +270,5 @@ function frame(now) {
 }
 requestAnimationFrame(frame);
 window.n0 = { app, core, geo: app.geo, telemetry: () => tele.read(), run: l => core.run(l), exec: c => core.exec(c), get fps() { return app.fps; }, get pr() { return app.pr; } };
+mountWorkspace(window.n0);
 window.Core = { exec: c => core.exec(c), describe: () => core.exec({ cmd: 'describe' }), state: () => core.exec({ cmd: 'state' }) };
