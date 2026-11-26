@@ -1770,6 +1770,24 @@
     contextMenu.show(cx || rect.left,cy || rect.bottom,actions);
     return true;
   }
+  /* while the finger is still down the menu sits above it and fades, so you can see the layer under your finger; slide onto an option and let go to pick it, or lift to keep the menu */
+  function peekMenu(x,y) {
+    const m = $('studioContext'); if (m.hidden) return;
+    const h = m.offsetHeight, w = m.offsetWidth, above = y-h-34;
+    m.style.top = Math.max(6,above >= 6 ? above : Math.min(y+60,innerHeight-h-6))+'px';
+    m.style.left = Math.max(6,Math.min(x-w/2,innerWidth-w-6))+'px';
+    m.classList.add('peek');
+    const items = () => [...m.children];
+    const over = (px,py) => items().find(b => { const r = b.getBoundingClientRect(); return px >= r.left && px <= r.right && py >= r.top && py <= r.bottom; });
+    const move = e => { const hit = over(e.clientX,e.clientY); items().forEach(b => b.classList.toggle('hot',b === hit)); m.classList.toggle('near',!!hit); if (hit && hit !== move.last) navigator.vibrate?.(4); move.last = hit; };
+    const end = e => {
+      window.removeEventListener('pointermove',move); window.removeEventListener('pointerup',end); window.removeEventListener('pointercancel',end);
+      const hit = e.type === 'pointerup' ? over(e.clientX,e.clientY) : null;
+      m.classList.remove('peek','near'); items().forEach(b => b.classList.remove('hot'));
+      if (hit) hit.click();
+    };
+    window.addEventListener('pointermove',move); window.addEventListener('pointerup',end); window.addEventListener('pointercancel',end);
+  }
   /* touch: hold a layer on the canvas (still) to open the same menu; moving, a second finger or lifting cancels it */
   { let press = null;
     const stop = () => { clearTimeout(press?.timer); press = null; };
@@ -1784,7 +1802,7 @@
         const before = gesture;
         if (before) { gesture = null; delete stage.dataset.drag; }
         const e2 = {target,preventDefault() {}};
-        if (stageMenu(e2,x,y,false)) { menuAt = Date.now(); navigator.vibrate?.(12); pointers.clear(); }
+        if (stageMenu(e2,x,y,false)) { menuAt = Date.now(); navigator.vibrate?.(12); pointers.clear(); peekMenu(x,y); }
         else if (before) gesture = before;
       },450)};
     },true);
@@ -1978,28 +1996,30 @@
     catch { notice('Could not open the node editor.'); }
   }
   async function sendArtwork(destination) {
-    const tab = window.open('about:blank','_blank');
-    if (!tab) { notice('Allow pop-ups to open the exported image in another tool.'); return; }
-    tab.opener = null;
+    const phone = matchMedia('(max-width:680px)').matches || matchMedia('(pointer:coarse)').matches;
+    const tab = phone ? null : window.open('about:blank','_blank');
+    if (!phone && !tab) { notice('Allow pop-ups to open the exported image in another tool.'); return; }
+    if (tab) tab.opener = null;
     try {
       const [blob,handoff] = await Promise.all([exportPNG(),import('../src/handoff.js')]);
       await handoff.put(blob,{from:'studio',name:doc.name,to:destination});
       await hubRecord(blob,destination);
-      tab.location.replace(new URL((destination === 'effects' ? 'effects.html' : 'studio.html')+'#from=studio',location.href));
+      const url = new URL((destination === 'effects' ? 'effects.html' : 'studio.html')+'#from=studio',location.href);
+      if (tab) tab.location.replace(url); else location.href = url.href;
     } catch {
-      tab.close();
+      tab?.close();
       notice('Could not send the artwork. Download a PNG to open it in the other tool.');
     }
   }
   function exportOptions() {
     if (gesture || view === 'spatial') return;
     menu('Export artwork',[
+      ['Send to Effects',() => sendArtwork('effects')],
       ['Download PNG',downloadPNG],
       ...(doc.artboards ? [['Download every artboard (PNG)',downloadAllPNG]] : []),
       ['Download SVG',downloadSVG],
       ['Save editable project',save],
       ['Show in node editor',showInNodes],
-      ['Open in Effects',() => sendArtwork('effects')],
       ['Open in 3D as relief',() => sendArtwork('3d')]
     ]);
   }
