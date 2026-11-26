@@ -38,7 +38,7 @@
   let textEdit = null, inlineText = null, launchMode = 'new', launchTicket = 0;
   let view = 'canvas', tool = 'select', rail = 'layers', sheet = 'canvas', shape = 'rectangle';
   let paintColor = '#e9e5db', constrain = true, hoverId = null;
-  let dirty = false, opening = 0, revision = 0, space = false, snapping = true, angular = false;
+  let dirty = false, opening = 0, revision = 0, space = false, snapping = true, angular = false, hud = null, hudKey = '';
   /* grid, guides and snap switches (StudioGrid): showing the grid and snapping to it are separate */
   let gridCfg = StudioGrid.normalize((() => { try { return JSON.parse(localStorage.getItem('n0ise.gridcfg') || 'null'); } catch { return null; } })());
   const saveGrid = () => { gridCfg = StudioGrid.normalize(gridCfg); try { localStorage.setItem('n0ise.gridcfg',JSON.stringify(gridCfg)); } catch {} };
@@ -301,7 +301,7 @@
     editAnchors = false;
   }
   /* options for each tool, remembered between sessions (shown in the palette above the tool) */
-  const toolOpts = {pickSize:1,brushSize:12,smooth:58,taper:55,eraserSize:40,lineWidth:6,shapeStroke:0,penWidth:4,textFont:'sans-serif',textSize:0,gradKind:'linear',cropAspect:0};
+  const toolOpts = {pickSize:1,brushSize:12,smooth:58,taper:55,eraserSize:40,lineWidth:6,shapeStroke:0,penWidth:4,textFont:'sans-serif',textSize:0,gradKind:'linear',cropAspect:0,shapeAspect:0};
   try { Object.assign(toolOpts,JSON.parse(localStorage.getItem('n0ise.toolopts') || '{}')); } catch {}
   const saveOpts = () => { try { localStorage.setItem('n0ise.toolopts',JSON.stringify(toolOpts)); } catch {} };
   function build(type,props = {}) {
@@ -748,6 +748,14 @@
     if (fitted) {
       const f = StudioViewport.fitTransform(w,h,width,height,matchMedia('(max-width:680px)').matches);
       zoom = f.zoom; pan = f.pan;
+      /* phone: centre the artwork in the space between the top bars and the dock, not just inside the stage (the footer tools sit below the stage) */
+      if (matchMedia('(max-width:680px)').matches) {
+        const sr = stage.getBoundingClientRect(), top = document.querySelector('.documentbar')?.getBoundingClientRect(), dock = document.querySelector('.mobilebar')?.getBoundingClientRect();
+        if (top && dock && dock.top > top.bottom) {
+          const want = (top.bottom+dock.top)/2-(sr.top+sr.height/2), room = Math.max(0,(height-h*zoom)/2);
+          pan = {x:pan.x,y:Math.max(-room,Math.min(room,want))};
+        }
+      }
     }
     /* the composition is drawn at screen resolution, so a change of zoom must redraw it (debounced), otherwise vectors stay soft until the next edit */
     { const rs = renderScale(); if (Math.abs(rs-lastRenderScale) > .01) { lastRenderScale = rs; clearTimeout(scaleTimer); scaleTimer = setTimeout(() => { if (view !== 'spatial') schedule(); },90); } }
@@ -798,12 +806,29 @@
     const b = S.union(layers.map(l => R.bounds(l,w,h)));
     return [{x:b.left,y:b.top},{x:b.right,y:b.top},{x:b.right,y:b.bottom},{x:b.left,y:b.bottom}];
   }
+  const coarse = () => matchMedia('(pointer:coarse)').matches;
+  /* one layer that can be stretched on its own axes: shapes, images and video have a width and height, paths scale their points */
+  const stretchOf = l => l && !l.locked && (l.type === 'path' || ((l.type === 'shape' || l.type === 'image' || l.type === 'video') && l.width > 0 && l.height > 0));
+  const stretchable = layers => layers.length === 1 && stretchOf(layers[0]);
+  /* squeeze or stretch a layer by kx, ky about a fixed point in its own (unscaled, unrotated) space */
+  function stretchLayer(g,kx,ky) {
+    const {l,piv,snap} = g, [w,h] = dims();
+    if (l.type === 'path') {
+      l.points = snap.points.map(v => { const o = v.slice(); o[0] = piv.x+(v[0]-piv.x)*kx; o[1] = piv.y+(v[1]-piv.y)*ky; if (v.length > 2) { o[2] = v[2]*kx; o[3] = v[3]*ky; } return o; });
+      if (snap.breaks) l.breaks = snap.breaks.slice();
+      return;
+    }
+    l.width = Math.max(1,round(snap.width*kx)); l.height = Math.max(1,round(snap.height*ky));
+    /* the centre moves toward the fixed edge; turn that local shift into artboard units */
+    const shift = R.transform(piv.x*(1-kx)*l.scale/100,piv.y*(1-ky)*l.scale/100,R.radians(l.rotation));
+    l.x = round(snap.x+shift.x); l.y = round(snap.y+shift.y);
+  }
   const xy = p => `${p.x},${p.y}`;
   const rectangle = (a,b) => ({x:Math.min(a.x,b.x),y:Math.min(a.y,b.y),width:Math.abs(a.x-b.x),height:Math.abs(a.y-b.y)});
 
   function drawOverlay() {
     overlay.replaceChildren();
-    if (view === 'spatial') return;
+    if (view === 'spatial') { if (hud) { hud.hidden = true; hudKey = ''; } return; }
     const [w,h] = dims();
     if (gridCfg.show) {
       const g = StudioGrid.lines(gridCfg,w,h), o = gridCfg.opacity/100;
@@ -813,7 +838,7 @@
     for (const gd of gridCfg.guides) svg('line',gd.axis === 'x' ? {x1:gd.at,y1:0,x2:gd.at,y2:h,class:'userguide'} : {x1:0,y1:gd.at,x2:w,y2:gd.at,class:'userguide'});
     function line(x1,y1,x2,y2,cls) { svg('line',{x1,y1,x2,y2,class:cls}); }
     function handle(p,attrs,shape = 'rect') {
-      const r = 3.4/zoom, hit = 11/zoom;
+      const r = 3.4/zoom, hit = (coarse() ? 22 : 11)/zoom;
       svg(shape,shape === 'circle' ? {cx:p.x,cy:p.y,r,class:'handle'} :
         {x:p.x-r,y:p.y-r,width:r*2,height:r*2,class:'handle'});
       svg('circle',{cx:p.x,cy:p.y,r:hit,class:'hit',...attrs});
@@ -841,6 +866,15 @@
           if (i === anchorSel) svg('circle',{cx:p.x,cy:p.y,r:7/zoom,class:'handle selected'});
         });
       } else if (tool === 'select') {
+        /* rotate ring first (under the corner grips): grab just outside any corner to turn, no need to find the top handle */
+        const ring = (coarse() ? 46 : 30)/zoom;
+        points.forEach(p => svg('circle',{cx:p.x,cy:p.y,r:ring,class:'hit rot','data-handle':'rotate'}));
+        if (stretchable(layers)) [[0,1],[1,2],[2,3],[3,0]].forEach(([a,b],i) => {
+          const m = midpoint(points[a],points[b]), r = 3.4/zoom, edge = Math.hypot(points[a].x-points[b].x,points[a].y-points[b].y);
+          if (edge*zoom < 34) return;
+          svg('rect',{x:m.x-r,y:m.y-r,width:r*2,height:r*2,class:'handle edge'});
+          svg('circle',{cx:m.x,cy:m.y,r:(coarse() ? 20 : 11)/zoom,class:'hit edgehit','data-handle':'e'+i});
+        });
         points.forEach((p,i) => handle(p,{'data-handle':i}));
         const top = midpoint(points[0],points[1]), bottom = midpoint(points[2],points[3]);
         const length = Math.hypot(top.x-bottom.x,top.y-bottom.y) || 1;
@@ -879,8 +913,50 @@
         svg('circle',{cx:x,cy:y,r:3.4/zoom,class:'handle'});
       }
     }
+    syncHud();
   }
 
+  /* floating controls for a phone: ratio lock while sizing, point tools while drawing or editing a vector */
+  hud = document.createElement('div');
+  hud.className = 'xhud'; hud.setAttribute('role','toolbar'); hud.setAttribute('aria-label','Canvas controls');
+  hud.addEventListener('pointerdown',e => e.stopPropagation());
+  hud.addEventListener('touchstart',e => e.stopPropagation(),{passive:true});
+  stage.append(hud);
+  function addPointNext() {
+    const l = editable(); if (!l || !l.points?.length) return;
+    const n = l.points.length, i = anchorSel < 0 ? n-1 : anchorSel, seg = !l.closed && i >= n-1 ? n-2 : i;
+    if (seg < 0) return;
+    change(() => { const r = StudioPath.split(l.points,!!l.closed,seg,.5,l.breaks); l.points = r.points; if (r.breaks) l.breaks = r.breaks; anchorSel = r.index; contextKey = ''; });
+  }
+  function syncHud() {
+    if (!hud) return;
+    const l = visibleSelection()[0], editing = editAnchors && l?.type === 'path' && !l.locked && (tool === 'select' || tool === 'direct');
+    const penning = tool === 'pen', sizing = tool === 'select' && !editAnchors && stretchable(visibleSelection());
+    const sel = editing && anchorSel >= 0 ? l.points[anchorSel] : null;
+    const key = [editing,penning,sizing,constrain,pen.length,anchorSel,sel && StudioPath.isSmooth(sel),editing && l.closed].join('|');
+    if (key === hudKey) return;
+    hudKey = key; hud.replaceChildren();
+    const btn = (label,run,opts = {}) => {
+      const b = document.createElement('button'); b.type = 'button'; b.textContent = label; b.disabled = !!opts.off;
+      if (opts.pressed !== undefined) b.setAttribute('aria-pressed',String(opts.pressed));
+      b.onclick = () => { navigator.vibrate?.(8); run(); };
+      hud.append(b);
+    };
+    if (sizing) btn(constrain ? 'Ratio locked' : 'Ratio free',() => { constrain = !constrain; notice(constrain ? 'Corners keep the shape. Drag a side to stretch.' : 'Corners stretch freely.'); contextKey = ''; syncHud(); syncInspector(); },{pressed:constrain});
+    if (penning && pen.length) {
+      btn('Undo point',() => { pen.pop(); drawOverlay(); });
+      btn('Close',() => penFinish(true),{off:pen.length < 3});
+      btn('Done',() => penFinish(false),{off:pen.length < 2});
+    }
+    if (editing) {
+      btn('Add point',addPointNext);
+      btn(sel && StudioPath.isSmooth(sel) ? 'Corner' : 'Smooth',toggleSmooth,{off:!sel});
+      btn('Delete',deleteAnchor,{off:!sel});
+      btn(l.closed ? 'Open' : 'Close',toggleClosed);
+      btn('Done',toggleAnchors);
+    }
+    hud.hidden = !hud.children.length;
+  }
   function setTool(next) {
     if (tool === 'pen' && next !== 'pen') { pen = []; hover = null; }
     if (next !== 'select' && next !== 'direct') editAnchors = false;
@@ -1115,6 +1191,18 @@
     if (!editAnchors) toggleAnchors();
   }
   /* live preview while dragging out a shape: the real outline in the current paint, not just a box */
+  /* a shape pulled out from a corner keeps the chosen ratio (or 1:1 with Shift); a line snaps to 15° steps with Shift */
+  function fixedEnd(a,b,shift) {
+    if (shape === 'line') {
+      if (!shift) return b;
+      const len = Math.hypot(b.x-a.x,b.y-a.y), ang = Math.round(Math.atan2(b.y-a.y,b.x-a.x)/(Math.PI/12))*(Math.PI/12);
+      return {x:a.x+Math.cos(ang)*len,y:a.y+Math.sin(ang)*len};
+    }
+    const ratio = toolOpts.shapeAspect > 0 ? toolOpts.shapeAspect : shift ? 1 : 0;
+    if (!ratio) return b;
+    const sx = b.x < a.x ? -1 : 1, sy = b.y < a.y ? -1 : 1, width = Math.max(Math.abs(b.x-a.x),Math.abs(b.y-a.y)*ratio);
+    return {x:a.x+sx*width,y:a.y+sy*width/ratio};
+  }
   function shapeDraft(a,b) {
     const r = rectangle(a,b), look = build('shape',{});
     if (shape === 'line') { draft = {line:true,x1:a.x,y1:a.y,x2:b.x,y2:b.y,paint:look.stroke,thick:toolOpts.lineWidth}; return; }
@@ -1155,6 +1243,7 @@
     delete stage.dataset.drag;
     hideLoupe();
     if (!g) { drawOverlay(); return; }
+    if (g.kind === 'pan' && g.tapAnchor && !g.moved && !cancelled) { anchorSel = -1; contextKey = ''; syncInspector(); drawOverlay(); return; }
     if (g.kind === 'picker') { if (!cancelled) commitPick(g); return; }
     if (cancelled) {
       if (g.kind === 'pen') pen.pop();
@@ -1221,6 +1310,9 @@
     else drawOverlay();
   }
 
+  /* iOS draws its text magnifier and callout on a long press unless touchstart is cancelled; the canvas never needs the browser's touch defaults */
+  stage.addEventListener('touchstart',e => { if (view !== 'spatial' && !e.target.closest('input,textarea,select,button,#textEdit,#inlineText,[contenteditable]')) e.preventDefault(); },{passive:false});
+  stage.addEventListener('selectstart',e => { if (!e.target.closest('input,textarea,#textEdit,#inlineText,[contenteditable]')) e.preventDefault(); });
   stage.addEventListener('pointerdown',e => {
     if (view === 'spatial' || e.target.closest('button,#textEdit,#inlineText') || e.button > 1) return;
     if (doc.artboardLocked && e.button === 0 && pointers.size < 2) { if (e.pointerType !== 'touch') notice('Artboard is locked. Right-click it to unlock.'); return; }
@@ -1264,6 +1356,22 @@
     } else if (tool === 'select' && handle !== undefined && layers.length) {
       const corners = selectionGeometry(layers);
       const rotate = handle === 'rotate';
+      const edgeHandle = /^e[0-3]$/.test(handle), stretchOn = stretchOf(active) && (edgeHandle || !constrain !== !!e.shiftKey);
+      if (edgeHandle || (stretchOn && !rotate)) {
+        /* sx, sy say which side moves: -1 left or top, 1 right or bottom, 0 stays. Corners 0..3 are tl, tr, br, bl; edges are top, right, bottom, left */
+        const [sx,sy] = edgeHandle ? [[0,-1],[1,0],[0,1],[-1,0]][Number(handle[1])] : [[-1,-1],[1,-1],[1,1],[-1,1]][Number(handle)];
+        const box = corners.map(c => R.local(active,c,w,h)), xs = box.map(c => c.x), ys = box.map(c => c.y);
+        const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+        const grab = {x:sx > 0 ? x1 : sx < 0 ? x0 : (x0+x1)/2,y:sy > 0 ? y1 : sy < 0 ? y0 : (y0+y1)/2};
+        const piv = {x:sx ? (sx > 0 ? x0 : x1) : 0,y:sy ? (sy > 0 ? y0 : y1) : 0};
+        const snap = {x:active.x,y:active.y,width:active.width,height:active.height,points:active.points?.map(v => v.slice()),breaks:active.breaks?.slice()};
+        gesture = {...base,kind:'stretch',l:active,sx,sy,grab,piv,snap,before:capture()};
+        stage.dataset.drag = 'true';
+        e.preventDefault();
+        try { stage.setPointerCapture(e.pointerId); } catch {}
+        return;
+      }
+      if (/^e[0-3]$/.test(handle)) return;
       const pivot = rotate ? midpoint(corners[0],corners[2]) : corners[(Number(handle)+2)%4];
       const origin = rotate ? p : corners[Number(handle)];
       gesture = {...base,kind:rotate ? 'rotate' : 'scale',pivot,origin,items:snapshotTransforms(layers),before:capture()};
@@ -1273,6 +1381,14 @@
         const b = boxFor(layers);
         return p.x >= b.left && p.x <= b.right && p.y >= b.top && p.y <= b.bottom;
       })();
+      if (!hit && editAnchors && e.pointerType === 'touch' && layers.length) {
+        /* touch: dragging empty space pans, a tap only drops the selected point; it never leaves point editing */
+        gesture = {...base,kind:'pan',pan:{...pan},tapAnchor:true};
+        stage.dataset.drag = 'true';
+        e.preventDefault();
+        try { stage.setPointerCapture(e.pointerId); } catch {}
+        return;
+      }
       if (hit && multi) { select(toggleId(selection,hit.id)); return; }
       if (hit || (inside && inGroup)) {
         if (hit && !selection.includes(hit.id)) select([hit.id]);
@@ -1301,7 +1417,7 @@
       gesture = {...base,kind:'brush',before,l,pressure,edited:true,eraser:tool === 'eraser'};
       schedule();
     } else if (tool === 'pen') {
-      if (pen.length > 2 && Math.hypot(p.x-pen[0][0],p.y-pen[0][1])*zoom <= 11) {
+      if (pen.length > 2 && Math.hypot(p.x-pen[0][0],p.y-pen[0][1])*zoom <= (coarse() ? 24 : 11)) {
         penFinish(true);
         return;
       }
@@ -1506,6 +1622,14 @@
       }
       for (const item of g.items) Object.assign(item.l,{x:round(item.x+x),y:round(item.y+y)});
       update();
+    } else if (g.kind === 'stretch') {
+      const q = R.local({...g.l,x:g.snap.x,y:g.snap.y},p,w,h), k = (axis,s) => {
+        if (!s) return 1;
+        const span = g.grab[axis]-g.piv[axis];
+        return span ? clamp((q[axis]-g.piv[axis])/span,.02,200) : 1;
+      };
+      stretchLayer(g,k('x',g.sx),k('y',g.sy));
+      update();
     } else if (g.kind === 'scale' || g.kind === 'rotate') {
       const {origin,pivot} = g;
       const a = {x:origin.x-pivot.x,y:origin.y-pivot.y};
@@ -1519,6 +1643,11 @@
         if (!e.altKey && (angular || e.shiftKey)) {
           const base = g.items.length === 1 ? g.items[0].rotation : 0;
           angle = Math.round((base+angle)/15)*15-base;
+        } else if (!e.altKey && g.items.length === 1) {
+          /* soft snap: the turn clicks onto every 45° when it passes within 3° */
+          const base = g.items[0].rotation, total = base+angle, near = Math.round(total/45)*45;
+          if (Math.abs(total-near) < 3) { angle = near-base; if (g.snapAt !== near) { g.snapAt = near; navigator.vibrate?.(6); } }
+          else g.snapAt = null;
         }
       }
       for (const item of g.items) {
@@ -1537,8 +1666,8 @@
       draft = {line:true,x1:g.p.x,y1:g.p.y,x2:p.x,y2:p.y};
       drawOverlay();
     } else if (g.kind === 'shape') {
-      g.now = p;
-      shapeDraft(g.p,p);
+      g.now = fixedEnd(g.p,p,e.shiftKey);
+      shapeDraft(g.p,g.now);
       drawOverlay();
     } else if (g.kind === 'marquee') {
       g.now = p;
@@ -1762,6 +1891,24 @@
     contextMenu.show(cx || rect.left,cy || rect.bottom,actions);
     return true;
   }
+  /* while the finger is still down the menu sits above it and fades, so you can see the layer under your finger; slide onto an option and let go to pick it, or lift to keep the menu */
+  function peekMenu(x,y) {
+    const m = $('studioContext'); if (m.hidden) return;
+    const h = m.offsetHeight, w = m.offsetWidth, above = y-h-34;
+    m.style.top = Math.max(6,above >= 6 ? above : Math.min(y+60,innerHeight-h-6))+'px';
+    m.style.left = Math.max(6,Math.min(x-w/2,innerWidth-w-6))+'px';
+    m.classList.add('peek');
+    const items = () => [...m.children];
+    const over = (px,py) => items().find(b => { const r = b.getBoundingClientRect(); return px >= r.left && px <= r.right && py >= r.top && py <= r.bottom; });
+    const move = e => { const hit = over(e.clientX,e.clientY); items().forEach(b => b.classList.toggle('hot',b === hit)); m.classList.toggle('near',!!hit); if (hit && hit !== move.last) navigator.vibrate?.(4); move.last = hit; };
+    const end = e => {
+      window.removeEventListener('pointermove',move); window.removeEventListener('pointerup',end); window.removeEventListener('pointercancel',end);
+      const hit = e.type === 'pointerup' ? over(e.clientX,e.clientY) : null;
+      m.classList.remove('peek','near'); items().forEach(b => b.classList.remove('hot'));
+      if (hit) hit.click();
+    };
+    window.addEventListener('pointermove',move); window.addEventListener('pointerup',end); window.addEventListener('pointercancel',end);
+  }
   /* touch: hold a layer on the canvas (still) to open the same menu; moving, a second finger or lifting cancels it */
   { let press = null;
     const stop = () => { clearTimeout(press?.timer); press = null; };
@@ -1776,7 +1923,7 @@
         const before = gesture;
         if (before) { gesture = null; delete stage.dataset.drag; }
         const e2 = {target,preventDefault() {}};
-        if (stageMenu(e2,x,y,false)) { menuAt = Date.now(); navigator.vibrate?.(12); pointers.clear(); }
+        if (stageMenu(e2,x,y,false)) { menuAt = Date.now(); navigator.vibrate?.(12); pointers.clear(); peekMenu(x,y); }
         else if (before) gesture = before;
       },450)};
     },true);
@@ -1824,7 +1971,7 @@
     eraser:[['range','Size','eraserSize',4,300]],
     pen:[['range','Stroke width','penWidth',1,60]],
     line:[['range','Width','lineWidth',1,80]],
-    shape:[['range','Outline','shapeStroke',0,40]],
+    shape:[['choice','Ratio','shapeAspect',[[0,'Free'],[1,'1:1'],[4/3,'4:3'],[3/2,'3:2'],[16/9,'16:9'],[3/4,'3:4'],[2/3,'2:3'],[9/16,'9:16']]],['range','Outline','shapeStroke',0,40]],
     text:[['choice','Font','textFont',[['sans-serif','Sans'],['serif','Serif'],['monospace','Mono']]],['range','Size (0 is auto)','textSize',0,600]],
     gradient:[['choice','Type','gradKind',[['linear','Linear'],['radial','Radial']]]],
     crop:[['choice','Aspect','cropAspect',[[0,'Free'],[1,'1:1'],[4/3,'4:3'],[16/9,'16:9'],[9/16,'9:16']]]]
@@ -1970,28 +2117,30 @@
     catch { notice('Could not open the node editor.'); }
   }
   async function sendArtwork(destination) {
-    const tab = window.open('about:blank','_blank');
-    if (!tab) { notice('Allow pop-ups to open the exported image in another tool.'); return; }
-    tab.opener = null;
+    const phone = matchMedia('(max-width:680px)').matches || matchMedia('(pointer:coarse)').matches;
+    const tab = phone ? null : window.open('about:blank','_blank');
+    if (!phone && !tab) { notice('Allow pop-ups to open the exported image in another tool.'); return; }
+    if (tab) tab.opener = null;
     try {
       const [blob,handoff] = await Promise.all([exportPNG(),import('../src/handoff.js')]);
       await handoff.put(blob,{from:'studio',name:doc.name,to:destination});
       await hubRecord(blob,destination);
-      tab.location.replace(new URL((destination === 'effects' ? 'effects.html' : 'studio.html')+'#from=studio',location.href));
+      const url = new URL((destination === 'effects' ? 'effects.html' : 'studio.html')+'#from=studio',location.href);
+      if (tab) tab.location.replace(url); else location.href = url.href;
     } catch {
-      tab.close();
+      tab?.close();
       notice('Could not send the artwork. Download a PNG to open it in the other tool.');
     }
   }
   function exportOptions() {
     if (gesture || view === 'spatial') return;
     menu('Export artwork',[
+      ['Send to Effects',() => sendArtwork('effects')],
       ['Download PNG',downloadPNG],
       ...(doc.artboards ? [['Download every artboard (PNG)',downloadAllPNG]] : []),
       ['Download SVG',downloadSVG],
       ['Save editable project',save],
       ['Show in node editor',showInNodes],
-      ['Open in Effects',() => sendArtwork('effects')],
       ['Open in 3D as relief',() => sendArtwork('3d')]
     ]);
   }
