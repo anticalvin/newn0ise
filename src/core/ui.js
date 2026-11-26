@@ -91,6 +91,8 @@ export class UI {
     let n = 0; this.el('rbody').querySelectorAll('p[class^=r-]').forEach(p => { p.textContent = groups.flatMap(g => g[1])[n++].text; });
     this.el('report').classList.add('on');
   }
+  // any sheet that should take the keyboard and the pointer away from the world
+  modalOpen() { return !!(this.startOpen || this.el('guide').classList.contains('on') || this.el('report').classList.contains('on') || this.root.querySelector('.ws-confirm.on')); }
   toggleHidden() { this.hidden = !this.hidden; this.root.classList.toggle('hide', this.hidden); }
   setMode(m) { this.root.dataset.mode = m; for (const b of this.el('mode').children) b.classList.toggle('on', b.dataset.m === m);
     if (m === 'edit') this.say(this.padOn ? 'RT apply · LT invert · LB/RB tools · Y back to Explore' : 'Drag to paint · right-drag orbit · shift-drag pan · [ ] radius', 6000); else this.say('Walk around · E to edit · / for the console', 5000); this.render(); }

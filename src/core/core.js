@@ -64,6 +64,7 @@ export class Core {
   exec(cmd) {
     const a = this.a; let c; try { c = typeof cmd === 'string' ? JSON.parse(cmd) : cmd; } catch (e) { return { ok: false, msg: 'Bad JSON' }; }
     if (!c || typeof c.cmd !== 'string') return { ok: false, msg: 'Missing "cmd". Run {"cmd":"describe"} for the list.' };
+    if (a.firstLight?.active) return a.firstLight.exec(c);
     try {
       if (c.cmd.startsWith('world.') && c.cmd !== 'world.import' && c.cmd !== 'world.remove' && a.geo) return a.geo.exec(c, this);
       switch (c.cmd) {
@@ -245,10 +246,8 @@ export class Core {
       player: [r(a.player.pos.x), r(a.player.pos.z), r(a.player.yaw)] };
   }
   async load(d) {
-    if (!d || d.format !== FORMAT || !d.terrain) throw new Error('Not a n0ise Core scene');
-    if (d.version > VERSION) throw new Error('This scene was saved by a newer Core (version ' + d.version + ')');
-    if ((d.palms || []).length > LIMITS.palms || (d.boulders || []).length > 200) throw new Error('Scene exceeds limits');
-    const a = this.a; this.muted = true;
+    this.checkScene(d);
+    const a = this.a, before = a.snapshot(); this.muted = true;   // a failed load puts the current scene back
     try {
       await a.terrain.unpack(d.terrain); a.env.set(d.env || {}); a.name = d.name || (a.terrain.preset === 'blank' ? 'BLANK' : 'COAST_001');
       a.palms.items = (d.palms || []).map(([x, z, s, yaw]) => ({ x: +x, z: +z, s: +s, yaw: +yaw })); a.palms.rebuild();
@@ -260,8 +259,21 @@ export class Core {
       if (d.player) { a.player.pos.set(+d.player[0], 0, +d.player[1]); a.player.yaw = +d.player[2]; } else a.player.pos.set(a.spawn[0], 0, a.spawn[1]);
       a.player.pos.y = a.player.groundAt(a.player.pos.x, a.player.pos.z); a.player.vel.set(0, 0, 0); a.phys && a.phys.teleport(a.player);
       a.afterTerrain(true); this.hist = []; this.ptr = 0;
-    } finally { this.muted = false; }
+    } catch (e) { try { a.restoreScene(before); } catch (e2) { /* keep the original error */ } this.muted = false; throw e; }
+    finally { this.muted = false; }
     this.emit('Loaded');
+  }
+  // cheap structural checks that run before anything is replaced
+  checkScene(d) {
+    if (!d || d.format !== FORMAT || !d.terrain) throw new Error('Not a n0ise Core scene');
+    if (d.version > VERSION) throw new Error('This scene was saved by a newer Core (version ' + d.version + ')');
+    if ((d.palms || []).length > LIMITS.palms || (d.boulders || []).length > 200) throw new Error('Scene exceeds limits');
+    const arr = (k) => d[k] == null || Array.isArray(d[k]);
+    if (!d.terrain || typeof d.terrain !== 'object') throw new Error('The scene has no terrain');
+    for (const k of ['palms', 'boulders', 'worlds', 'entities']) if (!arr(k)) throw new Error('The scene field "' + k + '" is not a list');
+    if (d.env != null && (typeof d.env !== 'object' || Array.isArray(d.env))) throw new Error('The scene environment is invalid');
+    for (const k of ['spawn', 'player']) if (d[k] != null && !(Array.isArray(d[k]) && d[k].length >= 2 && d[k].every(n => Number.isFinite(+n)))) throw new Error('The scene field "' + k + '" is invalid');
+    return true;
   }
   async autosave() { try { localStorage.setItem(KEY, JSON.stringify(await this.serialize())); this.a.ui && this.a.ui.saved(); } catch (e) { /* quota / private mode: ignore */ } }
   hasSave() { try { return !!(localStorage.getItem(KEY) || localStorage.getItem(OLD_KEY)); } catch (e) { return false; } }

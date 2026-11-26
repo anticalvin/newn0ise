@@ -24,9 +24,9 @@ void n0waves(vec2 p, float damp, out vec3 disp, out vec3 nrm){
   nrm = normalize(n);
 }`;
 const TERR = /* glsl */`
-uniform sampler2D uHeight; uniform float uN; uniform float uS;
+uniform sampler2D uHeight; uniform float uN; uniform float uS; uniform vec2 uTC;
 float n0hf(ivec2 p){ return texelFetch(uHeight, clamp(p, ivec2(0), ivec2(int(uN))), 0).r; }
-float terrH(vec2 xz){ vec2 g = (xz / uS + 0.5) * uN; g = clamp(g, vec2(0.0), vec2(uN) - 1e-3);
+float terrH(vec2 xz){ vec2 g = ((xz - uTC) / uS + 0.5) * uN; g = clamp(g, vec2(0.0), vec2(uN) - 1e-3);
   ivec2 i = ivec2(floor(g)); vec2 f = fract(g);
   return mix(mix(n0hf(i), n0hf(i+ivec2(1,0)), f.x), mix(n0hf(i+ivec2(0,1)), n0hf(i+ivec2(1,1)), f.x), f.y); }`;
 
@@ -112,7 +112,7 @@ export class Water {
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setIndex(new THREE.BufferAttribute(idx, 1));
     g.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 1e5);
     this.u = THREE.UniformsUtils.merge([THREE.UniformsLib.fog, {
-      uTime: shared.uTime, uSea: { value: 0.5 }, uWindAng: { value: 0 }, uLevel: { value: 0 }, uSwash: shared.uSwash, uCenter: { value: new THREE.Vector2() },
+      uTime: shared.uTime, uSea: { value: 0.5 }, uWindAng: { value: 0 }, uLevel: { value: 0 }, uSwash: shared.uSwash, uTC: { value: new THREE.Vector2() }, uCenter: { value: new THREE.Vector2() },
       uLightDir: { value: new THREE.Vector3(0, 1, 0) }, uLightCol: { value: new THREE.Color() }, uDay: { value: 1 },
       uSun: shared.uSun, uCloud: shared.uCloud, uCloudOff: shared.uCloudOff }]);
     Object.assign(this.u, terrain.uniforms);

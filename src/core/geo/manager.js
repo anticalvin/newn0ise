@@ -3,9 +3,10 @@
 import * as THREE from 'three';
 import { DataProvider, Storage } from './data.js';
 import { RegionFrame, zoneOf, fromLatLon, toLatLon } from './georef.js';
-import { HeightField, landMask, terrainGeometry, landColor } from './terrain.js';
+import { HeightField, landMask, terrainGeometry, landColor, lodStride } from './terrain.js';
+import { GeoOcean } from './ocean.js';
 import { RoadGraph, roadGeometries, toGeometry, laneInfo, CLASSES } from './roads.js';
-import { buildGeometry, tileMaterial, fadeIn, BuildingIndex, streetProps } from './buildings.js';
+import { buildGeometry, tileMaterial, fadeIn, BuildingIndex, streetProps, truthOf } from './buildings.js';
 import { Sim } from './sim.js';
 import { Walker, Car } from './vehicle.js';
 import { Wilds } from './wilds.js';
@@ -44,7 +45,8 @@ export class GeoWorld {
     this.stats = { loaded: 0, built: 0, unloaded: 0, cancelled: 0, lodSwaps: 0, rebases: 0, popIns: 0 }; this.t = { stream: 0, save: 0, env: 0, hud: 0 }; this.hidden = [];
     this.pitU = { uPit: { value: new THREE.Vector4(0, 0, 0, 0) }, uPitYaw: { value: 0 } }; this.msg = ''; this.dayRate = 1 / 90; this.lastYaw = 0; this.props = new THREE.Group(); this.group.add(this.props); this.propMeshes = new Map();
     const sea = new THREE.Mesh(new THREE.PlaneGeometry(240000, 240000).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x1b4552, roughness: 0.06, metalness: 0.25 }));
-    sea.position.y = -0.15; sea.receiveShadow = false; this.sea = sea; this.group.add(sea);
+    sea.position.y = -0.4; sea.receiveShadow = false; this.sea = sea; this.group.add(sea);   // cheap far water, under the Gerstner ocean
+    this.ocean = new GeoOcean(this); this.landmarks = new Set();   // OSM building ids replaced by authored assets (T4); the footprint and coordinates stay untouched
   }
   // ---------- coordinates ----------
   get sx() { return this.walker.x - this.origin.x; } get sz() { return this.walker.z - this.origin.z; }
@@ -260,7 +262,7 @@ export class GeoWorld {
     this.stats.built++; yield;
     const store = this.store && this.store.id, all = d.buildings, chunk = 220; t.bld = [];
     for (let i = 0; i < all.length; i += chunk) {
-      const part = { buildings: all.slice(i, i + chunk) }, r = buildGeometry(part, H, b => b.id !== store);
+      const part = { buildings: all.slice(i, i + chunk) }, r = buildGeometry(part, H, b => b.id !== store && !this.landmarks.has(b.id));
       if (r) { const m = new THREE.Mesh(r.geometry, t.mBld); m.castShadow = true; m.receiveShadow = true; m.userData.kind = 'bld'; t.group.add(m); t.meshes.push(m); t.bld.push(m); }
       yield;
     }
@@ -281,14 +283,14 @@ export class GeoWorld {
     else if (dr < BUDGET.midIn) next = dr < BUDGET.nearIn ? 'near' : 'mid';
     if (next === cur && !force) return;
     t.lod = next; this.stats.lodSwaps++;
-    const stride = next === 'near' ? 1 : next === 'mid' ? 2 : 4;
+    const stride = lodStride(t.data.grid, next === 'near' ? 1 : next === 'mid' ? 3 : 8);
     if (!t.terr[stride]) t.terr[stride] = terrainGeometry(t.hf, t.mask, stride);
     if (!t.terrain) { t.terrain = new THREE.Mesh(t.terr[stride], t.mTerrain); t.terrain.receiveShadow = true; t.group.add(t.terrain); t.meshes.push(t.terrain); } else t.terrain.geometry = t.terr[stride];
     t.mBld.userData.u.uDetail.value = next === 'near' ? 1 : 0;
     for (const m of t.meshes) if (m.userData.kind === 'road-minor') m.visible = next !== 'far';
     // far tiles show only the skyline: tall or large buildings (built once, on demand)
     if (next === 'far' && !t.sky && t.data) { const T = this.T, H = (x, z) => t.hf.at(clamp(x, 0, T), clamp(z, 0, T)), id = this.store && this.store.id;
-      const r = buildGeometry(t.data, H, b => b.id !== id && (b.h >= 16 || b.p.length > 16)); if (r) { t.sky = new THREE.Mesh(r.geometry, t.mBld); t.group.add(t.sky); t.meshes.push(t.sky); } else t.sky = null; t.skyTried = true; }
+      const r = buildGeometry(t.data, H, b => b.id !== id && !this.landmarks.has(b.id) && (b.h >= 16 || b.p.length > 16), { mid: true }); if (r) { t.sky = new THREE.Mesh(r.geometry, t.mBld); t.group.add(t.sky); t.meshes.push(t.sky); } else t.sky = null; t.skyTried = true; }
     for (const m of t.bld || []) m.visible = next !== 'far';
     if (t.sky) t.sky.visible = next === 'far';
     if (next === 'near' && !t.props) this.addProps(t); else if (next !== 'near' && t.props) this.dropProps(t);
@@ -347,7 +349,7 @@ export class GeoWorld {
     this.lastYaw = c.yaw; const dist = this.driving ? Math.max(c.dist, 8) : c.dist; if (this.driving && c.dist < 8) c.dist = 8; if (!this.driving && !this.god && c.dist > 14) c.dist = 14;
     const cp = Math.cos(c.pitch), cam = a.camera; cam.position.set(c.target.x + Math.sin(c.yaw) * cp * dist, c.target.y + Math.sin(c.pitch) * dist, c.target.z + Math.cos(c.yaw) * cp * dist);
     const fl = this.heightAt(cam.position.x + this.origin.x, cam.position.z + this.origin.z) + 0.9; if (cam.position.y < fl) cam.position.y = fl; cam.lookAt(c.target); if (this.god) this.godCam(); else if (cam.far !== 140000) { cam.far = 140000; cam.near = 0.4; cam.updateProjectionMatrix(); }
-    this.sea.position.set(cam.position.x, -0.15, cam.position.z);
+    this.sea.position.set(cam.position.x, -0.4, cam.position.z); this.ocean.update(dt, cam);
     a.env.update(dt, cam, c.target); a.entities.tick(dt);
     this.t.hud += dt; if (this.t.hud > 0.3) { this.t.hud = 0; this.updateHud(); }
     this.t.save += dt; if (this.t.save > 12) { this.t.save = 0; this.save(); }
@@ -465,7 +467,7 @@ export class GeoWorld {
     this.placeMarker();
   }
   godCam() { const cam = this.a.camera, d = this.a.cam.dist, far = Math.max(140000, d * 70), near = clamp(d / 1500, 0.4, 3000); if (Math.abs(cam.far - far) > far * 0.05 || Math.abs(cam.near - near) > near * 0.05) { cam.far = far; cam.near = near; cam.updateProjectionMatrix(); } }
-  detail(on) { for (const t of this.tiles.values()) if (t.group) t.group.visible = on; this.wilds.group.visible = on; if (this.far) this.far.visible = on; this.sim.group.visible = on; this.sea.visible = on; this.car.root.visible = on && (this.region || this.car.root.visible || true); }
+  detail(on) { for (const t of this.tiles.values()) if (t.group) t.group.visible = on; this.wilds.group.visible = on; if (this.far) this.far.visible = on; this.sim.group.visible = on; this.sea.visible = on; this.ocean.mesh.visible = on; this.car.root.visible = on && (this.region || this.car.root.visible || true); }
   dropFromGod() {
     const g = this.god; if (!g) return; const ll = this.frame.toLatLon(g.x, g.z);
     if (ll.lat < -35.2 || ll.lat > -21.9 || ll.lon < 16.3 || ll.lon > 33.1) return this.say('That is outside South Africa. Move over land first.', 3000);
@@ -585,7 +587,7 @@ export class GeoWorld {
         let rec; if (c.id != null) rec = this.bi.byId.get(+c.id); else { const p = find(); rec = this.bi.inside(p.x, p.z); if (!rec) { let bd = 40; for (const q of this.bi.near(p.x, p.z, 40)) { const d = Math.hypot((q.x0 + q.x1) / 2 - p.x, (q.z0 + q.z1) / 2 - p.z); if (d < bd) { bd = d; rec = q; } } } }
         if (!rec) return bad('world.building.none', 'No loaded building there. Go closer, or pass an id.');
         const b = rec.b, t = this.tiles.get(rec.tile);
-        return { ok: true, building: { id: b.id, osm: 'way/' + b.id, kind: b.k, name: b.n || null, levels: b.lv ? +b.lv : null, height: b.h, heightSource: b.hs, heightVerified: b.hs === 'tag', roof: b.rs || null, roofSource: b.rs ? 'tag' : 'inferred', footprintArea: Math.round(polyArea(rec.pts)), vertices: rec.pts.length / 2, interactive: !!(this.store && this.store.id === b.id), lod: t ? t.lod : null, tile: rec.tile, provenance: 'footprint from OSM; heights marked "inferred" are guesses, not survey data' } };
+        const truth = truthOf(b, this.landmarks.has(b.id)); return { ok: true, truth, building: { id: b.id, osm: 'way/' + b.id, kind: b.k, name: b.n || null, levels: b.lv ? +b.lv : null, height: b.h, heightSource: b.hs, heightVerified: b.hs === 'tag' || b.hs === 'levels', tier: truth.tier, tierName: truth.tierName, parts: b.parts ? b.parts.length : 0, roof: b.rs || null, roofSource: b.rs ? 'tag' : 'inferred', footprintArea: Math.round(polyArea(rec.pts)), vertices: rec.pts.length / 2, interactive: !!(this.store && this.store.id === b.id), lod: t ? t.lod : null, tile: rec.tile, provenance: 'footprint from OSM; heights marked "inferred" are guesses, not survey data' } };
       }
       case 'world.building.populate': {
         const p = find(), n = num(c.count, 1, 12, 4); let rec = c.id != null ? this.bi.byId.get(+c.id) : this.bi.inside(p.x, p.z); const cx = rec ? (rec.x0 + rec.x1) / 2 : p.x, cz = rec ? (rec.z0 + rec.z1) / 2 : p.z;

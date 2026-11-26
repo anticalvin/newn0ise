@@ -14,7 +14,9 @@ export class Input {
     this.pinch = 0; this.jumpEdge = false;
     const typing = e => /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) && e.target.type !== 'range';
     addEventListener('keydown', e => {
+      if (app.firstLight?.active) return;
       if (typing(e)) return; this.pad.active = false;
+      if (app.ui.modalOpen()) { if (e.key === 'Escape') app.ui.closeAll(); return; }   // sheets own the keyboard
       const k = e.key.toLowerCase(), mod = e.ctrlKey || e.metaKey;
       if (mod && k === 'z') { e.preventDefault(); e.shiftKey ? app.redo() : app.undo(); return; }
       if (mod && k === 'y') { e.preventDefault(); app.redo(); return; }
@@ -38,13 +40,15 @@ export class Input {
     addEventListener('gamepadconnected', () => { this.pad.connected = true; app.ui.toast('Gamepad connected'); });
     addEventListener('gamepaddisconnected', () => { this.pad.connected = false; this.pad.active = false; });
     canvas.addEventListener('contextmenu', e => e.preventDefault());
-    canvas.addEventListener('wheel', e => { e.preventDefault(); app.zoom(Math.exp(e.deltaY * 0.0011)); }, { passive: false });
+    canvas.addEventListener('wheel', e => { if (app.firstLight?.active) return; e.preventDefault(); app.zoom(Math.exp(e.deltaY * 0.0011)); }, { passive: false });
     canvas.addEventListener('pointerdown', e => {
+      if (app.firstLight?.active) return;
       canvas.setPointerCapture(e.pointerId); this.pad.active = false;
       this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, button: e.button, type: e.pointerType, shift: e.shiftKey, t: 0, moved: 0 });
       this.ptr.x = e.clientX; this.ptr.y = e.clientY; this.ptr.in = true; this.decide(e);
     });
     canvas.addEventListener('pointermove', e => {
+      if (app.firstLight?.active) return;
       this.ptr.x = e.clientX; this.ptr.y = e.clientY; this.ptr.in = true;
       const p = this.pointers.get(e.pointerId); if (!p) return;
       const dx = e.clientX - p.x, dy = e.clientY - p.y; p.x = e.clientX; p.y = e.clientY; p.moved += Math.abs(dx) + Math.abs(dy);
@@ -77,7 +81,7 @@ export class Input {
     mx += this.stick[0]; mz -= this.stick[1];
     let padApply = false, padInv = false;
     const gp = navigator.getGamepads ? [...navigator.getGamepads()].find(g => g && g.connected) : null;
-    if (gp) {
+    if (gp && !a.ui.modalOpen()) {
       const P = this.pad, b = i => gp.buttons[i] && gp.buttons[i].value, down = (i, on = 0.5, off = 0.3) => { const v = b(i); P.held[i] = P.held[i] ? v > off : v > on; return P.held[i]; };
       const C = cfg(), sw = C.swap ? 2 : 0, [lsx, lsy] = dz(gp.axes[sw] || 0, gp.axes[sw + 1] || 0), [rsx, rsy0] = dz(gp.axes[2 - sw] || 0, gp.axes[3 - sw] || 0), rsy = C.invY ? -rsy0 : rsy0;
       const any = lsx || lsy || rsx || rsy || gp.buttons.some(x => x.pressed); if (any && !P.active) { P.active = true; a.ui.pad(true); }

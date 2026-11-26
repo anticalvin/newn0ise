@@ -17,8 +17,10 @@ import geo
 
 REGIONS = {
     # south, west, north, east
-    'capetown': dict(name='Cape Town', bbox=(-33.990, 18.380, -33.900, 18.470), zone=34, tile=1000, grid=40),
+    'capetown': dict(name='Cape Town', bbox=(-33.990, 18.380, -33.900, 18.470), zone=34, tile=1000, grid=96, dem_zoom=14),
 }
+BTAGS = ('building', 'height', 'building:levels', 'roof:shape', 'roof:levels', 'roof:height', 'roof:direction', 'roof:orientation', 'min_height', 'building:min_level', 'name', 'shop', 'amenity', 'addr:housenumber', 'addr:street',
+         'building:colour', 'roof:colour', 'building:material', 'roof:material', 'start_date', 'tourism', 'historic')
 ROAD_ORDER = ['motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'unclassified', 'residential', 'living_street', 'service',
               'motorway_link', 'trunk_link', 'primary_link', 'secondary_link', 'tertiary_link', 'pedestrian', 'footway', 'path', 'cycleway', 'steps', 'track']
 AREA_KEYS = {('natural', 'water'): 'water', ('natural', 'wood'): 'wood', ('natural', 'scrub'): 'scrub', ('natural', 'beach'): 'beach', ('natural', 'sand'): 'beach',
@@ -41,7 +43,7 @@ class Pass:
     def __init__(self, regions):
         self.R = regions
         self.coast, self.nroads, self.places = [], [], []
-        self.data = {k: dict(roads=[], buildings=[], areas=[], pois=[]) for k in regions}
+        self.data = {k: dict(roads=[], buildings=[], parts=[], areas=[], pois=[]) for k in regions}
         self.n = 0
     def inside(self, bbox, coords):
         s, w, n, e = bbox
@@ -59,13 +61,13 @@ class Pass:
     def way(self, o):
         t = {x.k: x.v for x in o.tags}; self.n += 1
         if self.n % 500000 == 0: print('  ways', self.n, file=sys.stderr)
-        hw, bd = t.get('highway'), t.get('building')
+        hw, bd, bp = t.get('highway'), t.get('building'), t.get('building:part')
         nat = t.get('natural')
         if nat == 'coastline':
             try: self.coast.append([(n.lon, n.lat) for n in o.nodes])
             except osmium.InvalidLocationError: pass
             return
-        if not (hw or bd or any((k, t.get(k)) in AREA_KEYS for k in ('natural', 'landuse', 'leisure'))): return
+        if not (hw or bd or bp or any((k, t.get(k)) in AREA_KEYS for k in ('natural', 'landuse', 'leisure'))): return
         try: pts = [(n.lon, n.lat) for n in o.nodes]
         except osmium.InvalidLocationError: return
         if hw in NATIONAL_ROADS: self.nroads.append(dict(c=hw, p=pts, n=t.get('ref', t.get('name', ''))))
@@ -75,7 +77,9 @@ class Pass:
             if hw and hw in ROAD_ORDER:
                 d['roads'].append(dict(id=o.id, c=hw, p=pts, tags={q: tags[q] for q in ('name', 'oneway', 'lanes', 'maxspeed', 'surface', 'bridge', 'tunnel', 'sidewalk', 'cycleway', 'lit', 'ref', 'layer') if q in tags}))
             elif bd and o.is_closed():
-                d['buildings'].append(dict(id=o.id, p=pts, tags={q: tags[q] for q in ('building', 'height', 'building:levels', 'roof:shape', 'roof:levels', 'min_height', 'name', 'shop', 'amenity', 'addr:housenumber', 'building:colour', 'roof:colour') if q in tags}))
+                d['buildings'].append(dict(id=o.id, p=pts, tags={q: tags[q] for q in BTAGS if q in tags}))
+            elif bp and o.is_closed():
+                d['parts'].append(dict(id=o.id, p=pts, tags={q: tags[q] for q in BTAGS + ('building:part',) if q in tags}))
             elif o.is_closed():
                 for kk in ('natural', 'landuse', 'leisure'):
                     kind = AREA_KEYS.get((kk, tags.get(kk)))
@@ -103,8 +107,8 @@ def fetch_terrarium(z, x, y, cache):
 
 class Dem:
     """Mosaic of Terrarium tiles at one zoom, sampled bilinearly by lat/lon."""
-    def __init__(self, z, bounds, cache):
-        s, w, n, e = bounds; self.z = z
+    def __init__(self, z, bounds, cache, cubic=False):
+        s, w, n, e = bounds; self.z = z; self.cubic = cubic
         x0, y1 = mercator_px(s, w, z); x1, y0 = mercator_px(n, e, z)
         self.tx0, self.tx1, self.ty0, self.ty1 = int(x0 // 256) - 1, int(x1 // 256) + 1, int(y0 // 256) - 1, int(y1 // 256) + 1
         w_, h_ = (self.tx1 - self.tx0 + 1) * 256, (self.ty1 - self.ty0 + 1) * 256
@@ -112,13 +116,44 @@ class Dem:
         for ty in range(self.ty0, self.ty1 + 1):
             for tx in range(self.tx0, self.tx1 + 1):
                 self.a[(ty - self.ty0) * 256:(ty - self.ty0 + 1) * 256, (tx - self.tx0) * 256:(tx - self.tx0 + 1) * 256] = fetch_terrarium(z, tx, ty, cache)
+    meta = property(lambda self: dict(name='AWS Terrain Tiles (Terrarium)', kind='terrarium', zoom=self.z, native='SRTM ~30 m (NED/GEBCO elsewhere); zoom-%d grid is resampled' % self.z,
+        interpolation='catmull-rom' if self.cubic else 'bilinear', license='Public/open sources, see https://github.com/tilezen/joerd/blob/master/docs/attribution.md', redistributable=True, version='live tiles fetched ' + time.strftime('%Y-%m-%d')))
     def sample(self, lat, lon):
+        if self.cubic: return self._cubic(lat, lon)
         lat, lon = np.asarray(lat), np.asarray(lon); n = 2 ** self.z * 256
         x = (lon + 180) / 360 * n - self.tx0 * 256 - .5
         y = (1 - np.arcsinh(np.tan(np.radians(lat))) / np.pi) / 2 * n - self.ty0 * 256 - .5
         x0, y0 = np.floor(x).astype(int), np.floor(y).astype(int); fx, fy = x - x0, y - y0
         a = self.a; x0 = np.clip(x0, 0, a.shape[1] - 2); y0 = np.clip(y0, 0, a.shape[0] - 2)
         return a[y0, x0] * (1 - fx) * (1 - fy) + a[y0, x0 + 1] * fx * (1 - fy) + a[y0 + 1, x0] * (1 - fx) * fy + a[y0 + 1, x0 + 1] * fx * fy
+
+def _cubic(self, lat, lon):
+    lat, lon = np.asarray(lat), np.asarray(lon); n = 2 ** self.z * 256
+    x = (lon + 180) / 360 * n - self.tx0 * 256 - .5
+    y = (1 - np.arcsinh(np.tan(np.radians(lat))) / np.pi) / 2 * n - self.ty0 * 256 - .5
+    x0, y0 = np.floor(x).astype(int), np.floor(y).astype(int); fx, fy = x - x0, y - y0; a = self.a
+    def w(t): return [(-t**3 + 2*t**2 - t) / 2, (3*t**3 - 5*t**2 + 2) / 2, (-3*t**3 + 4*t**2 + t) / 2, (t**3 - t**2) / 2]
+    wx, wy = w(fx), w(fy); out = 0
+    for j in range(4):
+        row = 0
+        for i in range(4): row = row + wx[i] * a[np.clip(y0 + j - 1, 0, a.shape[0] - 1), np.clip(x0 + i - 1, 0, a.shape[1] - 1)]
+        out = out + wy[j] * row
+    return out
+Dem._cubic = _cubic
+
+class GeoTiffDem:
+    """Optional user-supplied DEM/DTM (GeoTIFF, metres). Needs `pip install rasterio`. NOT redistributed: only used if --dem is given, and the manifest records it as local-only."""
+    def __init__(self, path, license='unspecified (local R&D input)', name=None):
+        import rasterio
+        self.ds = rasterio.open(path); self.a = self.ds.read(1).astype(np.float64); nd = self.ds.nodata
+        if nd is not None: self.a[self.a == nd] = np.nan
+        self.path = path; self.license = license; self.name = name or os.path.basename(path)
+    meta = property(lambda self: dict(name=self.name, kind='geotiff', native='%.1f m pixels' % abs(self.ds.res[0] * (111320 if self.ds.crs.is_geographic else 1)), interpolation='bilinear', license=self.license, redistributable=False, version=os.path.basename(self.path)))
+    def sample(self, lat, lon):
+        from rasterio.warp import transform
+        xs, ys = transform('EPSG:4326', self.ds.crs, np.asarray(lon).ravel().tolist(), np.asarray(lat).ravel().tolist())
+        r, c = self.ds.index(np.array(xs), np.array(ys)); r = np.clip(np.array(r), 0, self.a.shape[0] - 1); c = np.clip(np.array(c), 0, self.a.shape[1] - 1)
+        v = self.a[r, c].reshape(np.shape(lat)); return np.where(np.isnan(v), 0, v)
 
 def sha(path):
     h = hashlib.sha256()
@@ -153,6 +188,62 @@ def split_polyline(pts, tile, tiles):
     flush()
     return runs
 
+DEMSRC = None
+def terrain_meta(dem, T, G): return dict(dem.meta, grid=G, spacingM=round(T / G, 2), lods=[1, 3, 8], heightUnit='decimetres int16')
+
+def terrain_only(a):
+    """Rewrite only the elevation of existing tile files + manifest provenance. Roads/buildings/areas are untouched (no OSM pass)."""
+    mp = os.path.join(a.out, 'manifest.json'); man = json.load(open(mp))
+    for key, r in man['regions'].items():
+        if a.region and key not in a.region: continue
+        spec = REGIONS.get(key, {}); G = spec.get('grid', r['grid']); T = r['tile']; zone = r['zone']; E0, N0 = r['e0'], r['n0']
+        s, w, n, e = r['bbox']; pad = .02
+        dem = DEMSRC or Dem(spec.get('dem_zoom', 13), (s - pad, w - pad, n + pad, e + pad), a.cache, cubic=True)
+        xs = np.arange(G + 1) * (T / G)
+        for k, ent in r['tiles'].items():
+            i, j = map(int, k.split('_')); p = os.path.join(a.out, ent['file']); rec = json.load(open(p))
+            gx, gz = np.meshgrid(i * T + xs, j * T + xs); lat = np.zeros_like(gx); lon = np.zeros_like(gx)
+            for q in range(gx.shape[0]):
+                for b in range(gx.shape[1]): lat[q, b], lon[q, b] = geo.inv(E0 + gx[q, b], N0 - gz[q, b], zone)
+            hm = np.clip(np.round(dem.sample(lat, lon) * 10), -3000, 32000).astype('<i2')
+            rec.update(grid=G, hm=base64.b64encode(hm.tobytes()).decode())
+            with open(p, 'w') as f: json.dump(rec, f, separators=(',', ':'))
+            ent.update(bytes=os.path.getsize(p), sha256=sha(p))
+        r['grid'] = G; r['terrain'] = terrain_meta(dem, T, G); print('terrain rewritten for', key, file=sys.stderr)
+    man['generated'] = time.strftime('%Y-%m-%d'); json.dump(man, open(mp, 'w'), indent=1)
+
+def num(v):
+    try: return float(str(v).split()[0].replace(',', '.').rstrip('m'))
+    except (ValueError, IndexError): return None
+
+def pin(x, z, poly):
+    ins = False; j = len(poly) - 1
+    for i in range(len(poly)):
+        xi, zi = poly[i]; xj, zj = poly[j]
+        if (zi > z) != (zj > z) and x < (xj - xi) * (z - zi) / (zj - zi) + xi: ins = not ins
+        j = i
+    return ins
+
+def truth(t, parts):
+    """WorldTruth fields for one building: sourced values with a per-field provenance (tag | levels | parts | inferred). Never invents a surveyed value."""
+    out = {}; src = {}
+    h = num(t.get('height')); hs = 'tag' if h is not None else None
+    if h is None and num(t.get('building:levels')) is not None: h = num(t['building:levels']) * 3.2 + 1.0 + (num(t.get('roof:levels')) or 0) * 2.5 * 0; hs = 'levels'
+    mh = num(t.get('min_height')); 
+    if mh is None and num(t.get('building:min_level')) is not None: mh = num(t['building:min_level']) * 3.2
+    if mh is not None: out['mh'] = round(mh, 1); src['mh'] = 'tag'
+    if t.get('roof:shape'): out['rs'] = t['roof:shape']; src['rs'] = 'tag'
+    rh = num(t.get('roof:height'))
+    if rh is not None: out['rh'] = round(rh, 1); src['rh'] = 'tag'
+    rd = num(t.get('roof:direction') or t.get('roof:orientation'))
+    if rd is not None: out['rd'] = rd; src['rd'] = 'tag'
+    if t.get('building:colour'): out['col'] = t['building:colour']; src['col'] = 'tag'
+    if t.get('roof:colour'): out['rc'] = t['roof:colour']; src['rc'] = 'tag'
+    if t.get('building:material'): out['mat'] = t['building:material']; src['mat'] = 'tag'
+    if t.get('roof:material'): out['rm'] = t['roof:material']; src['rm'] = 'tag'
+    if t.get('start_date'): out['sd'] = t['start_date']; src['sd'] = 'tag'
+    return h, hs, out, src
+
 def build_region(key, r, d, out, cache):
     s, w, n, e = r['bbox']; zone = r['zone']; T = r['tile']; G = r['grid']
     # origin: projected centre, rounded to a whole kilometre so tile edges sit on round numbers
@@ -164,8 +255,8 @@ def build_region(key, r, d, out, cache):
     tiles = {(i, j) for i in range(tx0, tx1 + 1) for j in range(tz0, tz1 + 1)}
     print(f'[{key}] origin UTM{zone}S E{E0} N{N0}; tiles x {tx0}..{tx1} z {tz0}..{tz1} = {len(tiles)}', file=sys.stderr)
     # elevation
-    pad = .02; dem = Dem(13, (s - pad, w - pad, n + pad, e + pad), cache)
-    tdata = {k: dict(roads=[], buildings=[], areas=[], pois=[]) for k in tiles}
+    pad = .02; dem = DEMSRC or Dem(r.get('dem_zoom', 13), (s - pad, w - pad, n + pad, e + pad), cache, cubic=True)
+    tdata = {k: dict(roads=[], buildings=[], areas=[], pois=[]) for k in tiles}; npart = 0
     for road in d['roads']:
         pts = [loc(la, lo) for lo, la in road['p']]
         for tk, runs in split_polyline(pts, T, tiles).items():
@@ -179,20 +270,37 @@ def build_region(key, r, d, out, cache):
         cx, cz = sum(p[0] for p in pts) / len(pts), sum(p[1] for p in pts) / len(pts); tk = (math.floor(cx / T), math.floor(cz / T))
         if tk not in tiles: continue
         t = b['tags']; ox, oz = tk[0] * T, tk[1] * T
-        h = None; hs = 'inferred'
-        try:
-            if 'height' in t: h = float(str(t['height']).split()[0].replace(',', '.')); hs = 'tag'
-            elif 'building:levels' in t: h = float(t['building:levels']) * 3.2 + 1.0; hs = 'levels'
-        except ValueError: h = None; hs = 'inferred'
+        h, hs, extra, src = truth(t, None); hs = hs or 'inferred'
+        kind = t.get('building', 'yes')
         if h is None:
             hh = (b['id'] * 2654435761) % 1000 / 1000   # deterministic, stable between imports
-            kind = t.get('building', 'yes')
-            h = {'house': 5.5 + hh * 2.5, 'detached': 5.5 + hh * 2.5, 'residential': 7 + hh * 8, 'apartments': 12 + hh * 18, 'commercial': 10 + hh * 25, 'office': 14 + hh * 40, 'retail': 5 + hh * 3, 'industrial': 7 + hh * 4, 'warehouse': 8 + hh * 3}.get(kind, 6 + hh * 6)
+            h = {'house': 5.5 + hh * 2.5, 'detached': 5.5 + hh * 2.5, 'residential': 7 + hh * 8, 'apartments': 12 + hh * 18, 'commercial': 10 + hh * 25, 'office': 14 + hh * 40, 'retail': 5 + hh * 3, 'industrial': 7 + hh * 4, 'warehouse': 8 + hh * 3}.get(kind, 4 + hh * 5)
         h = max(2.5, min(h, 320))
-        rec = dict(id=b['id'], k=t.get('building', 'yes'), h=round(h, 1), hs=hs, p=[v for x, z in pts for v in (dm(x - ox), dm(z - oz))])
-        for q, name in (('roof:shape', 'rs'), ('building:levels', 'lv'), ('name', 'n'), ('shop', 'shop'), ('amenity', 'am'), ('building:colour', 'col')):
+        rec = dict(id=b['id'], k=kind, h=round(h, 1), hs=hs, p=[v for x, z in pts for v in (dm(x - ox), dm(z - oz))], **extra)
+        for q, name in (('building:levels', 'lv'), ('name', 'n'), ('shop', 'shop'), ('amenity', 'am'), ('addr:street', 'st'), ('addr:housenumber', 'hn')):
             if q in t: rec[name] = t[q]
-        tdata[tk]['buildings'].append(rec); nb += 1
+        rec['_pts'] = pts; rec['_src'] = src; tdata[tk]['buildings'].append(rec); nb += 1
+    # building parts: attached to the footprint that contains their centroid. OSM convention: parts replace the outline's massing.
+    npart = 0
+    for pt in d.get('parts', []):
+        pp = [loc(la, lo) for lo, la in pt['p'][:-1]]
+        if len(pp) < 3: continue
+        cx, cz = sum(p[0] for p in pp) / len(pp), sum(p[1] for p in pp) / len(pp); tk = (math.floor(cx / T), math.floor(cz / T))
+        if tk not in tiles: continue
+        par = next((r for r in tdata[tk]['buildings'] if pin(cx, cz, r['_pts'])), None)
+        if not par: continue
+        ph, phs, pex, psrc = truth(pt['tags'], None); ox, oz = tk[0] * T, tk[1] * T
+        if ph is None: ph = par['h']; phs = 'parent:' + par['hs']
+        part = dict(id=pt['id'], h=round(max(1.5, min(ph, 320)), 1), hs=phs, p=[v for x, z in pp for v in (dm(x - ox), dm(z - oz))], **pex); part['_src'] = psrc
+        par.setdefault('parts', []).append(part); npart += 1
+    for tk, td in tdata.items():
+        for br in td['buildings']:
+            src = br.pop('_src'); br.pop('_pts'); ps = {k: v for k, v in src.items()}
+            for part in br.get('parts', []): part.pop('_src')
+            kinds = set(src) & {'col', 'rc', 'mat', 'rm', 'rs'}
+            br['tt'] = 3 if (br['hs'] != 'inferred' or br.get('parts')) and kinds else 2 if (br['hs'] != 'inferred' or br.get('parts')) else 1
+            br['ps'] = ps
+    print(f'[{key}] building parts attached: {npart}', file=sys.stderr)
     for a in d['areas']:
         pts = [loc(la, lo) for lo, la in a['p'][:-1]]
         if len(pts) < 3: continue
@@ -217,8 +325,8 @@ def build_region(key, r, d, out, cache):
         p = os.path.join(out, key, f't_{i}_{j}.json')
         with open(p, 'w') as f: json.dump(rec, f, separators=(',', ':'))
         files[f'{i}_{j}'] = dict(file=f'{key}/t_{i}_{j}.json', bytes=os.path.getsize(p), sha256=sha(p), roads=len(rec['roads']), buildings=len(rec['buildings']))
-    return dict(name=r['name'], bbox=r['bbox'], zone=zone, south=True, e0=E0, n0=N0, tile=T, grid=G, tiles=files,
-                counts=dict(roads=len(d['roads']), buildings=nb, areas=len(d['areas']), pois=len(d['pois'])))
+    return dict(name=r['name'], bbox=r['bbox'], zone=zone, south=True, e0=E0, n0=N0, tile=T, grid=G, terrain=terrain_meta(dem, T, G), tiles=files,
+                counts=dict(roads=len(d['roads']), buildings=nb, parts=npart, areas=len(d['areas']), pois=len(d['pois'])))
 
 def national_dem(out, cache):
     """Coarse relief for the whole country: 0.025 degree grid, int16 metres."""
@@ -231,8 +339,13 @@ def national_dem(out, cache):
     return dict(file='national_dem.bin', west=w, north=n, step=step, cols=len(lons), rows=len(lats), unit='m', encoding='int16le row-major from the north-west', bytes=os.path.getsize(p), sha256=sha(p))
 
 def main():
-    ap = argparse.ArgumentParser(); ap.add_argument('--pbf', required=True); ap.add_argument('--out', default='data/world/za'); ap.add_argument('--region', action='append'); ap.add_argument('--cache', default='tmp/world-cache')
-    a = ap.parse_args(); os.makedirs(a.out, exist_ok=True); os.makedirs(a.cache, exist_ok=True)
+    ap = argparse.ArgumentParser(); ap.add_argument('--pbf'); ap.add_argument('--out', default='data/world/za'); ap.add_argument('--region', action='append'); ap.add_argument('--cache', default='tmp/world-cache')
+    ap.add_argument('--dem', help='optional local GeoTIFF DEM/DTM (not redistributed)'); ap.add_argument('--dem-license', default='unspecified (local R&D input)'); ap.add_argument('--terrain-only', action='store_true', help='rewrite elevation only, keep existing OSM data')
+    a = ap.parse_args(); global DEMSRC
+    if not a.pbf and not a.terrain_only: ap.error('--pbf is required')
+    if a.dem: DEMSRC = GeoTiffDem(a.dem, a.dem_license)
+    if a.terrain_only: os.makedirs(a.cache, exist_ok=True); return terrain_only(a)
+    os.makedirs(a.out, exist_ok=True); os.makedirs(a.cache, exist_ok=True)
     keys = a.region or list(REGIONS); regs = {k: REGIONS[k] for k in keys}
     t0 = time.time(); h = Pass(regs)
     print('reading OSM (takes a few minutes)...', file=sys.stderr)

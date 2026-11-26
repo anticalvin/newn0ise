@@ -21,6 +21,8 @@ import { retailPrefab } from './prefabs/retail.js';
 import { createTelemetry } from './debug.js';
 import { GeoWorld } from './geo/manager.js';
 import { OverviewMap } from './geo/map.js';
+import { mountWorkspace } from './workspace-ui.js';
+import { createFirstLightHost } from './first-light/host.js';
 
 const canvas = document.getElementById('c');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
@@ -208,15 +210,17 @@ app.cam.yaw = Math.PI / 2 + 0.35; app.cam.pitch = 0.2; app.cam.dist = 5.4;
 phys.init().then(ok => { if (!ok) ui.toast('Physics engine could not load, using the simple built-in solver'); });
 
 async function start(choice) {
+  if (choice === 'first-light') return app.firstLight.start();
   if (choice === 'world') { app.geo.open({ resume: true }).then(() => ui.brand()); return; }
   if (choice === 'continue') { const ok = await core.restore(); if (!ok) { app.newScene('coast'); ui.toast('No saved scene, started the coast'); } else ui.toast('Restored your last scene'); }
   else app.newScene(choice === 'blank' ? 'blank' : 'coast');
   app.cam.yaw = Math.atan2(-Math.sin(app.spawn[2]), -Math.cos(app.spawn[2])) + Math.PI + 0.35; app.cam.pitch = 0.2; app.cam.dist = 5.4;
   ui.render(); ui.updHist(); ui.brand(); ui.say('Drag to look · WASD to walk · E to edit the land', 9000);
 }
+app.firstLight = createFirstLightHost(app);
 app.start = start;
 { const q = new URLSearchParams(location.search).get('mcp'); if (q) setTimeout(() => connectBridge(app, q.startsWith('ws') ? q : undefined), 800); }
-{ const sp = new URLSearchParams(location.search), q = sp.get('start'); if (q === 'world') { ui.hideStart(); app.geo.open({ lat: sp.get('lat') ? +sp.get('lat') : undefined, lon: sp.get('lon') ? +sp.get('lon') : undefined, resume: sp.get('resume') === '1' }).then(() => ui.brand()); } else if (q === 'blank' || q === 'coast' || q === 'continue') { ui.hideStart(); start(q); } else ui.showStart(core.hasSave()); }
+{ const sp = new URLSearchParams(location.search), q = sp.get('start'); if (q === 'world') { ui.hideStart(); app.geo.open({ lat: sp.get('lat') ? +sp.get('lat') : undefined, lon: sp.get('lon') ? +sp.get('lon') : undefined, resume: sp.get('resume') === '1' }).then(() => ui.brand()); } else if (q === 'blank' || q === 'coast' || q === 'continue' || q === 'first-light') { ui.hideStart(); start(q); } else ui.showStart(core.hasSave()); }
 
 function resize() { const w = innerWidth, h = innerHeight; camera.aspect = w / h; camera.updateProjectionMatrix(); renderer.setSize(w, h, false); sand.setScale(renderer, camera); }
 const maxPr = () => Math.min(devicePixelRatio, 2);
@@ -229,13 +233,15 @@ function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000); last = now; shared.uTime.value += dt;
   // adaptive pixel ratio: drop resolution when the frame rate sags, climb back when there is headroom
   acc += dt; frames++; if (acc > 1.5) { const fps = frames / acc; app.fps = fps; if (fps < 38 && pr > 0.7) { pr = Math.max(0.7, pr - 0.25); renderer.setPixelRatio(pr); resize(); } else if (fps > 58 && pr < maxPr()) { pr = Math.min(maxPr(), pr + 0.25); renderer.setPixelRatio(pr); resize(); } app.pr = pr; acc = 0; frames = 0; }
+  if (app.firstLight.active) { app.firstLight.update(dt); return; }
   const inp = input.poll(dt), c = app.cam;
+  if (ui.modalOpen()) { inp.mx = inp.mz = inp.lx = inp.ly = 0; inp.jump = false; inp.run = false; }
   if (inp.lx || inp.ly) app.orbit(inp.lx * 200, inp.ly * 200);
   if (app.geo.active) { app.geo.update(dt, inp, now); renderer.render(scene, camera); tele.tick(now); return; }
   // movement relative to camera
   const fx = -Math.sin(c.yaw), fz = -Math.cos(c.yaw), rx = Math.cos(c.yaw), rz = -Math.sin(c.yaw);
   const mvx = fx * inp.mz + rx * inp.mx, mvz = fz * inp.mz + rz * inp.mx;
-  const explore = app.mode === 'explore', startOpen = ui.startOpen;
+  const explore = app.mode === 'explore', startOpen = ui.modalOpen();
   if (!explore) { const k = c.dist * 0.6 * dt; c.target.x = clamp(c.target.x + mvx * k, -124, 124); c.target.z = clamp(c.target.z + mvz * k, -124, 124); }
   // one fixed 60 Hz step for the character and the boulders (Rapier when it is ready, the simple solver until then)
   physAcc += dt; let n = 0;
@@ -268,4 +274,5 @@ function frame(now) {
 }
 requestAnimationFrame(frame);
 window.n0 = { app, core, geo: app.geo, telemetry: () => tele.read(), run: l => core.run(l), exec: c => core.exec(c), get fps() { return app.fps; }, get pr() { return app.pr; } };
+mountWorkspace(window.n0);
 window.Core = { exec: c => core.exec(c), describe: () => core.exec({ cmd: 'describe' }), state: () => core.exec({ cmd: 'state' }) };

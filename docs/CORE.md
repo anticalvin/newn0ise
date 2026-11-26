@@ -85,3 +85,15 @@ The in-app guide (`?`) shows the same table; keep both in step.
 ## Phase 2 additions
 
 Entities, assets and the convenience store: see [core-architecture.md](core-architecture.md) and [CORE_ASSETS.md](CORE_ASSETS.md). Use the Place tab to search assets or build a store; F, RB or the Use button opens the door and picks up the nearest product. Telemetry: `core.html?debug=1`.
+
+## Workspace shell (`src/core/workspace-ui.js`, `ui/core-workspace.css`)
+
+The launcher, workspace navigation, inspector and status bar are one bundled module, mounted once from `main.js` after `window.n0` exists (`n0.workspace`). It is a presentation layer over the legacy `UI` class and `Core.exec`; it owns no simulation state. `mountWorkspace()` is idempotent and `n0.workspace.dispose()` removes every node, listener, timer and method patch it added.
+
+**Working:** Create (Blank, Third person = Blank's existing player), Projects (continue the single autosave, import), Examples and Labs (COAST_001, South Africa incl. Cape Town and the national map), return to the viewport, return from South Africa to the local scene; workspaces World, Assets and Environment open the real dock groups; Scene lists entities and edits position through `entity.set` (undoable); Diagnostics shows `n0.telemetry()` (a dash when unavailable) and opens the console, screenshot and `describe`.
+
+**Planned and labelled so:** First person, Vehicle, Open world, Interior, HABITAT_01, the character/vehicle/gameplay laboratories, Simulate mode, named projects, gizmos, component inspector, and the Characters, Vehicles, Gameplay and Cinematics capability lists. Play is the old Explore mode, not isolated from editing.
+
+**Lifecycle rules:** launch routes go through `app.start`; nothing switches while South Africa is loading (`geo.loading`); replacing the scene asks first when commands have run since it was started, loaded or exported; imports are parsed and checked (`Core.checkScene`, `readWorld`) before anything changes, and `Core.load` rolls back to a snapshot if it fails midway; `ui.modalOpen()` (launcher, guide, report, confirm) blocks keyboard, pad and movement input to the world.
+
+Tests: `tools/core-smoke-workspace.mjs` (`node tools/core-smoke.mjs "workspace:"`).

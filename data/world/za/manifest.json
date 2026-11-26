@@ -2,7 +2,7 @@
  "format": "n0ise.world.manifest",
  "version": 1,
  "country": "South Africa",
- "generated": "2026-11-22",
+ "generated": "2026-11-23",
  "source": {
   "osm": "south-africa-261121.osm.pbf",
   "osmSha256": "004c0f0cc35e638b13148d73609e53af28bc26062994562cd89b15f3c6ebe159",
@@ -24,845 +24,863 @@
    "e0": 262000,
    "n0": 6241000,
    "tile": 1000,
-   "grid": 40,
+   "grid": 96,
+   "terrain": {
+    "name": "AWS Terrain Tiles (Terrarium)",
+    "kind": "terrarium",
+    "zoom": 14,
+    "native": "SRTM ~30 m (NED/GEBCO elsewhere); zoom-14 grid is resampled",
+    "interpolation": "catmull-rom",
+    "license": "Public/open sources, see https://github.com/tilezen/joerd/blob/master/docs/attribution.md",
+    "redistributable": true,
+    "version": "live tiles fetched 2026-11-23",
+    "grid": 96,
+    "spacingM": 10.42,
+    "lods": [
+     1,
+     3,
+     8
+    ],
+    "heightUnit": "decimetres int16"
+   },
    "tiles": {
     "-5_-6": {
      "file": "capetown/t_-5_-6.json",
-     "bytes": 4584,
-     "sha256": "b464a1f4e4c601b2ff8c3deb532141ae5d40654b1688c8b1a4f0f2488510ad0a",
+     "bytes": 25192,
+     "sha256": "afec633be817f26b9607d6ccabb37439a9f5b97b2d725de58494091580b204aa",
      "roads": 0,
      "buildings": 0
     },
     "-5_-5": {
      "file": "capetown/t_-5_-5.json",
-     "bytes": 4584,
-     "sha256": "5430796f0e31d4ccb6a30f9603a0e789a201d6a94f04427381c4952078c14d32",
+     "bytes": 25192,
+     "sha256": "fe14e20a40ba17edf6516cbcc1568f867e340220b9ca54d4d642aaea73e744bd",
      "roads": 0,
      "buildings": 0
     },
     "-5_-4": {
      "file": "capetown/t_-5_-4.json",
-     "bytes": 4584,
-     "sha256": "fa5b3f3d346f349a8e3880181d7ff73ac9f8acf0d8f15bdc905cfa6584ac0749",
+     "bytes": 25192,
+     "sha256": "0547515904f3686b6c3876a35422a63c1c8443b2d34766d62e8fb379dd0e49c1",
      "roads": 0,
      "buildings": 0
     },
     "-5_-3": {
      "file": "capetown/t_-5_-3.json",
-     "bytes": 58317,
-     "sha256": "b10803a63be5bd594578b302759eaac03f17e05fc1b4d6b9e2d8a9f209402a1d",
+     "bytes": 82381,
+     "sha256": "57153e8b7bbb19a1dc3d1b0b4274670eae6a6d597fcc2277e3628516d22d61f5",
      "roads": 164,
      "buildings": 166
     },
     "-5_-2": {
      "file": "capetown/t_-5_-2.json",
-     "bytes": 52139,
-     "sha256": "f4305e2b3582c8526444c21fe53dbde0b471d6ed25b4688ed22ca7c9ab20edca",
+     "bytes": 78309,
+     "sha256": "aaccbdbf50d08055d8552ea45b8c1526efeb9ad96e9d6fc2b76feb43738a2581",
      "roads": 48,
      "buildings": 174
     },
     "-5_-1": {
      "file": "capetown/t_-5_-1.json",
-     "bytes": 12085,
-     "sha256": "3e3981a3c9e3e34d735d1be7d9faedd5223662c2ffca6973aea3b68ac18d7fc7",
+     "bytes": 32956,
+     "sha256": "24f9648befae1e1285a130f48c69ec32e4bbe540b72f85844f6f2d758b73e020",
      "roads": 8,
      "buildings": 14
     },
     "-5_0": {
      "file": "capetown/t_-5_0.json",
-     "bytes": 25758,
-     "sha256": "174a9c59d5eb3a431b26eeef8665124293e97eabc2249a86fde34973be8a603e",
+     "bytes": 48098,
+     "sha256": "81c43212da01d8dee0c4812180406c2ce1b8c152f2cca32d4e74c6e13a8d25e8",
      "roads": 48,
      "buildings": 107
     },
     "-5_1": {
      "file": "capetown/t_-5_1.json",
-     "bytes": 19269,
-     "sha256": "eaeaa40b80a267733183b142ba1b8c8eea3f1e8743c048e39af2a9785546d081",
+     "bytes": 41071,
+     "sha256": "fd69262e142d4893f1ed4d1e3ca46f7ddc73bf0f930f481cd988fc8ae6601c1b",
      "roads": 38,
      "buildings": 64
     },
     "-5_2": {
      "file": "capetown/t_-5_2.json",
-     "bytes": 23357,
-     "sha256": "1df7d4d3974dc7ff430cba6eb6a64dcb2a6ad5aebbb8b8c7c279e68aaba2b4be",
+     "bytes": 45076,
+     "sha256": "b48e3f4cfbbecab964bf5f80d38181b676c383667378ce1dba7022361b402d9e",
      "roads": 14,
      "buildings": 61
     },
     "-5_3": {
      "file": "capetown/t_-5_3.json",
-     "bytes": 6277,
-     "sha256": "9f66313288076c5243d2a4457ff7911d61bc16593847f1e049fa76e6794e4fe4",
+     "bytes": 26885,
+     "sha256": "03bff873bf19c156fb132a0f5a461d4e2969fa13fd35d3a82edd17d4eaa47a23",
      "roads": 2,
      "buildings": 0
     },
     "-5_4": {
      "file": "capetown/t_-5_4.json",
-     "bytes": 6093,
-     "sha256": "c4387be455f5e3ddc1f618f748c17842f65f67b55ed992b78a9ed30cd9a343ba",
+     "bytes": 26701,
+     "sha256": "12a8115607bda406122fa9261607999bf09ed77d927eb41551643c3c2de1555b",
      "roads": 4,
      "buildings": 0
     },
     "-5_5": {
      "file": "capetown/t_-5_5.json",
-     "bytes": 4660,
-     "sha256": "33873f7a05a58f690ec2075b0de2ff59bd5ebc744f75732eba8889b00e15be07",
+     "bytes": 25268,
+     "sha256": "acd99b263653aafc936b800f463be86e530e9e7e1af3715efd91bc3cbf9c6326",
      "roads": 1,
      "buildings": 0
     },
     "-4_-6": {
      "file": "capetown/t_-4_-6.json",
-     "bytes": 4584,
-     "sha256": "39d9e52671a663bcd0b5ab16fbe006308ed7ad2770949a80e604bd02636c8a47",
+     "bytes": 25192,
+     "sha256": "663e6b1ad8313d2c5145b0372e647e4a88e1d24b78d6fcd344ca91cda0aee5e1",
      "roads": 0,
      "buildings": 0
     },
     "-4_-5": {
      "file": "capetown/t_-4_-5.json",
-     "bytes": 4584,
-     "sha256": "949f9b27d51a748cda570bbcbf086b5ce3fb023a17565de8d867f092b81d380a",
+     "bytes": 25192,
+     "sha256": "6404207f4d0f019980235cfaf40c5026bd274d79e32d823cada8ee49fb4a9a0b",
      "roads": 0,
      "buildings": 0
     },
     "-4_-4": {
      "file": "capetown/t_-4_-4.json",
-     "bytes": 109403,
-     "sha256": "cc7ae75b02b36122abf8e5f842827116a1819d93e70aa95e529285a709808b0c",
+     "bytes": 137035,
+     "sha256": "5f85f41fa1c5270c1e70b207dfd4c1e20cbf44a65822ad3ec4bd9fc88a4bb614",
      "roads": 336,
      "buildings": 408
     },
     "-4_-3": {
      "file": "capetown/t_-4_-3.json",
-     "bytes": 292754,
-     "sha256": "ea7199d2c87f70bfb862a2145602822183328ce1e31f2b8da76c5e6854da29dc",
+     "bytes": 338509,
+     "sha256": "1e27df1fc8a671709d1dfa6948ecfc4efbe89dbc920ed5c88b4323996d03503f",
      "roads": 755,
      "buildings": 1383
     },
     "-4_-2": {
      "file": "capetown/t_-4_-2.json",
-     "bytes": 92907,
-     "sha256": "c7efec89a3c257c162533c2709821ba336ca66fd4f0e48901a5c3385ceaa9a65",
+     "bytes": 119839,
+     "sha256": "4425b5df68563970cf6398e5ad1d06c4a27c24fca28759e0c44e2d0761874f16",
      "roads": 135,
      "buildings": 377
     },
     "-4_-1": {
      "file": "capetown/t_-4_-1.json",
-     "bytes": 20979,
-     "sha256": "0343fb794d34f5d80674fdf13b5c5bcba2b34f54d071c487ea305bf2d17b9a51",
+     "bytes": 41625,
+     "sha256": "ef5915ae3775f0eb6cb740c9c8beb2bb87ea50cfd825d14243bb9f12baf242c6",
      "roads": 23,
      "buildings": 1
     },
     "-4_0": {
      "file": "capetown/t_-4_0.json",
-     "bytes": 85564,
-     "sha256": "7b358bb04a9688688aedd1ac5e62d0515b1a2c3673050cc5b1176b48561ad04a",
+     "bytes": 113303,
+     "sha256": "86633f10c9e582ef2b2d35cd6a2f16037c4fdf577475e747162a89ee678c9855",
      "roads": 127,
      "buildings": 377
     },
     "-4_1": {
      "file": "capetown/t_-4_1.json",
-     "bytes": 79531,
-     "sha256": "d1809de03306b94b72c2711e3e34925d67a281aad912fcdb762e315914f1d3ea",
+     "bytes": 107658,
+     "sha256": "fc77aa63e241d4f988e1a7d9236d091375951e2e0f973721a8da37fa5e86678c",
      "roads": 111,
      "buildings": 371
     },
     "-4_2": {
      "file": "capetown/t_-4_2.json",
-     "bytes": 52014,
-     "sha256": "37b5a19510f4cdf7cb09cee03ee9ec9b9e2c73a80ed9aebd5598c76c650a56eb",
+     "bytes": 76047,
+     "sha256": "dbf715c92e2ef428faf25b2b186c8f73b34bc571932231d38fe87e29108fe84f",
      "roads": 45,
      "buildings": 186
     },
     "-4_3": {
      "file": "capetown/t_-4_3.json",
-     "bytes": 13938,
-     "sha256": "a87818ed4283cb9c9149d19568d4bc731782ac5804bd32a85f86e8dca55a5331",
+     "bytes": 34561,
+     "sha256": "1829aa195fad4f87c6e633592871cdd65c1a50682810d1fb864cbc70e5bd2aa7",
      "roads": 15,
      "buildings": 1
     },
     "-4_4": {
      "file": "capetown/t_-4_4.json",
-     "bytes": 13185,
-     "sha256": "b397aeeef75859b1e6188cfb44239a0cd92320b4004abddbb1943580b18317be",
+     "bytes": 33793,
+     "sha256": "928f978e9345a63355fefc17c6cdc52d2ae3bf6549bc7a6e8ed7d3b78bddb20a",
      "roads": 23,
      "buildings": 0
     },
     "-4_5": {
      "file": "capetown/t_-4_5.json",
-     "bytes": 7988,
-     "sha256": "f60dcb34aca60cdab02fe97638fb9e23194b86cef8f53c71e2b15e354b34b4dd",
+     "bytes": 28596,
+     "sha256": "11b34c2d4641097f360d88731f102d98d3be2690108b8f5a22a060c7d791d89d",
      "roads": 4,
      "buildings": 0
     },
     "-3_-6": {
      "file": "capetown/t_-3_-6.json",
-     "bytes": 4584,
-     "sha256": "9780e4c982b394a519b42964b19ba2a7b3f82e7ce35bdaef2e611d417447bfe4",
+     "bytes": 25192,
+     "sha256": "2f88c64736c2daf6da6a80f08f4873c9d925487004ede8aa3c405848c2ac79ee",
      "roads": 0,
      "buildings": 0
     },
     "-3_-5": {
      "file": "capetown/t_-3_-5.json",
-     "bytes": 72182,
-     "sha256": "bb08f8f80aa3dc0a15f8cab84182ed9b11fd8d6180257082951a00ed4b62d0cc",
+     "bytes": 95036,
+     "sha256": "22f08df665a66809de5f01b5540d9aff51abd3db4d26f619dbceef1165ba7aba",
      "roads": 237,
      "buildings": 94
     },
     "-3_-4": {
      "file": "capetown/t_-3_-4.json",
-     "bytes": 247455,
-     "sha256": "2358b6061b9783764f068b403d1839b225d424722b141e5e7b48a427410a63df",
+     "bytes": 287270,
+     "sha256": "7aaedff50c999f36f906484da5b47b7ecdbe025cab4aea0479bf280115878de5",
      "roads": 608,
      "buildings": 1098
     },
     "-3_-3": {
      "file": "capetown/t_-3_-3.json",
-     "bytes": 46647,
-     "sha256": "ba67b35e148549c712a6137584c086b92be27aadb3bebeac9ecee8d0db758a32",
+     "bytes": 69354,
+     "sha256": "c0c554f3b6a6c59c05d89d75bc45be374a0eb6da983f1e8d8ab8412326ff8a14",
      "roads": 89,
      "buildings": 101
     },
     "-3_-2": {
      "file": "capetown/t_-3_-2.json",
-     "bytes": 99833,
-     "sha256": "aff191a35bce15c6acadb0b3f50e33f7478de4d4653f259b999e5f7391b1eddf",
+     "bytes": 127165,
+     "sha256": "7d743bb6d2b1e35a33e31c22155f19c41bf3846b495e217f272b26c5aa595dea",
      "roads": 104,
      "buildings": 446
     },
     "-3_-1": {
      "file": "capetown/t_-3_-1.json",
-     "bytes": 111837,
-     "sha256": "70134ac6d783de0ced95421176f625d2311f29f9e96e080a7c0484d16af1dc2d",
+     "bytes": 139674,
+     "sha256": "16427a686e96b8b7ae2226a4f7d51ea0d60712e9f482636cd4150e913d371945",
      "roads": 120,
      "buildings": 474
     },
     "-3_0": {
      "file": "capetown/t_-3_0.json",
-     "bytes": 26114,
-     "sha256": "a829584e981e8fa56c493dde391f08073b0c46ccee18382b3c0bfc039fe606a5",
+     "bytes": 46899,
+     "sha256": "89e7721daa12c988c8d16fb7b9c1e0a7d650a66ce3a6bcacc6a51c67602948e7",
      "roads": 50,
      "buildings": 12
     },
     "-3_1": {
      "file": "capetown/t_-3_1.json",
-     "bytes": 13807,
-     "sha256": "a403ebd5d4a4e7ef744da63858f45425f0da50ba252a289b142c2cc67bec88a9",
+     "bytes": 34415,
+     "sha256": "e3bc7d00afd9dfc53866c6b757754efe96054fd8d6ae2d09d7df19de307a52f0",
      "roads": 25,
      "buildings": 0
     },
     "-3_2": {
      "file": "capetown/t_-3_2.json",
-     "bytes": 18995,
-     "sha256": "904ea96912f5b46448359820b05de803f73f5cd045192edc998f2fc02b94904d",
+     "bytes": 39603,
+     "sha256": "b423a840352c75ce8041d7bb39555d8a634100443c16d20b15ad30cf0028e2fc",
      "roads": 22,
      "buildings": 0
     },
     "-3_3": {
      "file": "capetown/t_-3_3.json",
-     "bytes": 13393,
-     "sha256": "f179064a2ee712a04c4ce73a497c38c577fcecdf4f61870a484b63bc203ac5d8",
+     "bytes": 34091,
+     "sha256": "6a1a0da0acd9c6436933ab3fc3df1f6fe38be995997e5a53e2e5ca1456c938d8",
      "roads": 32,
      "buildings": 6
     },
     "-3_4": {
      "file": "capetown/t_-3_4.json",
-     "bytes": 9264,
-     "sha256": "292f61b9e9cb7ac9e78a85c4d3377f9872ea9c1905b20efb61e69b9cc61c258a",
+     "bytes": 29872,
+     "sha256": "f228d6d5a00a6b2314459613d4fdbf3a1162cf8f21d1e9001339b4ce2075e885",
      "roads": 11,
      "buildings": 0
     },
     "-3_5": {
      "file": "capetown/t_-3_5.json",
-     "bytes": 7970,
-     "sha256": "a20af5256fb3c0d978b63a843d0b2194ebfbf695859e1cc0299d871377370069",
+     "bytes": 28578,
+     "sha256": "f0cbf4238114e286bd76ab441f23cfd1e36a742ea25199d7aaa2dfee3aa08ff8",
      "roads": 4,
      "buildings": 0
     },
     "-2_-6": {
      "file": "capetown/t_-2_-6.json",
-     "bytes": 4584,
-     "sha256": "44f47f9a4fa4883cb465bcafab1661a032164f8d1e2b4cd95b3e1dce15745d55",
+     "bytes": 25192,
+     "sha256": "b927dc3d154319f1807f216007dc1f8a31c8d458658b9640afc3292526a46dfa",
      "roads": 0,
      "buildings": 0
     },
     "-2_-5": {
      "file": "capetown/t_-2_-5.json",
-     "bytes": 84753,
-     "sha256": "4b7f9ba8517ba6bca849aef3eca907b55eab8e12033178abedcc913129941431",
+     "bytes": 107519,
+     "sha256": "51d0e4b572e17d16c88ae3e5ce5b43f3359a81174238e4145e085eb51ff74666",
      "roads": 394,
      "buildings": 101
     },
     "-2_-4": {
      "file": "capetown/t_-2_-4.json",
-     "bytes": 235427,
-     "sha256": "1a5a5fcd6efb444febc524e53277d9f06b1f767fecef0d331162b0e9362dedd4",
+     "bytes": 272860,
+     "sha256": "156a4ba7a570f96b5a9f3ca9a5f72201aeac3412070fa56f3fde996430193023",
      "roads": 401,
      "buildings": 1005
     },
     "-2_-3": {
      "file": "capetown/t_-2_-3.json",
-     "bytes": 167269,
-     "sha256": "a15dfaf43500e573878d44e402eaa94e514f7bc099fb65bf456ba67c2e484c17",
+     "bytes": 201632,
+     "sha256": "671665f75384a9c5de2dd6986e82c07fab700b0b3b8a672d43de3631500d555c",
      "roads": 265,
      "buildings": 889
     },
     "-2_-2": {
      "file": "capetown/t_-2_-2.json",
-     "bytes": 260989,
-     "sha256": "6e150ba79db394a2428de380a221cc5aca88cd597108f69205681068508c67ca",
+     "bytes": 301048,
+     "sha256": "d5482cf511317e1098163ab859d7e1094c4f37dbea7d876d1414b92c9ef1946f",
      "roads": 364,
      "buildings": 1199
     },
     "-2_-1": {
      "file": "capetown/t_-2_-1.json",
-     "bytes": 158042,
-     "sha256": "90619980937a6ff372acf1f48d93e126d4b01506365aa5a8425d8b341dc31088",
+     "bytes": 193290,
+     "sha256": "28baa927a226d24d7e6acc308f568b2040a42963bb56e8f640e46ce05ebce628",
      "roads": 203,
      "buildings": 808
     },
     "-2_0": {
      "file": "capetown/t_-2_0.json",
-     "bytes": 22902,
-     "sha256": "c6f18d5315cb48366533a296f57017466eb076310b8dd5ea5bcf89164c5bd58b",
+     "bytes": 44796,
+     "sha256": "fea7a45bd7d3570e3f453d12e6d7b90797c01de1b0d6b3b79bf724f83d549f63",
      "roads": 54,
      "buildings": 65
     },
     "-2_1": {
      "file": "capetown/t_-2_1.json",
-     "bytes": 60113,
-     "sha256": "8c881faf12b8fbbb547fa098ad1d7545ad8da11ac9b77d18f5419bebd80ec820",
+     "bytes": 80794,
+     "sha256": "3b08a89a70ca216e5d94b2f78cffe1309055a5b638a15fa97d84d2e59cc54790",
      "roads": 160,
      "buildings": 5
     },
     "-2_2": {
      "file": "capetown/t_-2_2.json",
-     "bytes": 19977,
-     "sha256": "658e674cbd7245b57adb3ccf010438bb18c1261fc0f98dee405165556b0117be",
+     "bytes": 40585,
+     "sha256": "1bc39123c5069203f1d46a61412b66efc2eaf7296c6b6ae41b62d625e3b9c035",
      "roads": 23,
      "buildings": 0
     },
     "-2_3": {
      "file": "capetown/t_-2_3.json",
-     "bytes": 14602,
-     "sha256": "48ac2769574b7e9e01d1fa8c969d9a76dfbf402865c6e8bdc617e2f94a400c19",
+     "bytes": 35239,
+     "sha256": "fab81b742ab6188f7f47c14d89c339f2745b77119c046f82659f5e8fbcd67f14",
      "roads": 21,
      "buildings": 2
     },
     "-2_4": {
      "file": "capetown/t_-2_4.json",
-     "bytes": 12543,
-     "sha256": "b5a2f5e36e0fea790dc64a963bb7852e338329d45f7b92c22ac0e1638021d78a",
+     "bytes": 33181,
+     "sha256": "9ec2c086b4b7647fd47bef7a572a9224f1b500167852b466742eabadc1d5b83f",
      "roads": 18,
      "buildings": 2
     },
     "-2_5": {
      "file": "capetown/t_-2_5.json",
-     "bytes": 6009,
-     "sha256": "69c0c7d41723e24e708335261b4e4a36e485bbb08e47ce39ae55b3e1caaced7f",
+     "bytes": 26617,
+     "sha256": "48725e803a01e2bb268fb6e9afedda49abf5fe5183b4e7a68e2bc5a3881c1c8f",
      "roads": 4,
      "buildings": 0
     },
     "-1_-6": {
      "file": "capetown/t_-1_-6.json",
-     "bytes": 4584,
-     "sha256": "967168ce94a5366b6ef311f5cf5867f47d569a432c2c6ef9b19f0daa0f0c5e6f",
+     "bytes": 25192,
+     "sha256": "7621628c39ae9bac42db7ac38eceb051963cb81f1fc34dc84aaeaf6a57dcc1e8",
      "roads": 0,
      "buildings": 0
     },
     "-1_-5": {
      "file": "capetown/t_-1_-5.json",
-     "bytes": 124638,
-     "sha256": "0acd51046622d4ff145b7dbe37abef5c1009b5610ebc024a30ec4913ccc42a8a",
+     "bytes": 147769,
+     "sha256": "466891272a8c50698fefdb08c7f02eb1b58505b5f854213e992454b40325479a",
      "roads": 553,
      "buildings": 159
     },
     "-1_-4": {
      "file": "capetown/t_-1_-4.json",
-     "bytes": 202894,
-     "sha256": "e95ef45b9bbbbbcd040924428f9aae55b7354ad5718073fe7ce0b16c59793095",
+     "bytes": 239392,
+     "sha256": "61085d7a46f9b7a64778f494558f96ef720f404ecc476b662268b9e5f9f6f596",
      "roads": 744,
      "buildings": 511
     },
     "-1_-3": {
      "file": "capetown/t_-1_-3.json",
-     "bytes": 292326,
-     "sha256": "521af106a87130c3e4fbd5ccdfc8428bec0563c46c5a3282ae10746da5379f0e",
+     "bytes": 412577,
+     "sha256": "00ed9624a7fda43543d068eed07132426686b1789310b31205ddd11751b368cd",
      "roads": 1046,
      "buildings": 834
     },
     "-1_-2": {
      "file": "capetown/t_-1_-2.json",
-     "bytes": 185846,
-     "sha256": "4f1d798e7369ff90e3f4322d0be166cdcb5a6070f136ff75d4f6f646350551fe",
+     "bytes": 222654,
+     "sha256": "e353d774dead2e5250fbf10096c2c3772d6f79cfc7825a27c34d1424a768fc62",
      "roads": 552,
      "buildings": 638
     },
     "-1_-1": {
      "file": "capetown/t_-1_-1.json",
-     "bytes": 132602,
-     "sha256": "3d4e635826acecaf762d1a895045c4aea8aef3faa8a89d461bb254f7e62b9d19",
+     "bytes": 168794,
+     "sha256": "2a3b72ad27a843236f3f77da23edc8d603fd9a0460dd248efb025d3cc8a4213b",
      "roads": 255,
      "buildings": 677
     },
     "-1_0": {
      "file": "capetown/t_-1_0.json",
-     "bytes": 37299,
-     "sha256": "86ef10377248688b7342981b9e23aec52db27bf03c36494230f64347f1d5e69d",
+     "bytes": 60669,
+     "sha256": "f54437024d08bcdb12346216c772ac62d023142558d6e22f8a0555abefbe6da4",
      "roads": 87,
      "buildings": 148
     },
     "-1_1": {
      "file": "capetown/t_-1_1.json",
-     "bytes": 13386,
-     "sha256": "2c762de3f6caf5510bb1a275cb12fac99df13bb4065d8393e8afedc0a5ed88d1",
+     "bytes": 34009,
+     "sha256": "6dbaabbf100384d213229221e680413094255d57b2c51fe81425f5c3edbcbfea",
      "roads": 29,
      "buildings": 1
     },
     "-1_2": {
      "file": "capetown/t_-1_2.json",
-     "bytes": 12447,
-     "sha256": "60d4efa79731ca7ff1f208943e1734ad933d017bddd6d31e5a83dd74fe4e795b",
+     "bytes": 33055,
+     "sha256": "c25b5f43724eb75b4a04281d603851a6c8cd0f28e48b9cfbd5c868eed2b711ae",
      "roads": 11,
      "buildings": 0
     },
     "-1_3": {
      "file": "capetown/t_-1_3.json",
-     "bytes": 11321,
-     "sha256": "de321e80f65aadb80f186b23ba43866e720f0d3d3612b6f5196f71500c9e0e37",
+     "bytes": 31929,
+     "sha256": "d1630b26ba45a5e9fe39acb48c8ebbbe07e1d11f3b24759474a7a31ca3af9b20",
      "roads": 17,
      "buildings": 0
     },
     "-1_4": {
      "file": "capetown/t_-1_4.json",
-     "bytes": 14797,
-     "sha256": "9f70929b3476d40197a0b3e4be43d812d274d2b970d5a539133763201c5f8307",
+     "bytes": 35405,
+     "sha256": "157044bc67700ff27ee4c789ce54be6f69a1a239bff36b8f04170e8ce5b40dcd",
      "roads": 18,
      "buildings": 0
     },
     "-1_5": {
      "file": "capetown/t_-1_5.json",
-     "bytes": 5966,
-     "sha256": "dddd07e0edecf3444292d3e6845afceab4d2efca0bf17f327f0f68067dc5060c",
+     "bytes": 26574,
+     "sha256": "c71ec42e5079efd80ef8959784781456887bef3960ef3512f0a3f945c93d5443",
      "roads": 4,
      "buildings": 0
     },
     "0_-6": {
      "file": "capetown/t_0_-6.json",
-     "bytes": 4661,
-     "sha256": "67ee3b0c8281552b0e678195a06e7f51e6cb7e3b752158251724c1117fcf67dd",
+     "bytes": 25269,
+     "sha256": "55f6d55c99207ca58a48458a8c475dc385d09fc1157ea33579bbc87a4e6c4bcb",
      "roads": 1,
      "buildings": 0
     },
     "0_-5": {
      "file": "capetown/t_0_-5.json",
-     "bytes": 23806,
-     "sha256": "79ea9f9208db3f52b008caed369285a251a77be72e242be967c4206576d24077",
+     "bytes": 45971,
+     "sha256": "d8aa8de3d7ee2ab30958375bb73ecffeee2d1a47719863759d4e265a4f4f3104",
      "roads": 48,
      "buildings": 103
     },
     "0_-4": {
      "file": "capetown/t_0_-4.json",
-     "bytes": 65207,
-     "sha256": "a1669a763a6037b4224d9a8d7599a06a4f141456a9ca5705dc8ea9eb8ebe6ca7",
+     "bytes": 92669,
+     "sha256": "66839df463730e982d7bdb6fe4f6baa6b49ad966d3d4292e7620ca81d1f5a576",
      "roads": 317,
      "buildings": 68
     },
     "0_-3": {
      "file": "capetown/t_0_-3.json",
-     "bytes": 163443,
-     "sha256": "935f47404aea359147b5ba67533386afd0dc3d1a62ea969ee37d754d1fa9e0c6",
+     "bytes": 214919,
+     "sha256": "12ede94bf1be0439f20dc5292c5ccff4ecfe04f02ee8497f444371be1488e11e",
      "roads": 831,
      "buildings": 117
     },
     "0_-2": {
      "file": "capetown/t_0_-2.json",
-     "bytes": 134667,
-     "sha256": "36e02999582b089ba9f76b7391dceb1fe6fa1793abb0069b194c6bf6230183b3",
+     "bytes": 164495,
+     "sha256": "efb22ab06f8da16a25ab7e2d9a26ae97312a80fa208decd2161bdc15c9a57289",
      "roads": 616,
      "buildings": 270
     },
     "0_-1": {
      "file": "capetown/t_0_-1.json",
-     "bytes": 104985,
-     "sha256": "2ac7f83c088ad4915adb3877c3a6d9ca73adc9ba7f4cae8ec46006911823a825",
+     "bytes": 136742,
+     "sha256": "104dbadd70d177db71e6502a4b73325a84362031aa7f2178642869287b849694",
      "roads": 192,
      "buildings": 543
     },
     "0_0": {
      "file": "capetown/t_0_0.json",
-     "bytes": 13676,
-     "sha256": "86b069466dab8865f9be9d72f995da4e415e2210c73175b1bd499c47e1fd527b",
+     "bytes": 34299,
+     "sha256": "dbaf270984d92562a6b3a567545c641727e6c14c8098b5a75b3b54de313e04cd",
      "roads": 25,
      "buildings": 1
     },
     "0_1": {
      "file": "capetown/t_0_1.json",
-     "bytes": 17103,
-     "sha256": "41876d3ca39699698aee3a92ade8de1ca696caafea332bc32d3c587ae8e2e171",
+     "bytes": 37711,
+     "sha256": "03c6e3ed6e2a6cbf5418206342faa6dcd14898c28946914df935442b30b5c099",
      "roads": 39,
      "buildings": 0
     },
     "0_2": {
      "file": "capetown/t_0_2.json",
-     "bytes": 15119,
-     "sha256": "9fc1fd5e0715b860031cd1cc8e15a8cef31c8bebd12baa4266866e19e5576f2b",
+     "bytes": 35727,
+     "sha256": "d49eb666a00801bbae6982d26a69332ff1f398e78a418af14690411d721e4be3",
      "roads": 24,
      "buildings": 0
     },
     "0_3": {
      "file": "capetown/t_0_3.json",
-     "bytes": 11355,
-     "sha256": "752bac0e0aaa69e74f87ceb95009dd31f22063bd8b7e8c7dcb38923a648aa6b5",
+     "bytes": 31963,
+     "sha256": "4120bb5fdcde5dbdb7bfa63478c61f0b15b6b4fbd89bcfc43968b2554b71758a",
      "roads": 13,
      "buildings": 0
     },
     "0_4": {
      "file": "capetown/t_0_4.json",
-     "bytes": 38940,
-     "sha256": "e745b75629a6e5b1cf59a86f8f7a778c78120294ed2521ac053a5b9de6876df3",
+     "bytes": 59971,
+     "sha256": "57115466829f2516b621d0dd68a7a1fb25c9ca908ef822edeecb702ad1b28abc",
      "roads": 228,
      "buildings": 24
     },
     "0_5": {
      "file": "capetown/t_0_5.json",
-     "bytes": 9211,
-     "sha256": "3d7806ad7ce6dc8eae94c7673d997047c5924c7766d268991a1f9083b252aa3d",
+     "bytes": 29849,
+     "sha256": "963abfd89b1b8ba1c5487cb1140945a4dc72c1a80c7fa776bb11a16b85d91ccd",
      "roads": 38,
      "buildings": 2
     },
     "1_-6": {
      "file": "capetown/t_1_-6.json",
-     "bytes": 4583,
-     "sha256": "166fb83bee9d8708c690d3ce53ce549e35c3aa21b87700b9f1751368c7fb9d93",
+     "bytes": 25191,
+     "sha256": "7854aabab17ca777788e4a486f3ea010c6880be46c45a5e8fcc8895ed4a8c403",
      "roads": 0,
      "buildings": 0
     },
     "1_-5": {
      "file": "capetown/t_1_-5.json",
-     "bytes": 6229,
-     "sha256": "9dbd29c4ff56d53f6c42d961c88e39acb9db8600ec59206d0b4726eff9935ad5",
+     "bytes": 26837,
+     "sha256": "b7aeb569bb5fc4963f8ea0fba4d2eeea809dc69a65ddddec1522395e69cfc972",
      "roads": 11,
      "buildings": 0
     },
     "1_-4": {
      "file": "capetown/t_1_-4.json",
-     "bytes": 33670,
-     "sha256": "4d3d240f2fede1b2fdc5d51cf5f9a97b46024339adb3591950e72b10b2a7f026",
+     "bytes": 55613,
+     "sha256": "f52cd126def035890e0529507c065027e123db7108245db4c7ab8ce3366517d7",
      "roads": 41,
      "buildings": 90
     },
     "1_-3": {
      "file": "capetown/t_1_-3.json",
-     "bytes": 43098,
-     "sha256": "6816a7ef0764c01f0b691475fd82196822bc687098c43f77e016027a14aedd06",
+     "bytes": 67645,
+     "sha256": "9df9c43f36e21807a19d529602a039283d86421ab7a4a694faf3d2cb8bc4ef31",
      "roads": 173,
      "buildings": 120
     },
     "1_-2": {
      "file": "capetown/t_1_-2.json",
-     "bytes": 233076,
-     "sha256": "921660bfcff9f730113a38fb4d71c58216ec84536f1435a5afe203554517cd18",
+     "bytes": 305688,
+     "sha256": "74161c1654e865679840deed7a8d3b22ee371de84e7f1d7f12e1f0005ac3b218",
      "roads": 472,
      "buildings": 1226
     },
     "1_-1": {
      "file": "capetown/t_1_-1.json",
-     "bytes": 42351,
-     "sha256": "701d8d57e077c77505224a3ad83e482027f1ee1107e56d6298f491f9974f90cd",
+     "bytes": 70949,
+     "sha256": "f2eb85effd6a8a2137a5aaec84f8c31825a249d40153d3b9d683388143d8c7f0",
      "roads": 66,
      "buildings": 190
     },
     "1_0": {
      "file": "capetown/t_1_0.json",
-     "bytes": 16749,
-     "sha256": "e468254f3ed38b9861d1e0d90d3d4147a23887d2ea2f160bb74e54519916f8d5",
+     "bytes": 37357,
+     "sha256": "ce898bc258e4528120be8e9e55b94f14af4a70e6d7c09517ce5d1c09d99f0545",
      "roads": 40,
      "buildings": 0
     },
     "1_1": {
      "file": "capetown/t_1_1.json",
-     "bytes": 11705,
-     "sha256": "62f715ab92602afb3919bf28b20f3478cd47a07dac826d229f489ffac70da8f6",
+     "bytes": 32313,
+     "sha256": "1d27d903bd52040b32307e93afe9138f51db63ca8bb93bc15313b73dc375bfcd",
      "roads": 31,
      "buildings": 0
     },
     "1_2": {
      "file": "capetown/t_1_2.json",
-     "bytes": 12905,
-     "sha256": "d959f16d4ace43605dfc78b8ebf5a28bd58030c10a945690377518cdc73548c1",
+     "bytes": 33513,
+     "sha256": "a75783d43e452752bc47cab5527d3f017d1734b930e0221ea122ea8685871b09",
      "roads": 45,
      "buildings": 0
     },
     "1_3": {
      "file": "capetown/t_1_3.json",
-     "bytes": 17448,
-     "sha256": "ce00c2def3f932200b7918916cbab555de1373d5dccd5df851542c7188069c6f",
+     "bytes": 38085,
+     "sha256": "860052563093072411b02ebe68c93de7dafc3524940c940267468ce2a544ee6b",
      "roads": 73,
      "buildings": 2
     },
     "1_4": {
      "file": "capetown/t_1_4.json",
-     "bytes": 28884,
-     "sha256": "509b9a0bd3126a525536fa9e1a1303d8e6e4dd2b2994a399e2e692667e933e23",
+     "bytes": 50411,
+     "sha256": "a79d47ef135c2966213fb75c82c568e39907edef823b6af8de276f6c592ae681",
      "roads": 107,
      "buildings": 56
     },
     "1_5": {
      "file": "capetown/t_1_5.json",
-     "bytes": 6260,
-     "sha256": "727dee5c267f43b62b1c6d9d086decb48f786399cd01c863d06a909f605c2e5c",
+     "bytes": 26868,
+     "sha256": "4e053cc8d5d8f6defe7bcd675c4a94e14a03b9eb21d675faa965f395b6937d54",
      "roads": 7,
      "buildings": 0
     },
     "2_-6": {
      "file": "capetown/t_2_-6.json",
-     "bytes": 4583,
-     "sha256": "73e5eb5163709e9cec6b6d95dbab8cecd1e7e47aae16586f4dd310658b7195a6",
+     "bytes": 25191,
+     "sha256": "cfb062bd2d81070f4a559cca242ccfb7a8f7e13ae29c310db3e769c2cd24558d",
      "roads": 0,
      "buildings": 0
     },
     "2_-5": {
      "file": "capetown/t_2_-5.json",
-     "bytes": 5149,
-     "sha256": "97098c53bfe76c008b0b334b1e94907a5710ae0e51392b8f9ca2bd8c8cfb7a4f",
+     "bytes": 25757,
+     "sha256": "a56ac2dd053a519d6ad20528c09bee5c845fd167275dd1dcdb2c0a1d19e2167b",
      "roads": 5,
      "buildings": 0
     },
     "2_-4": {
      "file": "capetown/t_2_-4.json",
-     "bytes": 21945,
-     "sha256": "a03fb38e468a6171c6dd55c275d7c32024ecb454fdd1b9c86487a101de2d55c0",
+     "bytes": 42923,
+     "sha256": "f41c076291d77b9283de83741b6ab6f1629c2dbe8cc0187353431fcb22c5dacc",
      "roads": 78,
      "buildings": 25
     },
     "2_-3": {
      "file": "capetown/t_2_-3.json",
-     "bytes": 71325,
-     "sha256": "c9057ae7cca7701a05606e8a5674076376c495f825a981e0b11f86a5e504e6e8",
+     "bytes": 96487,
+     "sha256": "0784b94af9afc8dd2a28fea52bd194d58330bca19dcf7896240451b3b7077782",
      "roads": 264,
      "buildings": 192
     },
     "2_-2": {
      "file": "capetown/t_2_-2.json",
-     "bytes": 363930,
-     "sha256": "c173286f257cf96c6c2f07fbd334fced9c6c2a1972ca91ba84be29c019e02268",
+     "bytes": 482744,
+     "sha256": "f890737c08138106304615361031c2d70e7a414fc947116e98ed39c962d00f27",
      "roads": 488,
      "buildings": 2169
     },
     "2_-1": {
      "file": "capetown/t_2_-1.json",
-     "bytes": 89568,
-     "sha256": "dd0d1fe6e230928523f212944654329f172bbd9e3fb7aaeb2b20a29eb33b1a8d",
+     "bytes": 128864,
+     "sha256": "2b3b163b83968e656718d84a0f7b967cfc9b3d6e445796a538000ab8667cb6f7",
      "roads": 181,
      "buildings": 430
     },
     "2_0": {
      "file": "capetown/t_2_0.json",
-     "bytes": 17039,
-     "sha256": "b69d891057aa8494c6784ef10adcec2fa5e7ffd33fbed7526f94e45def12ced7",
+     "bytes": 37677,
+     "sha256": "0f38a073140e4ce3643f0779ed1d9ef0505c3973a3f1f9510c3523c2a22fe0e7",
      "roads": 33,
      "buildings": 2
     },
     "2_1": {
      "file": "capetown/t_2_1.json",
-     "bytes": 15189,
-     "sha256": "b9f3709cfb649e3fee593bc5a88326659158990ac293c1dd81e512078917d9b5",
+     "bytes": 35927,
+     "sha256": "629e54b338cf8c46a1703f1a42128138749f937780d72a5f87cea7a649ec83e6",
      "roads": 38,
      "buildings": 9
     },
     "2_2": {
      "file": "capetown/t_2_2.json",
-     "bytes": 32661,
-     "sha256": "070eff9d7ff1779a5b8a802a2baa6c1b51f1bc20185263db8a13f95179022304",
+     "bytes": 54039,
+     "sha256": "b38750a71d4aacb5eeec4ab81aa09b8a6c8799a9e0552e5abb18ec0963de347f",
      "roads": 143,
      "buildings": 50
     },
     "2_3": {
      "file": "capetown/t_2_3.json",
-     "bytes": 40100,
-     "sha256": "7769759f2c9ab09765e2923cdd7317c4a038a2259920f9daf97f0ebd6d011ebe",
+     "bytes": 61200,
+     "sha256": "1c9b96e6c884018ac38dd311d953482747656816a8c75717f8f25e708ad184dc",
      "roads": 215,
      "buildings": 26
     },
     "2_4": {
      "file": "capetown/t_2_4.json",
-     "bytes": 37161,
-     "sha256": "e7ba504b1cc3695a7ba4f8c574628104a6d757b88f42deb43a623463233f7c4b",
+     "bytes": 58253,
+     "sha256": "d40d2aae0703e99a708dcc717896b0fd94fe4b98c9c79d7e6167ff39c7114430",
      "roads": 193,
      "buildings": 33
     },
     "2_5": {
      "file": "capetown/t_2_5.json",
-     "bytes": 5214,
-     "sha256": "d4d340e3e18789c5f87527fb4380b231568daca442c0df7b753163d924fee0de",
+     "bytes": 25822,
+     "sha256": "4a865e2e211c53ba0e143e16cff7ab64899b42ac5bbff9471dcba5d75d4ad60d",
      "roads": 5,
      "buildings": 0
     },
     "3_-6": {
      "file": "capetown/t_3_-6.json",
-     "bytes": 4583,
-     "sha256": "7a45b9619d237bdb0c6f85f3d7838b3daddcf0a44fdd3420dace7d277aa344b1",
+     "bytes": 25191,
+     "sha256": "eacc00e47a936cf84c666eec1002f44ddc1fe9a3a38ccc1191f02af31481e3b9",
      "roads": 0,
      "buildings": 0
     },
     "3_-5": {
      "file": "capetown/t_3_-5.json",
-     "bytes": 4583,
-     "sha256": "c5f4013c6b701a23b2a44c91283741c4d640605ac119066519afe451fda8ea8a",
+     "bytes": 25191,
+     "sha256": "0b0d8b0b6c310142da234f522fb037e1907112dfc959d9aecb9dc9ac40d2e36d",
      "roads": 0,
      "buildings": 0
     },
     "3_-4": {
      "file": "capetown/t_3_-4.json",
-     "bytes": 39362,
-     "sha256": "17b55e2720fc2544a9725376e738f1756c9c40dd37a90f9c95590aa3611bd62b",
+     "bytes": 61636,
+     "sha256": "e84272a1cc3e6550217d8b9e1468d0455d81ba7220a51565ccae6bb3170a5f60",
      "roads": 179,
      "buildings": 75
     },
     "3_-3": {
      "file": "capetown/t_3_-3.json",
-     "bytes": 40912,
-     "sha256": "67731cc036dc9501b0f9fb68d3c768eeb0a6ac3f9998a5fe359f8808edfcf335",
+     "bytes": 63631,
+     "sha256": "030d7ce6a41e5dfdc660586065f87516210a86e0de112feb6603fe1d004d9bba",
      "roads": 135,
      "buildings": 137
     },
     "3_-2": {
      "file": "capetown/t_3_-2.json",
-     "bytes": 337138,
-     "sha256": "8f1b1a7bb434d5cbae775eb4bf349728c5acff6983b76ffb4e985e0d44da1d36",
+     "bytes": 441405,
+     "sha256": "dbb805529742c2b97bc463e7ac327dd33d98dc7d5fdb7870a33c3981811ecba6",
      "roads": 542,
      "buildings": 1935
     },
     "3_-1": {
      "file": "capetown/t_3_-1.json",
-     "bytes": 136554,
-     "sha256": "a47933cf3a143945897039defb21f4863009d43e1fb71f63e6f6a9395ca3b134",
+     "bytes": 180140,
+     "sha256": "b12555230b460a84921af2bad32870c048fed1a749e06aabeedca5c5b72249c0",
      "roads": 447,
      "buildings": 520
     },
     "3_0": {
      "file": "capetown/t_3_0.json",
-     "bytes": 35571,
-     "sha256": "357c5766cc86a42602057dc3ca03858513417404e329d9d894a3c713543a278d",
+     "bytes": 56728,
+     "sha256": "2d6ee91e8a6314d3e486e05a575e2f0e785cfeb49e68ce2bf6b9f27410d6c1e0",
      "roads": 153,
      "buildings": 27
     },
     "3_1": {
      "file": "capetown/t_3_1.json",
-     "bytes": 99094,
-     "sha256": "6fbe17c24dff31846dd46bdd1e315aa9388a762eb32ef9108455edc2d6d6e71c",
+     "bytes": 121397,
+     "sha256": "d2da6ff51d270903472b4dc7dfdaa230cd16e405c5667b467d7aedd9b976ee0b",
      "roads": 561,
      "buildings": 111
     },
     "3_2": {
      "file": "capetown/t_3_2.json",
-     "bytes": 69646,
-     "sha256": "733f3e7a3791b00b82b15ec78d94102fe98784ef5ef46ab32fb6bd79cd6f6e45",
+     "bytes": 92364,
+     "sha256": "a53a887bf1851afd7b76634b084be89a5dff6b2c6d7bcd171da9282bdcef071e",
      "roads": 345,
      "buildings": 76
     },
     "3_3": {
      "file": "capetown/t_3_3.json",
-     "bytes": 111717,
-     "sha256": "a303ef9a925100c65d1706bcb6a5457787169485f804f8d0cf0c3ed93894ce45",
+     "bytes": 136089,
+     "sha256": "845f6a65028d765db82c7d05037b891034d3001f6fb603774506ece86c9be4c4",
      "roads": 627,
      "buildings": 129
     },
     "3_4": {
      "file": "capetown/t_3_4.json",
-     "bytes": 118123,
-     "sha256": "19875bcc8a33f5dbd605444cb26cebd72c8cf105d73ea70df90838a86e7e7f4a",
+     "bytes": 141732,
+     "sha256": "cb10c48d129e40fa2dd6a110cd026793caaa8ef67d47b340b4acd73ce76a90ab",
      "roads": 660,
      "buildings": 152
     },
     "3_5": {
      "file": "capetown/t_3_5.json",
-     "bytes": 5129,
-     "sha256": "033a857864c41a0fdfbd6f2c082de3784013aa098f2bbf69548ec342f00b15fb",
+     "bytes": 25737,
+     "sha256": "71d2342bb066f595bdef0d9c347cc156f25457996e7e53ee1a00968d62fa8088",
      "roads": 4,
      "buildings": 0
     },
     "4_-6": {
      "file": "capetown/t_4_-6.json",
-     "bytes": 4583,
-     "sha256": "552e737ba691588547d64fa0e9393513b664be4113b7fb95ff13546464c33b57",
+     "bytes": 25191,
+     "sha256": "8b2447c50ceff5fca6925d31286e411469265e26c060fa203fa3f0da08b54dba",
      "roads": 0,
      "buildings": 0
     },
     "4_-5": {
      "file": "capetown/t_4_-5.json",
-     "bytes": 5553,
-     "sha256": "38c7bb219007decd2615ae2ded8318d2b2c9f4fd7d44581786b09830f9610cb8",
+     "bytes": 26161,
+     "sha256": "18f6ac663e1b97f150918b7337348273ad3e4dd37fe48b3f251fff1df81bb311",
      "roads": 5,
      "buildings": 0
     },
     "4_-4": {
      "file": "capetown/t_4_-4.json",
-     "bytes": 10437,
-     "sha256": "4b55a4778e9a4aa0f6fd123684f543edcff4828a6e0d843544e6a8bf7b456a4e",
+     "bytes": 31149,
+     "sha256": "15c404ccff00a63e1b300b7e81dfd5aad7038d660c1c03abc4182bed70f10c0a",
      "roads": 25,
      "buildings": 7
     },
     "4_-3": {
      "file": "capetown/t_4_-3.json",
-     "bytes": 9141,
-     "sha256": "ea49dcd73e4957e1e48f743d035e358fca445e6538e559f5583178631c23e2fc",
+     "bytes": 29859,
+     "sha256": "a1cb546185da045a696e8c27f3080a0eb2c7ab3a163106ed28e34fd307a4c2ca",
      "roads": 22,
      "buildings": 5
     },
     "4_-2": {
      "file": "capetown/t_4_-2.json",
-     "bytes": 23094,
-     "sha256": "b7601cfe916572ad8b3539cda5c1580b140a317ad63e43965393ee3d324ab006",
+     "bytes": 46197,
+     "sha256": "13f2e8a1a65a59b823120b10d1b3fff457ed5e3b151371afb261840e1a3c2280",
      "roads": 57,
      "buildings": 83
     },
     "4_-1": {
      "file": "capetown/t_4_-1.json",
-     "bytes": 73164,
-     "sha256": "6c16d9dbd67df85d4bd33fe9951c95c837589449c930b2f47d80a80adf87d792",
+     "bytes": 105712,
+     "sha256": "2a28937e727c4f885481c7021c2ed5fec4dadd631d85dad488c3328ee75adc70",
      "roads": 200,
      "buildings": 291
     },
     "4_0": {
      "file": "capetown/t_4_0.json",
-     "bytes": 27887,
-     "sha256": "8f6f18af272b4d112998733e6e58ce3e85fa35af402d22fed61469d6fb1ff39c",
+     "bytes": 49825,
+     "sha256": "1950692f65bbf55cf6ade5448f2edcab93e77f762d47b6ebc546ccb242262379",
      "roads": 114,
      "buildings": 77
     },
     "4_1": {
      "file": "capetown/t_4_1.json",
-     "bytes": 38621,
-     "sha256": "f00b77fc6c170cc44b01dd4a731183bf1311a22c2897e06c81d71d9e374d9747",
+     "bytes": 60336,
+     "sha256": "5f7a2023e3b3c86e85e165362b0e9e0267311803e96b3b48b475c6f36724ca59",
      "roads": 186,
      "buildings": 68
     },
     "4_2": {
      "file": "capetown/t_4_2.json",
-     "bytes": 22590,
-     "sha256": "b592d36e13fc25cbbb84610834e8d3b72ce0d3a1173fd997621aaac90014bd57",
+     "bytes": 43540,
+     "sha256": "34a324304c865eef2fc832b9c2f28c64243f7d0f6e745da800ed47cf7361cf35",
      "roads": 120,
      "buildings": 19
     },
     "4_3": {
      "file": "capetown/t_4_3.json",
-     "bytes": 30538,
-     "sha256": "34592d27755bc537bc0f411a8f627af0b9ff665279e475dc0ac7042a280339a8",
+     "bytes": 51911,
+     "sha256": "2244e81a4c78ff0250bd7606de3c21d335250f7adafa8076dbd9e66f1371ef9f",
      "roads": 147,
      "buildings": 43
     },
     "4_4": {
      "file": "capetown/t_4_4.json",
-     "bytes": 40210,
-     "sha256": "e389b0f75cf59251927d6f64aa187676a460044407eafbbb82be66cce875f3ec",
+     "bytes": 62036,
+     "sha256": "c26228d02514e492965933578be3a26427008863293d9b5bbee3fb1e41993705",
      "roads": 187,
      "buildings": 72
     },
     "4_5": {
      "file": "capetown/t_4_5.json",
-     "bytes": 5127,
-     "sha256": "567c4b2a0aea47b2c116b4e5cdf634fd65aea3aec53a3bdd2117809b643e9f26",
+     "bytes": 25735,
+     "sha256": "fbcb8749770e1c17e54e6739eceaaa8d161c8cec41835e5641dd022e4ea08965",
      "roads": 3,
      "buildings": 0
     }
@@ -870,6 +888,7 @@
    "counts": {
     "roads": 16225,
     "buildings": 22540,
+    "parts": 1007,
     "areas": 1237,
     "pois": 1285
    }

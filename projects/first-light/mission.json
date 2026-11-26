@@ -1,0 +1,64 @@
+{
+  "format": "n0ise.mission",
+  "version": 1,
+  "id": "first-light.first-drive",
+  "initial": "key",
+  "states": {
+    "key": {
+      "objective": "Collect your keys from the living room.",
+      "target": "house.key",
+      "transitions": [
+        {
+          "event": "inventory.added",
+          "match": {
+            "item": "vehicle_key"
+          },
+          "next": "car"
+        }
+      ]
+    },
+    "car": {
+      "objective": "Get into the Vela 6 in the garage.",
+      "target": "car.player",
+      "transitions": [
+        {
+          "event": "vehicle.entered",
+          "match": {
+            "vehicle": "car.player"
+          },
+          "next": "store"
+        }
+      ]
+    },
+    "store": {
+      "objective": "Drive to Tide Market and collect the parcel.",
+      "target": "store.parcel",
+      "transitions": [
+        {
+          "event": "inventory.added",
+          "match": {
+            "item": "parcel"
+          },
+          "next": "deliver"
+        }
+      ]
+    },
+    "deliver": {
+      "objective": "Deliver the parcel at the coastal lookout.",
+      "target": "viewpoint.delivery",
+      "transitions": [
+        {
+          "event": "item.delivered",
+          "match": {
+            "item": "parcel"
+          },
+          "next": "complete"
+        }
+      ]
+    },
+    "complete": {
+      "objective": "Delivery complete. Explore the coast at your own pace.",
+      "complete": true
+    }
+  }
+}
