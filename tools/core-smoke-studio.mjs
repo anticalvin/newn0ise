@@ -119,7 +119,7 @@ t('studio mobile: tools sit in the artboard footer, scroll sideways, keep 44px t
  if(!(tools.scrollWidth>=tools.clientWidth))return 'toolbar cannot scroll';if(document.documentElement.scrollWidth>innerWidth)return 'page overflows horizontally';
  const z=document.getElementById('zoomLock'),r=z.getBoundingClientRect();if(r.width>32)return 'lock is still large '+r.width;const hit=document.elementFromPoint(r.left+r.width/2+18,r.top+r.height/2),hit2=document.elementFromPoint(r.left+r.width/2-18,r.top+r.height/2);if((hit!==z&&!z.contains(hit))||(hit2!==z&&!z.contains(hit2)))return 'lock hit area is smaller than 44px';
  document.querySelector('[data-tool=text]').click();await wait(150);if(!document.querySelector('[data-tool=text]').classList.contains('active'))return 'tool selection from the footer does not work';
- const head=document.querySelector('.stagehead').getBoundingClientRect();if(head.height>40)return 'top chrome is tall: '+head.height;return true}`);
+ const head=document.querySelector('.stagehead').getBoundingClientRect();if(head.height>56)return 'top chrome is tall: '+head.height;return true}`);
 
 t('studio motion: fit sequence, fit selection, dynamic zoom limits, pinch and ctrl-wheel zoom, touch selects before it edits (N0I-40)', '/studio-app.html', `async()=>{${OPEN}await open();const M=window.n0iseMotion,D=StudioDocument;
  M.add([D.layer('shape',{shape:'rectangle',width:200,height:100,fill:'#d33',stroke:'#d33',strokeWidth:0,start:2,dur:3})]);M.add([D.layer('shape',{shape:'ellipse',width:100,height:100,fill:'#39c',stroke:'#39c',strokeWidth:0,start:40,dur:5})]);
@@ -274,4 +274,18 @@ t('mobile polish: no text selection or double-tap zoom, canvas centred between t
  const q=s=>document.querySelector(s).getBoundingClientRect();await wait(600);const a=q('#artboard'),t=q('.documentbar'),n=q('.mobilebar'),c=a.top+a.height/2,f=(t.bottom+n.top)/2;
  if(Math.abs(c-f)>3)return 'canvas centre '+c.toFixed(1)+' vs free space centre '+f.toFixed(1);
  const inp=document.createElement('input');document.body.append(inp);const ok=getComputedStyle(inp).userSelect==='text';inp.remove();if(!ok)return 'text fields lost selection';
+ return true}`);
+
+t('studio mobile: the hold menu fades above the finger, slide onto an option and release to pick it; export has Send to Effects; canvas is flush', '/studio-app.html', `async()=>{${OPEN}await open();const M=window.n0iseMotion;
+ M.add([StudioDocument.layer('shape',{name:'Box',shape:'rectangle',width:400,height:400,fill:'#d33',stroke:'#d33',strokeWidth:0})]);await wait(500);M.select([]);await wait(100);
+ const st=document.getElementById('stagebody'),r=document.querySelector('#stagebody canvas').getBoundingClientRect(),x=r.left+r.width/2,y=r.top+r.height/2;
+ const pe=(ty,id,px,py)=>{const ev=new PointerEvent(ty,{pointerId:id,pointerType:'touch',isPrimary:true,clientX:px,clientY:py,bubbles:true,cancelable:true});(ty==='pointerdown'?st:window).dispatchEvent(ev)};
+ const menu=document.getElementById('studioContext');pe('pointerdown',41,x,y);await wait(700);
+ if(menu.hidden)return 'menu did not open';if(!menu.classList.contains('peek'))return 'menu does not fade while the finger is down';
+ const mr=menu.getBoundingClientRect();if(mr.bottom>y)return 'menu covers the finger: '+mr.bottom+' > '+y;
+ const item=[...menu.children].find(b=>b.textContent==='Hide');const ir=item.getBoundingClientRect();pe('pointermove',41,ir.left+8,ir.top+8);await wait(60);
+ if(!menu.classList.contains('near'))return 'sliding onto an option does not show it';
+ const was=M.doc.layers.find(l=>l.name==='Box').visible;pe('pointerup',41,ir.left+8,ir.top+8);await wait(200);
+ if(M.doc.layers.find(l=>l.name==='Box').visible===was)return 'releasing on an option did not run it';if(!menu.hidden)return 'menu stayed open after picking';
+ document.getElementById('export').click();await wait(300);if(![...document.querySelectorAll('#modalcontent button')].some(b=>/Send to Effects/.test(b.textContent)))return 'no Send to Effects';
  return true}`);

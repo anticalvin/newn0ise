@@ -436,3 +436,8 @@ a.brand:focus-visible { outline:2px solid var(--accent); outline-offset:4px; }
 .procbox.embedded{position:relative;inset:auto;z-index:auto;height:100%;min-height:200px;border-radius:0}
 #graph.procmode{display:flex;flex-direction:column;padding:0}#graph.procmode>:not(.procbox){display:none!important}
 .pwire.hot{stroke:#fff;stroke-width:3.5}
+
+/* hold menu: faded while the finger is down so the layer underneath stays visible */
+.context-menu.peek{opacity:.2;pointer-events:none;transition:opacity .12s}
+.context-menu.peek.near{opacity:.96}
+.context-menu button.hot{background:#5a5957}
