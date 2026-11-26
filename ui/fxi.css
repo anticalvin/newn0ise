@@ -242,3 +242,15 @@ body:not([data-cam]) .dock :is(button,input,select,summary,[tabindex]):focus-vis
   .fx-foot .rl{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
   body:not([data-cam]) .fx-foot .srcmenu{left:auto;right:calc(100% + 8px);top:0;bottom:auto;transform:none}
 }
+
+/* Fuse look picker: real previews of your picture, one tap to try */
+.fpick .ftiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(88px,1fr));gap:8px;margin:6px 0 12px}
+.fpick .ftile{display:flex;flex-direction:column;gap:5px;align-items:stretch;padding:5px;border:1px solid var(--line,#3a3836);border-radius:12px;background:#ffffff08;color:inherit;font:inherit;font-size:11px;text-align:center;min-height:44px}
+.fpick .ftile canvas{width:100%;aspect-ratio:1;border-radius:8px;display:block;background:#000}
+.fpick .ftile span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 2px}
+.fpick .ftile.on{border-color:#f3efe4;background:#ffffff18;box-shadow:0 0 0 1px #f3efe4}
+.fpick .fdone{position:sticky;bottom:0;display:flex;gap:8px;padding:10px 0;background:#171615}
+.fpick .fdone .chip{flex:1;min-height:44px;justify-content:center}
+/* the section tabs (Hardware, Colour, Effects, Fuse) stay put while the options scroll underneath */
+body:not([data-cam]) .dock{overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+body:not([data-cam]) .dock .strip{position:sticky;top:0;z-index:6;background:var(--panel,#171615)}

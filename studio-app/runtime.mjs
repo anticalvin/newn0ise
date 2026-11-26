@@ -114,6 +114,26 @@ export function createRuntime(canvas,onChange,onError) {
     h.material.metalness = limits(m.metalness,1,0,1);
     h.mesh.rotation.set(...asset.transform.rotation,'XYZ');
     h.mesh.updateMatrixWorld(true);
+    centreMesh(h);
+  }
+
+  /* Perspective pulls a tilted model toward whichever side is nearer, so a camera aimed at its middle draws it off-centre.
+     Project the model's points, find the middle of what is actually drawn, and shift the view so that sits in the middle of the layer. */
+  function centreMesh(h) {
+    const cam = h.camera, pos = h.mesh.geometry.attributes.position;
+    cam.clearViewOffset(); cam.updateProjectionMatrix(); cam.updateMatrixWorld(true);
+    const M = h.mesh.matrixWorld.elements, V = cam.matrixWorldInverse.elements, P = cam.projectionMatrix.elements;
+    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+    for (let i = 0; i < pos.count; i++) {
+      const px = pos.getX(i), py = pos.getY(i), pz = pos.getZ(i);
+      const wx = M[0]*px+M[4]*py+M[8]*pz+M[12], wy = M[1]*px+M[5]*py+M[9]*pz+M[13], wz = M[2]*px+M[6]*py+M[10]*pz+M[14];
+      const ex = V[0]*wx+V[4]*wy+V[8]*wz+V[12], ey = V[1]*wx+V[5]*wy+V[9]*wz+V[13], ez = V[2]*wx+V[6]*wy+V[10]*wz+V[14];
+      const cw = P[3]*ex+P[7]*ey+P[11]*ez+P[15] || 1;
+      const nx = (P[0]*ex+P[4]*ey+P[8]*ez+P[12])/cw, ny = (P[1]*ex+P[5]*ey+P[9]*ez+P[13])/cw;
+      if (nx < x0) x0 = nx; if (nx > x1) x1 = nx; if (ny < y0) y0 = ny; if (ny > y1) y1 = ny;
+    }
+    const cx = (x0+x1)/2, cy = (y0+y1)/2, w = h.renderer.domElement.width || 1, ht = h.renderer.domElement.height || 1;
+    if (Math.abs(cx) > .002 || Math.abs(cy) > .002) { cam.setViewOffset(w,ht,cx*w/2,-cy*ht/2,w,ht); cam.updateProjectionMatrix(); }
   }
 
   function resize(h,w,height) {
@@ -130,6 +150,7 @@ export function createRuntime(canvas,onChange,onError) {
     h.camera.zoom = Math.min(1,w/height);
     h.camera.updateProjectionMatrix();
     h.size = size;
+    h.meshKey = h.meshKey;
   }
 
   function sceneTexture(h,asset,w,height) {
