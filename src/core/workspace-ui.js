@@ -5,7 +5,7 @@ const icons = { box: 'M4 7 12 3l8 4v10l-8 4-8-4V7Zm0 0 8 4 8-4M12 11v10', view: 
 const ico = (name, size = 20) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${icons[name] || icons.box}"/></svg>`;
 // [id, name, icon, description, meta, status label, launch route (null = not implemented)]
 const templates = [['blank', 'Blank', 'box', 'An empty world with the essential runtime.', 'Scene · terrain · physics', 'Ready', 'blank'], ['first', 'First person', 'view', 'A grounded, first-person experience.', 'Camera · interaction', 'Planned', null], ['third', 'Third person', 'person', 'Start with the existing embodied player.', 'Movement · follow camera', 'Ready', 'blank'], ['vehicle', 'Vehicle', 'car', 'A dedicated driving and handling template.', 'Suspension · drivetrain', 'Planned', null], ['open', 'Open world', 'earth', 'A configurable streamed world.', 'Terrain · regions · population', 'Planned', null], ['interior', 'Interior', 'house', 'A room-first architectural project.', 'Rooms · media · interaction', 'Planned', null]];
-const examples = [['coast', 'COAST_001', 'mountain', 'Sculptable island, sea, vegetation and physics.', 'Environmental reference', 'Ready', 'coast'], ['world', 'South Africa', 'earth', 'National relief, detailed Cape Town, roads and traffic.', 'Large-world benchmark', 'Existing', 'world'], ['habitat', 'HABITAT_01', 'house', 'Safehouse, garage, outdoor road and gameplay.', 'Integration target', 'Planned', null]];
+const examples = [['coast', 'COAST_001', 'mountain', 'Sculptable island, sea, vegetation and physics.', 'Environmental reference', 'Ready', 'coast'], ['world', 'South Africa', 'earth', 'National relief, detailed Cape Town, roads and traffic.', 'Large-world benchmark', 'Existing', 'world'], ['habitat', 'HABITAT_01', 'house', 'Safehouse, garage, outdoor road and gameplay.', 'Integration target', 'Planned', null], ['first-light', 'FIRST LIGHT', 'house', 'Playable coastal district, vehicles, interiors and a mission.', 'Gameplay vertical slice', 'Preview', 'first-light']];
 const labs = [['blanklab', 'Blank laboratory', 'box', 'Isolated movement, terrain and physical tests.', 'Core baseline', 'Ready', 'blank'], ['envlab', 'Environment laboratory', 'sun', 'Existing island for ocean, atmosphere and terrain.', 'COAST_001', 'Ready', 'coast'], ['streamlab', 'Streaming laboratory', 'earth', 'Existing South Africa geographical stress test.', 'Cape Town · national scale', 'Existing', 'world'], ['charlab', 'Character laboratory', 'person', 'Skeletal animation, IK and active ragdolls.', 'Embodiment R&D', 'Planned', null], ['vehlab', 'Vehicle laboratory', 'car', 'Suspension, contacts and damage tests.', 'Mobility R&D', 'Planned', null], ['gameplaylab', 'Gameplay laboratory', 'game', 'Interactions, missions and state persistence.', 'Runtime R&D', 'Planned', null]];
 // [name, icon, dock group it opens (null = inspector only), description]
 const nav = [['World', 'mountain', 0, 'Terrain and world construction'], ['Scene', 'layers', null, 'Entity hierarchy and inspection'], ['Assets', 'folder', 3, 'Asset catalogue and prefabs'], ['Characters', 'person', null, 'Embodiment and animation'], ['Vehicles', 'car', null, 'Vehicle profiles and handling'], ['Gameplay', 'game', null, 'Interactions and missions'], ['Environment', 'sun', 4, 'Sky, ocean and time'], ['Cinematics', 'camera', null, 'Cameras and sequences'], ['Diagnostics', 'chart', null, 'Runtime metrics and tools']];
@@ -55,12 +55,14 @@ export function mountWorkspace(n0) {
       return r;
     }
     if (a.geo?.active) a.geo.close();                        // leaves only transient world resources; the local scene is still there
+    if (choice === 'first-light') return base(choice);
     const r = await base(choice); clean = sig(); return r;
   });
   async function go(choice) {
     if (busy()) { ui.toast('South Africa is still loading. Try again in a moment.'); return; }
     lastErr = '';
     if (choice === 'world') { if (a.geo.active) { ui.hideStart(); return; } ui.hideStart(); a.start('world'); return; }
+    if (choice === 'first-light') { ui.hideStart(); await a.start(choice); return; }
     if (choice === 'continue' && !a.core.hasSave()) { ui.toast('There is no autosaved scene yet'); return; }
     if (opened && !a.geo?.active && !(await okToReplace(choice === 'continue' ? 'Continuing the autosave' : 'A new scene'))) return;
     ui.hideStart(); await a.start(choice);
