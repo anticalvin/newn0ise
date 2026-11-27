@@ -9,6 +9,8 @@
     "test": "npm run check:bundles && npm run test:models && npm run test:parity && npm run test:ui && npm run test:core",
     "test:models": "node --test studio-app/test/model.test.cjs studio-app/test/procedural-vector.test.mjs studio-app/test/sketchfab.test.mjs studio-app/test/viewport.test.cjs studio-app/test/lab-canvas.test.mjs studio-app/test/pathedit.test.cjs studio-app/test/grid.test.cjs studio-app/test/timeline-view.test.cjs studio-app/test/procgraph.test.cjs studio-app/test/palette.test.cjs studio-app/test/trace.test.cjs",
     "test:core": "node tools/core-smoke.mjs",
+    "test:sim": "node tools/sim-test.mjs",
+    "test:character": "node tools/core-smoke.mjs character:",
     "test:world": "node tools/world/check_geo.mjs && node tools/core-smoke.mjs world:",
     "test:ui": "node tools/ui-check.mjs"
   },

@@ -35,7 +35,11 @@ a{color:inherit}button,.btn{font:inherit;color:inherit;cursor:pointer}
 .tile img{width:56px;height:56px;object-fit:cover;border-radius:10px;background:rgba(128,128,128,.15)}.tile b{width:56px;height:56px;border-radius:10px;display:grid;place-items:center;font-size:22px;background:rgba(128,128,128,.15)}
 .tile small{font:600 9px var(--lab);line-height:1.1;text-align:center;max-width:60px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.tile[aria-pressed=true]{border-color:var(--ac);box-shadow:0 0 0 2px var(--ac)}
 .row.sw>span:first-child{flex:1 1 100%;width:auto}
-h3{margin:10px 0 2px;font:800 12px var(--lab);letter-spacing:.1em;text-transform:uppercase;opacity:.6}output{width:64px;text-align:right;opacity:.7}
+input.num{flex:none;width:68px;min-height:44px;padding:0 8px;border-radius:12px;border:1px solid var(--ln);background:transparent;color:inherit;font:inherit;text-align:right}
+input.search{min-height:44px;padding:0 12px;border-radius:14px;border:1px solid var(--ln);background:transparent;color:inherit;font:inherit}
+input[type=file]{min-height:44px;font:inherit;color:inherit;max-width:100%}.note{margin:2px 0 6px;opacity:.65;line-height:1.45;font-weight:500}.list{display:flex;flex-direction:column;gap:2px}
+.tabs .tab{padding:0 9px;flex:1 0 auto}
+h3{margin:10px 0 2px;font:800 12px var(--lab);letter-spacing:.1em;text-transform:uppercase;opacity:.6}
 #fload{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:9;padding:16px 22px;border-radius:20px;max-width:calc(100vw - 32px);text-align:center}#fload[hidden]{display:none}
 .tabs{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none}.tabs::-webkit-scrollbar{display:none}
 .tab{flex:1;min-height:44px;padding:0 12px;border:0;border-radius:14px;background:transparent;letter-spacing:.05em;text-transform:uppercase;font-size:11px;font-weight:700}
@@ -74,6 +78,6 @@ h3{margin:10px 0 2px;font:800 12px var(--lab);letter-spacing:.1em;text-transform
 </div>
 <div id="fload" class="glass" role="status">Loading the character…</div>
 <div id="ft" class="glass" role="status" hidden></div>
-<script type="module" src="assets/figure.js?v=29cd5e1d"></script>
+<script type="module" src="assets/figure.js?v=73fe1eed"></script>
 </body>
 </html>

@@ -29,7 +29,7 @@ const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 await send('Runtime.enable');await send('Page.enable');
 await send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
 const ev=async expr=>{const r=await send('Runtime.evaluate',{expression:expr,awaitPromise:true,returnByValue:true,timeout:120000});if(r.exceptionDetails)return 'threw: '+(r.exceptionDetails.exception&&r.exceptionDetails.exception.description||r.exceptionDetails.text).split('\n')[0];return r.result.value;};
-const open=async url=>{errors.length=0;await send('Page.navigate',{url:base+url});for(let i=0;i<60;i++){await sleep(500);if(await ev('!!(window.n0&&window.n0.app&&window.n0.app.phys&&(window.n0.app.phys.ready||window.n0.app.phys.failed))'))break;}await sleep(500);};
+const open=async url=>{errors.length=0;await send('Page.navigate',{url:base+url});for(let i=0;i<60;i++){await sleep(500);if(await ev('!!(window.__hum||(window.n0&&window.n0.app&&window.n0.app.phys&&(window.n0.app.phys.ready||window.n0.app.phys.failed)))'))break;}await sleep(500);};
 
 /* tests: [name, url, async body]. The body sees `n0` and returns true or a failure string. */
 const T=[];const t=(name,url,body)=>T.push([name,url,body]);
@@ -50,6 +50,7 @@ try{const wx=await import('./core-smoke-world.mjs');extra=extra.concat(wx.tests|
 try{const ww=await import('./core-smoke-workspace.mjs');extra=extra.concat(ww.tests||[]);}catch(e){}
 try{const sx=await import('./core-smoke-studio.mjs');extra=extra.concat(sx.tests||[]);}catch(e){}
 try{const fl=await import('./core-smoke-firstlight.mjs');extra=extra.concat(fl.tests||[]);}catch(e){}
+try{const ch=await import('./core-smoke-character.mjs');extra=extra.concat(ch.tests||[]);}catch(e){}
 for(const [n,u,b] of extra)T.push([n,u,b]);
 let fail=0;const base0={};
 for(const [name,url,body] of T){
