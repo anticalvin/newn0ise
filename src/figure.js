@@ -35,7 +35,11 @@ let dirty=2;const bump=()=>{dirty=3;};controls.addEventListener('change',bump);
 function toast(m,ms=2400){const t=$('#ft');t.textContent=m;t.hidden=false;clearTimeout(toast._t);toast._t=setTimeout(()=>t.hidden=true,ms);}
 let H=null,EXP=null,expLast=0;
 const KEY='n0.human';
-const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(H.S));}catch(e){}};
+const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(H.S));}catch(e){}publishCore();};
+/* the character you are editing is the one Core and FIRST LIGHT use, unless you turn that off. It is only published when it passes the rig check, so a broken look never reaches the game. */
+const AUTO='n0.core.autouse';let pubT=0;
+const autoOn=()=>localStorage.getItem(AUTO)!=='0';
+function publishCore(){if(!autoOn()||!H)return;clearTimeout(pubT);pubT=setTimeout(()=>{try{const v=H.validate();if(!v.ok)return;localStorage.setItem('n0.core.character',JSON.stringify(H.exportCharacter()));}catch(e){}},900);}
 /* ---- undo / redo of the whole editable state ---- */
 const U={u:[],r:[],pend:false};
 function touch(){if(U.pend)return;U.pend=true;U.u.push(JSON.stringify(H.S));if(U.u.length>60)U.u.shift();U.r.length=0;setTimeout(()=>U.pend=false,700);}
@@ -213,7 +217,9 @@ const TABS=[
     const b=el('button','chip','Save this look as a favourite');b.type='button';b.addEventListener('click',()=>{const l=list();l.unshift({name:'Look '+new Date().toLocaleString(),look:structuredClone(H.S)});localStorage.setItem(FAV,JSON.stringify(l.slice(0,24)));show(5,true);toast('Saved.');});p.appendChild(b);
     list().forEach((f,k)=>{const r=el('div','row');r.append(el('span','',f.name));const ld=el('button','chip','Load');ld.type='button';ld.addEventListener('click',()=>setState(f.look));const rm=el('button','chip','Delete');rm.type='button';rm.addEventListener('click',()=>{const l=list();l.splice(k,1);localStorage.setItem(FAV,JSON.stringify(l));show(5,true);});r.append(ld,rm);p.appendChild(r);});
     head(p,'Seed');const r2=el('div','row');const sd=el('input','num');sd.type='number';sd.value=H.S.seed||1;sd.setAttribute('aria-label','Seed');const go=el('button','chip','Random from seed');go.type='button';go.addEventListener('click',()=>setState(randomState(Math.floor(+sd.value)||1)));r2.append(sd,go);p.appendChild(r2);
-    head(p,'Send');p.appendChild(el('p','note','Core and FIRST LIGHT use this character if it passes the rig check. If it does not, they keep the reference character.'));
+    head(p,'Core and FIRST LIGHT');p.appendChild(el('p','note','The character you are editing is the one FIRST LIGHT and Core use. If it fails the rig check, or you switch this off, they use the reference character.'));
+    chips(p,'Use this character',['On','Off'],()=>autoOn()?'On':'Off',n=>{localStorage.setItem(AUTO,n==='On'?'1':'0');if(n==='On')publishCore();else localStorage.removeItem('n0.core.character');toast(n==='On'?'FIRST LIGHT will use this character.':'FIRST LIGHT will use the reference character.',2800);});
+    const pl=el('button','chip','Play as this character');pl.type='button';pl.addEventListener('click',()=>{const v=H.validate();if(!v.ok){toast('This character failed the rig check: '+v.errs[0],5000);return;}try{localStorage.setItem(AUTO,'1');localStorage.setItem('n0.core.character',JSON.stringify(H.exportCharacter()));}catch(e){toast('Could not save it for Core: '+(e.message||e),4200);return;}location.href='core.html?start=first-light';});p.appendChild(pl);
     const sc=el('button','chip','Send to Core');sc.type='button';sc.addEventListener('click',()=>{const v=H.validate();if(!v.ok){toast('This character failed the rig check: '+v.errs[0],5000);return;}try{localStorage.setItem('n0.core.character',JSON.stringify(H.exportCharacter()));toast('Sent. FIRST LIGHT will use it next time it starts.',3600);}catch(e){toast('Could not save it for Core: '+(e.message||e),4200);}});p.appendChild(sc);
     const cl=el('button','chip','Use reference in Core');cl.type='button';cl.addEventListener('click',()=>{localStorage.removeItem('n0.core.character');toast('Core will use the reference character.');});p.appendChild(cl);
     head(p,'Files');

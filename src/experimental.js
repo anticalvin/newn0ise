@@ -52,7 +52,8 @@ export function createExperimental({THREE,H,scene,bump,camera}){
       rootsFlat(){const f=anchor._f||(anchor._f=new Float32Array(groom.roots.length*3));groom.roots.forEach((_,i)=>f.set(rootPoint(groom,i,scalp.verts,[0,0,0]),i*3));return f;},
       colliders:()=>{const c=headCentre(new V()),n1=wpos('neck02',new V()),s1=wpos('clavicle.L'),s2=wpos('clavicle.R');
         return {spheres:[[c.x,c.y,c.z,.098],[n1.x,n1.y,n1.z,.055]],capsules:[[s1.x,s1.y-.02,s1.z,s2.x,s2.y-.02,s2.z,.075]]};}};
-    anchor.sync();state.hair={groom,scalp,anchor,sim:makeHairSim(groom,anchor),line,out,lod,base,style:styleName,tint,width:ST.width};return true;
+    anchor.sync();const sim=makeHairSim(groom,anchor);for(let i=0;i<120;i++)stepHair(sim,anchor,1/60);/* settle before the first drawn frame, so nothing flies out of the head */
+    state.hair={groom,scalp,anchor,sim,line,out,lod,base,style:styleName,tint,width:ST.width};return true;
   }
   function stopHair(){const h=state.hair;if(!h)return;scene.remove(h.line);h.line.geometry.dispose();h.line.material.dispose();state.hair=null;bump();}
 

@@ -124,3 +124,35 @@ t('character: strand hair styles grow, stay finite and stay out of the head', '/
   if(bad>P.length/3*.02)return id+': '+bad+' strand points inside the head';
   if(E.state.stats.strands<8)return id+': too few strands';E.stopHair();}
  H.pose('A-pose');return true}`);
+
+t('core: the old World modes now live in Core (starter level, sandbox, proving ground)', '/core.html?start=blank', `async()=>{const a=n0.app,W=a.worldModes;if(!W)return 'no world modes';const wait=ms=>new Promise(r=>setTimeout(r,ms));
+ for(const [m,name] of [['starter','Starter level'],['sandbox','Physics sandbox'],['proving','Proving ground']]){W[m]();await wait(400);
+  if(a.name!==name)return m+': scene name is '+a.name;const n=n0.exec({cmd:'entity.list'}).entities.length;if(n<6)return m+': only '+n+' entities';
+  if(m==='sandbox'&&a.boulders.items.length<10)return 'sandbox: '+a.boulders.items.length+' boulders';
+  const p=a.player.pos;if(!isFinite(p.x+p.y+p.z))return m+': player position not finite';}
+ const html=await (await fetch('/index.html')).text();if(!/href="core.html"[^>]*id="d3"/.test(html))return 'the 3D door on the home page does not open Core';
+ return true}`);
+
+t('core: photo walk frames, crops and keeps a roll; leaving restores the camera', '/core.html?start=blank', `async()=>{const a=n0.app,W=a.worldModes,wait=ms=>new Promise(r=>setTimeout(r,ms));localStorage.removeItem('n0.core.roll');
+ const fov0=a.camera.fov;W.photowalk();await wait(500);if(!W.photo.on)return 'photo walk did not start';
+ const btn=s=>[...document.querySelectorAll('.pw button')].find(b=>b.textContent.trim()===s);
+ btn('85 mm').click();await wait(250);const want=2*Math.atan(12/85)*180/Math.PI;if(Math.abs(a.camera.fov-want)>.2)return 'lens did not set the field of view ('+a.camera.fov+' vs '+want+')';
+ for(const [lab,ratio] of [['3:2',1.5],['1:1',1],['16:9',16/9]]){btn(lab).click();await wait(100);document.querySelector('.pw-shut').click();await wait(150);const r=W.photo.roll()[0];
+  const im=new Image();im.src=r.img;await im.decode();if(Math.abs(im.naturalWidth/im.naturalHeight-ratio)>.06)return lab+': picture is '+im.naturalWidth+'x'+im.naturalHeight;}
+ if(W.photo.roll().length!==3)return 'roll has '+W.photo.roll().length+' pictures';
+ btn('Done').click();await wait(100);if(W.photo.on||document.querySelector('.pw'))return 'overlay still there';if(Math.abs(a.camera.fov-fov0)>.2)return 'camera fov not restored';
+ return true}`);
+
+t('first light: uses the character made in Character, or the reference one when none is sent', '/character.html', `async()=>{${PRE}
+ const H=await ready();localStorage.removeItem('n0.core.autouse');localStorage.removeItem('n0.core.character');
+ await put(H,{base:'female',gender:0,stature:152,hair:{style:'bob01',color:'#c8c8c8'}});
+ [...document.querySelectorAll('.tab')].find(b=>b.textContent==='Looks').click();await wait(300);
+ const chip=s=>[...document.querySelectorAll('#fp .chip')].find(b=>b.textContent.trim()===s);
+ chip('Off').click();await wait(200);if(localStorage.getItem('n0.core.character'))return 'switching off should clear the character for Core';
+ chip('On').click();await wait(1500);const raw=localStorage.getItem('n0.core.character');if(!raw)return 'nothing was published for Core';
+ const o=JSON.parse(raw);if(H.validateCharacter(o).length)return 'published file is invalid';if(o.look.base!=='female'||o.look.stature!==152)return 'published look is not the one being edited';
+ /* the loader FIRST LIGHT uses, in this same page, picks it up */
+ const V=await import('/src/core/first-light/visuals.js');const msgs=[];const an=await V.loadCharacter({onStatus:m=>msgs.push(m)});
+ if(!an)return 'loader returned nothing';if(!/Your character/.test(msgs.join(' ')))return 'loader did not use the sent character: '+msgs.join(' | ');
+ localStorage.removeItem('n0.core.character');const msgs2=[];await V.loadCharacter({onStatus:m=>msgs2.push(m)});if(!/Reference/.test(msgs2.join(' ')))return 'loader did not fall back to the reference character: '+msgs2.join(' | ');
+ localStorage.removeItem('n0.core.autouse');return true}`);
