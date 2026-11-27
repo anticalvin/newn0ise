@@ -18,7 +18,7 @@ return true}`);
 
 t('workspace: create launches Blank, editor shell appears','/core.html',`async()=>{${W}
 click('[data-template="third"]');click('.ws-primary');await wait(1500);
-if(q('#start.on'))return 'launcher still open';if(n0.app.name!=='BLANK')return 'scene '+n0.app.name;
+if(q('#start.on'))return 'launcher still open';if(n0.app.name!=='Blank island')return 'scene '+n0.app.name;
 if(!q('.ws-sidebar'))return 'no sidebar';if(getComputedStyle(q('.ws-status')).display==='none')return 'no status bar';
 const sim=qa('#mode button').find(b=>b.textContent==='Simulate');if(!sim||!sim.disabled)return 'Simulate must be disabled';
 return true}`);

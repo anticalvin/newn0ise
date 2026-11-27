@@ -4,6 +4,7 @@
 // Prefabs register {validate(params)->params|throws, build(rec, ctx)->runtime}. A runtime is {object, colliders(), instanceCount?(), dispose?()}.
 import * as THREE from 'three';
 import { patchStandard } from './glsl.js';
+import { registerBuildKit } from './buildkit.js';
 
 export const LIMIT = 2000;
 const ID = /^[A-Za-z0-9_.-]{1,64}$/;
@@ -24,7 +25,7 @@ export class Entities {
     this.a = app; this.recs = new Map(); this.rt = new Map(); this.prefabs = new Map(); this.group = new THREE.Group(); this.group.name = 'entities'; app.scene.add(this.group);
     this.mats = {}; this._cols = false; this.nextId = 1;
     this.register('prim.box', primPrefab('box')); this.register('prim.sphere', primPrefab('sphere')); this.register('prim.cylinder', primPrefab('cylinder'));
-    this.register('asset', assetPrefab);
+    this.register('asset', assetPrefab); registerBuildKit(this, { toWorld, bad, vec3, hexOk, isNum });
   }
   get size() { return this.recs.size; }
   register(name, def) { this.prefabs.set(name, def); }

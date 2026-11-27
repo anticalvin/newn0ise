@@ -14,14 +14,14 @@ export function createWorldModes(app) {
 
   // ---- starter level: a staircase of platforms around the spawn, crates to climb, and a gold goal on top ----
   function starter() {
-    fresh('Starter level', 'Reach the gold pillar. WASD to walk, Space to jump.');
+    fresh('Starter island', 'Reach the gold pillar. WASD to walk, Space to jump.');
     const col = ['#c9c1b3', '#b8afa0', '#a89f91'];
     const steps = [[6, 4, 3, .6], [10, 8, 3, 1.2], [13, 13, 3, 1.8], [12, 19, 3, 2.4], [7, 23, 3, 3.0], [0, 24, 4, 3.6], [-8, 22, 4, 4.2]];
     steps.forEach(([x, z, s, h], i) => box(x, z, s, h, s, col[i % 3]));
     for (const [x, z] of [[-4, 4], [-5, 6], [-3, 7], [3, -6], [4, -7], [-10, -3]]) box(x, z, 1, 1, 1, '#8a6d4b');
     box(-12, 22, 1.4, 6, 1.4, '#e3b341', { prefab: 'prim.cylinder' });
     app.goal = { x: -12, z: 22, r: 2.6, done: false };
-    watch = setInterval(() => { if (app.name !== 'Starter level') return stopWatch(); const p = app.player.pos; if (!app.goal.done && Math.hypot(p.x - app.goal.x, p.z - app.goal.z) < app.goal.r && p.y > ground(app.goal.x, app.goal.z) + 3) { app.goal.done = true; ui.say('You reached the goal.', 6000); } }, 250);
+    watch = setInterval(() => { if (app.name !== 'Starter island') return stopWatch(); const p = app.player.pos; if (!app.goal.done && Math.hypot(p.x - app.goal.x, p.z - app.goal.z) < app.goal.r && p.y > ground(app.goal.x, app.goal.z) + 3) { app.goal.done = true; ui.say('You reached the goal.', 6000); } }, 250);
   }
 
   // ---- physics sandbox: a wall of crates and a stack of boulders to knock down ----
@@ -61,5 +61,5 @@ export function createWorldModes(app) {
 
   function photowalk() { fresh('Photo walk', '', 'coast'); photo.start(); }
 
-  return { starter, sandbox, proving, photowalk, importWorld, stop() { stopWatch(); photo.stop(); }, photo };
+  return { fresh, prepare: name => fresh(name, ''), starter, sandbox, proving, photowalk, importWorld, stop() { stopWatch(); photo.stop(); }, photo };
 }

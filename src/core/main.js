@@ -1,4 +1,8 @@
 import { createWorldModes } from './world-modes.js';
+import { createEditor } from './editor3d.js';
+import { createPost } from './post.js';
+import { createShooter } from './weapons.js';
+import { createGame } from './game.js';
 import * as THREE from 'three';
 import { makeShared } from './glsl.js';
 import { Environment } from './env.js';
@@ -114,7 +118,7 @@ const app = {
   newScene(preset, seed = 101) {
     core.muted = true;
     try {
-      terrain.generate(seed, preset); this.name = preset === 'blank' ? 'BLANK' : 'COAST_001';
+      terrain.generate(seed, preset); this.name = preset === 'blank' ? 'Blank island' : 'COAST_001';
       palms.items = []; palms.rebuild(); [...boulders.items].forEach(b => boulders.remove(b)); entities.clear(); this.clearWorlds(); this.setPreset(preset);
       env.set(preset === 'blank' ? { time: 11, cloud: 0.3, wind: 0.35, windAng: 0, sea: 0.45, tide: 0 } : { time: 17.4, cloud: 0.38, wind: 0.55, windAng: 0, sea: 0.55, tide: 0 });
       if (preset === 'coast') this.populateCoast();
@@ -214,6 +218,7 @@ async function start(choice) {
   if (choice === 'first-light') return app.firstLight.start();
   if (app.worldModes && app.worldModes[choice] && ['starter', 'sandbox', 'proving', 'photowalk'].includes(choice)) { app.worldModes[choice](); return; }
   if (choice === 'import') { app.worldModes.importWorld(); return; }
+  if (['range', 'arena', 'coins'].includes(choice)) { app.game.start(choice); return; }
   if (app.worldModes) app.worldModes.stop();
   if (choice === 'world') { app.geo.open({ resume: true }).then(() => ui.brand()); return; }
   if (choice === 'continue') { const ok = await core.restore(); if (!ok) { app.newScene('coast'); ui.toast('No saved scene, started the coast'); } else ui.toast('Restored your last scene'); }
@@ -223,9 +228,13 @@ async function start(choice) {
 }
 app.firstLight = createFirstLightHost(app);
 app.worldModes = createWorldModes(app);
+app.editor = createEditor(app);
+app.post = createPost(app);
+app.shooter = createShooter(app);
+app.game = createGame(app);
 app.start = start;
 { const q = new URLSearchParams(location.search).get('mcp'); if (q) setTimeout(() => connectBridge(app, q.startsWith('ws') ? q : undefined), 800); }
-{ const sp = new URLSearchParams(location.search), q = sp.get('start'); if (q === 'world') { ui.hideStart(); app.geo.open({ lat: sp.get('lat') ? +sp.get('lat') : undefined, lon: sp.get('lon') ? +sp.get('lon') : undefined, resume: sp.get('resume') === '1' }).then(() => ui.brand()); } else if (q === 'blank' || q === 'coast' || q === 'continue' || q === 'first-light' || ['starter', 'sandbox', 'proving', 'photowalk'].includes(q)) { ui.hideStart(); start(q); } else ui.showStart(core.hasSave()); }
+{ const sp = new URLSearchParams(location.search), q = sp.get('start'); if (q === 'world') { ui.hideStart(); app.geo.open({ lat: sp.get('lat') ? +sp.get('lat') : undefined, lon: sp.get('lon') ? +sp.get('lon') : undefined, resume: sp.get('resume') === '1' }).then(() => ui.brand()); } else if (q === 'blank' || q === 'coast' || q === 'continue' || q === 'first-light' || ['starter', 'sandbox', 'proving', 'photowalk', 'range', 'arena', 'coins'].includes(q)) { ui.hideStart(); start(q); } else ui.showStart(core.hasSave()); }
 
 function resize() { const w = innerWidth, h = innerHeight; camera.aspect = w / h; camera.updateProjectionMatrix(); renderer.setSize(w, h, false); sand.setScale(renderer, camera); }
 const maxPr = () => Math.min(devicePixelRatio, 2);
@@ -264,18 +273,21 @@ function frame(now) {
   const cp = Math.cos(c.pitch); camera.position.set(c.target.x + Math.sin(c.yaw) * cp * c.dist, c.target.y + Math.sin(c.pitch) * c.dist, c.target.z + Math.cos(c.yaw) * cp * c.dist);
   const floor = Math.max(terrain.hAt(camera.position.x, camera.position.z), explore ? water.level : -99) + 0.55; if (camera.position.y < floor) camera.position.y = floor;
   camera.lookAt(c.target);
+  if (app.shooter.active) app.shooter.cameraUpdate();
   // edit cursor + stroke
   if (!explore) {
     app.updateHit(); const h = app.hit, t = app.tool, paintTool = ['raise', 'lower', 'smooth', 'flatten', 'sand', 'rock', 'grass'].includes(t);
-    ring.visible = !!h && !ui.hidden && !startOpen; if (h) { const a = ring.geometry.attributes.position, R = paintTool || t === 'palm' || t === 'erase' ? app.R : 1.1; for (let i = 0; i <= 96; i++) { const th = i / 96 * 6.2832, x = h.x + Math.cos(th) * R, z = h.z + Math.sin(th) * R; a.setXYZ(i, x, Math.max(terrain.hAt(x, z), water.level) + 0.2, z); } a.needsUpdate = true; }
+    ring.visible = !!h && !ui.hidden && !startOpen && !app.editor.active(); if (h) { const a = ring.geometry.attributes.position, R = paintTool || t === 'palm' || t === 'erase' ? app.R : 1.1; for (let i = 0; i <= 96; i++) { const th = i / 96 * 6.2832, x = h.x + Math.cos(th) * R, z = h.z + Math.sin(th) * R; a.setXYZ(i, x, Math.max(terrain.hAt(x, z), water.level) + 0.2, z); } a.needsUpdate = true; }
     if (app.stroking && h && (input.brushDown || app.padDown)) {
       terrain.brush(t, h.x, h.z, app.R, app.strength, dt, !!input.invert); terrain.flush();
       if (paintTool && t !== 'rock' && t !== 'grass' && h.y > water.level + 0.1) sand.burst(h.x + (Math.random() - 0.5) * app.R * 0.7, h.y, h.z + (Math.random() - 0.5) * app.R * 0.7, Math.round(2 + app.R * 0.4), 1.2, 1.4, 0.4);
     }
   } else ring.visible = false;
+  if (app.editor) { app.editor.prune(); app.editor.update(); }
+  app.shooter.update(dt); app.game.update(dt);
   entities.tick(dt); terrain.flush(); water.update(dt, camera, env.p, env); env.update(dt, camera, explore ? player.pos : c.target);
   sand.update(dt, camera, explore ? player.pos : c.target, env, water.level);
-  renderer.render(scene, camera); tele.tick(now);
+  if (!app.shooter.render()) renderer.render(scene, camera); tele.tick(now);
 }
 requestAnimationFrame(frame);
 window.n0 = { app, core, geo: app.geo, telemetry: () => tele.read(), run: l => core.run(l), exec: c => core.exec(c), get fps() { return app.fps; }, get pr() { return app.pr; } };
