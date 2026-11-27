@@ -100,3 +100,33 @@ Code and assets are audited separately. No code was copied from any reference be
 - Stature at ages 18 to 24 pushes the adult height macro harder (the young age target is a blend with the child shape), so extreme heights there can look stretched. The reach readout reflects this.
 - Experimental hair draws thin lines, not shaded strands. The hem cloth draws a flat strip. Both ignore the garment's real topology.
 - Frame times and memory were measured only for the solvers on one Mac (see above); no mobile device or GPU profile was taken.
+
+## 7. Round two: creator overhaul, eyes, hair, FIRST LIGHT, World moved to Core
+
+Branch `character-v2`, from main `3302c93`.
+
+Eyes
+- The eyeball was a fixed 1.35 cm sphere on a bone that moves with the face morphs. Measured on the base mesh it stayed 1.2 cm from the lashes in every look, but a child's, a smaller face's or a big-eyed face's socket is smaller than an adult male's, so the ball sat low and bulged. The eyeball now scales with the interocular distance (reference 5.85 cm) and the Eye size modifier, and sits on its bone with the same counter-rotation as before. Iris size and pupil size are new sliders.
+- The Face and Head camera views now aim at the measured eye line, not at the head joint, which is about 6 cm below where they pointed.
+- Limit: I could not reproduce eyes sliding down relative to the lashes or lids numerically (the lashes follow the skin and the eye follows its joint, and they agree within 1 mm across male, female, five heights, child and old). If the eyes still look low in a specific look, send me that look (Looks, Export .n0character) and I will measure it.
+
+Poses and clothing
+- 20 new poses (Kneel, Crouch, Sneak, Sprint, Jump, Kick, Punch, Lunge, Bow, Salute, Point, Arms crossed, Thinker, Hands up, Reach, Stretch, Shrug, Tree, Cross-legged, Superhero), 37 poses in total. Each is tested for attachment and rig health. They were tuned by eye on small renders from front and side, so some arm positions (Point, Arms crossed) are approximate.
+- The pose and expression pickers show a rendered picture of this body in that pose or expression (rendered once into a small target and cached per body). Outfit, glasses and hair styles have icons or the library thumbnails.
+- Top and bottom are now parametric: sleeve length, hem height, neckline, leg length, waist, fit. New styles crop, 3/4 sleeve, bermuda and capri. They are still cut from the body, so they deform exactly with it, but they are one layer and are not authored garments.
+- Custom colour pickers on every swatch row.
+
+Strand hair
+- Nine styles (ponytail, low ponytail, long, bob, curly, pixie, bun, braid, mohawk). A style is data: scalp region, length, curl, stiffness, how it leaves the scalp, an optional gather point (a real body vertex that follows the head) and a side parting. Strands are drawn as camera-facing tapered ribbons with a root to tip gradient, with 16 to 44 simulated guides and up to 40 interpolated followers each (about 530 to 1800 strands).
+- Found and fixed a real bug in the first version: scalp triangle indices were `count / 3` instead of `count`, so roots snapped to a handful of vertices. Roots are now on the real scalp.
+- A strand style settles for 120 steps before it is drawn. Collisions are against a head sphere that turns with the head.
+- Honest limits: still CPU, one colour, no strand shading or shadows, no self collision, curl is a bias not a helix, bun and pixie are thin. The long and bob styles look like hair; ponytail, bun and braid are thin bundles.
+
+FIRST LIGHT
+- The character you are editing is published to FIRST LIGHT automatically (switch on the Looks tab), only if it passes the rig check. "Play as this character" opens FIRST LIGHT directly. With nothing published, or when it fails the check, the reference character is used. Tested end to end with the real loader.
+
+World is now Core
+- The 3D door on the home page opens Core. The World card in the old 3D launcher also goes to Core.
+- Core's launcher gained: Photo walk (lens 24/35/50/85 mm, frame 3:2, 4:5, 1:1, 16:9, shot list, a roll of 12 pictures saved on this device with a Save button), Starter level, Physics sandbox, Proving ground, and Import a world (.n0world through Core's existing world.import, which validates and repairs).
+- These are ordinary Core entities with static colliders, so they save and undo like everything else.
+- Not moved: the Night Station demo (it was already hidden in the old launcher), the old engine's gameplay objects (pistol, TV, light switches, targets). Sigil, Material, Build, Sculpt, Photo to 3D, Browse and Scan stay in the old 3D page, linked from Core as "More 3D tools". The old World editor code is still in that page and still works there.

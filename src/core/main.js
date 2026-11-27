@@ -1,3 +1,4 @@
+import { createWorldModes } from './world-modes.js';
 import * as THREE from 'three';
 import { makeShared } from './glsl.js';
 import { Environment } from './env.js';
@@ -211,6 +212,9 @@ phys.init().then(ok => { if (!ok) ui.toast('Physics engine could not load, using
 
 async function start(choice) {
   if (choice === 'first-light') return app.firstLight.start();
+  if (app.worldModes && app.worldModes[choice] && ['starter', 'sandbox', 'proving', 'photowalk'].includes(choice)) { app.worldModes[choice](); return; }
+  if (choice === 'import') { app.worldModes.importWorld(); return; }
+  if (app.worldModes) app.worldModes.stop();
   if (choice === 'world') { app.geo.open({ resume: true }).then(() => ui.brand()); return; }
   if (choice === 'continue') { const ok = await core.restore(); if (!ok) { app.newScene('coast'); ui.toast('No saved scene, started the coast'); } else ui.toast('Restored your last scene'); }
   else app.newScene(choice === 'blank' ? 'blank' : 'coast');
@@ -218,9 +222,10 @@ async function start(choice) {
   ui.render(); ui.updHist(); ui.brand(); ui.say('Drag to look · WASD to walk · E to edit the land', 9000);
 }
 app.firstLight = createFirstLightHost(app);
+app.worldModes = createWorldModes(app);
 app.start = start;
 { const q = new URLSearchParams(location.search).get('mcp'); if (q) setTimeout(() => connectBridge(app, q.startsWith('ws') ? q : undefined), 800); }
-{ const sp = new URLSearchParams(location.search), q = sp.get('start'); if (q === 'world') { ui.hideStart(); app.geo.open({ lat: sp.get('lat') ? +sp.get('lat') : undefined, lon: sp.get('lon') ? +sp.get('lon') : undefined, resume: sp.get('resume') === '1' }).then(() => ui.brand()); } else if (q === 'blank' || q === 'coast' || q === 'continue' || q === 'first-light') { ui.hideStart(); start(q); } else ui.showStart(core.hasSave()); }
+{ const sp = new URLSearchParams(location.search), q = sp.get('start'); if (q === 'world') { ui.hideStart(); app.geo.open({ lat: sp.get('lat') ? +sp.get('lat') : undefined, lon: sp.get('lon') ? +sp.get('lon') : undefined, resume: sp.get('resume') === '1' }).then(() => ui.brand()); } else if (q === 'blank' || q === 'coast' || q === 'continue' || q === 'first-light' || ['starter', 'sandbox', 'proving', 'photowalk'].includes(q)) { ui.hideStart(); start(q); } else ui.showStart(core.hasSave()); }
 
 function resize() { const w = innerWidth, h = innerHeight; camera.aspect = w / h; camera.updateProjectionMatrix(); renderer.setSize(w, h, false); sand.setScale(renderer, camera); }
 const maxPr = () => Math.min(devicePixelRatio, 2);
