@@ -19,7 +19,7 @@ t('character: fitted garments, shoes, hair, brows and lashes follow every pose a
  for(const [k,st] of ${MATRIX}.entries()){await put(H,st);
   const a=D.attachmentReport(H,${POSES},V,3);
   for(const [pose,row] of Object.entries(a))for(const [m,r] of Object.entries(row))if(r.frac>.03||r.maxGrow>.08)return 'look '+k+' pose '+pose+': '+m+' drifts from the body ('+r.bad+'/'+r.n+' points, max '+r.maxGrow+' m)';
-  const v=D.validateRig(H,V);if(v.errs.length)return 'look '+k+': '+v.errs[0];}
+  const v=D.validateRig(H,V);if(v.errs.length)return 'look '+k+': '+v.errs[0];const g=H.validate();if(!g.ok)return 'look '+k+' failed the runtime gate: '+g.errs[0];}
  return true}`);
 
 t('character: eyeballs stay on the face in every pose and glasses are owned by the head', '/character.html', `async()=>{${PRE}
@@ -97,3 +97,9 @@ t('character: GLB export is a neutral rest pose and re-imports with the same ske
  /* the re-imported rest skeleton must put the wrist where the live rig has it */
  const V=H.body.position.constructor,a=new V(),b=new V();H.bones.find(x=>x.name==='wrist.L').getWorldPosition(a);let w=null;gl.scene.traverse(o=>{if(o.isBone&&/wrist/.test(o.name)&&/L$/.test(o.name))w=o;});gl.scene.updateMatrixWorld(true);w.getWorldPosition(b);
  if(a.distanceTo(b)>.01)return 'wrist moved '+a.distanceTo(b).toFixed(4)+' m after export';return true}`);
+
+t('character: brows and lashes follow expressions (a blink closes the lashes)', '/character.html', `async()=>{${PRE}
+ const H=await ready();const V=H.body.position.constructor;await put(H,{});const lash=H.root.children.find(c=>/eyelash/.test(c.name));if(!lash)return 'no lashes';
+ const sum=()=>{const t=new V();let y=0,n=0;for(let i=0;i<lash.geometry.attributes.position.count;i++){lash.getVertexPosition(i,t);if(t.x>0){y+=t.y;n++;}}return y/n;};
+ const a=sum();H.S.expr={'eye-left-closure':1,'eye-right-closure':1};H.expr();const b=sum();H.S.expr={};H.expr();const c=sum();
+ if(Math.abs(b-a)<.0015)return 'lashes did not move on a blink ('+(b-a).toFixed(5)+' m)';if(Math.abs(c-a)>1e-5)return 'lashes did not return to rest';return true}`);

@@ -474,7 +474,7 @@ export async function createHuman(c){
   function setEye(c){S.eye=c;eyes.draw&&eyes.draw();}
   function set(path,v){const a=path.split('.');let o=S;for(let i=0;i<a.length-1;i++)o=o[a[i]]=o[a[i]]||{};o[a[a.length-1]]=v;}
   /* looks saved before the rework are migrated, never dropped: retired procedural items map to their nearest real replacement, the old continuous gender is kept */
-  const MIGRATE={hair:{buzz:'short03',bun:'ponytail01',mohawk:'short02'},head:{balaclava:'none',beanie:'none',mask:'none',headband:'none'},neck:{scarf:'none'},shoes:{sneaker:'none'}};
+  const MIGRATE={hair:{buzz:'short03',bun:'ponytail01',mohawk:'short02'},head:{balaclava:'none',beanie:'none',mask:'none',headband:'none'},neck:{scarf:'none'},shoes:{sneaker:'shoes05'}};
   function load2(state){
     const st=structuredClone(state||{});const legacy=!('base' in st);
     Object.assign(S,structuredClone(DEFAULT),st);
@@ -502,6 +502,16 @@ export async function createHuman(c){
     return e;
   }
   async function importCharacter(o){const e=validateCharacter(o);if(e.length)throw new Error(e[0]);load2(o.look);await apply();await outfit();pose(S.pose);expr();return true;}
+  /* runtime gate used before a character is allowed into gameplay: finite rig, normalised weights, nothing stranded on the root bone */
+  function validate(){
+    const errs=[];rig.updateMatrixWorld(true);
+    for(const b of bones){const e=b.matrixWorld.elements;for(let i=0;i<16;i++)if(!isFinite(e[i])){errs.push('non-finite bone '+b.name);break;}}
+    for(const m of [body,...[...active.values()].map(p=>p.m),...[...gm.values()].map(g=>g&&g.m)]){if(!m)continue;const w=m.geometry.attributes.skinWeight.array,ix=m.geometry.attributes.skinIndex.array;let bad=0,rb=0;
+      for(let i=0;i<w.length/4;i++){const s2=w[i*4]+w[i*4+1]+w[i*4+2]+w[i*4+3];if(!(Math.abs(s2-1)<.02))bad++;if(ix[i*4]===0&&w[i*4]>.95)rb++;}
+      if(bad)errs.push(m.name+': '+bad+' unnormalised weights');if(rb>w.length/4*.05)errs.push(m.name+': '+rb+' vertices on the root bone');}
+    if(!(measure.stature>1.2&&measure.stature<2.5))errs.push('stature '+measure.stature);
+    return {ok:!errs.length,errs};
+  }
   makeEyes();await makeMorphs();await apply();await outfit();pose(S.pose);
-  return {S,root,body,exportCharacter,importCharacter,validateCharacter,setBoneEuler,applyMaterials,loadDecalFile,setDecal,FABRICS,setBase,setStature,measure,frames:()=>({Rr,Lr,Yax,info:frameInfo}),skeleton,bones,apply,outfit,pose,expr,setSkin,setTone,applySkin,setEye,set,load:load2,man,lib,stats:()=>({helperXfer,proxies:[...active.values()].map(p=>({id:p.id,...p.data.stats}))}),meta:{ageYears:()=>ageYears(S.age)},weights};
+  return {S,root,body,validate,exportCharacter,importCharacter,validateCharacter,setBoneEuler,applyMaterials,loadDecalFile,setDecal,FABRICS,setBase,setStature,measure,frames:()=>({Rr,Lr,Yax,info:frameInfo}),skeleton,bones,apply,outfit,pose,expr,setSkin,setTone,applySkin,setEye,set,load:load2,man,lib,stats:()=>({helperXfer,proxies:[...active.values()].map(p=>({id:p.id,...p.data.stats}))}),meta:{ageYears:()=>ageYears(S.age)},weights};
 }

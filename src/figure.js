@@ -8,6 +8,7 @@ import {RoomEnvironment} from 'three/addons/environments/RoomEnvironment.js';
 import {createHuman,DEFAULT,STYLE,STATURE,POSES,EXPRESSIONS,ageYears,ageFromYears} from './human.js';
 import {createGamepad} from './gamepad.js';
 import {initPen} from './pen.js';
+import {createExperimental} from './experimental.js';
 
 const $=s=>document.querySelector(s);
 const el=(t,c,x)=>{const e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e;};
@@ -32,7 +33,7 @@ function setLight(n){const L=LIGHTS[n];if(!L)return;lightName=n;scene.environmen
 let dirty=2;const bump=()=>{dirty=3;};controls.addEventListener('change',bump);
 
 function toast(m,ms=2400){const t=$('#ft');t.textContent=m;t.hidden=false;clearTimeout(toast._t);toast._t=setTimeout(()=>t.hidden=true,ms);}
-let H=null;
+let H=null,EXP=null,expLast=0;
 const KEY='n0.human';
 const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(H.S));}catch(e){}};
 /* ---- undo / redo of the whole editable state ---- */
@@ -142,6 +143,9 @@ const TABS=[
     const b=el('button','chip','Save this look as a favourite');b.type='button';b.addEventListener('click',()=>{const l=list();l.unshift({name:'Look '+new Date().toLocaleString(),look:structuredClone(H.S)});localStorage.setItem(FAV,JSON.stringify(l.slice(0,24)));show(5,true);toast('Saved.');});p.appendChild(b);
     list().forEach((f,k)=>{const r=el('div','row');r.append(el('span','',f.name));const ld=el('button','chip','Load');ld.type='button';ld.addEventListener('click',()=>setState(f.look));const rm=el('button','chip','Delete');rm.type='button';rm.addEventListener('click',()=>{const l=list();l.splice(k,1);localStorage.setItem(FAV,JSON.stringify(l));show(5,true);});r.append(ld,rm);p.appendChild(r);});
     head(p,'Seed');const r2=el('div','row');const sd=el('input','num');sd.type='number';sd.value=H.S.seed||1;sd.setAttribute('aria-label','Seed');const go=el('button','chip','Random from seed');go.type='button';go.addEventListener('click',()=>setState(randomState(Math.floor(+sd.value)||1)));r2.append(sd,go);p.appendChild(r2);
+    head(p,'Send');p.appendChild(el('p','note','Core and FIRST LIGHT use this character if it passes the rig check. If it does not, they keep the reference character.'));
+    const sc=el('button','chip','Send to Core');sc.type='button';sc.addEventListener('click',()=>{const v=H.validate();if(!v.ok){toast('This character failed the rig check: '+v.errs[0],5000);return;}try{localStorage.setItem('n0.core.character',JSON.stringify(H.exportCharacter()));toast('Sent. FIRST LIGHT will use it next time it starts.',3600);}catch(e){toast('Could not save it for Core: '+(e.message||e),4200);}});p.appendChild(sc);
+    const cl=el('button','chip','Use reference in Core');cl.type='button';cl.addEventListener('click',()=>{localStorage.removeItem('n0.core.character');toast('Core will use the reference character.');});p.appendChild(cl);
     head(p,'Files');
     const ex=el('button','chip','Export .n0character');ex.type='button';ex.addEventListener('click',()=>{const o=H.exportCharacter();const u=URL.createObjectURL(new Blob([JSON.stringify(o,null,1)],{type:'application/json'})),a=el('a');a.href=u;a.download='character.n0character.json';a.click();setTimeout(()=>URL.revokeObjectURL(u),3000);toast('Saved the character file.');});p.appendChild(ex);
     const im=el('input');im.type='file';im.accept='.json,application/json';im.setAttribute('aria-label','Import a character file');im.addEventListener('change',async()=>{const f=im.files&&im.files[0];if(!f)return;try{touch();await H.importCharacter(JSON.parse(await f.text()));show(tab,true);save();bump();toast('Loaded '+f.name);}catch(e){toast('Could not load that file: '+(e.message||e),4200);}im.value='';});p.appendChild(im);
@@ -152,6 +156,12 @@ const TABS=[
     head(p,'Light');chips(p,'Preset',Object.keys(LIGHTS),()=>lightName,n=>setLight(n));
     slider(p,'Exposure',()=>renderer.toneMappingExposure,v=>{renderer.toneMappingExposure=v;bump();},.3,2.5,null,{def:1,to:v=>Math.round(v*100),from:x=>x/100});
     chips(p,'Background',['Dark','Light','Grey'],()=>bgName,n=>{bgName=n;theme();bump();});
+    head(p,'Experimental');p.appendChild(el('p','note','Strand hair and cloth are experiments. They run on the CPU, reset when you change the pose or the body, and your normal hair and clothes stay as the fallback.'));
+    const st=EXP.state;let lod=st.hair?st.hair.lod:'medium';
+    chips(p,'Strand ponytail',['Off','On'],()=>st.hair?'On':'Off',n=>{if(n==='On'){if(!EXP.startHair(lod))toast('Could not find a scalp to grow hair from on this look.',3600);}else EXP.stopHair();show(6,true);});
+    chips(p,'Hair quality',['low','medium','high'],()=>lod,n=>{lod=n;if(st.hair)EXP.startHair(lod);});
+    chips(p,'Hem cloth',['Off','On'],()=>st.cloth?'On':'Off',n=>{if(n==='On'){if(!EXP.startCloth())toast('Pick a top first: the hem cloth hangs from it.',3600);}else EXP.stopCloth();show(6,true);});
+    const ms=el('p','note','');const upd=()=>{ms.textContent=(st.hair||st.cloth)?'Hair '+st.stats.hairMs.toFixed(1)+' ms, cloth '+st.stats.clothMs.toFixed(1)+' ms per frame, '+st.stats.strands+' strands, '+st.stats.simPoints+' cloth points.':'Off.';};upd();p.appendChild(ms);if(st.hair||st.cloth){clearInterval(show._ms);show._ms=setInterval(()=>{if(!ms.isConnected){clearInterval(show._ms);return;}upd();},500);}
     head(p,'Render');chips(p,'Mode',['Preview'],()=>'Preview',()=>{});p.appendChild(el('p','note','Preview is the real-time renderer. The progressive path tracer is a research item and is not enabled in this build.'));
   }
 ];
@@ -195,7 +205,8 @@ async function dl(neutral){try{const b=await glb(neutral),u=URL.createObjectURL(
 let animOn=false,animT=0,animLast=0;
 function startAnim(){animOn=true;animLast=performance.now();}
 function stopAnim(){if(!animOn)return;animOn=false;H.pose(H.S.pose);bump();}
-function animTick(now){if(!animOn||!H)return;const dt=Math.min(.05,(now-animLast)/1000);animLast=now;animT+=dt*6;for(const [i,sd] of ['L','R'].entries()){const f=Math.sin(animT+i*Math.PI);
+function expTick(now){if(!EXP)return;const dt=Math.min(.05,(now-expLast)/1000||0);expLast=now;EXP.tick(dt);}
+function animTick(now){expTick(now);if(!animOn||!H)return;const dt=Math.min(.05,(now-animLast)/1000);animLast=now;animT+=dt*6;for(const [i,sd] of ['L','R'].entries()){const f=Math.sin(animT+i*Math.PI);
   H.setBoneEuler('upperleg01.'+sd,f*.5,0,0);H.setBoneEuler('lowerleg01.'+sd,Math.max(0,-f)*.7,0,0);H.setBoneEuler('upperarm01.'+sd,-f*.45,0,sd==='L'?-.35:.35);H.setBoneEuler('lowerarm01.'+sd,-.3,0,0);}
   H.setBoneEuler('spine03',.04,Math.cos(animT)*.07,0);H.root.updateMatrixWorld(true);bump();}
 $('#fdl').addEventListener('click',async()=>{try{const b=await glb(),u=URL.createObjectURL(new Blob([b],{type:'model/gltf-binary'})),a=el('a');a.href=u;a.download='character.glb';a.click();setTimeout(()=>URL.revokeObjectURL(u),3000);toast('Saved character.glb ('+(b.byteLength/1048576).toFixed(1)+' MB)');}catch(e){toast('Couldn’t export: '+(e.message||e),4000);}});
@@ -220,7 +231,7 @@ const loading=$('#fload');
 try{
   H=await createHuman({THREE,onTex:bump});
   try{const s=JSON.parse(localStorage.getItem(KEY)||'null');if(s){H.load(s);await H.apply();await H.outfit();H.pose(H.S.pose);H.expr();}}catch(e){}
-  scene.add(H.root);show(tab);size();frame('body');
+  scene.add(H.root);EXP=createExperimental({THREE,H,scene,bump});show(tab);size();frame('body');
   loading.hidden=true;window.__hum=H;window.__r={renderer,scene,camera,controls};
 }catch(e){console.error(e);loading.textContent='Couldn’t load the character data: '+(e.message||e)+'. Check your connection and reload.';}
 initPen({canvas,toast});
