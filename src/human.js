@@ -4,10 +4,11 @@
    from the body so nothing intersects. Shape is baked into the geometry; the face expressions stay real glTF morph targets. */
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 export const DEFAULT={base:'male',gender:1,stature:171,statureUser:false,age:.5,muscle:.5,weight:.5,height:.5,prop:.5,race:{african:1/3,asian:1/3,caucasian:1/3},detail:{},expr:{},skin:'#c98f6a',skinTex:'auto',tone:1,eye:'#4a3020',
-  hair:{style:'short01',color:'#3b2417'},brows:{style:'eyebrow001',color:'#3b2417'},lashes:true,suit:{style:'none',color:'#ffffff'},top:{style:'tee',color:'#c2410c'},bottom:{style:'trousers',color:'#334155'},
+  iris:1,pupil:.36,hair:{style:'short01',color:'#3b2417'},brows:{style:'eyebrow001',color:'#3b2417'},lashes:true,suit:{style:'none',color:'#ffffff'},top:{style:'tee',color:'#c2410c'},bottom:{style:'trousers',color:'#334155'},
   shoes:{style:'none',color:'#f2efe8'},mat:{},decal:null,head:{style:'none',color:'#1a1a1a'},glasses:{style:'none',color:'#111111'},neck:{style:'none',color:'#c2410c'},pose:'A-pose',seed:1};
 /* procedural options (cut from the body) plus the packed CC0 library (see assets/human/library.json) */
-export const STYLE={top:['none','tank','tee','long'],bottom:['none','shorts','trousers'],glasses:['none','sunglasses','round','visor']};
+export const STYLE={top:['none','tank','tee','crop','3/4','long'],bottom:['none','shorts','bermuda','capri','trousers'],glasses:['none','sunglasses','round','visor']};
+export const TOP_DEFAULTS={tank:{sleeve:1.75,hem:1,neck:5.3},tee:{sleeve:2.75,hem:1,neck:5.75},crop:{sleeve:2.75,hem:2.7,neck:5.75},'3/4':{sleeve:3.5,hem:1,neck:5.75},long:{sleeve:4.15,hem:1,neck:5.75}},BOTTOM_DEFAULTS={shorts:{hem:-2.5,rise:1.4},bermuda:{hem:-4.6,rise:1.4},capri:{hem:-5.8,rise:1.4},trousers:{hem:-7.1,rise:1.4}};
 export const STATURE={male:171,female:159,presets:{male:183,female:165}};
 const ageW=a=>{const w={baby:0,child:0,young:0,old:0};if(a<.1875){w.baby=1-a/.1875;w.child=a/.1875;}else if(a<.5){w.child=1-(a-.1875)/.3125;w.young=(a-.1875)/.3125;}else{w.young=1-(a-.5)/.5;w.old=(a-.5)/.5;}return w;};
 const triW=v=>{const mn=v<.5?1-2*v:0,mx=v>.5?2*v-1:0;return {min:mn,average:1-mn-mx,max:mx};};
@@ -38,6 +39,29 @@ Object.assign(POSES,{
   'Dance':{'upperarm01.L':[0,0,1.6],'lowerarm01.L':[-.4,0,.4],'upperarm01.R':[-.3,0,-.5],'lowerarm01.R':[-.9,0,0],'upperleg01.L':[-.1,0,-.3],'upperleg01.R':[.1,0,.12],'lowerleg01.R':[.5,0,0],'root':[0,0,.1],'spine03':[0,0,-.18],'neck01':[0,0,.12]},
   'Pockets':mir({'upperarm01.L':[.0,0,-.16],'lowerarm01.L':[-.25,0,0],'spine03':[.05,0,0],'neck01':[.08,0,0],'upperleg01.R':[-.12,0,.02]}),
   'Lean':{'root':[0,0,.1],'spine03':[0,0,-.14],'upperleg01.L':[0,0,-.1],'upperleg01.R':[-.5,0,.1],'lowerleg01.R':[.6,0,0],'upperarm01.L':[0,0,-.25],'upperarm01.R':[-.5,0,-.2],'lowerarm01.R':[-1.4,0,0],'neck01':[0,0,.08]}
+});
+/* more poses: same convention as above, [x,y,z] radians in rest-world axes. mir() mirrors a left-side entry onto the right. */
+Object.assign(POSES,{
+  'Kneel':{'upperleg01.L':[-1.5,0,-.05],'lowerleg01.L':[1.5,0,0],'upperleg01.R':[.1,0,.05],'lowerleg01.R':[1.95,0,0],'upperarm01.L':[-.55,0,-.2],'lowerarm01.L':[-.9,0,0],'upperarm01.R':[-.1,0,.25],'lowerarm01.R':[-.5,0,0],'spine03':[.12,0,0],'neck01':[-.1,0,0]},
+  'Crouch':{'upperleg01.L':[-1.75,0,-.25],'upperleg01.R':[-1.75,0,.25],'lowerleg01.L':[2.15,0,0],'lowerleg01.R':[2.15,0,0],'upperarm01.L':[-.8,0,-.25],'upperarm01.R':[-.8,0,.25],'lowerarm01.L':[-.7,0,0],'lowerarm01.R':[-.7,0,0],'spine03':[.4,0,0],'neck01':[-.3,0,0]},
+  'Sneak':{'upperleg01.L':[-.85,0,-.1],'upperleg01.R':[-.5,0,.1],'lowerleg01.L':[1.1,0,0],'lowerleg01.R':[1.0,0,0],'upperarm01.L':[-.7,0,-.15],'upperarm01.R':[-.6,0,.15],'lowerarm01.L':[-1.2,0,0],'lowerarm01.R':[-1.4,0,0],'spine03':[.35,.1,0],'neck01':[-.25,0,0]},
+  'Sprint':{'upperleg01.L':[-1.25,0,0],'upperleg01.R':[.9,0,0],'lowerleg01.L':[.4,0,0],'lowerleg01.R':[1.9,0,0],'upperarm01.L':[1.1,0,-.25],'upperarm01.R':[-1.2,0,.25],'lowerarm01.L':[-1.5,0,0],'lowerarm01.R':[-1.3,0,0],'spine03':[.42,.12,0],'neck01':[-.3,0,0]},
+  'Jump':{'upperleg01.L':[-.8,0,-.12],'upperleg01.R':[-.6,0,.12],'lowerleg01.L':[1.3,0,0],'lowerleg01.R':[1.4,0,0],'upperarm01.L':[-.2,0,1.75],'upperarm01.R':[-.15,0,-1.75],'lowerarm01.L':[-.3,0,0],'lowerarm01.R':[-.3,0,0],'spine03':[-.1,0,0],'neck01':[-.1,0,0]},
+  'Kick':{'upperleg01.R':[-1.5,0,.05],'lowerleg01.R':[.15,0,0],'upperleg01.L':[.1,0,-.05],'upperarm01.L':[-.1,0,.75],'upperarm01.R':[.0,0,-.85],'lowerarm01.L':[-.3,0,0],'lowerarm01.R':[-.3,0,0],'spine03':[-.25,0,.12]},
+  'Punch':{'upperarm01.R':[-1.5,.05,-.1],'lowerarm01.R':[-.1,0,0],'upperarm01.L':[-.8,.0,-.1],'lowerarm01.L':[-2.0,0,0],'upperleg01.L':[-.35,0,-.12],'upperleg01.R':[.35,0,.12],'lowerleg01.L':[.35,0,0],'spine03':[.1,-.4,0]},
+  'Lunge':{'upperleg01.L':[-1.2,0,-.1],'lowerleg01.L':[1.25,0,0],'upperleg01.R':[.55,0,.1],'lowerleg01.R':[.35,0,0],'upperarm01.L':[-.25,0,-.2],'upperarm01.R':[.2,0,.2],'lowerarm01.L':[-.5,0,0],'lowerarm01.R':[-.5,0,0],'spine03':[.08,0,0]},
+  'Bow':{'spine02':[.55,0,0],'spine03':[.3,0,0],'neck01':[.2,0,0],'upperarm01.L':[.1,0,-.1],'upperarm01.R':[.1,0,.1],'lowerarm01.L':[-.2,0,0],'lowerarm01.R':[-.2,0,0]},
+  'Salute':{'upperarm01.R':[-.4,0,-1.5],'lowerarm01.R':[-2.1,0,0],'wrist.R':[0,0,.15],'upperarm01.L':[.05,0,-.2],'lowerarm01.L':[-.2,0,0],'neck01':[-.03,0,0]},
+  'Point':{'upperarm01.R':[-1.5,0,.9],'lowerarm01.R':[0,0,0],'upperarm01.L':[.05,0,-.2],'lowerarm01.L':[-.3,0,0],'spine03':[0,-.12,0],'neck01':[0,-.1,0]},
+  'Arms crossed':mir({'upperarm01.L':[-.4,0,-.2],'lowerarm01.L':[-1.7,-1.9,0],'spine03':[.04,0,0],'neck01':[.04,0,0]}),
+  'Thinker':{'upperleg01.L':[-1.55,0,-.08],'upperleg01.R':[-1.55,0,.08],'lowerleg01.L':[1.5,0,0],'lowerleg01.R':[1.5,0,0],'upperarm01.L':[-.5,0,-.2],'lowerarm01.L':[-1.1,0,0],'upperarm01.R':[-.95,.15,.05],'lowerarm01.R':[-2.4,0,0],'spine05':[.3,0,0],'neck01':[.25,.0,0]},
+  'Hands up':mir({'upperarm01.L':[-.1,0,1.0],'lowerarm01.L':[0,0,1.55],'neck01':[-.05,0,0]}),
+  'Reach':{'upperarm01.R':[-.3,0,-2.6],'lowerarm01.R':[0,0,0],'upperarm01.L':[0,0,-.2],'lowerarm01.L':[-.2,0,0],'spine03':[0,0,-.18],'neck01':[0,0,-.1],'upperleg01.L':[0,0,-.06]},
+  'Stretch':mir({'upperarm01.L':[-.2,0,2.3],'lowerarm01.L':[0,0,0],'spine03':[-.25,0,0],'neck01':[-.2,0,0]}),
+  'Shrug':mir({'upperarm01.L':[0,0,-.1],'lowerarm01.L':[-.9,0,.4],'wrist.L':[0,0,.3],'clavicle.L':[0,0,.25],'neck01':[0,0,0]}),
+  'Tree':{'upperleg01.R':[-.5,.0,.95],'lowerleg01.R':[2.15,0,0],'upperarm01.L':[0,0,2.5],'upperarm01.R':[0,0,-2.5],'lowerarm01.L':[0,0,-.4],'lowerarm01.R':[0,0,.4],'spine03':[-.02,0,0]},
+  'Cross-legged':{'upperleg01.L':[-1.1,0,.8],'upperleg01.R':[-1.1,0,-.8],'lowerleg01.L':[2.0,0,0],'lowerleg01.R':[2.0,0,0],'upperarm01.L':[-.5,0,-.35],'upperarm01.R':[-.5,0,.35],'lowerarm01.L':[-.8,0,0],'lowerarm01.R':[-.8,0,0],'spine03':[.1,0,0]},
+  'Superhero':{'upperleg01.L':[0,0,-.25],'upperleg01.R':[0,0,.25],'upperarm01.L':[-.1,0,.45],'upperarm01.R':[-.1,0,-.45],'lowerarm01.L':[-1.3,0,0],'lowerarm01.R':[-1.3,0,0],'spine03':[-.12,0,0],'neck01':[-.12,0,0]}
 });
 export const EXPRESSIONS={Neutral:{},Smile:{'mouth-corner-puller':1,'mouth-elevation':.4},Frown:{'mouth-depression':.8,'eyebrows-left-down':.7,'eyebrows-right-down':.7},Surprise:{'eyebrows-left-up':1,'eyebrows-right-up':1,'mouth-open':.8,'eye-left-opened-up':.8,'eye-right-opened-up':.8},Blink:{'eye-left-closure':1,'eye-right-closure':1},Smirk:{'mouth-corner-puller':.0,'mouth-elevation':.6,'eyebrows-left-up':.7},Worried:{'eyebrows-left-inner-up':1,'eyebrows-right-inner-up':1,'mouth-depression':.4},Kiss:{'mouth-pursing':1}};
 
@@ -164,14 +188,16 @@ export async function createHuman(c){
   const armish=i=>isB(i,/^(clavicle|shoulder|upperarm|lowerarm|wrist|finger|metacarpal)/);
   const hairThr=i=>{const z=bz(i),x=bx(i);let t=z>.6?8.05:Math.max(7.05,8.05-(.6-z)*1.1);if(x>.8&&z>-.45)t+=.4;return t;};
   /* each region is a scalar field over the base shape (positive inside); garments are clipped exactly on the zero line, so hems and necklines are straight */
-  const REG={
-    tank:i=>Math.min(by(i)-1.0,5.3-by(i),1.75-bx(i)),
-    tee:i=>Math.min(by(i)-1.0,5.75-by(i),2.75-bx(i)),
-    long:i=>Math.min(by(i)-1.0,5.75-by(i),4.15-bx(i)),
-    /* limited to the hip and leg columns: in the A-pose the fingertips hang at the same height as the thighs and used to be clipped into the trousers */
-    shorts:i=>Math.min(1.4-by(i),by(i)+2.5,3.3-bx(i)),
-    trousers:i=>Math.min(1.4-by(i),by(i)+7.1,3.3-bx(i))
-  };
+  /* top: hem height, sleeve reach (sideways) and neckline height; bottom: waist rise and hem. Defaults per style, any of them can be overridden per look (opt). */
+  const TOPS={tank:{sleeve:1.75,hem:1,neck:5.3},tee:{sleeve:2.75,hem:1,neck:5.75},crop:{sleeve:2.75,hem:2.7,neck:5.75},'3/4':{sleeve:3.5,hem:1,neck:5.75},long:{sleeve:4.15,hem:1,neck:5.75}};
+  /* limited to the hip and leg columns: in the A-pose the fingertips hang at the same height as the thighs and used to be clipped into the trousers */
+  const BOTS={shorts:{hem:-2.5,rise:1.4},bermuda:{hem:-4.6,rise:1.4},capri:{hem:-5.8,rise:1.4},trousers:{hem:-7.1,rise:1.4}};
+  const clampN=(v,a,b)=>Math.max(a,Math.min(b,v));
+  const garmentOpts={top:{sleeve:[1.2,4.15],hem:[.9,3.6],neck:[4.8,6.0]},bottom:{hem:[-8.2,-1.2],rise:[.4,2.2]}};
+  const REG={};for(const k of Object.keys(TOPS))REG[k]=true;for(const k of Object.keys(BOTS))REG[k]=true;
+  const regionFor=(slot,style,opt={})=>{
+    if(slot==='top'){const p={...TOPS[style]};for(const k of Object.keys(garmentOpts.top))if(opt[k]!=null)p[k]=clampN(+opt[k],...garmentOpts.top[k]);return i=>Math.min(by(i)-p.hem,p.neck-by(i),p.sleeve-bx(i));}
+    const p={...BOTS[style]};for(const k of Object.keys(garmentOpts.bottom))if(opt[k]!=null)p[k]=clampN(+opt[k],...garmentOpts.bottom[k]);return i=>Math.min(p.rise-by(i),by(i)-p.hem,3.3-bx(i));};
   const gm=new Map();
   function garment(key,reg,color,off,rough=.8){
     const f=new Float32Array(man.n);for(let i=0;i<man.n;i++)f[i]=reg(i);
@@ -297,8 +323,10 @@ export async function createHuman(c){
   function headHalf(){let mx=0;const hb=man.bones[boneIdx.get('head')].h;const hy=avg(hb)[1];for(let i=0;i<man.nvBody;i+=3){if(P[i*3+1]>hy&&P[i*3+1]<hy+1.2)mx=Math.max(mx,Math.abs(P[i*3]));}return mx*.1*1.0;}
   /* attachments keep rest-world orientation whatever the bone axes are: eyeballs look forward, glasses face forward */
   function alignAttachments(){const hi=boneIdx.get('head');acc.quaternion.copy(Rinv[hi]);acc.position.set(0,0,0);
-    for(const e of eyes){const i=boneIdx.get(e.userData.bone);e.quaternion.copy(Rinv[i]);e.position.set(0,0,.003).applyQuaternion(Rinv[i]);}}
-  function eyesUpdate(){glassesUpdate();}
+    const k=eyeScale();for(const e of eyes){const i=boneIdx.get(e.userData.bone);e.quaternion.copy(Rinv[i]);e.scale.setScalar(k);e.position.set(0,0,.003*k).applyQuaternion(Rinv[i]);}}
+  /* the eyeball follows the size of the socket: interocular distance against the adult male reference (head size, age, sex) and the eye-size modifier */
+  function eyeScale(){const a=Hd[boneIdx.get('eye.L')],b=Hd[boneIdx.get('eye.R')];if(!a||!b)return 1;const ipd=a.distanceTo(b),d=(S.detail&&S.detail['eyes/eye-scale-decr-incr'])||0;return Math.max(.6,Math.min(1.2,ipd/.0585))*(1+.18*d);}
+  function eyesUpdate(){alignAttachments();glassesUpdate();}
   let outfitSeq=0;
   /* One atomic outfit change: everything the new look needs is loaded first, a stale request is dropped before it touches the scene, then slots are swapped in one synchronous step. */
   async function outfit(){
@@ -314,8 +342,8 @@ export async function createHuman(c){
     for(const slot of Object.keys(req))setSlot(slot,ds[slot]||null,col[slot]);
     for(const k of ['top','bottom'])clearG(k);
     /* body-cut basics are only a base layer under or instead of a library outfit; bare slots stay bare */
-    if(!wantSuit){const t=S0.top.style;if(REG[t])gm.set('top',garment('Top',REG[t],S0.top.color,.0045,.85));
-      const b=S0.bottom.style;if(REG[b])gm.set('bottom',garment('Bottom',REG[b],S0.bottom.color,.0042,.85));}
+    if(!wantSuit){const t=S0.top.style;if(REG[t]&&TOPS[t])gm.set('top',garment('Top',regionFor('top',t,S0.top.opt),S0.top.color,.0035+clampN(S0.top.fit??.05,0,1)*.02,.85));
+      const b=S0.bottom.style;if(REG[b]&&BOTS[b])gm.set('bottom',garment('Bottom',regionFor('bottom',b,S0.bottom.opt),S0.bottom.color,.0035+clampN(S0.bottom.fit??.035,0,1)*.02,.85));}
     buildGlasses();
     bodyHide();rebuild();expr();applyMaterials();return true;
   }
@@ -324,8 +352,8 @@ export async function createHuman(c){
   function makeEyes(){
     const cv=document.createElement('canvas');cv.width=256;cv.height=128;const g=cv.getContext('2d');
     /* the front of a three.js sphere sits at u = 0.25, v = 0.5, so the iris is painted there; 256 px is 360 degrees, so a 26 px radius is about 37 degrees */
-    const draw=col=>{g.fillStyle='#f1eee8';g.fillRect(0,0,256,128);const cx=64,cy=64,R=24;
-      const gr=g.createRadialGradient(cx,cy,2,cx,cy,R);gr.addColorStop(0,'#030303');gr.addColorStop(.36,'#030303');gr.addColorStop(.38,col);gr.addColorStop(.85,col);gr.addColorStop(1,'#14100d');
+    const draw=col=>{g.fillStyle='#f1eee8';g.fillRect(0,0,256,128);const cx=64,cy=64,R=24*Math.max(.6,Math.min(1.4,S.iris??1)),pu=Math.max(.15,Math.min(.6,S.pupil??.36));
+      const gr=g.createRadialGradient(cx,cy,2,cx,cy,R);gr.addColorStop(0,'#030303');gr.addColorStop(pu,'#030303');gr.addColorStop(pu+.02,col);gr.addColorStop(.85,col);gr.addColorStop(1,'#14100d');
       g.fillStyle=gr;g.beginPath();g.ellipse(cx,cy,R,R*1.0,0,0,7);g.fill();g.fillStyle='rgba(255,255,255,.9)';g.beginPath();g.arc(cx-8,cy-9,3.4,0,7);g.fill();};
     const tex=new THREE.CanvasTexture(cv);tex.colorSpace=THREE.SRGBColorSpace;draw(S.eye);
     const mat=new THREE.MeshPhysicalMaterial({map:tex,roughness:.15,clearcoat:1,clearcoatRoughness:.05});

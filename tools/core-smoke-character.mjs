@@ -103,3 +103,24 @@ t('character: brows and lashes follow expressions (a blink closes the lashes)', 
  const sum=()=>{const t=new V();let y=0,n=0;for(let i=0;i<lash.geometry.attributes.position.count;i++){lash.getVertexPosition(i,t);if(t.x>0){y+=t.y;n++;}}return y/n;};
  const a=sum();H.S.expr={'eye-left-closure':1,'eye-right-closure':1};H.expr();const b=sum();H.S.expr={};H.expr();const c=sum();
  if(Math.abs(b-a)<.0015)return 'lashes did not move on a blink ('+(b-a).toFixed(5)+' m)';if(Math.abs(c-a)>1e-5)return 'lashes did not return to rest';return true}`);
+
+const NEWPOSES = `['Kneel','Crouch','Sneak','Sprint','Jump','Kick','Punch','Lunge','Bow','Salute','Point','Arms crossed','Thinker','Hands up','Reach','Stretch','Shrug','Tree','Cross-legged','Superhero','Sit']`;
+t('character: every pose is finite, and new pose + parametric garments keep attached', '/character.html', `async()=>{${PRE}
+ const H=await ready();const V=H.body.position.constructor;
+ await put(H,{base:'female',gender:0,stature:165,top:{style:'crop',color:'#2563eb',opt:{sleeve:3.4,hem:3.2,neck:5.1},fit:1},bottom:{style:'capri',color:'#334155',opt:{rise:.8},fit:.6},shoes:{style:'shoes01',color:'#fff'}});
+ const names=${NEWPOSES};
+ const a=D.attachmentReport(H,names,V,3);
+ for(const [pose,row] of Object.entries(a))for(const [m,r] of Object.entries(row))if(r.frac>.03||r.maxGrow>.08)return 'pose '+pose+': '+m+' drifts ('+r.bad+'/'+r.n+', max '+r.maxGrow+' m)';
+ for(const n of names){H.pose(n);H.root.updateMatrixWorld(true);const g=H.validate();if(!g.ok)return n+': '+g.errs[0];}
+ for(const [t0,b0] of [['tank','shorts'],['3/4','bermuda'],['long','trousers'],['tee','capri']]){await put(H,{top:{style:t0,color:'#fff',opt:{}},bottom:{style:b0,color:'#fff',opt:{hem:b0==='trousers'?-8:undefined}}});const m=H.root.children.filter(c=>c.name==='Top'||c.name==='Bottom');if(m.length!==2)return t0+'/'+b0+' did not build both garments';}
+ return true}`);
+
+t('character: strand hair styles grow, stay finite and stay out of the head', '/character.html', `async()=>{${PRE}
+ const H=await ready();const E=window.__exp;const V=H.body.position.constructor;await put(H,{});
+ for(const id of Object.keys(E.STYLES)){if(!E.startHair('low',id))return id+' found no scalp';
+  for(let f=0;f<90;f++){H.pose(f%40<20?'A-pose':'Sprint');E.tick(1/60);}
+  const h=E.state.hair,P=h.sim.P;let bad=0;const c=new V();{const hi=H.bones.findIndex(b=>b.name==='head'),b=H.bones[hi],q=new b.quaternion.constructor(),q2=new b.quaternion.constructor();b.getWorldPosition(c);b.getWorldQuaternion(q);q2.copy(H.frames().Rr[hi]).invert();q.multiply(q2);const o=new V(0,.075,.01).applyQuaternion(q);c.add(o);}
+  const m=h.sim.m;for(let i=0;i<P.length;i+=3){if((i/3)%m<2)continue;if(!isFinite(P[i]+P[i+1]+P[i+2]))return id+': non-finite strand point';if(Math.hypot(P[i]-c.x,P[i+1]-c.y,P[i+2]-c.z)<.07)bad++;}
+  if(bad>P.length/3*.02)return id+': '+bad+' strand points inside the head';
+  if(E.state.stats.strands<8)return id+': too few strands';E.stopHair();}
+ H.pose('A-pose');return true}`);

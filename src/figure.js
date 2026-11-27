@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {GLTFExporter} from 'three/addons/exporters/GLTFExporter.js';
 import {RoomEnvironment} from 'three/addons/environments/RoomEnvironment.js';
-import {createHuman,DEFAULT,STYLE,STATURE,POSES,EXPRESSIONS,ageYears,ageFromYears} from './human.js';
+import {createHuman,DEFAULT,STYLE,STATURE,POSES,EXPRESSIONS,ageYears,ageFromYears,TOP_DEFAULTS,BOTTOM_DEFAULTS} from './human.js';
 import {createGamepad} from './gamepad.js';
 import {initPen} from './pen.js';
 import {createExperimental} from './experimental.js';
@@ -47,8 +47,9 @@ async function redo(){if(!U.r.length){toast('Nothing to redo.');return;}U.u.push
 let cam=null;
 function frame(kind){
   const b=new THREE.Box3().setFromObject(H.body),h=b.max.y,hd=H.bones.find(x=>x.name==='head'),hp=new THREE.Vector3();hd.getWorldPosition(hp);
-  const cx=hp.x,cz=Math.min(hp.z,.1);
-  const to=kind==='face'?{t:new THREE.Vector3(cx,hp.y+.1,hp.z),d:1.05}:kind==='head'?{t:new THREE.Vector3(cx,hp.y+.08,hp.z),d:1.9}:{t:new THREE.Vector3(0,h*.52,0),d:Math.max(3,h*2.3)};
+  const eL=H.root.getObjectByName('Eye.L'),eR=H.root.getObjectByName('Eye.R'),ep=new THREE.Vector3();if(eL&&eR){const a=new THREE.Vector3(),c2=new THREE.Vector3();eL.getWorldPosition(a);eR.getWorldPosition(c2);ep.copy(a).add(c2).multiplyScalar(.5);}else ep.copy(hp).y+=.04;
+  const cx=ep.x;
+  const to=kind==='face'?{t:new THREE.Vector3(cx,ep.y-.01,ep.z),d:.95}:kind==='head'?{t:new THREE.Vector3(cx,ep.y-.03,ep.z),d:1.9}:{t:new THREE.Vector3(0,h*.52,0),d:Math.max(3,h*2.3)};
   const fit=innerWidth<860?Math.min(1.9,Math.max(1,innerHeight/Math.max(220,$('#panel').getBoundingClientRect().top))):1;
   let dir=camera.position.clone().sub(controls.target).normalize();
   if(kind==='profile')dir=new THREE.Vector3(1,.06,0);else if(kind==='back')dir=new THREE.Vector3(0,.08,-1);else if(kind==='front')dir=new THREE.Vector3(0,.06,1);
@@ -70,17 +71,74 @@ function slider(p,label,get,set,mn,mx,fmt,o={}){const r=el('label','row');const 
   i.addEventListener('input',()=>push(+i.value));n.addEventListener('change',()=>{if(n.value==='')return;push(from(+n.value));});
   sp.addEventListener('dblclick',()=>push(o.def!=null?o.def:(mn<0?0:(mn+mx)/2)));r.append(i,n);p.appendChild(r);return i;}
 function dslider(p,label,id,mx=1){if(!id)return;const d=H.man.detail.find(x=>x.id===id);slider(p,label,()=>H.S.detail[id]||0,v=>{H.S.detail[id]=v;},d.bi?-mx:0,mx,null,{def:0});}
-function sw(p,label,cols,get,set){const r=el('div','row sw');r.append(el('span','',label));const w=el('div','swatches');cols.forEach((c,i)=>{const b=el('button','');b.type='button';b.style.background=c;b.setAttribute('aria-label',label+' '+(i+1));b.setAttribute('aria-pressed',String(get()===c));b.addEventListener('click',()=>{touch();set(c);w.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));save();bump();});w.appendChild(b);});r.appendChild(w);p.appendChild(r);}
+function sw(p,label,cols,get,set){const r=el('div','row sw');r.append(el('span','',label));const w=el('div','swatches');cols.forEach((c,i)=>{const b=el('button','');b.type='button';b.style.background=c;b.setAttribute('aria-label',label+' '+(i+1));b.setAttribute('aria-pressed',String(get()===c));b.addEventListener('click',()=>{touch();set(c);w.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));save();bump();});w.appendChild(b);});
+  const ci=el('input','cpick');ci.type='color';ci.value=/^#[0-9a-f]{6}$/i.test(get())?get():'#888888';ci.title='Custom colour';ci.setAttribute('aria-label',label+' custom colour');ci.addEventListener('change',()=>{touch();set(ci.value);w.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed','false'));save();bump();});w.appendChild(ci);
+  r.appendChild(w);p.appendChild(r);}
 function chips(p,label,list,get,set){const r=el('div','row sw');r.append(el('span','',label));const w=el('div','chips');list.forEach(n=>{const b=el('button','chip',n);b.type='button';b.setAttribute('aria-pressed',String(get()===n));b.addEventListener('click',()=>{touch();set(n);w.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));save();bump();});w.appendChild(b);});r.appendChild(w);p.appendChild(r);}
 const head=(p,t)=>p.appendChild(el('h3','',t));
-function tiles(p,label,items,get,set){const r=el('div','row sw');r.append(el('span','',label));const w=el('div','tiles');
+function tiles(p,label,items,get,set){const r=el('div','row sw');r.append(el('span','',label));const w=el('div','tiles'+(items.length>6?' wrap':''));
   items.forEach(it=>{const b=el('button','tile');b.type='button';b.title=it.label;b.setAttribute('aria-label',it.label);b.setAttribute('aria-pressed',String(get()===it.id));
-    if(it.thumb){const im=el('img');im.src=it.thumb;im.alt='';im.loading='lazy';b.appendChild(im);}else b.appendChild(el('b','',it.glyph||it.label.slice(0,2)));b.appendChild(el('small','',it.label));
+    if(it.thumb){const im=el('img');im.src=it.thumb;im.alt='';im.loading='lazy';b.appendChild(im);}
+    else if(it.svg){const i=el('b','ic');i.innerHTML=it.svg;b.appendChild(i);}
+    else if(it.bg){const i=el('b','sw');i.style.background=it.bg;b.appendChild(i);}
+    else if(it.live){const i=el('img');i.alt='';i.className='live';b.appendChild(i);liveThumb(i,it.live);}
+    else b.appendChild(el('b','',it.glyph||it.label.slice(0,2)));b.appendChild(el('small','',it.label));
     b.addEventListener('click',()=>{touch();set(it.id);w.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));});w.appendChild(b);});r.appendChild(w);p.appendChild(r);}
+
+/* ---- visual references: simple line icons for things that have no library thumbnail, and live renders of the actual character for poses and expressions ---- */
+const IC=(d,extra='')=>`<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true">${d.map(x=>'<path d="'+x+'"/>').join('')}${extra}</svg>`;
+const ICONS={
+  tank:IC(['M16 8 L14 16 L14 40 L34 40 L34 16 L32 8 Q28 15 24 15 Q20 15 16 8Z']),
+  tee:IC(['M16 8 L8 12 L4 21 L10 24 L13 21 L13 40 L35 40 L35 21 L38 24 L44 21 L40 12 L32 8 Q24 14 16 8Z']),
+  crop:IC(['M16 8 L8 12 L4 21 L10 24 L13 21 L13 30 L35 30 L35 21 L38 24 L44 21 L40 12 L32 8 Q24 14 16 8Z']),
+  '3/4':IC(['M16 8 L8 12 L5 30 L10 31 L13 23 L13 40 L35 40 L35 23 L38 31 L43 30 L40 12 L32 8 Q24 14 16 8Z']),
+  long:IC(['M16 8 L8 12 L5 39 L10 40 L13 23 L13 40 L35 40 L35 23 L38 40 L43 39 L40 12 L32 8 Q24 14 16 8Z']),
+  shorts:IC(['M14 8 H34 L36 26 H27 L24 16 L21 26 H12Z']),
+  bermuda:IC(['M14 8 H34 L36 32 H27 L24 17 L21 32 H12Z']),
+  capri:IC(['M14 8 H34 L36 37 H27 L24 17 L21 37 H12Z']),
+  trousers:IC(['M14 6 H34 L36 43 H27 L24 18 L21 43 H12Z']),
+  sunglasses:IC(['M6 20 H21 V27 Q21 33 13.5 33 Q6 33 6 27Z','M27 20 H42 V27 Q42 33 34.5 33 Q27 33 27 27Z','M21 22 Q24 20 27 22']),
+  round:IC(['M21 27 A7.5 7.5 0 1 1 6 27 A7.5 7.5 0 1 1 21 27Z','M42 27 A7.5 7.5 0 1 1 27 27 A7.5 7.5 0 1 1 42 27Z','M21 25 Q24 22 27 25']),
+  visor:IC(['M5 19 H43 L40 31 Q24 36 8 31Z']),
+  none:IC(['M10 10 L38 38','M24 6 A18 18 0 1 0 24.1 6Z']),
+  hair_ponytail:IC(['M24 8 C14 8 12 18 13 26 C14 20 18 15 24 15 C30 15 34 20 35 26 C36 18 34 8 24 8Z','M35 18 C42 20 42 32 38 42 C36 34 36 28 34 22'],'<circle cx="24" cy="28" r="7"/>'),
+  hair_long:IC(['M24 7 C13 7 11 20 12 42 L17 42 L17 22 C20 17 28 17 31 22 L31 42 L36 42 C37 20 35 7 24 7Z'],'<circle cx="24" cy="28" r="5"/>'),
+  hair_bob:IC(['M24 7 C14 7 11 18 12 33 L19 33 L19 23 C22 19 26 19 29 23 L29 33 L36 33 C37 18 34 7 24 7Z'],'<circle cx="24" cy="28" r="5"/>'),
+  hair_curly:IC(['M13 24 C9 20 11 14 16 14 C16 8 24 7 27 11 C32 8 38 12 35 17 C40 19 38 26 33 26 C34 30 30 32 28 30'],'<circle cx="24" cy="29" r="6"/>'),
+  hair_bun:IC(['M24 12 C15 12 13 19 14 26 C16 20 19 18 24 18 C29 18 32 20 34 26 C35 19 33 12 24 12Z','M24 4 A5 5 0 1 1 23.9 4Z'],'<circle cx="24" cy="30" r="6"/>'),
+  hair_braid:IC(['M24 8 C15 8 13 18 14 26 C16 20 19 16 24 16 C29 16 32 20 34 26 C35 18 33 8 24 8Z','M34 24 C37 28 31 30 35 34 C39 38 33 40 36 44'],'<circle cx="24" cy="29" r="6"/>'),
+  hair_mohawk:IC(['M18 18 C18 8 24 6 24 6 C24 6 30 8 30 18','M19 20 C15 22 14 28 16 31 M29 20 C33 22 34 28 32 31'],'<circle cx="24" cy="26" r="7"/>'),
+  hair_pixie:IC(['M24 10 C15 10 13 19 14 25 C17 20 21 18 27 19 C31 20 33 22 34 25 C35 18 33 10 24 10Z'],'<circle cx="24" cy="29" r="6"/>'),
+  strand_off:IC(['M10 10 L38 38','M24 6 A18 18 0 1 0 24.1 6Z'])
+};
+/* a rendered thumbnail of the live character: pose, or expression close-up. Rendered into a small target on demand, never while the user is dragging. */
+const THUMB={cache:new Map(),queue:[],busy:false,rt:null};
+function thumbKey(spec){return JSON.stringify([spec,H.S.base,H.S.skinTex,H.S.skin,Math.round(H.measure.stature*100)]);}
+function liveThumb(img,spec){const key=thumbKey(spec),hit=THUMB.cache.get(key);if(hit){img.src=hit;return;}THUMB.queue.push({img,spec,key});pumpThumbs();}
+function pumpThumbs(){if(THUMB.busy||!THUMB.queue.length)return;THUMB.busy=true;requestAnimationFrame(()=>{const t0=performance.now();
+  while(THUMB.queue.length&&performance.now()-t0<24){const j=THUMB.queue.shift();if(!j.img.isConnected)continue;try{const url=renderThumb(j.spec);THUMB.cache.set(j.key,url);j.img.src=url;}catch(e){console.warn('thumbnail',e);}}
+  THUMB.busy=false;pumpThumbs();});}
+function renderThumb(spec){
+  const W=spec.kind==='face'?112:120,Hh=spec.kind==='face'?112:160,rt=THUMB.rt&&THUMB.rt.width===W&&THUMB.rt.height===Hh?THUMB.rt:(THUMB.rt=new THREE.WebGLRenderTarget(W,Hh,{samples:4}));
+  const keepPose=H.S.pose,keepExpr=H.S.expr,keepBg=scene.background,keepFloor=floor.visible,keepR=renderer.getRenderTarget(),keepA=renderer.getClearAlpha();
+  const cam=new THREE.PerspectiveCamera(spec.kind==='face'?22:28,W/Hh,.05,40);
+  try{
+    if(spec.pose){H.pose(spec.pose);}else H.pose('A-pose');
+    if(spec.expr){H.S.expr={...EXPRESSIONS[spec.expr]};}else H.S.expr={};H.expr();H.root.updateMatrixWorld(true);
+    const box=new THREE.Box3().setFromObject(H.body),c=box.getCenter(new THREE.Vector3()),size=box.getSize(new THREE.Vector3());
+    if(spec.kind==='face'){const a=new THREE.Vector3(),b=new THREE.Vector3();H.root.getObjectByName('Eye.L').getWorldPosition(a);H.root.getObjectByName('Eye.R').getWorldPosition(b);a.add(b).multiplyScalar(.5);a.y-=.03;cam.position.set(a.x,a.y,a.z+.78);cam.lookAt(a);}
+    else{const d=Math.max(size.y*1.05,size.x*.9)/(2*Math.tan(cam.fov*Math.PI/360)),ang=spec.view==='front'?0:spec.view==='back'?Math.PI:spec.view==='side'?Math.PI/2:.62;cam.position.set(c.x+Math.sin(ang)*d,c.y,c.z+Math.cos(ang)*d);cam.lookAt(c);}
+    scene.background=null;floor.visible=false;renderer.setRenderTarget(rt);renderer.setClearColor(0x000000,0);renderer.clear();renderer.render(scene,cam);
+    const buf=new Uint8Array(W*Hh*4);renderer.readRenderTargetPixels(rt,0,0,W,Hh,buf);
+    const cv=document.createElement('canvas');cv.width=W;cv.height=Hh;const g=cv.getContext('2d'),im=g.createImageData(W,Hh);
+    for(let y=0;y<Hh;y++)im.data.set(buf.subarray((Hh-1-y)*W*4,(Hh-y)*W*4),y*W*4);const d=im.data;for(let i=0;i<d.length;i+=4){if(!d[i+3])continue;for(let k=0;k<3;k++)d[i+k]=Math.min(255,255*Math.pow(d[i+k]/255,1/2.2)*1.1);}g.putImageData(im,0,0);return cv.toDataURL('image/png');
+  }finally{renderer.setRenderTarget(keepR);renderer.setClearAlpha(keepA);scene.background=keepBg;floor.visible=keepFloor;H.S.expr=keepExpr;H.expr();H.pose(keepPose);H.root.updateMatrixWorld(true);bump();}
+}
 const th=id=>'assets/human/a/'+id+'_t.webp';
 const nice=id=>id.replace(/^culturalibre_/,'').replace(/_/g,' ').replace(/(\D)0?(\d+)$/,'$1 $2');
 const libItems=(kind,filter)=>H.lib[kind].filter(x=>!filter||filter(x.id)).map(x=>({id:x.id,label:nice(x.id),thumb:th(x.id)}));
-const none={id:'none',label:'None',glyph:'∅'};
+
+const none={id:'none',label:'None',svg:ICONS.none};
 const refit=()=>H.outfit().then(()=>{save();bump();});
 const SUITS=id=>/suit|culturalibre/.test(id);
 const TABS=[
@@ -99,14 +157,14 @@ const TABS=[
     head(p,'Ancestry blend');for(const k of['african','asian','caucasian'])slider(p,k[0].toUpperCase()+k.slice(1),()=>H.S.race[k],v=>H.S.race[k]=v,0,1,null,{def:1/3});
     head(p,'Skin');tiles(p,'Texture',[{id:'auto',label:'Auto',glyph:'✦'},{id:'none',label:'Flat',glyph:'▭'},...H.lib.skins.map(x=>({id:x.id,label:nice(x.id),thumb:th('skin_'+x.id)}))],()=>H.S.skinTex,id=>{H.S.skinTex=id;H.applySkin();save();bump();});
     slider(p,'Tone',()=>H.S.tone,v=>{H.S.tone=v;H.applySkin();},.55,1.35,null,{def:1});sw(p,'Flat colour',SKIN,()=>H.S.skin,c=>{H.S.skin=c;H.S.skinTex='none';H.applySkin();show(0,true);});},
-  p=>{head(p,'Expression');chips(p,'Expression',Object.keys(EXPRESSIONS),()=>Object.keys(EXPRESSIONS).find(k=>JSON.stringify(EXPRESSIONS[k])===JSON.stringify(H.S.expr))||'',n=>{H.S.expr={...EXPRESSIONS[n]};H.expr();});
+  p=>{head(p,'Expression');tiles(p,'Expression',Object.keys(EXPRESSIONS).map(k=>({id:k,label:k,live:{kind:'face',expr:k}})),()=>Object.keys(EXPRESSIONS).find(k=>JSON.stringify(EXPRESSIONS[k])===JSON.stringify(H.S.expr))||'',n=>{H.S.expr={...EXPRESSIONS[n]};H.expr();save();bump();});
     head(p,'Head and brow');dslider(p,'Head width',D('head','head-scale-horiz'));dslider(p,'Head height',D('head','head-scale-vert'));dslider(p,'Head depth',D('head','head-scale-depth'));dslider(p,'Forehead',D('forehead','forehead-scale-vert'));dslider(p,'Brow ridge',D('forehead','forehead-nubian'));dslider(p,'Brow angle',D('eyebrows','eyebrows-angle'));
     tiles(p,'Eyebrows',[none,...libItems('eyebrows')],()=>H.S.brows.style,n=>{H.S.brows.style=n;refit();});
     head(p,'Eyes');dslider(p,'Eye size',D('eyes','eye-scale'));dslider(p,'Eye height',D('eyes','eye-height1'));dslider(p,'Eye spacing',D('eyes','eye-push1'));dslider(p,'Eye corners',D('eyes','eye-corner1'));dslider(p,'Eye bags',D('eyes','eye-bag-height'));
     chips(p,'Lashes',['On','Off'],()=>H.S.lashes?'On':'Off',n=>{H.S.lashes=n==='On';refit();});
     head(p,'Nose');dslider(p,'Nose width',D('nose','nose-scale-horiz'));dslider(p,'Nose length',D('nose','nose-scale-vert'));dslider(p,'Nose depth',D('nose','nose-scale-depth'));dslider(p,'Bridge hump',D('nose','nose-hump'));dslider(p,'Tip',D('nose','nose-point'));dslider(p,'Nostrils',D('nose','nose-nostrils-width'));
     head(p,'Mouth and jaw');dslider(p,'Mouth width',D('mouth','mouth-scale-horiz'));dslider(p,'Lip fullness',D('mouth','mouth-lowerlip-volume'));dslider(p,'Upper lip',D('mouth','mouth-upperlip-volume'));dslider(p,'Chin',D('chin','chin-prominent'));dslider(p,'Jaw width',D('chin','chin-width'));dslider(p,'Chin height',D('chin','chin-height'));dslider(p,'Cheeks',D('cheek','cheek-volume'));dslider(p,'Cheekbones',D('cheek','cheek-bones'));dslider(p,'Ear size',D('ears','ear-scale'));
-    head(p,'Eye colour');sw(p,'Eyes',EYE,()=>H.S.eye,c=>H.setEye(c));
+    head(p,'Eye colour');sw(p,'Eyes',EYE,()=>H.S.eye,c=>H.setEye(c));slider(p,'Iris size',()=>H.S.iris??1,v=>{H.S.iris=v;H.setEye(H.S.eye);},.6,1.4,null,{def:1,after:()=>{}});slider(p,'Pupil size',()=>H.S.pupil??.36,v=>{H.S.pupil=v;H.setEye(H.S.eye);},.15,.6,null,{def:.36});
     head(p,'All morphs');const q=el('input','search');q.type='search';q.placeholder='Search morphs, e.g. nose, jaw, ear';q.setAttribute('aria-label','Search morphs');p.appendChild(q);
     const groups=[...new Set(H.man.detail.map(d=>d.group))];let region='';const box=el('div','list');
     const rs=el('div','chips');const mk=(g,lab)=>{const b=el('button','chip',lab);b.type='button';b.setAttribute('aria-pressed',String(region===g));b.addEventListener('click',()=>{region=g;rs.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));draw();});rs.appendChild(b);};
@@ -115,13 +173,24 @@ const TABS=[
     function draw(){box.innerHTML='';const t=q.value.trim().toLowerCase();let n=0;for(const d of H.man.detail){if(region&&d.group!==region)continue;if(t&&!(d.name+' '+d.group).toLowerCase().includes(t))continue;if(++n>40)break;slider(box,nice(d.name),()=>H.S.detail[d.id]||0,v=>{H.S.detail[d.id]=v;},d.bi?-1:0,1,null,{def:0});}if(!n)box.appendChild(el('p','note','No morphs match. Try a shorter word.'));}
     q.addEventListener('input',draw);draw();},
   p=>{head(p,'Hair');tiles(p,'Style',[none,...libItems('hair')],()=>H.S.hair.style,n=>{H.S.hair.style=n;refit();});
-    sw(p,'Colour',['#ffffff',...HAIRC],()=>H.S.hair.color,c=>{H.S.hair.color=c;H.S.brows.color=c==='#ffffff'?'#ffffff':c;refit();});},
+    sw(p,'Colour',['#ffffff',...HAIRC],()=>H.S.hair.color,c=>{H.S.hair.color=c;H.S.brows.color=c==='#ffffff'?'#ffffff':c;refit().then(()=>{if(EXP.state.hair)EXP.startHair(EXP.state.hair.lod,EXP.state.hair.style);});});
+    head(p,'Strand hair');p.appendChild(el('p','note','Real moving strands that swing with the head and the pose. Pick a style, then a quality. They sit on top of the fitted hair above; set that to None to see them alone.'));
+    const st=EXP.state,styles=Object.entries(EXP.STYLES).map(([id,v])=>({id,label:v.label,svg:ICONS['hair_'+(id==='low ponytail'?'ponytail':id)]||ICONS.hair_pixie}));
+    tiles(p,'Style',[{id:'off',label:'Off',svg:ICONS.strand_off},...styles],()=>st.hair?st.hair.style:'off',id=>{if(id==='off'){EXP.stopHair();}else if(!EXP.startHair(st.hair?st.hair.lod:'medium',id))toast('Could not find a scalp to grow hair from on this look.',3600);save();bump();});
+    chips(p,'Quality',['low','medium','high'],()=>st.hair?st.hair.lod:'medium',n=>{if(st.hair)EXP.startHair(n,st.hair.style);});
+    head(p,'Hair care');p.appendChild(el('p','note','Colour above also tints the strands.'));},
   p=>{head(p,'Outfit');p.appendChild(el('p','note','A full outfit replaces the top and bottom. Shoes, headwear and glasses layer on top.'));
     tiles(p,'Full outfit',[none,...libItems('clothes',SUITS)],()=>H.S.suit.style,n=>{H.S.suit.style=n;refit();});sw(p,'Tint',['#ffffff',...PAL],()=>H.S.suit.color,c=>{H.S.suit.color=c;refit();});
-    head(p,'Base layer');chips(p,'Top',STYLE.top,()=>H.S.top.style,n=>{H.S.top.style=n;refit();});sw(p,'Colour',PAL,()=>H.S.top.color,c=>{H.S.top.color=c;refit();});chips(p,'Bottom',STYLE.bottom,()=>H.S.bottom.style,n=>{H.S.bottom.style=n;refit();});sw(p,'Colour',PAL,()=>H.S.bottom.color,c=>{H.S.bottom.color=c;refit();});
+    head(p,'Base layer');
+    const lay=(slot,styles,defs,label,ordLabel)=>{const L=H.S[slot];
+      tiles(p,label,[none,...styles.filter(x=>x!=='none').map(x=>({id:x,label:x,svg:ICONS[x]}))],()=>L.style,n=>{L.style=n;L.opt={};refit().then(()=>show(3,true));});sw(p,'Colour',PAL,()=>L.color,c=>{L.color=c;refit();});
+      if(L.style!=='none'&&defs[L.style]){L.opt=L.opt||{};const d=defs[L.style];const so=(name,key,mn,mx)=>slider(p,name,()=>L.opt[key]??d[key],v=>{L.opt[key]=v;},mn,mx,null,{def:d[key],step:.02,to:v=>Math.round(v*100)/100*1,from:x=>x,nstep:.1,after:()=>{refit();}});
+        if(slot==='top'){so('Sleeve length','sleeve',1.2,4.15);so('Hem height','hem',.9,3.6);so('Neckline','neck',4.8,6);}else{so('Leg length','hem',-8.2,-1.2);so('Waist','rise',.4,2.2);}
+        slider(p,'Fit',()=>L.fit??(slot==='top'?.05:.035),v=>{L.fit=v;},0,1,null,{def:slot==='top'?.05:.035,after:()=>{refit();}});}};
+    lay('top',STYLE.top,TOP_DEFAULTS,'Top');lay('bottom',STYLE.bottom,BOTTOM_DEFAULTS,'Bottom');
     head(p,'Shoes');tiles(p,'Shoes',[none,...libItems('clothes',id=>/^shoes/.test(id))],()=>H.S.shoes.style,n=>{H.S.shoes.style=n;refit();});sw(p,'Tint',['#ffffff',...PAL],()=>H.S.shoes.color,c=>{H.S.shoes.color=c;refit();});
     head(p,'Headwear and glasses');tiles(p,'Headwear',[none,...libItems('clothes',id=>/fedora/.test(id))],()=>H.S.head.style,n=>{H.S.head.style=n;refit();});sw(p,'Colour',['#1a1a1a','#ffffff',...PAL],()=>H.S.head.color,c=>{H.S.head.color=c;refit();});
-    tiles(p,'Glasses',[none,{id:'sunglasses',label:'Shades',glyph:'🕶'},{id:'round',label:'Round',glyph:'👓'},{id:'visor',label:'Visor',glyph:'▰'}],()=>H.S.glasses.style,n=>{H.S.glasses.style=n;refit();});
+    tiles(p,'Glasses',[none,{id:'sunglasses',label:'Shades',svg:ICONS.sunglasses},{id:'round',label:'Round',svg:ICONS.round},{id:'visor',label:'Visor',svg:ICONS.visor}],()=>H.S.glasses.style,n=>{H.S.glasses.style=n;refit();});
     head(p,'Fabric');const SL={Top:'top',Bottom:'bottom',Outfit:'suit',Shoes:'shoes'};let fs='top';
     chips(p,'Garment',Object.keys(SL),()=>Object.keys(SL).find(k=>SL[k]===fs),n=>{fs=SL[n];show(3,true);});
     const cfg=()=>(H.S.mat[fs]=H.S.mat[fs]||{});const mat=()=>{H.applyMaterials();save();bump();};
@@ -137,7 +206,8 @@ const TABS=[
       slider(p,'Across',()=>d.x,v=>{d.x=v;up();},0,1,null,{def:.5});slider(p,'Up',()=>d.y,v=>{d.y=v;up();},0,1,null,{def:.5});slider(p,'Size',()=>d.scale,v=>{d.scale=v;up();},.1,1.4,null,{def:.5});slider(p,'Rotate',()=>d.rot,v=>{d.rot=v;up();},-180,180,null,{def:0,to:v=>Math.round(v),from:x=>x,step:1});slider(p,'Opacity',()=>d.opacity,v=>{d.opacity=v;up();},.1,1,null,{def:1});
       const rm=el('button','chip','Remove logo');rm.type='button';rm.addEventListener('click',()=>{touch();H.setDecal(null);save();bump();show(3,true);});p.appendChild(rm);}
   },
-  p=>{head(p,'Pose');chips(p,'Pose',Object.keys(POSES),()=>H.S.pose,n=>{H.pose(n);});},
+  p=>{head(p,'Pose');p.appendChild(el('p','note','Each picture is the pose on this body. They refresh when the body changes.'));const groups={Standing:['A-pose','Relaxed','T-pose','Pockets','Hips','Sassy','Lean','Power','Hero','Superhero','Catwalk','Arms crossed','Shrug','Bow','Salute','Point','Reach','Hands up','Wave','Cheer','Flex','Stretch','Tree'],Moving:['Walk','Run','Sprint','Sneak','Jump','Kick','Punch','Fighter','Lunge','Dance'],Low:['Sit','Thinker','Crouch','Kneel','Cross-legged']};
+    for(const [g,list] of Object.entries(groups)){const l=list.filter(n=>POSES[n]);if(l.length)tiles(p,g,l.map(n=>({id:n,label:n,live:{kind:'body',pose:n}})),()=>H.S.pose,n=>{stopAnim();H.pose(n);save();bump();});}},
   p=>{head(p,'Saved looks');
     const FAV='n0.looks',list=()=>{try{return JSON.parse(localStorage.getItem(FAV)||'[]');}catch(e){return [];}};
     const b=el('button','chip','Save this look as a favourite');b.type='button';b.addEventListener('click',()=>{const l=list();l.unshift({name:'Look '+new Date().toLocaleString(),look:structuredClone(H.S)});localStorage.setItem(FAV,JSON.stringify(l.slice(0,24)));show(5,true);toast('Saved.');});p.appendChild(b);
@@ -231,8 +301,8 @@ const loading=$('#fload');
 try{
   H=await createHuman({THREE,onTex:bump});
   try{const s=JSON.parse(localStorage.getItem(KEY)||'null');if(s){H.load(s);await H.apply();await H.outfit();H.pose(H.S.pose);H.expr();}}catch(e){}
-  scene.add(H.root);EXP=createExperimental({THREE,H,scene,bump});show(tab);size();frame('body');
-  loading.hidden=true;window.__hum=H;window.__r={renderer,scene,camera,controls};
+  scene.add(H.root);EXP=createExperimental({THREE,H,scene,bump,camera});window.__exp=EXP;show(tab);size();frame('body');
+  loading.hidden=true;window.__hum=H;window.__tools={POSES,renderThumb};window.__r={renderer,scene,camera,controls};
 }catch(e){console.error(e);loading.textContent='Couldn’t load the character data: '+(e.message||e)+'. Check your connection and reload.';}
 initPen({canvas,toast});
 window.__gp=createGamepad({THREE,camera,controls,S:{},toast,sheet:null,bump,canvas,cycle:d=>{if(!H)return;const k=Object.keys(POSES),i=(k.indexOf(H.S.pose)+d+k.length)%k.length;H.pose(k[i]);toast(k[i],900);bump();if(tab===4)show(4,true);},vert:()=>false});
