@@ -31,3 +31,13 @@
 .ws-confirm-card{width:min(420px,100%);background:#1d211d;border:1px solid #3c4339;border-radius:12px;padding:22px;box-shadow:0 24px 60px #000a;color:#ede8df}
 .ws-confirm-card b{display:block;font-size:17px;margin-bottom:8px}.ws-confirm-card p{margin:0 0 18px;font-size:14px;line-height:1.5;color:#b9b4a8}
 .ws-confirm-row{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap}.ws-confirm-row button{min-height:44px;padding:0 16px}
+
+.ws-field{display:block;margin:0 0 14px}.ws-field>span{display:block;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#a29d90;margin-bottom:6px}
+.ws-field input{width:100%;min-height:44px;box-sizing:border-box;background:#161914;border:1px solid #3c4339;border-radius:8px;color:#ede8df;padding:0 12px;font:inherit}
+.ws-field input:focus-visible{outline:2px solid #b9c99a;outline-offset:1px}
+.ws-chips{display:flex;gap:8px;flex-wrap:wrap}.ws-chip{min-height:44px;padding:0 14px;border-radius:8px;border:1px solid #3c4339;background:#222720;color:#ede8df;font:inherit}.ws-chip[aria-pressed=true]{background:#3a4533;border-color:#b9c99a}
+.ws-confirm-card #ws-cr-note{margin:10px 0 0;font-size:13px}
+.ws-proj-actions{display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end}.ws-proj-actions button{min-height:44px;min-width:44px;padding:0 10px}
+.ws-project-item.current{border-color:#b9c99a}.ws-project-item em{font-style:normal;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#b9c99a;margin-left:8px}
+.ws-back3d{display:inline-flex;align-items:center;min-height:44px;padding:0 12px;text-decoration:none}
+@media (max-width:760px){.ws-project-item{flex-wrap:wrap}.ws-proj-actions{width:100%;justify-content:flex-start}}

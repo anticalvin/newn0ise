@@ -22,6 +22,9 @@ import { createTelemetry } from './debug.js';
 import { GeoWorld } from './geo/manager.js';
 import { OverviewMap } from './geo/map.js';
 import { mountWorkspace } from './workspace-ui.js';
+import { Projects } from './projects.js';
+import { Grid } from './grid.js';
+import { applyTemplate } from './templates.js';
 import { createFirstLightHost } from './first-light/host.js';
 
 const canvas = document.getElementById('c');
@@ -55,8 +58,9 @@ player.onStep = (x, z) => {
 const ringGeo = new THREE.BufferGeometry(); ringGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(97 * 3), 3));
 const ring = new THREE.Line(ringGeo, new THREE.LineBasicMaterial({ color: 0xede8df, transparent: true, opacity: 0.9, depthTest: false, fog: false })); ring.renderOrder = 50; ring.frustumCulled = false; ring.visible = false; scene.add(ring);
 
+const grid = new Grid(scene, terrain);
 const app = {
-  scene, renderer, camera, terrain, water, env, palms, grass, boulders, player, character, phys, sand,
+  scene, renderer, camera, terrain, grid, water, env, palms, grass, boulders, player, character, phys, sand,
   name: 'COAST_001', spawn: [0, 0, 0], worlds: [], props: null, propCols: [],
   mode: 'explore', tool: 'raise', R: 10, strength: 0.6, padMode: false,
   cam: { yaw: 1.2, pitch: 0.28, dist: 5.2, target: new THREE.Vector3(), ey: 0 },
@@ -113,7 +117,7 @@ const app = {
   newScene(preset, seed = 101) {
     core.muted = true;
     try {
-      terrain.generate(seed, preset); this.name = preset === 'blank' ? 'BLANK' : 'COAST_001';
+      grid.set(false); terrain.generate(seed, preset); this.name = preset === 'blank' ? 'BLANK' : 'COAST_001';
       palms.items = []; palms.rebuild(); [...boulders.items].forEach(b => boulders.remove(b)); entities.clear(); this.clearWorlds(); this.setPreset(preset);
       env.set(preset === 'blank' ? { time: 11, cloud: 0.3, wind: 0.35, windAng: 0, sea: 0.45, tide: 0 } : { time: 17.4, cloud: 0.38, wind: 0.55, windAng: 0, sea: 0.55, tide: 0 });
       if (preset === 'coast') this.populateCoast();
@@ -196,6 +200,22 @@ const app = {
     } catch (e) { ui.toast('Could not load: ' + e.message); return { ok: false, msg: e.message }; }
   },
   importScene(f) { return this.importFile(f); },
+  setGrid(on) { grid.set(on); },
+  // ---- named projects: manifest + authored scene in IndexedDB; the template is data run through the command boundary ----
+  project: null, projects: new Projects(),
+  async createProject({ name, template, starter }) {
+    const r = applyTemplate(this, template, starter), doc = await core.serialize();
+    const rec = await this.projects.create({ name, template, starter, view: r.view }, doc);
+    this.project = rec; this.name = rec.name; this.setMode(r.mode); this.resetCam(); ui.render(); ui.updHist(); ui.brand(); ui.say(r.mode === 'edit' ? 'Drag to paint · right-drag orbit · shift-drag pan · [ ] radius' : 'Drag to look · WASD to walk · E to edit', 8000);
+    return rec;
+  },
+  async openProject(id) {
+    const { project, doc } = await this.projects.load(id);
+    await core.load(doc);   // validates first and rolls back to the current scene on any failure
+    this.project = project; this.name = project.name; this.setGrid(!!(project.view && project.view.grid)); this.setMode('explore'); this.cam.yaw = Math.atan2(-Math.sin(this.spawn[2]), -Math.cos(this.spawn[2])) + Math.PI + 0.35; this.cam.pitch = 0.2; this.cam.dist = 5.4;
+    ui.render(); ui.updHist(); ui.brand(); return project;
+  },
+  async saveProject() { if (!this.project) return null; await core.autosave(true); return this.project; },
   newIsland() { core.exec({ cmd: 'terrain.reset', seed: Math.floor(Math.random() * 90000) + 100 }); ui.toast('New terrain'); ui.updHist(); },
 };
 app.envChildren = envChildren; app.shared = shared; app.assets = new Assets(shared); app.entities = new Entities(app); const entities = app.entities; app.entities.register('retail.convenience', retailPrefab);
@@ -205,7 +225,7 @@ app.geo = new GeoWorld(app); app.map = new OverviewMap(app);
 phys.a = app;
 
 // ---- initial scene: the coast is the backdrop behind the start sheet ----
-app.newScene('coast'); core.hist = []; core.ptr = 0;
+app.newScene(new URLSearchParams(location.search).get('start') === 'coast' ? 'coast' : 'blank'); core.hist = []; core.ptr = 0;   // Coast is built only when asked for
 app.cam.yaw = Math.PI / 2 + 0.35; app.cam.pitch = 0.2; app.cam.dist = 5.4;
 phys.init().then(ok => { if (!ok) ui.toast('Physics engine could not load, using the simple built-in solver'); });
 

@@ -243,7 +243,7 @@ export class Core {
       palms: a.palms.items.map(p => [r(p.x), r(p.z), r(p.s), r(p.yaw)]),
       boulders: a.boulders.items.map(b => [r(b.p.x), r(b.p.y), r(b.p.z), r(b.r), b.seed]),
       worlds: a.worlds.map(w => ({ name: w.name, at: w.at.map(r), doc: w.doc })), entities: a.entities.serialize(), assetsUsed: [...new Set(a.entities.serialize().filter(e => e.prefab === 'asset').map(e => e.parameters.assetId))],
-      player: [r(a.player.pos.x), r(a.player.pos.z), r(a.player.yaw)] };
+      player: [r(a.player.pos.x), r(a.player.pos.z), r(a.player.yaw)], view: { grid: !!(a.grid && a.grid.on) } };
   }
   async load(d) {
     this.checkScene(d);
@@ -258,7 +258,7 @@ export class Core {
       a.spawn = Array.isArray(d.spawn) ? d.spawn.map(Number) : d.player ? [+d.player[0], +d.player[1], +d.player[2]] : a.defaultSpawn();
       if (d.player) { a.player.pos.set(+d.player[0], 0, +d.player[1]); a.player.yaw = +d.player[2]; } else a.player.pos.set(a.spawn[0], 0, a.spawn[1]);
       a.player.pos.y = a.player.groundAt(a.player.pos.x, a.player.pos.z); a.player.vel.set(0, 0, 0); a.phys && a.phys.teleport(a.player);
-      a.afterTerrain(true); this.hist = []; this.ptr = 0;
+      a.setGrid(!!(d.view && d.view.grid)); a.afterTerrain(true); this.hist = []; this.ptr = 0;
     } catch (e) { try { a.restoreScene(before); } catch (e2) { /* keep the original error */ } this.muted = false; throw e; }
     finally { this.muted = false; }
     this.emit('Loaded');
@@ -275,7 +275,11 @@ export class Core {
     for (const k of ['spawn', 'player']) if (d[k] != null && !(Array.isArray(d[k]) && d[k].length >= 2 && d[k].every(n => Number.isFinite(+n)))) throw new Error('The scene field "' + k + '" is invalid');
     return true;
   }
-  async autosave() { try { localStorage.setItem(KEY, JSON.stringify(await this.serialize())); this.a.ui && this.a.ui.saved(); } catch (e) { /* quota / private mode: ignore */ } }
+  async autosave(explicit) {
+    const a = this.a; let doc; try { doc = await this.serialize(); } catch (e) { return; }
+    try { localStorage.setItem(KEY, JSON.stringify(doc)); a.ui && a.ui.saved(); } catch (e) { /* quota / private mode: ignore */ }
+    if (a.project) { try { a.project = await a.projects.save(a.project.id, doc, { grid: a.grid ? a.grid.on : !!(a.project.view && a.project.view.grid) }); this.projectSaved = Date.now(); if (explicit) a.ui && a.ui.toast('Saved ' + a.project.name); } catch (e) { if (!this.saveWarned || explicit) { this.saveWarned = true; a.ui && a.ui.toast('Could not save the project: ' + e.message + '. Export the scene to keep it.'); } } }
+  }
   hasSave() { try { return !!(localStorage.getItem(KEY) || localStorage.getItem(OLD_KEY)); } catch (e) { return false; } }
   async restore() { try { const s = localStorage.getItem(KEY) || localStorage.getItem(OLD_KEY); if (!s) return false; await this.load(JSON.parse(s)); return true; } catch (e) { return false; } }
 }

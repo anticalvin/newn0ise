@@ -2040,7 +2040,8 @@ function setTab(id){
   if(id!=='mat'&&MS)MS.paintOff();
   if(BLD){if(id==='build')BLD.show();else BLD.off();}
   if(id==='mat'&&MS)MS.show();
-  if(id==='world'&&!S._wsChosen&&!S._wsBoot&&window.__wsShow&&!S.objs.some(o=>!(o.meta&&o.meta.player)))window.__wsShow();
+  /* World in 3D opens the Core workspace (one launcher). ?stay=1 comes back from Core: no launcher at all. The old start page stays reachable from its own buttons and as legacy labs. */
+  if(id==='world'&&!S._wsChosen&&!S._wsBoot&&window.__wsShow&&!S.objs.some(o=>!(o.meta&&o.meta.player))){if(/[?&]stay=1/.test(location.search)){S._wsChosen=true;}else{location.href='core.html?from=studio';return;}}
   if(id==='world'&&!S._plSpawn&&typeof ensurePlayer==='function'){S._plSpawn=1;ensurePlayer().then(()=>{S.needFrame=true;}).catch(()=>{});}
 }
 const TABIC={build:'<path d="M3 11 12 4l9 7M5 10v10h14V10M10 20v-6h4v6"/>',world:'<path d="M3 12a9 9 0 1 0 18 0 9 9 0 0 0-18 0M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/>',scene:'<path d="M12 3 3 8l9 5 9-5zM3 8v8l9 5 9-5V8M12 13v8"/>',draw:'<path d="M4 20c2-6 4-12 9-12 3 0 3 4 1 6-2 2-5 0-3-3M16 5l3 3"/>',scan:'<path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M4 12h16"/>',look:'<circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 0 0 16z" fill="currentColor"/>',mat:'<circle cx="12" cy="12" r="8"/><path d="M8 9.5a5 5 0 0 1 3.5-2.4M15.5 16.5a5 5 0 0 1-3 1.2"/>',export:'<path d="M12 15V4M7 9l5-5 5 5M5 15v4h14v-4"/>'};
@@ -3124,7 +3125,7 @@ if(NW&&paneEls.world){
       else if(ps.t==='enum'){chipRow(live,ps.opts.map(v=>[v,v]),v=>m.params[k]===v,v=>{NW.setParams(o,{[k]:v});window.__n0wRefresh();});}});
   };
 }
-if(/^#world/.test(location.hash)){S._wsChosen=true;setTab('world');worldEd.starter();}
+if(/^#world/.test(location.hash)){S._wsChosen=true;setTab('world');const pl=location.hash.match(/^#world:([\w-]+)/);if(pl)setTimeout(()=>loadPlace(pl[1]).catch(e=>toast(String(e.message||e),6000)),0);else worldEd.starter();}   // #world:photowalk etc. are the legacy places Core links to
 /* launch screen: the front door of 3D. Skipped when a link brings a picture or asks for the world builder. */
 {const L=document.getElementById('launch');
   if(L){const q=location.hash;

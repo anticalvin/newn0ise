@@ -913,7 +913,34 @@
         svg('circle',{cx:x,cy:y,r:3.4/zoom,class:'handle'});
       }
     }
+    if (gesture?.kind === 'rotate' && gesture.vis) drawTurn(gesture);
     syncHud();
+  }
+  /* while turning from a corner: the pivot, where the turn started, where it is now, the swept angle and a live readout */
+  function drawTurn(g) {
+    const {pivot} = g, {a,b,angle,total,snapped} = g.vis, k = 1/zoom;
+    const len = Math.hypot(a.x,a.y) || 1, r = Math.max(26*k,Math.min(len*.55,90*k)), a0 = Math.atan2(a.y,a.x), a1 = a0+angle*Math.PI/180;
+    const at = (t,rad = r) => ({x:pivot.x+Math.cos(t)*rad,y:pivot.y+Math.sin(t)*rad});
+    const tip = (v,rad) => { const m = Math.hypot(v.x,v.y) || 1; return {x:pivot.x+v.x/m*rad,y:pivot.y+v.y/m*rad}; };
+    const far = Math.max(len,Math.hypot(b.x,b.y),r+16*k)+10*k, cls = 'turn'+(snapped ? ' snap' : '');
+    const s0 = at(a0), s1 = at(a1);
+    if (Math.abs(angle) > .2) {
+      const full = Math.abs(angle) >= 359.5, large = Math.abs(angle) > 180 ? 1 : 0, sweep = angle > 0 ? 1 : 0;
+      const d = full ? `M ${pivot.x+r} ${pivot.y} A ${r} ${r} 0 1 1 ${pivot.x-r} ${pivot.y} A ${r} ${r} 0 1 1 ${pivot.x+r} ${pivot.y}`
+        : `M ${pivot.x} ${pivot.y} L ${s0.x} ${s0.y} A ${r} ${r} 0 ${large} ${sweep} ${s1.x} ${s1.y} Z`;
+      svg('path',{d,class:'turn-wedge'+(snapped ? ' snap' : '')});
+      const arc = `M ${s0.x} ${s0.y} A ${r} ${r} 0 ${large} ${sweep} ${s1.x} ${s1.y}`;
+      svg('path',{d:arc,class:'turn-halo'}); svg('path',{d:arc,class:cls+' arc'});
+    }
+    const o = tip(a,far), n = tip(b,far);
+    for (const [t,cl] of [[o,'turn-start'],[n,cls]]) { svg('line',{x1:pivot.x,y1:pivot.y,x2:t.x,y2:t.y,class:'turn-halo'}); svg('line',{x1:pivot.x,y1:pivot.y,x2:t.x,y2:t.y,class:cl}); }
+    for (let i = 0; i < 8; i++) { const t = i*Math.PI/4, p1 = at(t,r+4*k), p2 = at(t,r+(i%2 ? 8 : 12)*k); svg('line',{x1:p1.x,y1:p1.y,x2:p2.x,y2:p2.y,class:'turn-tick'}); }
+    svg('circle',{cx:pivot.x,cy:pivot.y,r:3.4*k,class:'turn-pivot'});
+    svg('circle',{cx:n.x,cy:n.y,r:4*k,class:'turn-pivot'});
+    const mid = a0+(angle*Math.PI/180)/2, lp = at(mid,r+26*k);
+    const label = svg('text',{x:lp.x,y:lp.y+4*k,'font-size':12*k,'stroke-width':3*k,'text-anchor':'middle'});
+    const shown = Math.round(((total%360)+540)%360-180);
+    label.textContent = (Math.round(angle*10)/10)+'°'+(Math.abs(Math.round(total)-Math.round(angle)) > 0 ? '  ·  '+shown+'°' : '');
   }
 
   /* floating controls for a phone: ratio lock while sizing, point tools while drawing or editing a vector */
@@ -1650,6 +1677,7 @@
           else g.snapAt = null;
         }
       }
+      if (g.kind === 'rotate') g.vis = {a,b,angle,total:g.items.length === 1 ? g.items[0].rotation+angle : angle,snapped:g.snapAt != null || (!e.altKey && (angular || e.shiftKey))};
       for (const item of g.items) {
         const pos = R.transform((item.x+w/2-pivot.x)*factor,(item.y+h/2-pivot.y)*factor,R.radians(angle));
         Object.assign(item.l,{x:round(pivot.x+pos.x-w/2),y:round(pivot.y+pos.y-h/2),
