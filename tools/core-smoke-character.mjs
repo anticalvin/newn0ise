@@ -130,7 +130,7 @@ t('core: the old World modes now live in Core (starter level, sandbox, proving g
   if(a.name!==name)return m+': scene name is '+a.name;const n=n0.exec({cmd:'entity.list'}).entities.length;if(n<6)return m+': only '+n+' entities';
   if(m==='sandbox'&&a.boulders.items.length<10)return 'sandbox: '+a.boulders.items.length+' boulders';
   const p=a.player.pos;if(!isFinite(p.x+p.y+p.z))return m+': player position not finite';}
- const html=await (await fetch('/index.html')).text();if(!/href="core.html"[^>]*id="d3"/.test(html))return 'the 3D door on the home page does not open Core';
+ const html=await (await fetch('/index.html')).text();if(!/href="studio.html"[^>]*id="d3"/.test(html))return 'the 3D door on the home page should open the 3D launcher';
  return true}`);
 
 t('core: photo walk frames, crops and keeps a roll; leaving restores the camera', '/core.html?start=blank', `async()=>{const a=n0.app,W=a.worldModes,wait=ms=>new Promise(r=>setTimeout(r,ms));localStorage.removeItem('n0.core.roll');
