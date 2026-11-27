@@ -11,6 +11,10 @@ float n0fbm5(vec2 p){float a=.5,s=0.;for(int i=0;i<5;i++){s+=a*n0noise(p);p=p*2.
 `;
 
 export const SKY_GLSL = /* glsl */`
+/* when the world is drawn into a post-processing target three leaves tone mapping to the output pass, so the fog colour is left linear here */
+#ifndef TONE_MAPPING
+vec3 toneMapping(vec3 c){ return c; }
+#endif
 uniform vec3 uSun; uniform float uCloud; uniform vec2 uCloudOff;
 vec3 n0Sky(vec3 d, float disc, float clouds){
   float sunh = uSun.y;

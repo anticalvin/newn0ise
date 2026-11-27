@@ -4,6 +4,8 @@ const GROUPS = [
   { id: 'surface', name: 'Surface', tools: [['sand', 'Sand'], ['rock', 'Rock'], ['grass', 'Grass']] },
   { id: 'nature', name: 'Nature', tools: [['palm', 'Palms'], ['erase', 'Erase'], ['boulder', 'Boulder']] },
   { id: 'place', name: 'Place', tools: [] },
+  { id: 'build', name: 'Build', tools: [] },
+  { id: 'scene', name: 'Scene', tools: [] },
   { id: 'sky', name: 'Sky & Sea', tools: [] },
 ];
 const SLIDERS = [['time', 'Time', 0, 24, 0.05, v => { const h = Math.floor(v), m = Math.floor((v - h) * 60); return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0'); }],
@@ -75,7 +77,7 @@ export class UI {
   showStart(hasSave) {
     const c = this.el('scards'), a = this.a; this.startOpen = true; this.el('start').classList.add('on');
     const card = (id, t, d, ic) => `<button class="scard" data-s="${id}"><i>${ic}</i><b>${t}</b><span>${d}</span></button>`;
-    c.innerHTML = card('blank', 'Blank', 'Flat land, a sky, a sun and a spawn point. Sculpt down and you reach the sea.', '\u25a1') + card('coast', 'Coast demo', 'COAST_001: an island with a beach, dunes, palms, a pier and a shack.', '\u25d0')
+    c.innerHTML = card('blank', 'Blank island', 'A flat round island in open sea, with a sky, a sun and a spawn point. Build on it or sculpt it.', '\u25a1') + card('coast', 'Coast demo', 'COAST_001: an island with a beach, dunes, palms, a pier and a shack.', '\u25d0')
       + card('world', 'South Africa', 'Real streets, buildings and traffic streamed from OpenStreetMap. Starts in Cape Town; open the map to go anywhere in the country.', '\u25ce') + card('import', 'Import', 'Open a .n0scene you saved, or a .n0world to place on the land.', '\u2191') + (hasSave ? card('continue', 'Continue', 'Pick up your last autosaved scene.', '\u21bb') : '');
     c.onclick = e => { const b = e.target.closest('[data-s]'); if (!b) return; const k = b.dataset.s;
       if (k === 'import') { this.el('file').onchange = async ev => { const f = ev.target.files[0]; ev.target.value = ''; if (!f) return; this.hideStart(); await a.start('blank'); await a.importFile(f); this.el('file').onchange = ev2 => { const g = ev2.target.files[0]; if (g) a.importFile(g); ev2.target.value = ''; }; }; this.el('file').click(); return; }
@@ -98,12 +100,16 @@ export class UI {
     if (m === 'edit') this.say(this.padOn ? 'RT apply · LT invert · LB/RB tools · Y back to Explore' : 'Drag to paint · right-drag orbit · shift-drag pan · [ ] radius', 6000); else this.say('Walk around · E to edit · / for the console', 5000); this.render(); }
   pad(on) { this.padOn = on; this.root.classList.toggle('padmode', on); const h = this.el('padhint'); h.innerHTML = on ? '<b>A</b> jump <b>X</b> boulder <b>Y</b> mode <b>B</b> undo <b>LB/RB</b> tool <b>RT</b> apply' : ''; }
   setGroup(i) { this.group = ((i % GROUPS.length) + GROUPS.length) % GROUPS.length; this.toolIdx = 0; for (const b of this.el('groups').children) b.classList.toggle('on', +b.dataset.g === this.group); this.render(); if (GROUPS[this.group].tools.length) this.a.setTool(GROUPS[this.group].tools[0][0]); if (!this.booting && this.a.mode === 'explore' && GROUPS[this.group].id !== 'sky' && GROUPS[this.group].id !== 'place') this.a.setMode('edit'); }
+  curGroupId() { return GROUPS[this.group].id; }
+  refreshPanel() { this.render(); }
   cycleGroup(d) { this.setGroup(this.group + d); }
   cycleTool(d) { const t = GROUPS[this.group].tools; if (!t.length) return; this.toolIdx = (this.toolIdx + d + t.length) % t.length; this.a.setTool(t[this.toolIdx][0]); this.render(); }
   pickToolIndex(n) { const all = GROUPS.flatMap((g, gi) => g.tools.map((t, ti) => [gi, ti])); const p = all[n]; if (!p) return; this.group = p[0]; this.toolIdx = p[1]; for (const b of this.el('groups').children) b.classList.toggle('on', +b.dataset.g === this.group); this.a.setTool(GROUPS[p[0]].tools[p[1]][0]); if (this.a.mode === 'explore') this.a.setMode('edit'); this.render(); }
   render() {
-    const g = GROUPS[this.group], p = this.el('panel'), a = this.a; p.innerHTML = '';
+    const g = GROUPS[this.group], p = this.el('panel'), a = this.a; p.innerHTML = ''; this.root.dataset.grp = g.id;
     if (g.id === 'place') { this.renderPlace(p); return; }
+    if (g.id === 'build' && a.editor) { a.editor.panelBuild(p); return; }
+    if (g.id === 'scene' && a.editor) { a.editor.panelScene(p); return; }
     if (g.id === 'sky') {
       p.className = 'panel sliders'; for (const [k, name, lo, hi, step, fmt] of SLIDERS) {
         const row = $(`<label><span>${name}</span><input type="range" min="${lo}" max="${hi}" step="${step}" value="${a.env.p[k]}"/><em>${fmt(a.env.p[k])}</em></label>`), inp = row.querySelector('input'), out = row.querySelector('em'); let before = null;

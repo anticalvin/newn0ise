@@ -55,7 +55,7 @@ export class Assets {
       const res = await fetch(m.url); if (!res.ok) throw Object.assign(new Error(`Could not load ${m.url} (${res.status}).`), { code: 'asset.load' });
       const buf = await res.arrayBuffer(); if (buf.byteLength > MAX_GLB) throw Object.assign(new Error(`${id} is ${(buf.byteLength / 1048576).toFixed(1)} MB; the limit is ${MAX_GLB / 1048576} MB.`), { code: 'asset.size' });
       const { GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js');
-      const gltf = await new GLTFLoader().parseAsync(buf, '');
+      const gltf = await new GLTFLoader().parseAsync(buf, String(m.url).replace(/[^/]*$/, ''));
       const root = gltf.scene; root.updateMatrixWorld(true);
       const b = new THREE.Box3().setFromObject(root), c = b.getCenter(new THREE.Vector3()), k = m.scale || 1;
       const wrap = new THREE.Group(); root.position.set(-c.x, -b.min.y, -c.z); wrap.add(root); wrap.scale.setScalar(k);

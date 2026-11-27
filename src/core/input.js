@@ -49,21 +49,25 @@ export class Input {
     });
     canvas.addEventListener('pointermove', e => {
       if (app.firstLight?.active) return;
-      this.ptr.x = e.clientX; this.ptr.y = e.clientY; this.ptr.in = true;
+      this.ptr.x = e.clientX; this.ptr.y = e.clientY; this.ptr.in = true; if (app.editor) app.editor.hover(e);
       const p = this.pointers.get(e.pointerId); if (!p) return;
       const dx = e.clientX - p.x, dy = e.clientY - p.y; p.x = e.clientX; p.y = e.clientY; p.moved += Math.abs(dx) + Math.abs(dy);
+      if (p.mode === 'shooter') { if (document.pointerLockElement !== this.canvas) app.shooter.look(dx, dy); return; }
       if (this.pointers.size >= 2) {
         const [a, b] = [...this.pointers.values()], d = Math.hypot(a.x - b.x, a.y - b.y);
         if (this.pinch) app.zoom(this.pinch / d); this.pinch = d; app.orbit(dx * 0.5, dy * 0.5); return;
       }
+      if (p.mode === 'editor') { app.editor.pointerMove(e); return; }
       if (p.mode === 'orbit') app.orbit(dx, dy); else if (p.mode === 'pan') app.pan(dx, dy);
     });
-    const up = e => { const p = this.pointers.get(e.pointerId); this.pointers.delete(e.pointerId); this.pinch = 0; if (p && p.mode === 'brush') this.endBrush(); if (this.pointers.size === 0 && e.pointerType !== 'mouse') this.ptr.in = false; };
+    const up = e => { const p = this.pointers.get(e.pointerId); this.pointers.delete(e.pointerId); this.pinch = 0; if (p && p.mode === 'brush') this.endBrush(); if (p && p.mode === 'editor') app.editor.pointerUp(e); if (this.pointers.size === 0 && e.pointerType !== 'mouse') this.ptr.in = false; };
     canvas.addEventListener('pointerup', up); canvas.addEventListener('pointercancel', up);
   }
   decide(e) {
     const a = this.app, p = this.pointers.get(e.pointerId);
-    if (this.pointers.size >= 2) { for (const q of this.pointers.values()) { if (q.mode === 'brush') this.endBrush(); q.mode = 'orbit'; } return; }
+    if (a.shooter && a.shooter.active) { p.mode = 'shooter'; return; }
+    if (this.pointers.size < 2 && a.editor && a.editor.pointerDown(e)) { p.mode = 'editor'; return; }
+    if (this.pointers.size >= 2) { if (a.editor) a.editor.cancel(); for (const q of this.pointers.values()) { if (q.mode === 'brush') this.endBrush(); q.mode = 'orbit'; } return; }
     if (a.mode === 'explore') { p.mode = 'orbit'; return; }
     if (e.button === 1 || (e.button === 0 && e.shiftKey)) p.mode = 'pan';
     else if (e.button === 2) p.mode = 'orbit';

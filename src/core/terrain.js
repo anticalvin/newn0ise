@@ -104,14 +104,15 @@ export class Terrain {
   }
 
   // ---- generation: island with a west-facing cove, sandy beach, dunes, hills and rocky flanks ----
-  // preset 'coast': the COAST_001 island. preset 'blank': flat land at BLANK_H with a shore around the rim, so sculpting down reaches the sea.
+  // preset 'coast': the COAST_001 island. preset 'blank': a round flat island at BLANK_H with a shore all round, so sculpting down reaches the sea.
   generate(seed, preset = 'coast') {
     this.seed = seed; this.preset = preset === 'blank' ? 'blank' : 'coast';
     const nz = makeNoise(seed), nz2 = makeNoise(seed + 99);
     if (this.preset === 'blank') {
       for (let j = 0; j < W; j++) for (let i = 0; i < W; i++) {
-        const x = (i / N - 0.5) * S, z = (j / N - 0.5) * S, e = Math.max(Math.abs(x), Math.abs(z));
-        this.h[j * W + i] = BLANK_H - 7.2 * smooth(96, 128, e) + 0.02 * nz.fbm(x * 0.15, z * 0.15, 2);
+        /* the blank scene is a round island: a flat top about 70 m across, a sandy shelf, then the sea. It always spawns on land with water all around it. */
+        const x = (i / N - 0.5) * S, z = (j / N - 0.5) * S, wob = 1 + 0.06 * nz.fbm(x * 0.02 + 4, z * 0.02, 2), e = Math.hypot(x, z) / wob;
+        this.h[j * W + i] = BLANK_H - 7.6 * smooth(52, 92, e) + 0.02 * nz.fbm(x * 0.15, z * 0.15, 2);
       }
       this.base.set(this.h); this.paint.fill(0); this.prints.fill(0);
       this.dirtyH = this.dirtyP = this.dirtyF = true; this.rev++; return;

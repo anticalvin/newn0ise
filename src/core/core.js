@@ -48,6 +48,8 @@ export class Core {
   on(fn) { this.listeners.add(fn); }
   emit(label) { this.listeners.forEach(f => f(label)); this.dirty(); }
   push(e) { this.hist.length = this.ptr; this.hist.push(e); this.ptr = this.hist.length; if (this.hist.length > LIMITS.undo) { this.hist.shift(); this.ptr--; } this.emit(e.label); }
+  // merge the last n history entries into one undo step (a room is a floor, four walls and a roof, and undoes as one)
+  group(n, label) { if (n < 2 || this.ptr < n) return; const es = this.hist.splice(this.ptr - n, n); this.ptr -= n; this.push({ label, undo: () => es.slice().reverse().forEach(e => e.undo()), redo: () => es.forEach(e => e.redo()) }); }
   canUndo() { return this.ptr > 0; } canRedo() { return this.ptr < this.hist.length; }
   undo() { if (!this.canUndo()) return { ok: false, msg: 'Nothing to undo' }; const e = this.hist[--this.ptr]; e.undo(); this.emit('Undo ' + e.label); return { ok: true, msg: 'Undid ' + e.label }; }
   redo() { if (!this.canRedo()) return { ok: false, msg: 'Nothing to redo' }; const e = this.hist[this.ptr++]; e.redo(); this.emit('Redo ' + e.label); return { ok: true, msg: 'Redid ' + e.label }; }
@@ -75,7 +77,7 @@ export class Core {
         case 'scene.new': {
           const preset = c.preset === 'coast' ? 'coast' : c.preset === 'blank' ? 'blank' : null; if (!preset) return { ok: false, msg: 'preset must be "blank" or "coast"' };
           const before = a.snapshot(); a.newScene(preset, num(c.seed, 101, 1, 99999)); this.pushScene('scene.new ' + preset, before, a.snapshot());
-          return { ok: true, msg: preset === 'blank' ? 'Blank scene' : 'Coast demo' };
+          return { ok: true, msg: preset === 'blank' ? 'Blank island' : 'Coast demo' };
         }
         case 'terrain.stroke': {
           const [x, z] = c.center || [c.x, c.z]; if (!Number.isFinite(+x) || !Number.isFinite(+z)) return { ok: false, msg: 'center [x,z] required' };
@@ -141,7 +143,7 @@ export class Core {
 
   // entity, asset and store commands. EntityError -> {ok:false, code, path, msg}; each mutation records exactly one undo entry.
   entityCmd(c) {
-    const a = this.a, E = a.entities, V3 = a.camera.position.constructor, BUILDABLE = k => !/^(prim\.|asset$)/.test(k);
+    const a = this.a, E = a.entities, V3 = a.camera.position.constructor, BUILDABLE = k => !/^(prim\.|asset$|build\.|model\.)/.test(k);
     try {
       switch (c.cmd) {
         case 'entity.list': return { ok: true, entities: E.list() };
@@ -249,7 +251,7 @@ export class Core {
     this.checkScene(d);
     const a = this.a, before = a.snapshot(); this.muted = true;   // a failed load puts the current scene back
     try {
-      await a.terrain.unpack(d.terrain); a.env.set(d.env || {}); a.name = d.name || (a.terrain.preset === 'blank' ? 'BLANK' : 'COAST_001');
+      await a.terrain.unpack(d.terrain); a.env.set(d.env || {}); a.name = d.name || (a.terrain.preset === 'blank' ? 'Blank island' : 'COAST_001');
       a.palms.items = (d.palms || []).map(([x, z, s, yaw]) => ({ x: +x, z: +z, s: +s, yaw: +yaw })); a.palms.rebuild();
       [...a.boulders.items].forEach(b => a.boulders.remove(b)); (d.boulders || []).forEach(([x, y, z, r, seed]) => a.boulders.add(+x, +y, +z, +r, seed | 0));
       a.entities.clear(); a.clearWorlds(); a.setPreset(a.terrain.preset);

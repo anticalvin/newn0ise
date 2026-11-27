@@ -126,7 +126,7 @@ t('character: strand hair styles grow, stay finite and stay out of the head', '/
  H.pose('A-pose');return true}`);
 
 t('core: the old World modes now live in Core (starter level, sandbox, proving ground)', '/core.html?start=blank', `async()=>{const a=n0.app,W=a.worldModes;if(!W)return 'no world modes';const wait=ms=>new Promise(r=>setTimeout(r,ms));
- for(const [m,name] of [['starter','Starter level'],['sandbox','Physics sandbox'],['proving','Proving ground']]){W[m]();await wait(400);
+ for(const [m,name] of [['starter','Starter island'],['sandbox','Physics sandbox'],['proving','Proving ground']]){W[m]();await wait(400);
   if(a.name!==name)return m+': scene name is '+a.name;const n=n0.exec({cmd:'entity.list'}).entities.length;if(n<6)return m+': only '+n+' entities';
   if(m==='sandbox'&&a.boulders.items.length<10)return 'sandbox: '+a.boulders.items.length+' boulders';
   const p=a.player.pos;if(!isFinite(p.x+p.y+p.z))return m+': player position not finite';}
@@ -156,3 +156,61 @@ t('first light: uses the character made in Character, or the reference one when 
  if(!an)return 'loader returned nothing';if(!/Your character/.test(msgs.join(' ')))return 'loader did not use the sent character: '+msgs.join(' | ');
  localStorage.removeItem('n0.core.character');const msgs2=[];await V.loadCharacter({onStatus:m=>msgs2.push(m)});if(!/Reference/.test(msgs2.join(' ')))return 'loader did not fall back to the reference character: '+msgs2.join(' | ');
  localStorage.removeItem('n0.core.autouse');return true}`);
+
+// ---- Core editor, building, weapons and the three test games ----
+t('core editor: the blank scene is a round island in open sea', '/core.html?start=blank', `async()=>{const a=n0.app,T=a.terrain,wl=a.water.level;
+ if(T.hAt(0,0)<wl+.5)return 'centre is not land ('+T.hAt(0,0)+')';
+ for(const [x,z] of [[110,0],[-110,0],[0,110],[0,-110],[100,100],[-100,-100]])if(T.hAt(x,z)>wl-.5)return 'no sea at '+x+','+z+' (height '+T.hAt(x,z)+')';
+ for(const [x,z] of [[40,0],[-40,10],[0,40],[0,-40]])if(T.hAt(x,z)<wl+.3)return 'island too small at '+x+','+z;
+ if(a.name!=='Blank island')return 'scene is called '+a.name;return true}`);
+
+t('core editor: rooms build as one undo step, props place with colliders, copy and delete work, saves round-trip', '/core.html?start=blank', `async()=>{const a=n0.app,ed=a.editor,c=n0.core,wait=ms=>new Promise(r=>setTimeout(r,ms));const y=a.terrain.hAt(0,0);
+ const ids=ed.createRoom({x:-4,y,z:-3},{x:4,y,z:3},{roof:true});if(!ids||ids.length!==6)return 'room made '+(ids&&ids.length)+' pieces';
+ const n=()=>n0.exec({cmd:'entity.list'}).entities.length;if(n()!==6)return 'entities '+n();
+ const cols=a.entities.colliders().length;if(cols<10)return 'only '+cols+' colliders for a room';
+ n0.exec({cmd:'undo'});if(n()!==0)return 'one undo should remove the whole room, '+n()+' left';c.redo();if(n()!==6)return 'redo lost pieces';
+ const r=await ed.place({key:'t',asset:'kenney.house.b'},{x:20,y:a.terrain.hAt(20,0),z:0},0);if(!r.ok)return 'place failed: '+r.msg;
+ const sz=a.assets.size('kenney.house.b');if(!(sz[0]>.5&&sz[1]>.5))return 'house size not measured '+sz;
+ const before=n();ed.select([r.entity.id]);const dup=ed.duplicate();if(dup.length!==1||n()!==before+1)return 'duplicate failed';
+ ed.remove();if(n()!==before)return 'delete failed';
+ const wall=ed.createWall({x:-10,y,z:10},{x:-4,y,z:10});if(!wall||!wall.ok)return 'wall failed';
+ const e1=n(),d=await c.serialize();await c.load(JSON.parse(JSON.stringify(d)));await wait(50);if(n()!==e1)return 'save round trip: '+n()+' vs '+e1;
+ const bad=n0.exec({cmd:'entity.create',prefab:'build.wall',parameters:{length:-1,material:'nope'}});if(bad.ok)return 'bad wall parameters were accepted';
+ return true}`);
+
+t('core weapons: bullets hit what they are aimed at, ammo and reload work, sights and bloom draw', '/core.html?start=range', `async()=>{const a=n0.app,S=a.shooter,G=a.game,wait=ms=>new Promise(r=>setTimeout(r,ms));
+ for(let i=0;i<60&&!(S.active&&S.targets.size&&S.modelSize);i++)await wait(250);if(!S.active)return 'shooter did not start';if(!S.modelSize)return 'weapon model did not load';
+ const ts=[...S.targets].sort((p,q)=>p.dist-q.dist);const t0=ts[0];S.aim(t0.pos);S.cameraUpdate();S.fireCd=0;const r=S.fire();if(!r||r.kind!=='target')return 'aimed shot missed: '+(r&&r.kind)+' '+JSON.stringify({cd:S.fireCd,rl:S.reloading,am:S.ammo.pistol,w:S.wid,act:S.active,why:S.why,shots:S.shots,tr:S.trigger,fired:S.fired,fps:a.fps});if(t0.alive)return 'target did not go down';
+ if(G.state().score<=0)return 'no score for a hit';
+ S.aim(new a.camera.position.constructor(0,10,-40));S.cameraUpdate();await wait(300);S.fireCd=0;const m=S.fire();if(!m||m.kind==='target')return 'sky shot should not hit a target';
+ const A=S.ammo.pistol;const mag=A.mag;for(let i=0;i<30&&A.mag>0;i++){S.fireCd=0;S.fire();}if(A.mag!==0)return 'mag did not empty ('+A.mag+')';
+ S.fireCd=0;S.fire();S.reload();for(let i=0;i<60;i++)S.update(0.05);if(A.mag!==12)return 'reload gave '+A.mag;
+ const ex=a.post.on;if(!ex)return 'bloom post is off while shooting';
+ S.adsHold=true;for(let i=0;i<30;i++)S.update(0.03);if(S.ads<.9)return 'aim down sights did not settle';
+ S.exit();if(a.post.on)return 'bloom stayed on after leaving';return true}`);
+
+t('core games: shooting range plays to the end', '/core.html?start=range', `async()=>{const a=n0.app,S=a.shooter,G=a.game,wait=ms=>new Promise(r=>setTimeout(r,ms));
+ for(let i=0;i<60&&!(S.active&&S.targets.size&&S.modelSize);i++)await wait(250);let kills=0;
+ for(let k=0;k<40;k++){const live=[...S.targets].filter(t=>t.alive);if(!live.length)break;live.sort((p,q)=>p.dist-q.dist);S.aim(live[0].pos);S.cameraUpdate();S.fireCd=0;S.spread=0;if(S.ammo[S.wid].mag<1){S.reload();S.reloading=0;S.ammo[S.wid].mag=12;}const h=S.fire();if(h&&h.kind==='target'&&!live[0].alive)kills++;G.update(0.1);}
+ if(kills<8)return 'only '+kills+' targets hit';const st=G.state();if(st.score<800)return 'score '+st.score;
+ G.update(70);G.update(0.1);if(!G.state().over)return 'time running out did not end the game';if(!G.result||G.result.score!==st.score&&G.result.score<st.score)return 'no result';
+ return true}`);
+
+t('core games: drone arena has waves, damage, pickups, a win and a loss', '/core.html?start=arena', `async()=>{const a=n0.app,S=a.shooter,G=a.game,wait=ms=>new Promise(r=>setTimeout(r,ms));
+ for(let i=0;i<80&&!(S.active&&G.targets().length>=5);i++)await wait(250);if(G.targets().length<5)return 'wave 1 did not spawn';
+ const hp0=G.state().health;for(let i=0;i<400;i++)G.update(0.1);if(!(G.state().health<hp0))return 'drones never hurt the player';if(!G.state().over||!/overrun/.test(G.result.title))return 'losing did not end the game: '+JSON.stringify(G.state());
+ return true}`);
+
+t('core games: arena can be won by shooting every drone', '/core.html?start=arena', `async()=>{const a=n0.app,S=a.shooter,G=a.game,wait=ms=>new Promise(r=>setTimeout(r,ms));
+ for(let i=0;i<80&&!(S.active&&S.modelSize&&G.targets().length>=5);i++)await wait(250);
+ for(let step=0;step<4000&&!G.state().over;step++){const live=G.targets().filter(t=>t.alive);if(live.length){live.sort((p,q)=>p.pos.distanceTo(a.player.pos)-q.pos.distanceTo(a.player.pos));S.aim(live[0].pos);S.cameraUpdate();S.fireCd=0;S.reloading=0;if(S.ammo[S.wid].mag<1)S.ammo[S.wid].mag=30;S.fire();}G.update(0.05);S.update(0.05);if(step%20===0)await wait(1);}
+ const st=G.state();if(!st.over||!/cleared/.test(G.result.title))return 'did not win: '+JSON.stringify(st);if(st.wave!==3)return 'wave '+st.wave;return true}`);
+
+t('core games: coin run platforms, collects and finishes at the flag', '/core.html?start=coins', `async()=>{const a=n0.app,G=a.game,wait=ms=>new Promise(r=>setTimeout(r,ms));
+ for(let i=0;i<80&&!(G.state().total);i++)await wait(250);const st=G.state();if(!st.total||st.total<6)return 'no coins ('+st.total+')';
+ const plats=n0.exec({cmd:'entity.list'}).entities.filter(e=>e.prefab==='asset').length;if(plats<8)return 'only '+plats+' platforms';
+ const P=a.player;for(const c of G.coinList()){P.pos.set(c.x,c.y-1,c.z);G.update(0.05);}
+ if(G.state().got!==st.total)return 'collected '+G.state().got+' of '+st.total;
+ const g=G.goalPos();P.pos.set(g.x,g.y,g.z);G.update(0.05);const s2=G.state();if(!s2.over||!/Flag/.test(G.result.title))return 'flag did not finish the game: '+JSON.stringify(s2);
+ return true}`);
+
