@@ -1,15 +1,17 @@
 // Simulation: fixed-step boulders (sphere vs heightfield) and the walkable player.
 // Fallback physics: used until Rapier has loaded (or if it cannot load). When phys.ready, Rapier (phys.js) owns the bodies and this file only owns the meshes.
 import * as THREE from 'three';
-import { makeBoulderMesh } from './nature.js';
+import { makeBoulderMesh, makeCrateMesh, makeBarrelMesh } from './nature.js';
 import { clamp, lerp } from './util.js';
 
 export class Boulders {
   constructor(scene, shared, terrain, water) { this.scene = scene; this.shared = shared; this.T = terrain; this.W = water; this.items = []; this.nextSeed = 11; this.splash = null; this.phys = null; }
-  add(x, y, z, r, seed = this.nextSeed++) {
-    const mesh = makeBoulderMesh(this.shared, r, seed); mesh.position.set(x, y, z); this.scene.add(mesh);
-    const b = { mesh, r, seed, p: mesh.position, v: new THREE.Vector3(), q: mesh.quaternion, sleep: 0, wasWet: false, id: 'b' + seed + '_' + this.items.length };
-    this.items.push(b); if (this.phys && this.phys.ready) this.phys.addBoulder(b); return b;
+  // kind: 'boulder' | 'crate' | 'barrel'. mass is explicit (kg) so heavy props drag and light ones throw. pp/cp/pq/cq are the previous/current fixed-step transforms for render interpolation.
+  add(x, y, z, r, seed = this.nextSeed++, kind = 'boulder') {
+    const mesh = kind === 'crate' ? makeCrateMesh(this.shared, r) : kind === 'barrel' ? makeBarrelMesh(this.shared, r) : makeBoulderMesh(this.shared, r, seed); mesh.position.set(x, y, z); this.scene.add(mesh);
+    const mass = kind === 'boulder' ? 45 * r ** 3 : kind === 'crate' ? 60 * (r / 0.5) ** 3 * 0.6 : 38 * (r / 0.5) ** 3 * 0.6;
+    const b = { mesh, kind, r, mass, seed, p: mesh.position, v: new THREE.Vector3(), q: mesh.quaternion, sleep: 0, wasWet: false, held: false, hitCd: 0, sp: 0, pp: new THREE.Vector3(), cp: new THREE.Vector3(), pq: new THREE.Quaternion(), cq: new THREE.Quaternion(), id: kind[0] + seed + '_' + this.items.length };
+    mesh.userData.prop = b; this.items.push(b); if (this.phys && this.phys.ready) this.phys.addBoulder(b); return b;
   }
   readd(b, x, y, z) { this.items.push(b); this.scene.add(b.mesh); b.p.set(x, y, z); b.v.set(0, 0, 0); b.sleep = 0; if (this.phys && this.phys.ready) this.phys.addBoulder(b); }
   remove(b) { const i = this.items.indexOf(b); if (i >= 0) { if (b.body && this.phys) this.phys.removeBoulder(b); this.items.splice(i, 1); this.scene.remove(b.mesh); b.mesh.geometry.dispose(); } }

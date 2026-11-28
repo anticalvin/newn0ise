@@ -26,7 +26,7 @@ return true}`);
 t('workspace: mode switch, workspace tools and dock groups','/core.html?start=blank',`async()=>{${W}
 click('#mode [data-m="edit"]');if(n0.app.mode!=='edit')return 'not edit';
 click('[data-workspace="Assets"]');if(n0.app.ui.group!==3)return 'Assets did not open Place';
-click('[data-workspace="Environment"]');if(n0.app.ui.group!==4)return 'Environment did not open Sky';
+click('[data-workspace="Environment"]');if(n0.app.ui.group!==6)return 'Environment did not open Sky';
 click('[data-workspace="World"]');if(n0.app.ui.group!==0)return 'World did not open Land';
 for(const k of ['raise','lower','smooth','flatten']){n0.app.setTool(k);}
 const h0=n0.app.terrain.hAt(0,0);n0.exec({cmd:'terrain.stroke',tool:'raise',center:[0,0],radius:8,strength:1,duration:1});if(!(n0.app.terrain.hAt(0,0)>h0))return 'terrain tool dead';

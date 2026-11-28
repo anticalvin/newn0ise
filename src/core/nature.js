@@ -140,3 +140,32 @@ export function makeBoulderMesh(shared, r, seed) {
   }, 'boulder');
   const m = new THREE.Mesh(g, mat); m.castShadow = true; m.receiveShadow = true; return m;
 }
+
+// ---- crates and barrels (dynamic props) ----
+let _crateTex = null, _barrelTex = null;
+function crateTexture() {
+  if (_crateTex) return _crateTex;
+  const c = document.createElement('canvas'); c.width = c.height = 256; const g = c.getContext('2d'), r = mulberry32(5);
+  g.fillStyle = '#6b5236'; g.fillRect(0, 0, 256, 256);
+  for (let i = 0; i < 5; i++) { const v = 0.85 + r() * 0.3; g.fillStyle = `rgb(${118 * v | 0},${90 * v | 0},${58 * v | 0})`; g.fillRect(14, 14 + i * 46, 228, 44);
+    g.strokeStyle = 'rgba(30,20,10,.35)'; for (let k = 0; k < 9; k++) { const y = 16 + i * 46 + r() * 40; g.beginPath(); g.moveTo(14, y); g.lineTo(242, y + (r() - .5) * 4); g.stroke(); } }
+  g.strokeStyle = '#2a1f14'; g.lineWidth = 14; g.strokeRect(7, 7, 242, 242); g.lineWidth = 12; g.beginPath(); g.moveTo(14, 14); g.lineTo(242, 242); g.moveTo(242, 14); g.lineTo(14, 242); g.stroke();
+  g.fillStyle = '#9a9a92'; for (const [x, y] of [[14, 14], [242, 14], [14, 242], [242, 242], [128, 128]]) { g.beginPath(); g.arc(x, y, 5, 0, 7); g.fill(); }
+  _crateTex = new THREE.CanvasTexture(c); _crateTex.colorSpace = THREE.SRGBColorSpace; _crateTex.anisotropy = 4; return _crateTex;
+}
+function barrelTexture() {
+  if (_barrelTex) return _barrelTex;
+  const c = document.createElement('canvas'); c.width = 128; c.height = 128; const g = c.getContext('2d'), r = mulberry32(9);
+  g.fillStyle = '#7a3a2a'; g.fillRect(0, 0, 128, 128);
+  for (let i = 0; i < 260; i++) { g.fillStyle = `rgba(${r() < .5 ? '40,20,12' : '150,90,60'},${.05 + r() * .1})`; g.fillRect(r() * 128, r() * 128, 1 + r() * 6, 1 + r() * 2); }
+  g.fillStyle = '#2b2b2c'; for (const y of [8, 56, 72, 120]) g.fillRect(0, y - 4, 128, 8);
+  _barrelTex = new THREE.CanvasTexture(c); _barrelTex.colorSpace = THREE.SRGBColorSpace; _barrelTex.wrapS = THREE.RepeatWrapping; _barrelTex.anisotropy = 4; return _barrelTex;
+}
+export function makeCrateMesh(shared, s) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(s * 2, s * 2, s * 2), patchStandard(new THREE.MeshStandardMaterial({ map: crateTexture(), roughness: 0.85 }), shared, {}, 'crate'));
+  m.castShadow = m.receiveShadow = true; return m;
+}
+export function makeBarrelMesh(shared, s) {
+  const g = new THREE.CylinderGeometry(s * 0.78, s * 0.78, s * 2.1, 20, 1), m = new THREE.Mesh(g, patchStandard(new THREE.MeshStandardMaterial({ map: barrelTexture(), roughness: 0.55, metalness: 0.55 }), shared, {}, 'barrel'));
+  m.castShadow = m.receiveShadow = true; return m;
+}

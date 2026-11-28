@@ -16,7 +16,7 @@ const srv=createServer(async(q,r)=>{try{const p=normalize(decodeURIComponent(q.u
 await new Promise(ok=>srv.listen(0,'127.0.0.1',ok));const base='http://127.0.0.1:'+srv.address().port;
 const prof=mkdtempSync(join(tmpdir(),'n0core-'));
 const proc=spawn(chrome,['--headless=new','--no-sandbox','--use-angle=swiftshader','--enable-unsafe-swiftshader','--ignore-gpu-blocklist','--remote-debugging-port=0','--user-data-dir='+prof,'--hide-scrollbars','--mute-audio','about:blank'],{stdio:'ignore'});
-let port=0;for(let i=0;i<80&&!port;i++){await new Promise(r=>setTimeout(r,250));try{port=+readFileSync(join(prof,'DevToolsActivePort'),'utf8').split('\n')[0];}catch(e){}}
+let port=0;for(let i=0;i<240&&!port;i++){await new Promise(r=>setTimeout(r,250));try{port=+readFileSync(join(prof,'DevToolsActivePort'),'utf8').split('\n')[0];}catch(e){}}
 if(!port){console.error('core-smoke: Chrome did not start.');proc.kill();process.exit(1);}
 const tab=await (await fetch(`http://127.0.0.1:${port}/json/new?about:blank`,{method:'PUT'})).json();
 const ws=new WebSocket(tab.webSocketDebuggerUrl);await new Promise(r=>ws.addEventListener('open',r));
@@ -47,6 +47,7 @@ const only=process.argv.slice(2).filter(a=>!a.startsWith('--'));
 const fs=await import('node:fs');let extra=[];
 try{const ex=await import('./core-smoke-extra.mjs');extra=ex.tests||[];}catch(e){}
 try{const wx=await import('./core-smoke-world.mjs');extra=extra.concat(wx.tests||[]);}catch(e){}
+try{const lv=await import('./core-smoke-living.mjs');extra=extra.concat(lv.tests||[]);}catch(e){}
 try{const ww=await import('./core-smoke-workspace.mjs');extra=extra.concat(ww.tests||[]);}catch(e){}
 try{const sx=await import('./core-smoke-studio.mjs');extra=extra.concat(sx.tests||[]);}catch(e){}
 try{const fl=await import('./core-smoke-firstlight.mjs');extra=extra.concat(fl.tests||[]);}catch(e){}
@@ -58,7 +59,7 @@ for(const [name,url,body] of T){
   await open(url);
   let r=await ev('('+body+')()');
   if(r===true&&errors.length)r='console errors: '+errors[0];
-  console.log((r===true?'  ok   ':'  FAIL ')+name+(r===true?'':'  → '+r));if(r!==true)fail++;
+  console.log((r===true?'  ok   ':'  FAIL ')+name+(r===true?'':'  → '+r)+(r!==true&&errors.length?'  [page error: '+errors[0]+']':''));if(r!==true)fail++;
 }
 /* screenshots of the store (software GL; for a human to look at, not asserted): node tools/core-smoke.mjs --shots */
 if(process.argv.includes('--shots')){
