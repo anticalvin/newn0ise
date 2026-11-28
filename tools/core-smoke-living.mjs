@@ -5,7 +5,7 @@ const H="const wait=ms=>new Promise(r=>setTimeout(r,ms));await wait(700);const a
 
 for(const [nm,url] of [['blank','/core.html?start=island'],['coast','/core.html?start=coast'],['lab','/core.html?start=lab']])
 t('living: '+nm+' starts clean with the player as an Actor',url,`async()=>{${H}
-if(!(P.isPlayer&&typeof P.tryAttack==='function'&&P.character))return 'player is not an Actor';if(!a.phys.ready)return 'physics '+a.phys.error;if(a.inputOwner()!=='play')return 'owner '+a.inputOwner();
+if(!(P.isPlayer&&typeof P.tryAttack==='function'&&P.character))return 'player is not an Actor';if(!a.phys.ready)return 'physics '+a.phys.error;if(a.session.owner()!=='play')return 'owner '+a.session.owner();
 step(90);if(!P.onGround)return 'player not standing after 1.5 s';if(!(a.character&&a.character===P.character))return 'app.character not the actor character';
 if('${nm}'==='coast'){if(C.enemies().length!==2)return 'coast fighters '+C.enemies().length;if(!a.boulders.items.some(b=>b.kind==='crate')||!a.boulders.items.some(b=>b.kind==='barrel'))return 'coast props missing'}
 if('${nm}'==='blank'&&(C.enemies().length||a.boulders.items.length))return 'blank not empty';

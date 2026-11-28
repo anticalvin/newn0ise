@@ -5,7 +5,7 @@ Source: CORE_ENGINE_PLAN and the master prompt. One PR per phase step. Status wo
 | Phase | Outcome | Status |
 |---|---|---|
 | 0 Stabilise | Vendor three + Rapier (offline), delete `.bak`/junk, docs truth pass, cycle check, test runner | **Partial** (see ledger) |
-| 1 Spine | Session, InputStack, Systems, component schemas, merge duplicate weapons/vehicle/terrain/UI | Planned |
+| 1 Spine | Session, InputStack, Systems, component schemas, merge duplicate weapons/vehicle/terrain/UI | **Partial** (step 1: Session, InputStack, Systems landed; see ledger) |
 | 2 Projects, storage, export | Project manifest, IndexedDB/OPFS, `.n0project`, export player | Planned |
 | 3 Gameplay as data | Rules, triggers, spawners, HUD widgets, templates | Planned |
 | 4 Characters and AI | AnimationMixer, skinned characters, ragdoll, navmesh | Planned |
@@ -25,6 +25,20 @@ Source: CORE_ENGINE_PLAN and the master prompt. One PR per phase step. Status wo
 | Remove `sim.js` / `simlite.js` fallback | **Planned**: `simlite.js` still provides `Boulders`; removal needs a parity port first |
 | Archive prototypes to `archive/`, tag `pre-core2` | **Planned** |
 | Unused-export scan and dead-code removal | **Planned** |
+
+## Phase 1 ledger
+| Item | Status |
+|---|---|
+| `session.js`: Session (state boot/menu/edit/play/pause/result), InputStack, Systems | Done |
+| `inputOwner()` deleted; every caller uses `app.session.owner()` | Done |
+| Input ownership pushed/popped at the activation sites: modal sheets (DOM watcher), first-light host, geo world, first-person shooter, car (vehicle) | Done |
+| Fixed step is an ordered system list (control, grab, weapons, combat, rules, physics, aim, vehicle) with enable flags and `?debug=1` per-system timing | Done |
+| Remaining systems from the plan (character, pickups, ai, camera, audio, vfx, ui) as separate fixed-step systems | Planned: character, pickups and ai still run inside `combat`/`rules`; camera, audio, vfx and ui run per frame, not in the list |
+| Mode flags removed (`shooter.active`, `firstLight.active`, `geo.active`, `lv`, arena) | **Planned**: these remain as each module's own bookkeeping and about 40 places still read them. Input ownership no longer depends on them |
+| One shared rebindable binding table (keyboard, mouse, touch, gamepad) | Planned: bindings are still in `input.js` |
+| Prefab parameter schemas and components (details panel, console help, `describe` derived from them) | Planned |
+| Merge weapons (`weapons.js` + `guns.js`), vehicles, terrain services, `ui.js` + `workspace-ui.js`, CharacterRig interface | Planned |
+| Existing modes run through Session with parity tests | Partial: Blank level, Coast, island and first-person checked by the level and living test groups; World, First Light and the shooter games were not re-run |
 
 ## Known failing tests (both fail on `main` before this PR)
 - `level: the player walks up a ramp and up stairs`: approaching the stair block from +z the player stops at the first step; best climb 1.38 m of 2 m. Real bug, not yet fixed.

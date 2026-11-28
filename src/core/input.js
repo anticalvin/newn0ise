@@ -26,7 +26,7 @@ export class Input {
       if (mod || e.altKey) return;
       if (e.repeat) { if (k === ' ' || k === 'tab') e.preventDefault(); return; }
       app.fx && app.fx.unlock();
-      const play = app.inputOwner() === 'play';   // one owner at a time: modal > first light > fps > geo > editor > play
+      const play = app.session.owner() === 'play';   // one owner at a time: the top of the session's input stack
       if (play && e.key === 'Escape' && app.mode === 'explore' && app.level) { e.preventDefault(); app.setMode('edit'); return; }
       if (play && app.guns && !app.geo.active && !e.repeat && app.mode === 'explore' && (k === 'x' || k === 'r' || k === '1' || k === '2' || k === '3')) { const G = app.guns; if (k === 'x') G.equip(null); else if (k === 'r') G.reload(); else G.equip(['pistol', 'rifle', 'shotgun'][+k - 1]); return; }
       if (play && e.key === 'Tab') { e.preventDefault(); app.combat.toggleLock(); return; }
@@ -78,7 +78,7 @@ export class Input {
     const a = this.app, p = this.pointers.get(e.pointerId);
     if (a.shooter && a.shooter.active) { p.mode = 'shooter'; return; }
     // an armed player: the left mouse button fires instead of punching or grabbing (holster with X to punch and grab again)
-    if (a.mode === 'explore' && a.guns && a.guns.cur && a.player && a.player.alive && !a.driving && !a.geo.active && e.button === 0 && e.pointerType === 'mouse' && a.inputOwner() === 'play') { p.mode = 'fire'; a.guns.firing = true; this.edge.punch = true; return; }
+    if (a.mode === 'explore' && a.guns && a.guns.cur && a.player && a.player.alive && !a.driving && !a.geo.active && e.button === 0 && e.pointerType === 'mouse' && a.session.owner() === 'play') { p.mode = 'fire'; a.guns.firing = true; this.edge.punch = true; return; }
     if (this.pointers.size < 2 && a.editor && a.editor.pointerDown(e)) { p.mode = 'editor'; return; }
     if (this.pointers.size >= 2) { if (a.editor) a.editor.cancel(); for (const q of this.pointers.values()) { if (q.mode === 'brush') this.endBrush(); q.mode = 'orbit'; } return; }
     const ndc = this.cursorNdc(new a.ndcClass());

@@ -23,8 +23,8 @@ game.js            three hardcoded mini-games
 - three 0.187.0 and Rapier 0.14.0 are **vendored**: `tools/build.mjs` bundles them (wasm embedded) into `assets/core.js`. `core.html` has no import map and loads nothing from a CDN for the engine. Optional online features (Poly Haven browser, Sketchfab) still need a network and say so.
 - `node tools/check-cycles.mjs` fails the build on circular imports in `src/core`.
 
-## Target spine (Planned, Phase 1)
-Session (Boot, Menu, Edit, Play, Pause, Result) owns InputStack and an ordered Systems list; prefabs declare components and parameter schemas. Not built yet.
+## Spine (Phase 1, partly built)
+`session.js`: `app.session` holds the state, the `InputStack` (modal, firstlight, fps, geo, vehicle over a base of edit or play; the top owns input, `session.owner()`) and the ordered fixed-step `Systems` list (`control, grab, weapons, combat, rules, physics, aim, vehicle`). `?debug=1` shows state, stack and per-system ms. Prefab component and parameter schemas are not built yet.
 
 ## Module sizes and fan-in (generated 2026-11-28)
 | module | size | imported by |
