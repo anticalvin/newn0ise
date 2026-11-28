@@ -21,6 +21,7 @@ import { readWorld, buildWorld, flatSpot, collidersFor } from './world.js';
 import { Core, LIMITS } from './core.js';
 import { Input } from './input.js';
 import { Session } from './session.js';
+import { coreTerrainService, geoTerrainService, activeGround } from './terrainservice.js';
 import { FX } from './fx.js';
 import { CamRig } from './camera.js';
 import { Grab } from './grab.js';
@@ -233,6 +234,7 @@ const app = {
   importScene(f) { return this.importFile(f); },
   newIsland() { core.exec({ cmd: 'terrain.reset', seed: Math.floor(Math.random() * 90000) + 100 }); ui.toast('New terrain'); ui.updHist(); },
 };
+{ const cg = coreTerrainService(app); let gg = null; Object.defineProperty(app, 'ground', { get() { return activeGround(app, cg, gg || (gg = geoTerrainService(app.geo))); } }); }   // TerrainService: app.ground.heightAt / normalAt / materialAt
 app.session = new Session(app); app.session.input.base(app.mode === 'explore' ? 'play' : 'edit');   // one object owns the running game: input stack, ordered systems, state
 app.envChildren = envChildren; app.shared = shared; app.assets = new Assets(shared); app.entities = new Entities(app); app.dyn = new DynEnts(app); const entities = app.entities; app.entities.register('retail.convenience', retailPrefab);
 const core = new Core(app); app.core = core; const ui = new UI(app); app.ui = ui; const input = new Input(app, canvas); app.input = input;
