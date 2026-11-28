@@ -1,0 +1,86 @@
+{
+ "format": "n0ise.project",
+ "version": 1,
+ "name": "Vehicle yard",
+ "template": "driving",
+ "startScene": {
+  "route": "blank",
+  "commands": [
+   {
+    "cmd": "entity.create",
+    "prefab": "build.ramp",
+    "position": [
+     0,
+     0,
+     -14
+    ],
+    "parameters": {
+     "size": [
+      6,
+      2,
+      10
+     ]
+    }
+   },
+   {
+    "cmd": "entity.create",
+    "prefab": "build.block",
+    "position": [
+     12,
+     0,
+     -8
+    ],
+    "parameters": {
+     "size": [
+      4,
+      1,
+      4
+     ]
+    }
+   },
+   {
+    "cmd": "entity.create",
+    "prefab": "build.cylinder",
+    "position": [
+     -10,
+     0,
+     -6
+    ]
+   },
+   {
+    "cmd": "entity.create",
+    "prefab": "vehicle.car",
+    "position": [
+     0,
+     0,
+     6
+    ]
+   },
+   {
+    "cmd": "entity.create",
+    "prefab": "spawn.player",
+    "position": [
+     4,
+     0,
+     8
+    ]
+   }
+  ]
+ },
+ "scenes": [],
+ "assets": [],
+ "rules": {},
+ "tests": {
+  "checks": [
+   "boots"
+  ]
+ },
+ "seed": {
+  "status": "experimental",
+  "systems": [
+   "physics",
+   "vehicle"
+  ],
+  "about": "A car, a ramp, a block and a cylinder on the grid floor. Press F to drive."
+ }
+}

@@ -1,0 +1,27 @@
+{
+ "format": "n0ise.project",
+ "version": 1,
+ "name": "Coast demo",
+ "template": "third-person",
+ "startScene": {
+  "route": "coast",
+  "commands": []
+ },
+ "scenes": [],
+ "assets": [],
+ "rules": {},
+ "tests": {
+  "checks": [
+   "boots"
+  ]
+ },
+ "seed": {
+  "status": "ready",
+  "systems": [
+   "physics",
+   "character",
+   "combat"
+  ],
+  "about": "Sculptable island with beach props, crates, a dummy and a brawler."
+ }
+}

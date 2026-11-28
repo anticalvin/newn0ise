@@ -1,0 +1,26 @@
+{
+ "format": "n0ise.project",
+ "version": 1,
+ "name": "Proving ground",
+ "template": "sandbox",
+ "startScene": {
+  "route": "proving",
+  "commands": []
+ },
+ "scenes": [],
+ "assets": [],
+ "rules": {},
+ "tests": {
+  "checks": [
+   "boots"
+  ]
+ },
+ "seed": {
+  "status": "ready",
+  "systems": [
+   "physics",
+   "character"
+  ],
+  "about": "Test course for movement."
+ }
+}

@@ -1,0 +1,30 @@
+{
+ "format": "n0ise.project",
+ "version": 1,
+ "name": "Blank level",
+ "template": "level",
+ "startScene": {
+  "route": "blank",
+  "commands": []
+ },
+ "scenes": [],
+ "assets": [],
+ "rules": {},
+ "tests": {
+  "checks": [
+   "boots"
+  ]
+ },
+ "seed": {
+  "status": "ready",
+  "systems": [
+   "physics",
+   "character",
+   "combat",
+   "weapons",
+   "vehicle",
+   "rules"
+  ],
+  "about": "Empty grid floor: build a level and Play it."
+ }
+}

@@ -18,7 +18,7 @@ export function createCoreApi(app) {
       }
       case 'camera': { const cam = app.cam; if (c.mode === 'edit' || c.mode === 'explore') app.setMode(c.mode); if (Number.isFinite(+c.yaw)) cam.yaw = +c.yaw; if (Number.isFinite(+c.pitch)) cam.pitch = Math.min(1.45, Math.max(0.03, +c.pitch)); if (Number.isFinite(+c.dist)) cam.dist = Math.min(160, Math.max(2, +c.dist));
         if (Array.isArray(c.target) && app.mode === 'edit') cam.target.set(+c.target[0], app.terrain.hAt(+c.target[0], +c.target[1]), +c.target[1]); return { mode: app.mode, yaw: cam.yaw, pitch: cam.pitch, dist: cam.dist }; }
-      default: return out(core.exec(c));
+      default: { let r = core.exec(c); if (r && typeof r.then === 'function') r = await r; return out(r); }
     }
   }
   return { run };

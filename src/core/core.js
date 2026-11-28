@@ -5,6 +5,7 @@ import { clamp } from './util.js';
 
 import { EntityError } from './entities.js';
 import { helpText } from './schema.js';
+import { putAutosave, getAutosave } from './projectstore.js';
 import { COMMANDS as GEO_COMMANDS } from './geo/manager.js';
 
 export const FORMAT = 'n0ise.core.scene', VERSION = 4;
@@ -29,6 +30,12 @@ export const COMMANDS = {
   'level.stop': 'Stop Play and return to the editor. Runtime state never reaches the saved entities.',
   'level.new': '{} → an empty Blank level (grid floor, sky, nothing else).',
   'level.sample': '{} → place a small sample level (stairs, ramp, crates, pickups, fighters, a car) as one undo step.',
+  'project.list': '{} → Promise: the shipped seed projects and your saved projects.',
+  'project.save': '{name} → Promise: save the current scene as a named project (IndexedDB).',
+  'project.open': '{id} → Promise: open a saved or seed project.',
+  'project.delete': '{id} → Promise: delete a saved project.',
+  'project.export': '{id} → Promise: download a saved project as .n0project (zip).',
+  'project.exportPlayer': '{name?} → Promise: download the current scene as one self-contained HTML game that runs offline with no editor.',
   'level.save': '{} → the level as a .n0level.json document (n0ise.level v2: the entity records).',
   'level.load': '{doc} → replace the entities with a .n0level.json document (v1 prototype files and v2). Fails with a list of what could not be placed.',
   'actor.spawn': `{kind?:"brawler"|"heavy"|"dummy", x, z, yaw?} → a melee fighter (max ${LIMITS.fighters}). Fighters use the same body, controller and attacks as the player.`,
@@ -149,6 +156,10 @@ export class Core {
         case 'level.stop': a.lv.stop(); return { ok: true, msg: 'Stopped' };
         case 'level.new': return this.exec({ cmd: 'scene.new', preset: 'blank' });
         case 'level.sample': { const n = a.sampleLevel(); return { ok: true, msg: n + ' objects placed' }; }
+        case 'project.list': case 'project.save': case 'project.open': case 'project.delete': case 'project.export': case 'project.exportPlayer': {
+          const P = a.projects, run = c.cmd === 'project.list' ? P.list() : c.cmd === 'project.save' ? P.save(c.name, c.id) : c.cmd === 'project.open' ? P.open(String(c.id || '')) : c.cmd === 'project.delete' ? P.remove(String(c.id || ''))
+            : c.cmd === 'project.export' ? P.exportZip(String(c.id || '')) : this.serialize().then(doc => P.exportPlayer({ name: c.name, scene: doc, download: c.download, returnHtml: c.returnHtml }));
+          return run.catch(e => ({ ok: false, msg: String(e.message || e) })); }
         case 'level.save': return { ok: true, doc: a.lv.exportDoc(), msg: 'Level exported' };
         case 'level.load': { const r = a.lv.importDoc(c.doc); if (!r.ok) return r; a.lv.end(); a.entities.clear(); const bad = [...r.probs]; for (const sp of r.specs) { try { a.entities.create(sp); } catch (e) { bad.push((sp.id || sp.prefab) + ': ' + e.message); } } this.hist = []; this.ptr = 0; this.emit('Level loaded'); a.ui.render(); if (a.mode === 'explore') a.lv.start(); return { ok: true, msg: a.entities.size + ' placed' + (bad.length ? ', ' + bad.length + ' skipped: ' + bad.slice(0, 3).join('; ') : ''), skipped: bad }; }
         case 'actor.spawn': {
@@ -317,7 +328,14 @@ export class Core {
     for (const k of ['spawn', 'player']) if (d[k] != null && !(Array.isArray(d[k]) && d[k].length >= 2 && d[k].every(n => Number.isFinite(+n)))) throw new Error('The scene field "' + k + '" is invalid');
     return true;
   }
-  async autosave() { if (this.noSave) return; try { localStorage.setItem(KEY, JSON.stringify(await this.serialize())); this.a.ui && this.a.ui.saved(); } catch (e) { /* quota / private mode: ignore */ } }
-  hasSave() { try { return !!(localStorage.getItem(KEY) || localStorage.getItem(OLD_KEY)); } catch (e) { return false; } }
-  async restore() { try { const s = localStorage.getItem(KEY) || localStorage.getItem(OLD_KEY); if (!s) return false; await this.load(JSON.parse(s)); return true; } catch (e) { return false; } }
+  // Autosave goes to localStorage when it fits and to IndexedDB (no 5 MB limit) when it does not. Failures are shown, not swallowed.
+  async autosave() {
+    if (this.noSave) return; const doc = await this.serialize(), ui = this.a.ui; let s;
+    try { s = JSON.stringify(doc); } catch (e) { ui && ui.toast('Autosave failed: the scene could not be written (' + e.message + ').'); return; }
+    try { localStorage.setItem(KEY, s); try { localStorage.removeItem(KEY + '.idb'); } catch (e) { /* ignore */ } ui && ui.saved(); return; } catch (e) { /* too big for localStorage: fall through to IndexedDB */ }
+    try { await putAutosave(doc); try { localStorage.removeItem(KEY); localStorage.setItem(KEY + '.idb', '1'); } catch (e) { /* the flag is best effort */ } ui && ui.saved(); }
+    catch (e) { if (!this.saveWarned) { this.saveWarned = true; ui && ui.toast('Autosave failed: ' + (e.message || e) + ' Export the scene to keep your work.'); } }
+  }
+  hasSave() { try { return !!(localStorage.getItem(KEY) || localStorage.getItem(KEY + '.idb') || localStorage.getItem(OLD_KEY)); } catch (e) { return false; } }
+  async restore() { try { let s = localStorage.getItem(KEY) || localStorage.getItem(OLD_KEY), doc = null; if (s) doc = JSON.parse(s); else if (localStorage.getItem(KEY + '.idb')) doc = await getAutosave(); if (!doc) return false; await this.load(doc); return true; } catch (e) { return false; } }
 }

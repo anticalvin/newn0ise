@@ -1,0 +1,25 @@
+{
+ "format": "n0ise.project",
+ "version": 1,
+ "name": "Shooting range",
+ "template": "fps",
+ "startScene": {
+  "route": "range",
+  "commands": []
+ },
+ "scenes": [],
+ "assets": [],
+ "rules": {},
+ "tests": {
+  "checks": [
+   "boots"
+  ]
+ },
+ "seed": {
+  "status": "ready",
+  "systems": [
+   "weapons"
+  ],
+  "about": "First-person range with targets."
+ }
+}
