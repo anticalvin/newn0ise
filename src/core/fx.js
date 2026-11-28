@@ -56,32 +56,79 @@ export class FX {
     for (const m of this.rings) { const u = m.userData; if (u.t > 0.35) { m.visible = false; continue; } u.t += dt; const k = u.t / 0.35; m.scale.setScalar((0.25 + k * 1.1) * u.s); m.material.opacity = (1 - k) * 0.85; m.quaternion.copy(this.camera.quaternion); }
   }
   // ---- sound ----
-  unlock() { if (!this.audio) { try { this.audio = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { /* no audio */ } } if (this.audio && this.audio.state === 'suspended') this.audio.resume(); }
-  noise(dur, f0, f1, q, vol) {
-    const c = this.audio, n = c.sampleRate * dur | 0, buf = c.createBuffer(1, n, c.sampleRate), d = buf.getChannelData(0); for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n) ** 2;
-    const s = c.createBufferSource(); s.buffer = buf; const f = c.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = q; f.frequency.setValueAtTime(f0, c.currentTime); f.frequency.exponentialRampToValueAtTime(f1, c.currentTime + dur);
-    const g = c.createGain(); g.gain.value = vol; s.connect(f); f.connect(g); g.connect(c.destination); s.start();
+  // A small synth engine: everything goes through one master bus (soft compressor + a short generated room reverb), voices get random pitch and
+  // level so repeats never sound identical, and positional sounds are panned and attenuated against the camera. No audio files.
+  unlock() {
+    if (!this.audio) { try { this.audio = new (window.AudioContext || window.webkitAudioContext)(); this.bus(); } catch (e) { /* no audio */ } }
+    if (this.audio && this.audio.state === 'suspended') this.audio.resume();
   }
-  tone(type, f0, f1, dur, vol) {
-    const c = this.audio, o = c.createOscillator(), g = c.createGain(), t = c.currentTime; o.type = type; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t + dur);
-    g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur); o.connect(g); g.connect(c.destination); o.start(); o.stop(t + dur + 0.02);
+  bus() {
+    const c = this.audio; this.out = c.createGain(); this.out.gain.value = this.vol != null ? this.vol : 0.9;
+    const comp = c.createDynamicsCompressor(); comp.threshold.value = -14; comp.knee.value = 18; comp.ratio.value = 5; comp.attack.value = 0.003; comp.release.value = 0.18;
+    this.rev = c.createConvolver(); const n = (c.sampleRate * 1.1) | 0, ib = c.createBuffer(2, n, c.sampleRate);
+    for (let ch = 0; ch < 2; ch++) { const d = ib.getChannelData(ch); for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 3.2); }
+    this.rev.buffer = ib; this.revG = c.createGain(); this.revG.gain.value = 0.2; this.out.connect(comp); comp.connect(c.destination); this.out.connect(this.rev); this.rev.connect(this.revG); this.revG.connect(comp);
   }
-  play(kind, vol = 1) {
-    if (!this.sound || !this.audio || this.audio.state !== 'running') return; const v = Math.min(1, vol);
+  // route for one voice: optional world position => pan + distance falloff
+  dest(pos, vol) {
+    const c = this.audio; if (!pos) return { node: this.out, vol };
+    const cam = this.camera, dx = pos.x - cam.position.x, dy = pos.y - cam.position.y, dz = pos.z - cam.position.z, d = Math.hypot(dx, dy, dz);
+    const right = new THREE.Vector3(1, 0, 0).applyQuaternion(cam.quaternion), pan = Math.max(-1, Math.min(1, (dx * right.x + dy * right.y + dz * right.z) / Math.max(1, d) * 0.9));
+    const v = vol / (1 + d * d * 0.012); if (v < 0.01) return null;
+    const p = c.createStereoPanner ? c.createStereoPanner() : null; if (p) { p.pan.value = pan; p.connect(this.out); return { node: p, vol: v }; } return { node: this.out, vol: v };
+  }
+  // filtered noise burst with an attack/decay envelope and a moving band
+  noise(dur, f0, f1, q, vol, o = {}) {
+    const c = this.audio, t0 = c.currentTime + (o.delay || 0), n = Math.max(8, c.sampleRate * dur | 0), buf = c.createBuffer(1, n, c.sampleRate), d = buf.getChannelData(0), pw = o.pow || 2;
+    for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, pw);
+    const s = c.createBufferSource(); s.buffer = buf; const f = c.createBiquadFilter(); f.type = o.type || 'bandpass'; f.Q.value = q; f.frequency.setValueAtTime(f0, t0); f.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t0 + dur);
+    const g = c.createGain(); g.gain.setValueAtTime(0.0001, t0); g.gain.linearRampToValueAtTime(vol * (o.gain || 1), t0 + (o.atk || 0.002)); g.gain.exponentialRampToValueAtTime(0.0008, t0 + dur);
+    s.connect(f); f.connect(g); g.connect(o.node || this.out); s.start(t0);
+  }
+  tone(type, f0, f1, dur, vol, o = {}) {
+    const c = this.audio, t = c.currentTime + (o.delay || 0), os = c.createOscillator(), g = c.createGain(); os.type = type; os.frequency.setValueAtTime(f0, t); os.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t + dur);
+    g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(vol, t + (o.atk || 0.003)); g.gain.exponentialRampToValueAtTime(0.0008, t + dur); os.connect(g); g.connect(o.node || this.out); os.start(t); os.stop(t + dur + 0.03);
+  }
+  play(kind, vol = 1, pos = null) {
+    if (!this.sound || !this.audio || this.audio.state !== 'running') return;
+    const r = this.dest(pos, Math.min(1.4, vol)); if (!r) return; const v = r.vol * (0.88 + Math.random() * 0.24), k = 0.93 + Math.random() * 0.14, node = r.node;
+    const N = (d, a, b, q, m, o) => this.noise(d, a * k, b * k, q, m * v, { node, ...o }), T = (ty, a, b, d, m, o) => this.tone(ty, a * k, b * k, d, m * v, { node, ...o });
     switch (kind) {
-      case 'punch': this.noise(0.09, 1800, 500, 0.8, 0.5 * v); this.tone('sine', 170, 55, 0.13, 0.55 * v); break;
-      case 'kick': this.noise(0.13, 1200, 300, 0.7, 0.6 * v); this.tone('sine', 120, 38, 0.22, 0.7 * v); break;
-      case 'heavy': this.noise(0.2, 900, 160, 0.6, 0.7 * v); this.tone('sine', 90, 30, 0.35, 0.9 * v); break;
-      case 'block': this.tone('square', 640, 380, 0.07, 0.16 * v); this.noise(0.05, 3000, 1500, 2, 0.3 * v); break;
-      case 'parry': this.tone('triangle', 1400, 1900, 0.18, 0.28 * v); this.tone('sine', 2100, 2400, 0.25, 0.14 * v); break;
-      case 'whoosh': this.noise(0.18, 350, 1500, 1.1, 0.16 * v); break;
-      case 'shot': this.noise(0.12, 2600, 300, 0.7, 0.7 * v); this.tone('sine', 150, 45, 0.16, 0.8 * v); break;
-      case 'click': this.tone('square', 900, 700, 0.03, 0.12 * v); break;
-      case 'pickup': this.tone('triangle', 520, 880, 0.12, 0.2 * v); this.tone('sine', 880, 1320, 0.16, 0.12 * v); break;
-      case 'thud': this.tone('sine', 80, 32, 0.22, 0.6 * v); this.noise(0.12, 500, 150, 0.6, 0.35 * v); break;
-      case 'splash': this.noise(0.35, 2400, 600, 0.5, 0.25 * v); break;
-      case 'grab': this.tone('triangle', 300, 520, 0.08, 0.1 * v); break;
-      case 'ko': this.tone('sine', 140, 28, 0.6, 0.8 * v); this.noise(0.4, 700, 100, 0.6, 0.5 * v); break;
+      case 'punch': N(0.08, 2200, 600, 0.9, 0.5); T('sine', 190, 60, 0.12, 0.55); N(0.05, 400, 200, 0.5, 0.25, { type: 'lowpass' }); break;
+      case 'kick': N(0.12, 1400, 300, 0.7, 0.6); T('sine', 130, 40, 0.2, 0.75); N(0.07, 600, 150, 0.5, 0.3, { type: 'lowpass' }); break;
+      case 'heavy': N(0.22, 1000, 140, 0.6, 0.75); T('sine', 95, 28, 0.38, 0.95); T('sawtooth', 60, 30, 0.2, 0.25); N(0.3, 300, 80, 0.4, 0.4, { type: 'lowpass' }); break;
+      case 'block': T('square', 700, 420, 0.06, 0.14); N(0.06, 3400, 1600, 2.2, 0.32); T('sine', 220, 120, 0.1, 0.3); break;
+      case 'parry': T('triangle', 1500, 2000, 0.2, 0.26); T('sine', 2200, 2600, 0.3, 0.14); N(0.08, 5000, 3000, 3, 0.2); T('sine', 3300, 3300, 0.4, 0.06, { delay: 0.03 }); break;
+      case 'whoosh': N(0.2, 300, 1800, 1.0, 0.18, { atk: 0.05, pow: 1.4 }); break;
+      case 'shot': case 'pistol': N(0.1, 3200, 400, 0.6, 0.8); T('sine', 190, 48, 0.16, 0.85); N(0.5, 900, 120, 0.4, 0.28, { type: 'lowpass', pow: 3, delay: 0.015 }); break;
+      case 'rifle': N(0.09, 3600, 500, 0.6, 0.85); T('sine', 160, 42, 0.14, 0.8); T('sawtooth', 240, 70, 0.07, 0.2); N(0.55, 1100, 140, 0.4, 0.3, { type: 'lowpass', pow: 3, delay: 0.012 }); break;
+      case 'shotgun': N(0.16, 2400, 250, 0.5, 1.0); T('sine', 120, 30, 0.28, 1.0); T('sawtooth', 90, 35, 0.15, 0.35); N(0.8, 700, 90, 0.35, 0.45, { type: 'lowpass', pow: 2.6, delay: 0.02 }); break;
+      case 'empty': T('square', 1100, 800, 0.025, 0.12); break;
+      case 'reload': T('square', 800, 500, 0.03, 0.12); N(0.04, 4000, 2000, 3, 0.2); T('square', 520, 380, 0.04, 0.12, { delay: 0.14 }); N(0.05, 2500, 1200, 3, 0.2, { delay: 0.14 }); T('square', 1000, 700, 0.03, 0.16, { delay: 0.28 }); break;
+      case 'click': T('square', 950, 720, 0.03, 0.12); break;
+      case 'pickup': T('triangle', 520, 900, 0.12, 0.22); T('sine', 900, 1350, 0.18, 0.14); T('sine', 1350, 1800, 0.22, 0.08, { delay: 0.07 }); break;
+      case 'thud': T('sine', 84, 32, 0.22, 0.6); N(0.12, 520, 150, 0.6, 0.35); break;
+      case 'crate': N(0.1, 1200, 300, 0.9, 0.5); T('triangle', 160, 70, 0.1, 0.35); N(0.06, 2500, 900, 1.5, 0.25, { delay: 0.03 }); break;
+      case 'barrel': T('sine', 130, 70, 0.3, 0.5); T('triangle', 260, 150, 0.2, 0.2); N(0.14, 1800, 500, 1.2, 0.3); break;
+      case 'rock': T('sine', 70, 28, 0.3, 0.7); N(0.2, 700, 120, 0.5, 0.5); break;
+      case 'step': N(0.06, 1500, 500, 0.8, 0.14, { pow: 3 }); T('sine', 110, 60, 0.06, 0.12); break;
+      case 'stepSand': N(0.1, 2600, 900, 0.6, 0.12, { pow: 1.6, atk: 0.01 }); break;
+      case 'jump': N(0.1, 500, 1100, 0.9, 0.12, { atk: 0.03 }); break;
+      case 'land': T('sine', 100, 40, 0.14, 0.4); N(0.1, 900, 250, 0.6, 0.25); break;
+      case 'hurt': T('sawtooth', 220, 110, 0.14, 0.2); N(0.1, 1200, 400, 0.8, 0.25); break;
+      case 'splash': N(0.4, 2600, 500, 0.5, 0.28, { atk: 0.01, pow: 1.5 }); N(0.2, 800, 200, 0.5, 0.2, { type: 'lowpass' }); break;
+      case 'grab': T('triangle', 300, 520, 0.08, 0.1); break;
+      case 'ko': T('sine', 140, 26, 0.7, 0.85); N(0.5, 800, 90, 0.6, 0.55); T('sawtooth', 90, 30, 0.4, 0.2); break;
+      case 'horn': T('square', 330, 330, 0.35, 0.15); T('square', 415, 415, 0.35, 0.12); break;
+      case 'crash': N(0.35, 1800, 200, 0.5, 0.8); T('sine', 90, 30, 0.4, 0.8); N(0.2, 5000, 2000, 2, 0.2); break;
     }
+  }
+  // looping engine for the car: rpm 0..1; call every frame while driving, engine(false) to stop
+  engine(on, rpm = 0, load = 0) {
+    const c = this.audio; if (!c || !this.sound) on = false;
+    if (!on) { if (this.eng) { const t = c.currentTime; this.eng.g.gain.setTargetAtTime(0, t, 0.08); const e = this.eng; this.eng = null; setTimeout(() => { try { e.o1.stop(); e.o2.stop(); } catch (er) { /* done */ } }, 400); } return; }
+    if (c.state !== 'running') return;
+    if (!this.eng) { const g = c.createGain(), f = c.createBiquadFilter(), o1 = c.createOscillator(), o2 = c.createOscillator(); f.type = 'lowpass'; o1.type = 'sawtooth'; o2.type = 'square'; g.gain.value = 0; o1.connect(f); o2.connect(f); f.connect(g); g.connect(this.out); o1.start(); o2.start(); this.eng = { g, f, o1, o2 }; }
+    const e = this.eng, t = c.currentTime, fr = 38 + rpm * 90; e.o1.frequency.setTargetAtTime(fr, t, 0.05); e.o2.frequency.setTargetAtTime(fr * 0.5, t, 0.05); e.f.frequency.setTargetAtTime(240 + rpm * 700 + load * 500, t, 0.05); e.g.gain.setTargetAtTime(0.06 + rpm * 0.07 + load * 0.04, t, 0.06);
   }
 }

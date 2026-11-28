@@ -37,7 +37,7 @@ export class CamRig {
     // boom with terrain check (shrinks instantly, grows back slowly)
     const cp = Math.cos(this.pitch), sp = Math.sin(this.pitch), dx = Math.sin(this.yaw) * cp, dz = Math.cos(this.yaw) * cp; let allow = this.dist;
     for (let i = 1; i <= 8; i++) { const t = i / 8 * this.dist, x = this.f.x + dx * t, z = this.f.z + dz * t, y = this.f.y + sp * t, floor = Math.max(A.terrain.hAt(x, z), c.explore ? A.water.level : -99) + 0.4; if (y < floor) { allow = Math.max(1.2, t - this.dist / 8); break; } }
-    if (A.level && A.phys && A.phys.ready) { const t = A.phys.castBoom(this.f, dx, sp, dz, this.dist); if (t !== null) allow = Math.min(allow, Math.max(1.2, t - 0.4)); }   // level geometry (fixed bodies only) pushes the boom in
+    if (A.level && c.explore && A.phys && A.phys.ready) { const t = A.phys.castBoom(this.f, dx, sp, dz, this.dist); if (t !== null) allow = Math.min(allow, Math.max(1.2, t - 0.4)); }   // level geometry (fixed bodies only) pushes the boom in
     this.eff = allow < this.eff ? allow : this.eff + (allow - this.eff) * (1 - Math.exp(-3 * dt));
     cam.position.set(this.f.x + dx * this.eff, this.f.y + sp * this.eff, this.f.z + dz * this.eff);
     const floor = Math.max(A.terrain.hAt(cam.position.x, cam.position.z), c.explore ? A.water.level : -99) + 0.45; if (cam.position.y < floor) cam.position.y = floor;

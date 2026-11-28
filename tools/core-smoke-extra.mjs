@@ -28,12 +28,12 @@ n0.exec({cmd:'entity.set',id:'b42',position:[5,1.2,5]});const d=JSON.parse(JSON.
 n0.exec({cmd:'scene.new',preset:'island'});await n0.core.load(d);if(E.size!==101)return 'reloaded '+E.size;if(E.get('b42').transform.position[0]!==5)return 'moved bottle lost';
 const geos=new Set();E.rt.forEach(r=>r.object.traverse(o=>{if(o.isMesh)geos.add(o.geometry.uuid)}));if(geos.size>12)return 'geometry not shared: '+geos.size;
 const i=n0.exec({cmd:'entity.inspect',id:'shelf1'}).entity;return i.colliders===1||'shelf collider '+i.colliders}`);
-t('assets: external GLB loads through the cached importer','/core.html?start=island',`async()=>{${W}const a=n0.app,THREE=a.camera.position.constructor;const {GLTFExporter}=await import('three/addons/exporters/GLTFExporter.js');
+t('assets: external GLB loads through the cached importer','/core.html?start=island',`async()=>{${W}const a=n0.app,THREE=a.camera.position.constructor;const {GLTFExporter}=n0.mods;
 const src=a.assets.instantiate('retail.product.box');const buf=await new GLTFExporter().parseAsync(src,{binary:true});const url=URL.createObjectURL(new Blob([buf],{type:'model/gltf-binary'}));
 a.assets.register({id:'test.glb.box',name:'Test box',category:'test',tags:['test'],url,source:'generated in test',license:'n0ise original',licenseEvidence:'tools/core-smoke-extra.mjs'});
 const r=n0.exec({cmd:'asset.place',assetId:'test.glb.box',id:'g1',at:[4,4]});if(!r.ok)return r.msg;await a.assets.ensure('test.glb.box');await a.assets.ensure('test.glb.box');if(a.assets.loads!==1)return 'not cached: '+a.assets.loads;
 await new Promise(r=>setTimeout(r,300));const o=a.entities.rt.get('g1').object;const hasMesh=[];o.traverse(n=>{if(n.isMesh)hasMesh.push(n)});if(!hasMesh.length||o.userData.pending)return 'placeholder not swapped';
-const b=new (await import('three')).Box3().setFromObject(o);if(Math.abs(b.min.y-a.terrain.hAt(4,4))>0.02)return 'pivot not on the floor '+b.min.y;
+const b=new n0.mods.THREE.Box3().setFromObject(o);if(Math.abs(b.min.y-a.terrain.hAt(4,4))>0.02)return 'pivot not on the floor '+b.min.y;
 a.assets.register({id:'test.big',name:'b',category:'t',url:'/nope.glb',source:'s',license:'l',licenseEvidence:'e'});const m=n0.exec({cmd:'asset.place',assetId:'test.big',id:'g2',at:[6,6]});await new Promise(r=>setTimeout(r,500));return m.ok||'missing-file placeholder should not break placing'}`);
 
 t('store: builds with a door, windows, shelves, 1000+ instances','/core.html?start=island',`async()=>{${W}const a=n0.app,t0=performance.now();const r=n0.exec({cmd:'prefab.build',type:'retail.convenience',id:'store001',seed:42,parameters:{width:12,depth:8,stock:0.85,condition:'worn'}});if(!r.ok)return r.msg+' '+(r.code||'');const ms=performance.now()-t0;

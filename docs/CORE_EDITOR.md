@@ -3,7 +3,7 @@
 Everything here sits on Core's existing pieces: entities (`entity.create/set/remove`), static colliders, the asset catalog and undo. Nothing is a second scene graph.
 
 ## Islands
-The blank scene is now a round island (about 70 m flat top, a sand shelf, open sea) so you always spawn on land. Launcher: **Blank island**, **Starter island**. Older saved blank scenes keep their old square land.
+Historical: before the level creator, the blank scene was a round island (about 70 m flat top, a sand shelf, open sea) so you always spawn on land. Launcher: **Blank (level creator)** is now an empty grid floor for building levels (see CORE.md); the island is `?start=island`, used by the combat lab and physics test page. Older saved blank scenes keep their old square land.
 
 ## Editor (Edit mode, dock groups Build and Scene)
 - Palette tabs: Props and buildings (catalog, with real rendered thumbnails), Build pieces, Online CC0 (Poly Haven). Drag a tile into the scene, or tap it and tap the ground. R turns the ghost 45 degrees. A ghost shows where it will land, on terrain or on top of other objects.
