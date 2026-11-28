@@ -16,7 +16,7 @@ const srv=createServer(async(q,r)=>{try{const p=normalize(decodeURIComponent(q.u
 await new Promise(ok=>srv.listen(0,'127.0.0.1',ok));const base='http://127.0.0.1:'+srv.address().port;
 const prof=mkdtempSync(join(tmpdir(),'n0core-'));
 const proc=spawn(chrome,['--headless=new','--no-sandbox','--use-angle=swiftshader','--enable-unsafe-swiftshader','--ignore-gpu-blocklist','--remote-debugging-port=0','--user-data-dir='+prof,'--hide-scrollbars','--mute-audio','about:blank'],{stdio:'ignore'});
-let port=0;for(let i=0;i<80&&!port;i++){await new Promise(r=>setTimeout(r,250));try{port=+readFileSync(join(prof,'DevToolsActivePort'),'utf8').split('\n')[0];}catch(e){}}
+let port=0;for(let i=0;i<240&&!port;i++){await new Promise(r=>setTimeout(r,250));try{port=+readFileSync(join(prof,'DevToolsActivePort'),'utf8').split('\n')[0];}catch(e){}}
 if(!port){console.error('core-smoke: Chrome did not start.');proc.kill();process.exit(1);}
 const tab=await (await fetch(`http://127.0.0.1:${port}/json/new?about:blank`,{method:'PUT'})).json();
 const ws=new WebSocket(tab.webSocketDebuggerUrl);await new Promise(r=>ws.addEventListener('open',r));
@@ -33,20 +33,22 @@ const open=async url=>{errors.length=0;await send('Page.navigate',{url:base+url}
 
 /* tests: [name, url, async body]. The body sees `n0` and returns true or a failure string. */
 const T=[];const t=(name,url,body)=>T.push([name,url,body]);
-t('page loads, renders, physics ready','/core.html?start=blank',`async()=>{const a=n0.app;await new Promise(r=>setTimeout(r,800));const i=a.renderer.info.render;if(!i.calls)return 'no draw calls';if(!a.phys.ready)return 'physics: '+a.phys.error;if(a.terrain.preset!=='blank')return 'preset '+a.terrain.preset;return true}`);
-t('describe lists the command set','/core.html?start=blank',`async()=>{const d=n0.exec({cmd:'describe'});const need=['scene.new','terrain.stroke','environment.set','scatter.add','world.import','spawn.set','undo','redo'];const miss=need.filter(k=>!d.commands[k]);return miss.length?'missing '+miss:true}`);
-t('terrain stroke, undo, redo','/core.html?start=blank',`async()=>{const a=n0.app,h0=a.terrain.hAt(0,0);n0.exec({cmd:'terrain.stroke',tool:'raise',center:[0,0],radius:8,strength:1,duration:1});const h1=a.terrain.hAt(0,0);if(!(h1>h0+0.5))return 'raise did nothing '+h0+' '+h1;n0.exec({cmd:'undo'});if(Math.abs(a.terrain.hAt(0,0)-h0)>1e-4)return 'undo failed';n0.exec({cmd:'redo'});return Math.abs(a.terrain.hAt(0,0)-h1)<1e-4||'redo failed'}`);
+t('page loads, renders, physics ready','/core.html?start=island',`async()=>{const a=n0.app;await new Promise(r=>setTimeout(r,800));const i=a.renderer.info.render;if(!i.calls)return 'no draw calls';if(!a.phys.ready)return 'physics: '+a.phys.error;if(a.terrain.preset!=='blank')return 'preset '+a.terrain.preset;return true}`);
+t('describe lists the command set','/core.html?start=island',`async()=>{const d=n0.exec({cmd:'describe'});const need=['scene.new','terrain.stroke','environment.set','scatter.add','world.import','spawn.set','undo','redo'];const miss=need.filter(k=>!d.commands[k]);return miss.length?'missing '+miss:true}`);
+t('terrain stroke, undo, redo','/core.html?start=island',`async()=>{const a=n0.app,h0=a.terrain.hAt(0,0);n0.exec({cmd:'terrain.stroke',tool:'raise',center:[0,0],radius:8,strength:1,duration:1});const h1=a.terrain.hAt(0,0);if(!(h1>h0+0.5))return 'raise did nothing '+h0+' '+h1;n0.exec({cmd:'undo'});if(Math.abs(a.terrain.hAt(0,0)-h0)>1e-4)return 'undo failed';n0.exec({cmd:'redo'});return Math.abs(a.terrain.hAt(0,0)-h1)<1e-4||'redo failed'}`);
 t('physics heightfield matches terrain','/core.html?start=coast',`async()=>{const a=n0.app;for(const [x,z] of [[-60,30],[40,-70],[10,90],[70,55]]){const c=a.phys.castDown(x,z),h=a.terrain.hAt(x,z);if(c==null||Math.abs(c-h)>0.05)return 'at '+x+','+z+' physics '+c+' terrain '+h}return true}`);
-t('save v3+, reload round trip','/core.html?start=blank',`async()=>{const a=n0.app,c=n0.core;n0.exec({cmd:'terrain.stroke',tool:'raise',center:[-30,20],radius:10,strength:0.6});n0.exec({cmd:'scatter.add',center:[40,40],radius:20,count:6});n0.exec({cmd:'environment.set',time:19.5});const h=a.terrain.hAt(-30,20),p=a.palms.items.length,j=JSON.stringify(await c.serialize());n0.exec({cmd:'scene.new',preset:'coast'});await c.load(JSON.parse(j));if(a.terrain.preset!=='blank')return 'preset lost';if(Math.abs(a.terrain.hAt(-30,20)-h)>1e-3)return 'terrain lost';if(a.palms.items.length!==p)return 'palms lost';return Math.abs(a.env.p.time-19.5)<1e-6||'env lost'}`);
-t('v3 scene file still loads','/core.html?start=blank',`async()=>{const a=n0.app,c=n0.core;const d=await c.serialize();d.version=3;delete d.entities;delete d.assetsUsed;await c.load(JSON.parse(JSON.stringify(d)));return true}`);
-t('.n0world import reports unsupported parts','/core.html?start=blank',`async()=>{const w=await (await fetch('/worlds/room-with-door.n0world')).json();const r=n0.exec({cmd:'world.import',world:w});if(!r.ok)return r.msg;if(!(r.report||[]).some(x=>x.level==='unsupported'))return 'no unsupported report';n0.exec({cmd:'undo'});return n0.app.worlds.length===0||'undo left the world'}`);
-t('bad commands fail without changing the scene','/core.html?start=blank',`async()=>{const a=n0.app;const h=a.terrain.hAt(0,0),n=n0.core.hist.length;const rs=[n0.exec({cmd:'terrain.stroke',tool:'nuke',center:[0,0]}),n0.exec({cmd:'scene.new',preset:'moon'}),n0.exec({cmd:'nope'}),n0.exec({})];if(rs.some(r=>r.ok))return 'a bad command succeeded';return a.terrain.hAt(0,0)===h&&n0.core.hist.length===n||'state changed'}`);
-t('api batch + render + camera','/core.html?start=blank',`async()=>{const {createCoreApi}=await import('/src/core/api.js');const api=createCoreApi(n0.app);const b=await api.run({cmd:'batch',ops:[{cmd:'environment.set',time:9},{cmd:'state'}]});if(b.results.some(x=>x.error))return 'batch error';const r=await api.run({cmd:'render',width:320});if(!(r.base64&&r.base64.length>2000))return 'render empty';return true}`);
+t('save v3+, reload round trip','/core.html?start=island',`async()=>{const a=n0.app,c=n0.core;n0.exec({cmd:'terrain.stroke',tool:'raise',center:[-30,20],radius:10,strength:0.6});n0.exec({cmd:'scatter.add',center:[40,40],radius:20,count:6});n0.exec({cmd:'environment.set',time:19.5});const h=a.terrain.hAt(-30,20),p=a.palms.items.length,j=JSON.stringify(await c.serialize());n0.exec({cmd:'scene.new',preset:'coast'});await c.load(JSON.parse(j));if(a.terrain.preset!=='blank')return 'preset lost';if(Math.abs(a.terrain.hAt(-30,20)-h)>1e-3)return 'terrain lost';if(a.palms.items.length!==p)return 'palms lost';return Math.abs(a.env.p.time-19.5)<1e-6||'env lost'}`);
+t('v3 scene file still loads','/core.html?start=island',`async()=>{const a=n0.app,c=n0.core;const d=await c.serialize();d.version=3;delete d.entities;delete d.assetsUsed;await c.load(JSON.parse(JSON.stringify(d)));return true}`);
+t('.n0world import reports unsupported parts','/core.html?start=island',`async()=>{const w=await (await fetch('/worlds/room-with-door.n0world')).json();const r=n0.exec({cmd:'world.import',world:w});if(!r.ok)return r.msg;if(!(r.report||[]).some(x=>x.level==='unsupported'))return 'no unsupported report';n0.exec({cmd:'undo'});return n0.app.worlds.length===0||'undo left the world'}`);
+t('bad commands fail without changing the scene','/core.html?start=island',`async()=>{const a=n0.app;const h=a.terrain.hAt(0,0),n=n0.core.hist.length;const rs=[n0.exec({cmd:'terrain.stroke',tool:'nuke',center:[0,0]}),n0.exec({cmd:'scene.new',preset:'moon'}),n0.exec({cmd:'nope'}),n0.exec({})];if(rs.some(r=>r.ok))return 'a bad command succeeded';return a.terrain.hAt(0,0)===h&&n0.core.hist.length===n||'state changed'}`);
+t('api batch + render + camera','/core.html?start=island',`async()=>{const {createCoreApi}=await import('/src/core/api.js');const api=createCoreApi(n0.app);const b=await api.run({cmd:'batch',ops:[{cmd:'environment.set',time:9},{cmd:'state'}]});if(b.results.some(x=>x.error))return 'batch error';const r=await api.run({cmd:'render',width:320});if(!(r.base64&&r.base64.length>2000))return 'render empty';return true}`);
 
 const only=process.argv.slice(2).filter(a=>!a.startsWith('--'));
 const fs=await import('node:fs');let extra=[];
 try{const ex=await import('./core-smoke-extra.mjs');extra=ex.tests||[];}catch(e){}
 try{const wx=await import('./core-smoke-world.mjs');extra=extra.concat(wx.tests||[]);}catch(e){}
+try{const lv=await import('./core-smoke-living.mjs');extra=extra.concat(lv.tests||[]);}catch(e){}
+try{const lv2=await import('./core-smoke-level.mjs');extra=extra.concat(lv2.tests||[]);}catch(e){}
 try{const ww=await import('./core-smoke-workspace.mjs');extra=extra.concat(ww.tests||[]);}catch(e){}
 try{const sx=await import('./core-smoke-studio.mjs');extra=extra.concat(sx.tests||[]);}catch(e){}
 try{const fl=await import('./core-smoke-firstlight.mjs');extra=extra.concat(fl.tests||[]);}catch(e){}
@@ -58,12 +60,12 @@ for(const [name,url,body] of T){
   await open(url);
   let r=await ev('('+body+')()');
   if(r===true&&errors.length)r='console errors: '+errors[0];
-  console.log((r===true?'  ok   ':'  FAIL ')+name+(r===true?'':'  → '+r));if(r!==true)fail++;
+  console.log((r===true?'  ok   ':'  FAIL ')+name+(r===true?'':'  → '+r)+(r!==true&&errors.length?'  [page error: '+errors[0]+']':''));if(r!==true)fail++;
 }
 /* screenshots of the store (software GL; for a human to look at, not asserted): node tools/core-smoke.mjs --shots */
 if(process.argv.includes('--shots')){
   await mkdir(join(root,'ui-shots'),{recursive:true});
-  await open('/core.html?start=blank&debug=1');
+  await open('/core.html?start=island&debug=1');
   await ev(`(async()=>{const a=n0.app;n0.exec({cmd:'environment.set',time:12,cloud:0.2});const r=n0.exec({cmd:'prefab.build',type:'retail.convenience',id:'store001',seed:42,at:[0,0],parameters:{condition:'worn'}});n0.exec({cmd:'store.door',id:'store001',open:true});a.setMode('edit');a.cam.target.set(0,1,0);a.cam.dist=22;a.cam.pitch=0.5;a.cam.yaw=0.5;await new Promise(r=>setTimeout(r,2500));return r.ok})()`);
   let shot=await send('Page.captureScreenshot',{format:'png'});await writeFile(join(root,'ui-shots','core-store-outside.png'),Buffer.from(shot.data,'base64'));
   await ev(`(async()=>{const a=n0.app;a.cam.dist=7;a.cam.pitch=0.9;a.cam.target.set(-3,0.8,-0.5);await new Promise(r=>setTimeout(r,2500));return 1})()`);
@@ -71,7 +73,7 @@ if(process.argv.includes('--shots')){
   console.log('  shots written to ui-shots/core-store-*.png');
 }
 /* performance baseline */
-for(const [label,url] of [['blank','/core.html?start=blank'],['coast','/core.html?start=coast']]){
+for(const [label,url] of [['blank','/core.html?start=island'],['coast','/core.html?start=coast']]){
   await open(url);await sleep(2500);const tl=await ev('n0.telemetry()');base0[label]=tl;console.log('  base',label.padEnd(6),JSON.stringify(tl));
 }
 await mkdir(join(root,'tools','out'),{recursive:true});

@@ -97,3 +97,60 @@ The launcher, workspace navigation, inspector and status bar are one bundled mod
 **Lifecycle rules:** launch routes go through `app.start`; nothing switches while South Africa is loading (`geo.loading`); replacing the scene asks first when commands have run since it was started, loaded or exported; imports are parsed and checked (`Core.checkScene`, `readWorld`) before anything changes, and `Core.load` rolls back to a snapshot if it fails midway; `ui.modalOpen()` (launcher, guide, report, confirm) blocks keyboard, pad and movement input to the world.
 
 Tests: `tools/core-smoke-workspace.mjs` (`node tools/core-smoke.mjs "workspace:"`).
+
+## Living world layer (movement, grab, combat) — v2 port
+
+The prototype in `AGENT_PROMPT_core_v2.md` is now Core's one movement system. The player in every local mode (Blank island, Coast demo, Import, Continue, Lab, the editor's Explore camera, first person, the coins game) is an `Actor`; fighters are the same class. The geographic world (South Africa) keeps its own walker and car for now and only borrows the character mesh.
+
+| Module | What it is |
+|---|---|
+| `tune.js` | `TUNE` (live constants) and `SCHEMA` (panel layout). Read every step by `actor.js`, `camera.js`, `combat.js`; nothing caches them. |
+| `actor.js` | Locomotion with constant acceleration, analog walk to run, coyote time, jump buffer, variable jump, landing squash, lean, footstep events; the `ATTACKS` table and the free / attack / hit / down / getup / dodge / dead state machine. `render(alpha, dt)` interpolates, `character.limb()` gives hand and foot positions. |
+| `character.js` | Block-built humanoid with a critically damped bone animator and keyframed `ACTIONS`. Still accepts the old `update(dt, speed, onGround, depth, vy)` call that the geo world makes. |
+| `combat.js` | Strikes (cone and reach, once per target per attack), combo chaining with an input queue, block, parry, dodge i-frames, armor, knockdown, KO and respawn, per-actor hit-stop, lock-on, fast props that hurt, fighter AI (`brawler`, `heavy`, `dummy`). |
+| `grab.js` | Cursor or reticle pick, velocity-driven hold with gravity scale 0, mass limits lift and speed, wheel changes lift, release keeps velocity (26 m/s cap). Used by explore left-click and the Fighters group's Grab tool. |
+| `camera.js` | `CamRig` works on the shared `app.cam` object (so the editor, shooter and tests that write `yaw`, `pitch`, `dist` still work; a direct write is adopted as the new target). Critically damped follow, look-ahead, soft lock-on, terrain-aware boom, speed FOV, trauma shake. |
+| `fx.js`, `hud.js` | Spark and dust pools, rings, WebAudio synth (`M` mutes); player HP, combo, floating enemy bars, lock reticle. |
+| `phys.js` | Merged into the existing file: one kinematic capsule per actor and one shared `CharacterController`; dynamic boulder, crate (cuboid) and barrel (cylinder) with explicit masses, CCD, water drag and buoyancy; `interp(alpha)`; the terrain-rebuild step now lifts props onto the new surface, and a safety net puts back any prop that tunnels below the ground or leaves the world. Without Rapier an actor falls back to the sculpted ground (no solid props). |
+| `lab.js` | The Tune panel (`T` key or button): every `TUNE` slider, a per-attack editor, spawn and test tools, presets saved to this browser, Copy and Paste JSON, and `flatArena()`. The **Combat lab** entry (Labs tab, or `?start=lab`) opens a flat 220 m grid arena and sets `core.noSave`, so it never touches your autosave. |
+
+**Timing.** One fixed 60 Hz step per frame loop (bounded to 6 catches-ups), driven by `fixedStep` in `main.js`: intent from latched input edges, then actors and fighters, then grab, then physics. Rendering interpolates between the last two steps. Global slow-mo is `app.slowmo(scale, dur)`; hit-stop is per actor.
+
+**Input ownership.** `app.inputOwner()` returns `modal`, `firstlight`, `fps`, `geo`, `editor` or `play`. Combat keys, left-click punch and grab act only for `play`; movement also works in `fps`; the editor keeps its shortcuts in `editor`. Controls: WASD, Shift run, Space jump (hold for height), J or left click punch, K kick, Q block (a tap just before a hit parries), C dodge, Tab lock on, click a prop to grab, wheel lifts, right or middle drag orbits. Pad in Play: A jump, X punch, Y kick, B dodge, LT block, RT grab, RB lock-on, LB use, L3 run, R3 recentre, Select toggles Edit (the old mapping is unchanged in Edit, geo and first person). Touch: stick plus Jump, Punch, Kick, Block, Dodge buttons.
+
+**Commands and saves.** `boulder.drop {kind: boulder|crate|barrel}`, `actor.spawn {kind, x, z}`, `actor.clear`; console words `crate`, `barrel`, `fighter`, `brawler`, `heavy`, `dummy`, `clear`. `.n0scene` gains `actors` (kind and home) and a sixth boulder field `kind`; saves without them still load (boulders, no fighters).
+
+**Changed from the prototype.** The fighter AI's `wantBlock` was never applied to the body in the prototype; it is now, so fighters block. Fighters stand still while you are in Edit or a sheet is open. Prop hit checks read the fixed-step transform (`cp`), not the interpolated mesh. The scene snapshot (scene.new undo) now includes fighters and prop kinds. Coast now starts with two fighters and a crate stack and barrels; Blank is the player alone.
+
+**Approximated, kept honest.** Melee hit checks are a reach-and-cone test, not per-limb hitboxes. The characters are block-built with no skinned mesh and no ragdoll; knockdowns and hits are authored poses. Grab is a velocity target, not a joint. Crates and barrels are rigid bodies; there is no fluid, granular, vehicle or pedestrian simulation. The no-Rapier fallback treats every prop as a sphere.
+
+**To apply tuning:** press `T`, set the sliders, Copy JSON, and give it to the agent to write into the defaults in `tune.js` and `ATTACKS`.
+
+Tests: `tools/core-smoke-living.mjs` (`node tools/core-smoke.mjs "living:"`).
+
+## Physical models, first-person fix and the physics test page
+
+- **Physical models** (`src/core/dynents.js`). Any placed catalog asset or primitive can be a real rigid body: `{"cmd":"entity.physics","id":"…"}`, `{"cmd":"physics.models"}` for all of them (`mode:"static"` fixes them again), the console words `physical` and `freeze`, or the Lab buttons. The body is a box fitted to the model's measured size and scale, with mass from volume (about 220 kg/m³) unless `components.collider.mass` is set. They are shoved by the player, punched and kicked, hit by fast props, shot (bullets apply an impulse at the hit point), grabbed and thrown, float in water and are kept above the terrain by the same safety nets as crates. Records save `collider: {type:"dynamic", mass?}` and the resting transform is written back on save, so reload puts them where they lay. Undo and redo work. Parented entities, the convenience-store prefab and instanced prefabs are not eligible.
+- **Approximation:** a box per model, not a convex hull per mesh, so a tilted house or a tree rests on its bounding box.
+- **Aim and fire:** holding right mouse then pressing left sent no `pointerdown`, so the shooter could not fire while aiming. Buttons are now read from the `buttons` bitmask on every pointer event. `V` enters first person from any local scene (and leaves it); there is also a First person chip.
+- **Physics test page:** `physics.html` (or `core.html?start=physics`) opens a flat arena, drops every catalog model as a rigid body together with crates, barrels and a boulder, and opens the Tune panel. Nothing is autosaved. Lab buttons: + Models, Models physical, Models static.
+
+## Blank = the level creator (`src/core/level.js`, `levelkit.js`, `guns.js`, `vehicle.js`)
+
+- **Blank** is an empty space: a 248 m grid floor, a dark void below, noon sky and one sun. No island, water, palms, grass or terrain mesh (the terrain is a flat zero-height heightfield, which is the floor collider). It opens in the editor on the **Level kit** tab. The Coast demo keeps the island. `?start=island` (and `scene.new {preset:"island"}`) is the old flat island, kept for tests; the Combat lab and Physics test page use it too.
+- **Level objects are Core entities** (`entity.create / set / remove`, undo and redo, autosave, `.n0scene`). New prefabs: `build.block|pillar|ramp|cylinder|sphere` (parameters `size`, `color`; ramp is a convex hull, cylinder and sphere real shapes), `prop.crate|barrel|boulder`, `pickup.pistol|rifle|shotgun|health|ammo`, `actor.brawler|heavy|dummy`, `spawn.player`, `vehicle.car`, `light.point`. Walls, floors and stairs are Core's own `build.wall`, `build.floor`, `build.stairs`, not duplicated. Every prefab's origin is on the floor under it.
+- **Play / Edit**: `E` (or the Play chip, `level.play`) builds a runtime from the records: dynamic props, fighters, pickups, cars, the player at `spawn.player`. Stop (`E`, Esc, `level.stop`) removes all of it and the records are byte-for-byte what they were (tested). The player is the same Actor in both modes.
+- **Armed play**: pick up a gun, `1 2 3` equips, `X` holsters, `R` reloads, left mouse fires (so you cannot punch or grab while armed), the player aims along the cursor ray with arms raised. Hitscan: fighters as stacked spheres, the world through Rapier `castRayAndGetNormal` excluding kinematic bodies and the player; dynamic bodies get an impulse. Pickups collect on walk-over; health and ammo come back after 18 s; a gun you already own gives ammo.
+- **Car**: `F` near a car enters and exits. Rapier ray-cast vehicle, four wheels, low centre of mass. Engine, reverse, top speed, brake, suspension stiffness and damping, friction slip and side friction are in the Tune panel (Vehicle) and read every step. Runs over fighters when fast. The player is frozen and non-colliding while riding.
+- **Commands**: `level.play`, `level.stop`, `level.new`, `level.sample`, `level.save`, `level.load {doc}`; console words `crate barrel boulder pistol rifle shotgun car brawler heavy dummy clear play stop sample`.
+- **Files**: `.n0level.json` is `{format:"n0ise.level", v:2, ents:[entity records]}`. `level.load` also reads the first prototype's v1 files (centre-origin pieces in degrees) and reports what it skipped. Saved scenes carry `level:true` so Continue and load rebuild the arena.
+- **Physics**: `phys.addStatic/removeStatic`, `pre`/`post` step hooks, `castBoom` (camera boom, fixed bodies only); static colliders now take `type` box, cyl, ball or hull.
+
+### Changes from the prototype
+Records use radians, a floor origin and `parameters`; undo is Core's history, not snapshots. The editor is Core's (`editor3d.js`) with a Level kit tab, Sample level / Save / Open / Snap chips, `[` and `]` to turn, Shift+G for snap, details for size, colour, radius and intensity. Play is Core's explore mode, not a separate page. Car suspension defaults differ from the prototype (stiffness 20, damping 1.8 / 2.4, engine 3200) and the chassis collider sits lower.
+
+### Approximated or not done
+- The edit camera is Core's orbit and pan rig (right-drag orbit, WASD pan, Shift faster, wheel zoom, F focus), not a free-fly camera.
+- The third-person guns (`guns.js`) and the first-person shooter (`weapons.js`) share effects and the world-trace idea but still have separate weapon tables. They are not merged yet.
+- `.n0world` import does not place the new prefabs. Selection is one object. No triggers, scripting or objectives. Enemies are melee only. Hit checks are cone/reach and sphere tests. The car has been tuned only in a software-GL test, not on a real drive.
+- Not checked by eye: the new panels, the grid floor and the car were exercised by scripted tests, not looked at in a real browser or on a phone.
