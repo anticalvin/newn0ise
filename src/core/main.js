@@ -20,6 +20,7 @@ import { buildProps } from './props.js';
 import { readWorld, buildWorld, flatSpot, collidersFor } from './world.js';
 import { Core, LIMITS } from './core.js';
 import { Input } from './input.js';
+import { Session } from './session.js';
 import { FX } from './fx.js';
 import { CamRig } from './camera.js';
 import { Grab } from './grab.js';
@@ -72,7 +73,7 @@ const app = {
   cam: { yaw: 1.2, pitch: 0.28, dist: 5.2, target: new THREE.Vector3(), ey: 0 },
   hit: null, stroking: false, grassT: 0, pr: 1, fps: 60,
   // one owner of the keyboard and pointer at a time
-  inputOwner() { if (ui.modalOpen()) return 'modal'; if (this.firstLight && this.firstLight.active) return 'firstlight'; if (this.shooter && this.shooter.active) return 'fps'; if (this.geo && this.geo.active) return 'geo'; return this.mode === 'edit' ? 'editor' : 'play'; },
+  // input ownership lives in app.session (session.js): session.owner() / session.input
   slowmo(scale, dur) { this.slow.s = clamp(1 - (1 - scale) * TUNE.slowmo, 0.02, 1.5); this.slow.until = performance.now() + dur * 1000; },
   stepFx(a, x, z, sp) { const h = terrain.hAt(x, z); if (h > water.level + 0.1) sand.burst(x, h, z, sp > 4 ? 30 : 18, 0.8 + sp * 0.25, 0.9, 0.18); },
   enterLevel() { this.exitArena(); this.arenaOff = levelArena(this); if (this.editor) this.editor.S.tab = 'level'; },
@@ -182,7 +183,7 @@ const app = {
   // ---- editing ----
   undo() { const r = core.undo(); ui.toast(r.msg || 'Undo'); ui.updHist(); },
   redo() { const r = core.redo(); ui.toast(r.msg || 'Redo'); ui.updHist(); },
-  setTool(t) { this.tool = t; if (t !== 'grab' && this.grab) this.grab.release(); }, setMode(m) { if (m === this.mode) return; this.mode = m; ui.setMode(m); this.grab && this.grab.release(); if (this.lv) { if (m === 'explore') this.lv.start(); else this.lv.end(); }
+  setTool(t) { this.tool = t; if (t !== 'grab' && this.grab) this.grab.release(); }, setMode(m) { if (m === this.mode) return; this.mode = m; this.session.mode(m); ui.setMode(m); this.grab && this.grab.release(); if (this.lv) { if (m === 'explore') this.lv.start(); else this.lv.end(); }
     if (m === 'edit') { this.rig.tDist = 46; this.rig.tPitch = 0.78; this.cam.target.set(player.pos.x, terrain.hAt(player.pos.x, player.pos.z), player.pos.z); }
     else { this.rig.tDist = 5.2; this.rig.tPitch = 0.28; this.input.endBrush(); } ui.pad(this.padMode); },
   toggleMode() { if (this.geo && this.geo.active) return this.geo.swapMode(); this.setMode(this.mode === 'explore' ? 'edit' : 'explore'); },
@@ -232,8 +233,11 @@ const app = {
   importScene(f) { return this.importFile(f); },
   newIsland() { core.exec({ cmd: 'terrain.reset', seed: Math.floor(Math.random() * 90000) + 100 }); ui.toast('New terrain'); ui.updHist(); },
 };
+app.session = new Session(app); app.session.input.base(app.mode === 'explore' ? 'play' : 'edit');   // one object owns the running game: input stack, ordered systems, state
 app.envChildren = envChildren; app.shared = shared; app.assets = new Assets(shared); app.entities = new Entities(app); app.dyn = new DynEnts(app); const entities = app.entities; app.entities.register('retail.convenience', retailPrefab);
 const core = new Core(app); app.core = core; const ui = new UI(app); app.ui = ui; const input = new Input(app, canvas); app.input = input;
+// modal sheets (start, guide, report, confirm) own input while open: the session watches the DOM instead of every caller pushing and popping
+{ const sync = () => app.session.modal(ui.modalOpen()); new MutationObserver(sync).observe(ui.root, { attributes: true, attributeFilter: ['class'], subtree: true }); sync(); app.session.debugOverlay(); }
 core.on(() => ui.updHist());
 app.geo = new GeoWorld(app); app.map = new OverviewMap(app);
 phys.a = app;
@@ -293,25 +297,31 @@ const tele = createTelemetry(app); app.tele = tele;
 const v3 = new THREE.Vector2(), FIX = 1 / 60; let last = performance.now(), physAcc = 0, tsc = 1;
 // one fixed step: intent -> actors and fighters -> grab -> physics. Intents come from the latched input edges, so no tap is lost between frames.
 app.fixedStep = (inp, modal) => fixedStep(inp, modal);
-function fixedStep(inp, modal) {
-  const P = player, I = input, explore = app.mode === 'explore', owner = app.inputOwner(), G = app.guns, car = app.driving;
-  if (explore && !modal && P.alive) {
-    if (car) { car.input.thr = I.mv.y; car.input.str = -I.mv.x; car.input.brake = I.jumpHeld; P.intent.mx = P.intent.mz = 0; P.setBlock(false); P.tryJump(false, false); I.take('jump'); I.take('punch'); I.take('kick'); I.take('dodge'); }
-    else {
-      const y = app.cam.yaw, fx = -Math.sin(y), fz = -Math.cos(y), rx = Math.cos(y), rz = -Math.sin(y), m = I.mv;
-      P.intent.mx = fx * m.y + rx * m.x; P.intent.mz = fz * m.y + rz * m.x; P.intent.run = m.run; P.intent.analog = m.analog;
-      P.tryJump(I.take('jump'), I.jumpHeld);
-      if (owner === 'play') { const pu = I.take('punch'), ki = I.take('kick'); if (G.cur) { if (pu) G.fireEdge = true; } else { if (pu) P.tryAttack('p'); if (ki) P.tryAttack('k'); } if (I.take('dodge')) P.tryDodge(P.intent.mx, P.intent.mz); P.setBlock(I.blockHeld && !G.cur); }
-      else { I.take('punch'); I.take('kick'); I.take('dodge'); P.setBlock(false); }
-    }
-  } else { P.intent.mx = P.intent.mz = 0; P.setBlock(false); P.tryJump(false, false); I.clearEdges(); if (car) { car.input.thr = car.input.str = 0; } }
-  if (app.grab.held) app.grab.control(FIX, I.cursorNdc(v3));
-  if (explore) G.step(FIX);
-  app.combat.step(FIX, water.level);
-  if (app.lv.rt) app.lv.rt.step(FIX);
-  if (phys.ready) phys.step(FIX, water.level); else boulders.step(FIX, player, water.level, shared.uTime.value);
-  if (explore) G.faceAim(FIX);
-  if (app.driving) { const c = app.driving; P.pos.set(c.cp.x, c.cp.y - 0.4, c.cp.z); P.vel.set(0, 0, 0); P.inv = 1; P.hp = Math.max(P.hp, 1); phys.teleport(P); }
+// The fixed step is an ordered list of systems (session.systems); each can be switched off and is timed under ?debug=1.
+function fixedStep(inp, modal) { app.session.systems.run(FIX, { inp, modal, explore: app.mode === 'explore', owner: app.session.owner() }); }
+{
+  const S = app.session.systems, v3b = v3;
+  // control: turns the latched input into intent for the player, or throttle and steering for the car
+  S.add('control', (dt, k) => {
+    const { modal, explore, owner } = k, P = player, I = input, G = app.guns, car = app.driving;
+    if (explore && !modal && P.alive) {
+      if (car) { car.input.thr = I.mv.y; car.input.str = -I.mv.x; car.input.brake = I.jumpHeld; P.intent.mx = P.intent.mz = 0; P.setBlock(false); P.tryJump(false, false); I.take('jump'); I.take('punch'); I.take('kick'); I.take('dodge'); }
+      else {
+        const y = app.cam.yaw, fx = -Math.sin(y), fz = -Math.cos(y), rx = Math.cos(y), rz = -Math.sin(y), m = I.mv;
+        P.intent.mx = fx * m.y + rx * m.x; P.intent.mz = fz * m.y + rz * m.x; P.intent.run = m.run; P.intent.analog = m.analog;
+        P.tryJump(I.take('jump'), I.jumpHeld);
+        if (owner === 'play') { const pu = I.take('punch'), ki = I.take('kick'); if (G.cur) { if (pu) G.fireEdge = true; } else { if (pu) P.tryAttack('p'); if (ki) P.tryAttack('k'); } if (I.take('dodge')) P.tryDodge(P.intent.mx, P.intent.mz); P.setBlock(I.blockHeld && !G.cur); }
+        else { I.take('punch'); I.take('kick'); I.take('dodge'); P.setBlock(false); }
+      }
+    } else { P.intent.mx = P.intent.mz = 0; P.setBlock(false); P.tryJump(false, false); I.clearEdges(); if (car) { car.input.thr = car.input.str = 0; } }
+  });
+  S.add('grab', dt => { if (app.grab.held) app.grab.control(dt, input.cursorNdc(v3b)); });
+  S.add('weapons', dt => { app.guns.step(dt); }, { when: k => k.explore });
+  S.add('combat', dt => { app.combat.step(dt, water.level); });   // actors, fighter brains, hits
+  S.add('rules', dt => { if (app.lv.rt) app.lv.rt.step(dt); });    // level runtime: pickups, cars, spawn
+  S.add('physics', dt => { if (phys.ready) phys.step(dt, water.level); else boulders.step(dt, player, water.level, shared.uTime.value); });
+  S.add('aim', dt => { app.guns.faceAim(dt); }, { when: k => k.explore });
+  S.add('vehicle', () => { if (app.driving) { const c = app.driving, P = player; P.pos.set(c.cp.x, c.cp.y - 0.4, c.cp.z); P.vel.set(0, 0, 0); P.inv = 1; P.hp = Math.max(P.hp, 1); phys.teleport(P); } });   // the driver rides the car
 }
 function frame(now) {
   requestAnimationFrame(frame);

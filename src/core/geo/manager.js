@@ -105,7 +105,7 @@ export class GeoWorld {
     this.loading = false; return { ok: true, msg: 'World open' };
   }
   enter() {
-    const a = this.a, s = a.scene; this.active = true; this.group.visible = true; this.hidden = [];
+    const a = this.a, s = a.scene; this.active = true; a.session && a.session.enter('geo'); this.group.visible = true; this.hidden = [];
     const keep = new Set([...(a.envChildren || []), this.group, a.character.root, a.entities.group]);
     for (const c of s.children) if (!keep.has(c)) { this.hidden.push([c, c.visible]); c.visible = false; }
     this.entHidden = []; a.entities.rt.forEach((rt, id) => { this.entHidden.push([rt.object, rt.object.visible]); rt.object.visible = false; });
@@ -118,7 +118,7 @@ export class GeoWorld {
     this.mode = 'play'; this.god = null; this.buildHud(); document.getElementById('ui').dataset.geo = '1'; this.hud.hidden = false; this.setMode('play', true);
   }
   leave() {
-    const a = this.a; this.save(); this.exitGod(true); this.unloadAll(); this.wilds.reset(); if (this.prompting) this.closePrompt(); if (this.prevName) a.name = this.prevName; this.group.visible = false; this.active = false; this.ready = false;
+    const a = this.a; this.save(); this.exitGod(true); this.unloadAll(); this.wilds.reset(); if (this.prompting) this.closePrompt(); if (this.prevName) a.name = this.prevName; this.group.visible = false; this.active = false; a.session && a.session.leave('geo'); this.ready = false;
     for (const [c, v] of this.hidden) c.visible = v; this.hidden = []; for (const [o, v] of this.entHidden || []) o.visible = v; this.entHidden = [];
     if (this.saved) { a.camera.far = this.saved.far; a.camera.near = this.saved.near; a.camera.updateProjectionMatrix(); const sc = a.env.sun.shadow.camera; sc.left = -80; sc.right = 80; sc.top = 80; sc.bottom = -80; sc.updateProjectionMatrix(); a.env.set({ time: this.saved.time }); }
     if (this.storeActive) this.deactivateStore();
