@@ -14,8 +14,8 @@ export class Grab {
   }
   glow(p, v) { const m = p && p.mesh.material; if (m && m.emissive) { m.emissive.setRGB(v * 0.9, v * 0.75, v * 0.45); } }
   pick(ndc, limit = true) {
-    const A = this.a, items = A.boulders.items.filter(b => b.body); this.ray.setFromCamera(ndc, A.camera); const hits = this.ray.intersectObjects(items.map(b => b.mesh), false);
-    for (const h of hits) { const p = h.object.userData.prop; if (!p) continue; if (limit && A.mode === 'explore') { const pl = A.player; if (Math.hypot(p.p.x - pl.pos.x, p.p.z - pl.pos.z) > this.reach + p.r) continue; } return { p, point: h.point, dist: h.distance }; }
+    const A = this.a, items = A.boulders.items.filter(b => b.body); this.ray.setFromCamera(ndc, A.camera); const hits = this.ray.intersectObjects(items.map(b => b.mesh), true);
+    for (const h of hits) { let o = h.object, p = null; while (o && !(p = o.userData.prop)) o = o.parent; if (!p || !p.body) continue; if (limit && A.mode === 'explore') { const pl = A.player; if (Math.hypot(p.p.x - pl.pos.x, p.p.z - pl.pos.z) > this.reach + p.r) continue; } return { p, point: h.point, dist: h.distance }; }
     return null;
   }
   setHover(ndc, enabled) {
@@ -36,7 +36,7 @@ export class Grab {
   control(dt, ndc) {
     const p = this.held, A = this.a; if (!p) return; if (!p.body) { this.release(); return; }
     if (ndc) this.ndc.copy(ndc); this.ray.setFromCamera(this.ndc, A.camera); const o = this.ray.ray.origin, d = this.ray.ray.direction, T = A.terrain;
-    this.target.copy(o).addScaledVector(d, this.dist); const gy = T.hAt(this.target.x, this.target.z), ext = p.kind === 'boulder' ? p.r * 0.95 : p.r * 1.05;
+    this.target.copy(o).addScaledVector(d, this.dist); const gy = T.hAt(this.target.x, this.target.z), ext = p.ext || (p.kind === 'boulder' ? p.r * 0.95 : p.r * 1.05);
     const heavy = sstep((p.mass - 25) / 200), maxLift = 4.2 * (1 - heavy) + 0.25 * heavy + Math.max(0, this.liftBias) * (1 - heavy * 0.8), minY = gy + ext + 0.05;
     this.target.y = clamp(this.target.y + this.liftBias * (1 - heavy), minY, gy + ext + maxLift);
     if (A.mode === 'explore') { const pl = A.player, dx = this.target.x - pl.pos.x, dz = this.target.z - pl.pos.z, L = Math.hypot(dx, dz), R = this.reach + 3; if (L > R) { this.target.x = pl.pos.x + dx / L * R; this.target.z = pl.pos.z + dz / L * R; } }

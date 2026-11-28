@@ -2,6 +2,7 @@ import { createWorldModes } from './world-modes.js';
 import { createEditor } from './editor3d.js';
 import { createPost } from './post.js';
 import { createShooter } from './weapons.js';
+import { DynEnts } from './dynents.js';
 import { createGame } from './game.js';
 import * as THREE from 'three';
 import { makeShared } from './glsl.js';
@@ -82,7 +83,7 @@ const app = {
   restoreTerrain(s) { if (s.preset && s.preset !== terrain.preset) { terrain.preset = s.preset; this.setPreset(s.preset); } terrain.seed = s.seed; terrain.h.set(s.h); terrain.paint.set(s.p); terrain.dirtyH = terrain.dirtyP = true; terrain.rev++; this.afterTerrain(true); },
   // ---- whole-scene snapshots (used by scene.new and its undo) ----
   snapshot() {
-    return { t: this.snapshotTerrain(), base: terrain.base.slice(), env: { ...env.p }, name: this.name, spawn: [...this.spawn], palms: palms.items.map(p => ({ ...p })), boulders: boulders.items.map(b => [b.p.x, b.p.y, b.p.z, b.r, b.seed, b.kind]), actors: this.combat.enemies().map(e => [e.kind, e.home[0], e.home[1], e.home[2]]),
+    return { t: this.snapshotTerrain(), base: terrain.base.slice(), env: { ...env.p }, name: this.name, spawn: [...this.spawn], palms: palms.items.map(p => ({ ...p })), boulders: boulders.items.filter(b => b.kind !== 'model').map(b => [b.p.x, b.p.y, b.p.z, b.r, b.seed, b.kind]), actors: this.combat.enemies().map(e => [e.kind, e.home[0], e.home[1], e.home[2]]),
       worlds: this.worlds.map(w => ({ name: w.name, at: [...w.at], doc: w.doc })), ents: entities.serialize(), player: [player.pos.x, player.pos.z, player.yaw] };
   },
   restoreScene(s) {
@@ -90,7 +91,7 @@ const app = {
     try {
       terrain.preset = s.t.preset; terrain.base.set(s.base); this.setPreset(s.t.preset); this.restoreTerrain(s.t); env.set(s.env); this.name = s.name; this.spawn = [...s.spawn];
       palms.items = s.palms.map(p => ({ ...p })); palms.rebuild();
-      [...boulders.items].forEach(b => boulders.remove(b)); s.boulders.forEach(([x, y, z, r, seed, kind]) => boulders.add(x, y, z, r, seed, kind || 'boulder')); this.combat.clearEnemies(); (s.actors || []).forEach(([k, x, z, yw]) => this.combat.add(k, x, z, yw));
+      boulders.items.filter(b => b.kind !== 'model').forEach(b => boulders.remove(b)); s.boulders.forEach(([x, y, z, r, seed, kind]) => boulders.add(x, y, z, r, seed, kind || 'boulder')); this.combat.clearEnemies(); (s.actors || []).forEach(([k, x, z, yw]) => this.combat.add(k, x, z, yw));
       entities.clear(); this.clearWorlds(); s.worlds.forEach(w => { const r = readWorld(w.doc); if (r.ok) this.placeWorld(r.doc, w.at, w.name); });
       entities.load(s.ents || []); this.exitArena(); player.pos.set(s.player[0], 0, s.player[1]); player.yaw = s.player[2]; player.pos.y = player.groundAt(player.pos.x, player.pos.z); player.vel.set(0, 0, 0); phys.teleport(player); this.rig && this.rig.snap();
       this.afterTerrain(true); sand.clear();
@@ -221,7 +222,7 @@ const app = {
   importScene(f) { return this.importFile(f); },
   newIsland() { core.exec({ cmd: 'terrain.reset', seed: Math.floor(Math.random() * 90000) + 100 }); ui.toast('New terrain'); ui.updHist(); },
 };
-app.envChildren = envChildren; app.shared = shared; app.assets = new Assets(shared); app.entities = new Entities(app); const entities = app.entities; app.entities.register('retail.convenience', retailPrefab);
+app.envChildren = envChildren; app.shared = shared; app.assets = new Assets(shared); app.entities = new Entities(app); app.dyn = new DynEnts(app); const entities = app.entities; app.entities.register('retail.convenience', retailPrefab);
 const core = new Core(app); app.core = core; const ui = new UI(app); app.ui = ui; const input = new Input(app, canvas); app.input = input;
 core.on(() => ui.updHist());
 app.geo = new GeoWorld(app); app.map = new OverviewMap(app);
@@ -237,6 +238,15 @@ app.newScene('coast'); core.hist = []; core.ptr = 0;
 app.rig.setView(Math.PI / 2 + 0.35, 0.2, 5.4); app.rig.snap();
 phys.init().then(ok => { if (!ok) ui.toast('Physics engine could not load, using the simple built-in solver'); });
 
+// A test yard: every catalog model dropped from a little height as a real rigid body, plus crates, barrels and boulders. dx/dz is where the first row starts.
+app.physicsYard = (cx = 0, cz = 8) => {
+  const ids = [...app.assets.items.keys()].filter(id => app.assets.meta(id).collider !== 'none' || id.startsWith('kenney.') || id.startsWith('nature.')); let n = 0; const cols = 7;
+  for (const id of ids) { const i = n++, x = cx + ((i % cols) - (cols - 1) / 2) * 5.5, z = cz + Math.floor(i / cols) * 5.5, y = terrain.hAt(x, z) + 1.2 + (i % 3) * 0.9;
+    try { entities.create({ prefab: 'asset', parameters: { assetId: id }, transform: { position: [x, y, z], rotation: [0, (i * 0.7) % 6.28, 0] }, components: { collider: { type: 'dynamic' } } }); } catch (e) { console.warn('yard', id, e.message); } }
+  const drop = (x, z, r, kind, up) => boulders.add(x, terrain.hAt(x, z) + (kind === 'boulder' ? r : r * 1.1) + 0.05 + up, z, r, undefined, kind);
+  for (let i = 0; i < 6; i++) drop(-14 + (i % 3) * 1.1, 4 + Math.floor(i / 3) * 1.1, 0.5, 'crate', 0); for (let i = 0; i < 4; i++) drop(-14 + i * 1.0, 8, 0.45, 'barrel', 0); drop(-17, 2, 1.2, 'boulder', 2);
+  return n;
+};
 async function start(choice) {
   if (choice === 'first-light') return app.firstLight.start();
   if (app.worldModes && app.worldModes[choice] && ['starter', 'sandbox', 'proving', 'photowalk'].includes(choice)) { app.worldModes[choice](); return; }
@@ -246,6 +256,8 @@ async function start(choice) {
   if (choice === 'lab') { app.newScene('blank'); core.noSave = true; app.arenaOff = flatArena(app); app.spawn = [0, 0, 0]; player.respawn(0, 0, 0); player.inv = 0; app.name = 'COMBAT LAB'; terrain.flush();
     const drop = (x, z, r, kind) => boulders.add(x, terrain.hAt(x, z) + (kind === 'boulder' ? r : r * 1.1) + 0.05, z, r, undefined, kind); drop(4, 0, 0.5, 'crate'); drop(4, 1.1, 0.5, 'crate'); drop(5.2, -3, 0.45, 'barrel'); drop(-5, 3, 1.1, 'boulder');
     app.rig.setView(Math.PI / 2 + 0.35, 0.2, 5.4); app.rig.snap(); app.lab.show(true); ui.brand(); ui.say('Combat lab: a flat arena with the Tune panel. Nothing here is autosaved.', 7000); return; }
+  if (choice === 'physics') { app.newScene('blank'); core.noSave = true; app.arenaOff = flatArena(app); app.spawn = [0, 0, 0]; player.respawn(0, 0, 0); player.inv = 0; app.name = 'PHYSICS TEST'; terrain.flush();
+    const n = app.physicsYard(); app.rig.setView(Math.PI / 2 + 0.35, 0.28, 8); app.rig.snap(); app.lab.show(true); ui.brand(); ui.say(n + ' models are real rigid bodies here. Walk into them, punch, kick, shoot (Shooting range) or grab them. Nothing is autosaved.', 9000); return; }
   if (choice === 'world') { app.geo.open({ resume: true }).then(() => ui.brand()); return; }
   if (choice === 'continue') { const ok = await core.restore(); if (!ok) { app.newScene('coast'); ui.toast('No saved scene, started the coast'); } else ui.toast('Restored your last scene'); }
   else app.newScene(choice === 'blank' ? 'blank' : 'coast');
@@ -260,7 +272,7 @@ app.shooter = createShooter(app);
 app.game = createGame(app);
 app.start = start;
 { const q = new URLSearchParams(location.search).get('mcp'); if (q) setTimeout(() => connectBridge(app, q.startsWith('ws') ? q : undefined), 800); }
-{ const sp = new URLSearchParams(location.search), q = sp.get('start'); if (q === 'world') { ui.hideStart(); app.geo.open({ lat: sp.get('lat') ? +sp.get('lat') : undefined, lon: sp.get('lon') ? +sp.get('lon') : undefined, resume: sp.get('resume') === '1' }).then(() => ui.brand()); } else if (q === 'blank' || q === 'coast' || q === 'continue' || q === 'lab' || q === 'first-light' || ['starter', 'sandbox', 'proving', 'photowalk', 'range', 'arena', 'coins'].includes(q)) { ui.hideStart(); start(q); } else ui.showStart(core.hasSave()); }
+{ const sp = new URLSearchParams(location.search), q = sp.get('start'); if (q === 'world') { ui.hideStart(); app.geo.open({ lat: sp.get('lat') ? +sp.get('lat') : undefined, lon: sp.get('lon') ? +sp.get('lon') : undefined, resume: sp.get('resume') === '1' }).then(() => ui.brand()); } else if (q === 'blank' || q === 'coast' || q === 'continue' || q === 'lab' || q === 'physics' || q === 'first-light' || ['starter', 'sandbox', 'proving', 'photowalk', 'range', 'arena', 'coins'].includes(q)) { ui.hideStart(); start(q); } else ui.showStart(core.hasSave()); }
 
 function resize() { const w = innerWidth, h = innerHeight; camera.aspect = w / h; camera.updateProjectionMatrix(); renderer.setSize(w, h, false); sand.setScale(renderer, camera); }
 const maxPr = () => Math.min(devicePixelRatio, 2);

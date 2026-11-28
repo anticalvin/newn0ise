@@ -97,3 +97,25 @@ if(a.water.mesh.visible)return 'water visible in arena';await a.start('blank');a
 t('living: first person shooter still runs with the actor player','/core.html?start=blank',`async()=>{${H}
 a.hold=false;await a.shooter.enter({});await wait(600);if(!a.shooter.active)return 'shooter did not start';a.input.keys.add('w');await wait(5000);a.input.keys.delete('w');const moved=Math.hypot(P.pos.x,P.pos.z);a.shooter.exit();await wait(300);
 if(!(moved>0.15))return 'player did not move in first person: '+moved;if(!a.character.root.visible)return 'character hidden after leaving first person';return true}`);
+
+t('physics: the test page opens the model yard and every model rests on the ground','/physics.html',`async()=>{${H}
+if(a.name!=='PHYSICS TEST')return 'name '+a.name;const n=a.dyn.count;if(n<30)return 'only '+n+' physical models';step(480);
+const bad=[];for(const[id,L]of a.dyn.live){const p=L.b.p,g=a.terrain.hAt(p.x,p.z);if(p.y<g-0.2||!isFinite(p.y)||Math.abs(p.x)>126)bad.push(id+' y='+p.y.toFixed(2)+' g='+g.toFixed(2))}
+if(bad.length)return 'models below ground or lost: '+bad.slice(0,4).join('; ');
+const moving=[...a.dyn.live.values()].filter(L=>L.b.body&&!L.b.body.isSleeping()&&L.b.v.length()>1.5).length;if(moving>3)return moving+' models still moving fast after 8 s';return true}`);
+
+t('physics: a placed model can be made physical, shoved, saved and loaded again','/core.html?start=blank',`async()=>{${H}
+a.core.exec({cmd:'asset.place',assetId:'nature.rock',at:[3,0]});const id=a.entities.list()[0].id;const r=a.core.exec({cmd:'entity.physics',id});if(!r.ok)return r.msg;
+if(!a.dyn.live.has(id))return 'not attached';const b=a.dyn.live.get(id).b;step(120);b.body.applyImpulse({x:b.mass*3,y:0,z:0},true);step(90);a.phys.interp(1);const mx=b.p.x;if(!(mx>3.3))return 'impulse did not move the model: '+mx;
+const sv=await a.core.serialize();const rec=sv.entities.find(e=>e.id===id);if(rec.components.collider.type!=='dynamic')return 'collider not saved';if(Math.abs(rec.transform.position[0]-mx)>0.5)return 'resting place not saved '+rec.transform.position[0]+' vs '+mx;
+if(sv.boulders.some(x=>x[5]==='model'))return 'model leaked into boulders';
+a.core.exec({cmd:'scene.new',preset:'blank'});if(a.dyn.count)return 'bodies left after new scene';await a.core.load(sv);
+await wait(200);step(30);if(!a.dyn.live.has(id))return 'not physical after load';const r2=a.core.exec({cmd:'entity.physics',id,mode:'static'});if(!r2.ok||a.dyn.live.has(id))return 'could not fix it again';return true}`);
+
+t('physics: shooting while aiming down sights (right button held, then left)','/core.html?start=blank',`async()=>{${H}
+a.hold=false;await a.shooter.enter({});await wait(600);const S=a.shooter,cv=a.canvas;
+const ev=(type,buttons,button)=>window.dispatchEvent(new PointerEvent(type,{pointerType:'mouse',buttons,button,bubbles:true,cancelable:true}));
+S.locked=true;Object.defineProperty(document,'pointerLockElement',{get:()=>cv,configurable:true});
+ev('pointermove',2,-1);await wait(100);if(!S.adsHold)return 'right button did not aim';
+ev('pointermove',3,-1);await wait(100);if(!S.trigger)return 'left button while aiming did not fire (no pointerdown is sent in that case)';
+const shots=S.shots;await wait(400);S.trigger=true;await wait(500);ev('pointermove',2,-1);await wait(100);if(S.trigger)return 'releasing left kept firing';if(!S.adsHold)return 'releasing left dropped the aim';ev('pointermove',0,-1);await wait(100);if(S.adsHold)return 'aim stuck';S.exit();return true}`);

@@ -54,7 +54,7 @@ export class Phys {
     this.buildHeightfield(); this.wakeAll();
     // a heightfield has no volume: anything now below the new surface would fall through, so lift props (and actors, below) onto it
     for (const b of this.a.boulders.items) {
-      if (!b.body) continue; const t = b.body.translation(), g = T.hAt(t.x, t.z), ext = (b.kind === 'boulder' || !b.kind) ? b.r : b.r * 1.05;
+      if (!b.body) continue; const t = b.body.translation(), g = T.hAt(t.x, t.z), ext = b.ext || ((b.kind === 'boulder' || !b.kind) ? b.r : b.r * 1.05);
       if (t.y - ext < g - 0.02) { const y = g + ext + 0.02, v = b.body.linvel(); b.body.setTranslation({ x: t.x, y, z: t.z }, true); b.body.setLinvel({ x: v.x, y: Math.max(0, v.y), z: v.z }, true); if (b.cp) { b.cp.set(t.x, y, t.z); b.pp.copy(b.cp); } }
     }
     for (const a of this.actors) { const g = T.hAt(a.pos.x, a.pos.z); if (a.pos.y < g - 0.2) a.pos.y = g; }
@@ -73,7 +73,8 @@ export class Phys {
     const R = this.R, boul = b.kind === 'boulder' || !b.kind, body = this.world.createRigidBody(R.RigidBodyDesc.dynamic().setTranslation(b.p.x, b.p.y, b.p.z).setRotation({ x: b.q.x, y: b.q.y, z: b.q.z, w: b.q.w })
       .setLinearDamping(boul ? 0.05 : 0.12).setAngularDamping(boul ? 0.35 : 0.5).setCcdEnabled(true));
     let desc; const mass = b.mass || 45 * b.r ** 3;
-    if (b.kind === 'crate') desc = R.ColliderDesc.cuboid(b.r, b.r, b.r).setFriction(0.8).setRestitution(0.12);
+    if (b.kind === 'model') desc = R.ColliderDesc.cuboid(b.h[0], b.h[1], b.h[2]).setFriction(0.8).setRestitution(0.1);
+    else if (b.kind === 'crate') desc = R.ColliderDesc.cuboid(b.r, b.r, b.r).setFriction(0.8).setRestitution(0.12);
     else if (b.kind === 'barrel') desc = R.ColliderDesc.cylinder(b.r * 1.05, b.r * 0.78).setFriction(0.7).setRestitution(0.18);
     else desc = R.ColliderDesc.ball(b.r * 0.92).setFriction(0.9).setRestitution(0.16);
     desc.setMass(mass); b.col = this.world.createCollider(desc, body); b.body = body; b.mass = mass; b.wasWet = false; b.lastSp = 0;
@@ -128,7 +129,7 @@ export class Phys {
     for (const b of items) {
       if (!b.body) continue; if (b.pp) { b.pp.copy(b.cp); b.pq.copy(b.cq); }
       let t = b.body.translation(); const q = b.body.rotation(), v = b.body.linvel(), sp = Math.hypot(v.x, v.y, v.z);
-      { const g = this.a.terrain.hAt(t.x, t.z), ext = (b.kind === 'boulder' || !b.kind) ? b.r : b.r * 1.05;   // safety net: a prop that tunnelled below the ground is put back on it
+      { const g = this.a.terrain.hAt(t.x, t.z), ext = b.ext || ((b.kind === 'boulder' || !b.kind) ? b.r : b.r * 1.05);   // safety net: a prop that tunnelled below the ground is put back on it
         const out = Math.abs(t.x) > 126 || Math.abs(t.z) > 126 || t.y < -25;   // thrown off the edge of the world, or fell below it
         if (out || t.y + ext < g - 0.3) { const x = clamp(t.x, -120, 120), z = clamp(t.z, -120, 120), gg = out ? this.a.terrain.hAt(x, z) : g; b.body.setTranslation({ x, y: gg + ext + 0.05, z }, true); b.body.setLinvel({ x: 0, y: 0, z: 0 }, true); t = b.body.translation(); if (b.cp) { b.cp.set(t.x, t.y, t.z); b.pp.copy(b.cp); } } }
       if (b.cp) { b.cp.set(t.x, t.y, t.z); b.cq.set(q.x, q.y, q.z, q.w); } else { b.p.set(t.x, t.y, t.z); b.q.set(q.x, q.y, q.z, q.w); }

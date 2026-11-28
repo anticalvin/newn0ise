@@ -13,8 +13,13 @@ export class Boulders {
     const b = { mesh, kind, r, mass, seed, p: mesh.position, v: new THREE.Vector3(), q: mesh.quaternion, sleep: 0, wasWet: false, held: false, hitCd: 0, sp: 0, pp: new THREE.Vector3(), cp: new THREE.Vector3(), pq: new THREE.Quaternion(), cq: new THREE.Quaternion(), id: kind[0] + seed + '_' + this.items.length };
     mesh.userData.prop = b; this.items.push(b); if (this.phys && this.phys.ready) this.phys.addBoulder(b); return b;
   }
+  // a placed model that has been made physical: `mesh` is a pivot at the body centre holding the entity's object; h = half extents
+  addModel(mesh, h, mass, entityId) {
+    const b = { mesh, kind: 'model', r: Math.max(h[0], h[1], h[2]), ext: h[1], h, mass, seed: 0, entityId, p: mesh.position, v: new THREE.Vector3(), q: mesh.quaternion, sleep: 0, wasWet: false, held: false, hitCd: 0, sp: 0, pp: new THREE.Vector3(), cp: new THREE.Vector3(), pq: new THREE.Quaternion(), cq: new THREE.Quaternion(), id: 'm_' + entityId };
+    this.items.push(b); if (this.phys && this.phys.ready) this.phys.addBoulder(b); return b;
+  }
   readd(b, x, y, z) { this.items.push(b); this.scene.add(b.mesh); b.p.set(x, y, z); b.v.set(0, 0, 0); b.sleep = 0; if (this.phys && this.phys.ready) this.phys.addBoulder(b); }
-  remove(b) { const i = this.items.indexOf(b); if (i >= 0) { if (b.body && this.phys) this.phys.removeBoulder(b); this.items.splice(i, 1); this.scene.remove(b.mesh); b.mesh.geometry.dispose(); } }
+  remove(b) { const i = this.items.indexOf(b); if (i >= 0) { if (b.body && this.phys) this.phys.removeBoulder(b); this.items.splice(i, 1); if (b.kind === 'model') { b.detach && b.detach(); return; } this.scene.remove(b.mesh); b.mesh.geometry.dispose(); } }
   wake() { this.items.forEach(b => { b.sleep = 0; }); if (this.phys && this.phys.ready) this.phys.wakeAll(); }
   step(dt, player, level, t) {
     if (this.phys && this.phys.ready) return;   // Rapier steps and syncs these

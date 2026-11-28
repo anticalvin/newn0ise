@@ -127,3 +127,10 @@ The prototype in `AGENT_PROMPT_core_v2.md` is now Core's one movement system. Th
 **To apply tuning:** press `T`, set the sliders, Copy JSON, and give it to the agent to write into the defaults in `tune.js` and `ATTACKS`.
 
 Tests: `tools/core-smoke-living.mjs` (`node tools/core-smoke.mjs "living:"`).
+
+## Physical models, first-person fix and the physics test page
+
+- **Physical models** (`src/core/dynents.js`). Any placed catalog asset or primitive can be a real rigid body: `{"cmd":"entity.physics","id":"…"}`, `{"cmd":"physics.models"}` for all of them (`mode:"static"` fixes them again), the console words `physical` and `freeze`, or the Lab buttons. The body is a box fitted to the model's measured size and scale, with mass from volume (about 220 kg/m³) unless `components.collider.mass` is set. They are shoved by the player, punched and kicked, hit by fast props, shot (bullets apply an impulse at the hit point), grabbed and thrown, float in water and are kept above the terrain by the same safety nets as crates. Records save `collider: {type:"dynamic", mass?}` and the resting transform is written back on save, so reload puts them where they lay. Undo and redo work. Parented entities, the convenience-store prefab and instanced prefabs are not eligible.
+- **Approximation:** a box per model, not a convex hull per mesh, so a tilted house or a tree rests on its bounding box.
+- **Aim and fire:** holding right mouse then pressing left sent no `pointerdown`, so the shooter could not fire while aiming. Buttons are now read from the `buttons` bitmask on every pointer event. `V` enters first person from any local scene (and leaves it); there is also a First person chip.
+- **Physics test page:** `physics.html` (or `core.html?start=physics`) opens a flat arena, drops every catalog model as a rigid body together with crates, barrels and a boulder, and opens the Tune panel. Nothing is autosaved. Lab buttons: + Models, Models physical, Models static.

@@ -22,6 +22,10 @@ export const COMMANDS = {
   'scatter.add': `{type?:"palm", center:[x,z], radius:2..60, count:1..60} → palms on dry land (max ${LIMITS.palms}). Generic prefab scatter is planned.`,
   'scatter.erase': '{center:[x,z], radius:1..60} → remove palms in range.',
   'boulder.drop': `{x, z, kind?:"boulder"|"crate"|"barrel", radius?:0.3..3, height?:1..60} → drop a physics prop (max ${LIMITS.boulders}). Crates and barrels are lighter and can be grabbed, thrown and punched.`,
+  'entity.physics': '{id, mode:"dynamic"|"static", mass?:0.5..5000} → make one placed model (asset or primitive) a real rigid body you can shove, punch, shoot, grab and throw, or fix it in place again. Saves with the scene.',
+  'physics.models': '{mode?:"dynamic"|"static"} → do that for every placed model at once. "dynamic" is the default.',
+  'entity.physics': '{id, mode?:"dynamic"|"static", mass?:0.5..5000} → make one placed model (catalog asset or primitive) a real rigid body you can shove, punch, shoot, grab and throw, or fix it in place again. Saves with the scene. The body is a box fitted to the model.',
+  'physics.models': '{mode?:"dynamic"|"static"} → do that for every placed model at once ("dynamic" by default).',
   'actor.spawn': `{kind?:"brawler"|"heavy"|"dummy", x, z, yaw?} → a melee fighter (max ${LIMITS.fighters}). Fighters use the same body, controller and attacks as the player.`,
   'actor.clear': '{} → remove every fighter (the player stays).',
   'player.teleport': '{x, z} → move the character.',
@@ -126,6 +130,15 @@ export class Core {
           const y = Math.max(a.terrain.hAt(x, z), a.env.p.tide) + num(c.height, kind === 'boulder' ? 14 : 3, 1, 60), b = a.boulders.add(x, y, z, r, undefined, kind);
           this.push({ label: 'prop.drop ' + kind, undo: () => a.boulders.remove(b), redo: () => a.boulders.readd(b, x, y, z) });
           return { ok: true, msg: kind + ' r=' + r.toFixed(1) };
+        }
+        case 'entity.physics': {
+          const id = String(c.id), rec = a.entities.get(id), mode = c.mode === 'static' ? 'static' : 'dynamic'; if (!a.dyn.eligible(rec)) return { ok: false, msg: id + ' is a ' + rec.prefab + ' and cannot be made a rigid body (models and primitives only, not parented ones)' };
+          const before = structuredClone(rec.components), col = { type: mode, ...(c.mass !== undefined ? { mass: num(c.mass, 20, 0.5, 5000) } : {}) };
+          a.entities.set(id, { components: { collider: col } }); this.push({ label: 'entity.physics ' + id, undo: () => { a.entities.set(id, { components: before.collider ? { collider: before.collider } : { collider: { type: 'static' } } }); }, redo: () => { a.entities.set(id, { components: { collider: col } }); } });
+          return { ok: true, msg: id + ' is ' + mode };
+        }
+        case 'physics.models': {
+          const mode = c.mode === 'static' ? 'static' : 'dynamic', n = a.dyn.setAll(mode); return { ok: true, msg: n + ' model' + (n === 1 ? '' : 's') + ' ' + (mode === 'dynamic' ? 'now physical' : 'fixed in place') };
         }
         case 'actor.spawn': {
           const kind = ['brawler', 'heavy', 'dummy'].includes(c.kind) ? c.kind : 'brawler'; if (a.combat.enemies().length >= LIMITS.fighters) return { ok: false, msg: 'Fighter limit reached (' + LIMITS.fighters + ')' };
@@ -240,7 +253,7 @@ export class Core {
     const [w, ...r] = t.split(/\s+/), v = parseFloat(r[0]), f = this.a.focusPoint();
     const map = { time: { cmd: 'environment.set', time: v }, cloud: { cmd: 'environment.set', cloud: v }, wind: { cmd: 'environment.set', wind: v }, sea: { cmd: 'water.set', sea: v }, tide: { cmd: 'water.set', tide: v },
       boulder: { cmd: 'boulder.drop', x: f.x, z: f.z }, crate: { cmd: 'boulder.drop', kind: 'crate', x: f.x, z: f.z }, barrel: { cmd: 'boulder.drop', kind: 'barrel', x: f.x, z: f.z },
-      fighter: { cmd: 'actor.spawn', kind: 'brawler', x: f.x + 4, z: f.z }, brawler: { cmd: 'actor.spawn', kind: 'brawler', x: f.x + 4, z: f.z }, heavy: { cmd: 'actor.spawn', kind: 'heavy', x: f.x + 4, z: f.z }, dummy: { cmd: 'actor.spawn', kind: 'dummy', x: f.x + 4, z: f.z }, clear: { cmd: 'actor.clear' }, palms: { cmd: 'scatter.add', center: [f.x, f.z], count: Number.isFinite(v) ? v : 8 }, undo: { cmd: 'undo' }, redo: { cmd: 'redo' },
+      fighter: { cmd: 'actor.spawn', kind: 'brawler', x: f.x + 4, z: f.z }, brawler: { cmd: 'actor.spawn', kind: 'brawler', x: f.x + 4, z: f.z }, heavy: { cmd: 'actor.spawn', kind: 'heavy', x: f.x + 4, z: f.z }, dummy: { cmd: 'actor.spawn', kind: 'dummy', x: f.x + 4, z: f.z }, physical: { cmd: 'physics.models' }, freeze: { cmd: 'physics.models', mode: 'static' }, clear: { cmd: 'actor.clear' }, palms: { cmd: 'scatter.add', center: [f.x, f.z], count: Number.isFinite(v) ? v : 8 }, undo: { cmd: 'undo' }, redo: { cmd: 'redo' },
       raise: { cmd: 'terrain.stroke', tool: 'raise', center: [f.x, f.z], radius: Number.isFinite(v) ? v : 10 }, lower: { cmd: 'terrain.stroke', tool: 'lower', center: [f.x, f.z], radius: Number.isFinite(v) ? v : 10 },
       sunset: { cmd: 'environment.set', time: 18.3 }, noon: { cmd: 'environment.set', time: 12 }, night: { cmd: 'environment.set', time: 23 },
       blank: { cmd: 'scene.new', preset: 'blank' }, coast: { cmd: 'scene.new', preset: 'coast' }, spawn: { cmd: 'spawn.set' }, state: { cmd: 'state' } };
@@ -256,7 +269,7 @@ export class Core {
     const a = this.a, r = n => +n.toFixed(2);
     return { format: FORMAT, version: VERSION, name: a.name, preset: a.terrain.preset, env: { ...a.env.p }, terrain: await a.terrain.pack(), spawn: a.spawn.map(r),
       palms: a.palms.items.map(p => [r(p.x), r(p.z), r(p.s), r(p.yaw)]),
-      boulders: a.boulders.items.map(b => [r(b.p.x), r(b.p.y), r(b.p.z), r(b.r), b.seed, b.kind]),
+      boulders: a.boulders.items.filter(b => b.kind !== 'model').map(b => [r(b.p.x), r(b.p.y), r(b.p.z), r(b.r), b.seed, b.kind]),
       actors: a.combat.enemies().map(e => [e.kind, r(e.home[0]), r(e.home[1]), r(e.home[2])]),
       worlds: a.worlds.map(w => ({ name: w.name, at: w.at.map(r), doc: w.doc })), entities: a.entities.serialize(), assetsUsed: [...new Set(a.entities.serialize().filter(e => e.prefab === 'asset').map(e => e.parameters.assetId))],
       player: [r(a.player.pos.x), r(a.player.pos.z), r(a.player.yaw)] };
