@@ -2,12 +2,11 @@
 // tested against fighters (stacked spheres) and the Rapier world (blocks, props, cars). Fighters take real hit reactions; dynamic bodies get an impulse.
 import * as THREE from 'three';
 import { clamp } from './util.js';
+import { WEAPON_STATS } from './weapondata.js';
 
-export const GUNS = {
-  pistol:  { name: 'Pistol',  dmg: 20, rate: 0.26, mag: 12, reserve: 48, auto: false, spread: 0.004, pellets: 1, range: 90, kick: 0.1,  imp: 14, reload: 1.0 },
-  rifle:   { name: 'Rifle',   dmg: 11, rate: 0.085, mag: 30, reserve: 90, auto: true,  spread: 0.016, pellets: 1, range: 140, kick: 0.07, imp: 10, reload: 1.5 },
-  shotgun: { name: 'Shotgun', dmg: 9,  rate: 0.85, mag: 6,  reserve: 24, auto: false, spread: 0.065, pellets: 8, range: 38, kick: 0.35, imp: 8,  reload: 1.8 },
-};
+// view-specific tuning only (camera kick, physics impulse); the shared stats come from weapondata.js
+const VIEW = { pistol: { kick: 0.1, imp: 14 }, rifle: { kick: 0.07, imp: 10 }, shotgun: { kick: 0.35, imp: 8 } };
+export const GUNS = Object.fromEntries(Object.entries(WEAPON_STATS).map(([k, w]) => [k, { ...w, ...VIEW[k], rate: 1 / w.rps }]));
 const v1 = new THREE.Vector3(), v2 = new THREE.Vector3(), ray = new THREE.Raycaster();
 
 export class Guns {

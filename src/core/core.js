@@ -4,6 +4,7 @@
 import { clamp } from './util.js';
 
 import { EntityError } from './entities.js';
+import { helpText } from './schema.js';
 import { COMMANDS as GEO_COMMANDS } from './geo/manager.js';
 
 export const FORMAT = 'n0ise.core.scene', VERSION = 4;
@@ -82,7 +83,7 @@ export class Core {
       switch (c.cmd) {
         case 'undo': return this.undo();
         case 'redo': return this.redo();
-        case 'describe': return { ok: true, commands: { ...COMMANDS, ...GEO_COMMANDS }, limits: LIMITS, units: 'metres, hours, radians for windAng', world: '256 x 256 m, x and z from -128 to 128, y up' };
+        case 'describe': return { ok: true, commands: { ...COMMANDS, ...GEO_COMMANDS }, prefabs: this.a.entities.describePrefabs(), limits: LIMITS, units: 'metres, hours, radians for windAng', world: '256 x 256 m, x and z from -128 to 128, y up' };
         case 'state': return { ok: true, ...a.summary() };
         case 'scene.new': {
           const preset = c.preset === 'coast' ? 'coast' : c.preset === 'blank' ? 'blank' : c.preset === 'island' ? 'island' : null; if (!preset) return { ok: false, msg: 'preset must be "blank" or "coast"' };
@@ -267,7 +268,8 @@ export class Core {
       raise: { cmd: 'terrain.stroke', tool: 'raise', center: [f.x, f.z], radius: Number.isFinite(v) ? v : 10 }, lower: { cmd: 'terrain.stroke', tool: 'lower', center: [f.x, f.z], radius: Number.isFinite(v) ? v : 10 },
       sunset: { cmd: 'environment.set', time: 18.3 }, noon: { cmd: 'environment.set', time: 12 }, night: { cmd: 'environment.set', time: 23 },
       blank: { cmd: 'scene.new', preset: 'blank' }, coast: { cmd: 'scene.new', preset: 'coast' }, spawn: { cmd: 'spawn.set' }, state: { cmd: 'state' } };
-    if (w === 'help') return { ok: true, msg: 'time cloud wind sea tide boulder crate barrel fighter heavy dummy clear palms raise lower sunset noon night blank coast spawn undo redo — or paste JSON {"cmd":...}. {"cmd":"describe"} lists every command.' };
+    if (w === 'prefab') { const n = (r[0] || '').trim(), E = this.a.entities; if (!n) return { ok: true, msg: [...E.prefabs.keys()].join(' ') }; const d = E.describePrefabs()[n]; return d ? { ok: true, msg: helpText(d) } : { ok: false, msg: 'No prefab "' + n + '". Type "prefab" for the list.' }; }
+    if (w === 'help') return { ok: true, msg: 'prefab time cloud wind sea tide boulder crate barrel fighter heavy dummy clear palms raise lower sunset noon night blank coast spawn undo redo — or paste JSON {"cmd":...}. {"cmd":"describe"} lists every command.' };
     const res = map[w] ? this.exec(map[w]) : { ok: false, msg: 'Unknown: ' + w + ' (try "help")' };
     if (res.ok && w === 'state') res.msg = JSON.stringify(res).slice(0, 220);
     return res;

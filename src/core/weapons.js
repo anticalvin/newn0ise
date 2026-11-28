@@ -4,11 +4,13 @@
 // so a different weapon is a different entry in WEAPONS and nothing else.
 import * as THREE from 'three';
 
+import { WEAPON_STATS } from './weapondata.js';
+const SH = k => { const { name, dmg, mag, reserve, reload, auto, pellets, spread, range } = WEAPON_STATS[k]; return { name, dmg, mag, reserve, reload, auto, pellets, spread, range }; };   // shared stats, one table (weapondata.js)
 const K = 'assets/core/kenney/';
 export const WEAPONS = {
   pistol: { name: 'Blaster', asset: 'kenney.blaster', sound: 'snd-blaster.ogg', auto: false, rate: 4.8, dmg: 34, mag: 12, reserve: 84, reload: 1.25, spread: 0.0035, grow: 0.01, recoil: 0.026, kick: 0.07, range: 220, len: 0.5, ads: 0.5, fov: 54, pos: [0.14, -0.12, -0.3], rot: [0, Math.PI, 0], scale: 0.16, sight: [0, 0.074, 0.0], muz: [0, 0.015, -0.2] },
-  rifle: { name: 'Rifle', asset: 'kenney.repeater', sound: 'snd-blaster_repeater.ogg', auto: true, synth: 'rifle', rate: 8, dmg: 22, mag: 30, reserve: 150, reload: 2.0, spread: 0.003, grow: 0.012, recoil: 0.014, kick: 0.04, range: 260, len: 0.7, ads: 0.6, fov: 42, pos: [0.14, -0.12, -0.32], rot: [0, Math.PI, 0], scale: 0.16, sight: [0, 0.07, -0.01], muz: [0, 0.015, -0.24] },
-  shotgun: { name: 'Shotgun', asset: 'kenney.blaster', sound: 'snd-blaster.ogg', auto: false, synth: 'shotgun', rate: 1.3, dmg: 11, pellets: 8, mag: 6, reserve: 36, reload: 2.2, spread: 0.045, grow: 0.0, recoil: 0.05, kick: 0.12, range: 60, len: 0.55, ads: 0.5, fov: 52, pos: [0.14, -0.13, -0.3], rot: [0, Math.PI, 0], scale: 0.16, sight: [0, 0.074, 0.0], muz: [0, 0.015, -0.2] },
+  rifle: { ...SH('rifle'), asset: 'kenney.repeater', sound: 'snd-blaster_repeater.ogg', synth: 'rifle', rate: WEAPON_STATS.rifle.rps, grow: 0.012, recoil: 0.014, kick: 0.04, len: 0.7, ads: 0.6, fov: 42, pos: [0.14, -0.12, -0.32], rot: [0, Math.PI, 0], scale: 0.16, sight: [0, 0.07, -0.01], muz: [0, 0.015, -0.24] },
+  shotgun: { ...SH('shotgun'), asset: 'kenney.blaster', sound: 'snd-blaster.ogg', synth: 'shotgun', rate: WEAPON_STATS.shotgun.rps, grow: 0.0, recoil: 0.05, kick: 0.12, len: 0.55, ads: 0.5, fov: 52, pos: [0.14, -0.13, -0.3], rot: [0, Math.PI, 0], scale: 0.16, sight: [0, 0.074, 0.0], muz: [0, 0.015, -0.2] },
   repeater: { name: 'Repeater', asset: 'kenney.repeater', sound: 'snd-blaster_repeater.ogg', auto: true, rate: 11, dmg: 15, mag: 32, reserve: 192, reload: 1.8, spread: 0.006, grow: 0.026, recoil: 0.011, kick: 0.035, range: 220, len: 0.6, ads: 0.55, fov: 50, pos: [0.14, -0.12, -0.3], rot: [0, Math.PI, 0], scale: 0.16, sight: [0, 0.07, -0.01], muz: [0, 0.015, -0.24] },
 };
 const lerp = (a, b, t) => a + (b - a) * t, clamp = (v, a, b) => Math.min(b, Math.max(a, v));

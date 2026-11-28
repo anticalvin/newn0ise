@@ -62,3 +62,15 @@ ex({cmd:'entity.create',prefab:'build.ramp',position:[0,0,0]});ex({cmd:'entity.c
 const P=a.player,mv=a.input.mv;const go=(x,z,dx,dz,n)=>{P.pos.set(x,0.5,z);P.prev.copy(P.pos);P.vel.set(0,0,0);a.phys.teleport(P);step(40);let top=0;mv.x=0;mv.y=0;for(let i=0;i<n;i++){const f=a.cam.yaw;mv.x=0;mv.y=1;const ang=Math.atan2(dx,dz);a.cam.yaw=Math.atan2(-dx,-dz);step(1);top=Math.max(top,P.pos.y)}mv.y=0;return top};
 const ramp=go(0,6,0,-1,300);const st=[go(20,6,0,-1,300),go(20,-6,0,1,300),go(14,0,1,0,300),go(26,0,-1,0,300)];const best=Math.max(...st);
 if(!(ramp>1.6))return 'ramp: reached y='+ramp.toFixed(2);if(!(best>1.5))return 'stairs: best '+st.map(v=>v.toFixed(2)).join(',');return true}`);
+
+t('schema: every level and primitive prefab declares components and a schema; describe, validation and defaults come from it','/core.html?start=blank',`async()=>{${H}
+const d=ex({cmd:'describe'}).prefabs;const need=['prim.box','build.block','build.ramp','prop.boulder','pickup.rifle','actor.brawler','vehicle.car','light.point','spawn.player','asset','build.wall'];
+for(const n of need){if(!d[n])return 'describe missing '+n;if(!d[n].components.length)return n+' declares no components'}
+if(!d['light.point'].parameters.find(f=>f.name==='intensity'&&f.max===400))return 'light schema';
+let r=ex({cmd:'entity.create',prefab:'light.point',parameters:{intensity:999}});if(r.ok||!/0 to 400/.test(r.msg))return 'range not enforced: '+JSON.stringify(r);
+r=ex({cmd:'entity.create',prefab:'vehicle.car',parameters:{color:'red'}});if(r.ok)return 'bad colour accepted';
+r=ex({cmd:'entity.create',prefab:'prop.boulder'});if(!r.ok||r.entity.parameters.r!==1.1)return 'boulder default '+JSON.stringify(r.entity&&r.entity.parameters);
+r=ex({cmd:'entity.create',prefab:'build.block',parameters:{size:[3,3,3]}});if(!r.ok||r.entity.parameters.color!=='#9aa1ab')return 'block default colour';
+a.editor.select([r.entity.id]);const p=document.createElement('div');a.editor.panelScene(p);if(p.querySelectorAll('input[type=color]').length<1)return 'details panel has no colour field from the schema';
+const h=n0.run('prefab light.point');if(!h.ok||!/intensity/.test(h.msg))return 'prefab help';
+return true}`);

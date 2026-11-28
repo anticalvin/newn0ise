@@ -36,8 +36,12 @@ Source: CORE_ENGINE_PLAN and the master prompt. One PR per phase step. Status wo
 | Remaining systems from the plan (character, pickups, ai, camera, audio, vfx, ui) as separate fixed-step systems | Planned: character, pickups and ai still run inside `combat`/`rules`; camera, audio, vfx and ui run per frame, not in the list |
 | Mode flags removed (`shooter.active`, `firstLight.active`, `geo.active`, `lv`, arena) | **Planned**: these remain as each module's own bookkeeping and about 40 places still read them. Input ownership no longer depends on them |
 | One shared rebindable binding table (keyboard, mouse, touch, gamepad) | Planned: bindings are still in `input.js` |
-| Prefab parameter schemas and components (details panel, console help, `describe` derived from them) | Planned |
-| Merge weapons (`weapons.js` + `guns.js`), vehicles, terrain services, `ui.js` + `workspace-ui.js`, CharacterRig interface | Planned |
+| `schema.js`: prefab schemas ({name, type, min, max, step, default, label, group}) and component declarations; validation derived from the schema | Done for prim.*, the level kit (blocks, ramp, props, pickups, fighters, car, light, spawn). `build.*`, `asset` and `model.online` keep their own validators and declare components and labels only |
+| Details panel generated from the schema (the hand-written car, light, size, colour and boulder blocks were deleted) | Done for schema prefabs; `build.*` and assets keep their custom rows |
+| `describe` lists every prefab with components and parameters; console `prefab` and `prefab <name>` | Done |
+| Components (model, collider, rigidbody, character, health, weapon, pickup, vehicle, ai, trigger, spawner, light, audio, emitter, script) | Declared only: they describe prefabs but systems do not read them yet. `trigger`, `audio`, `emitter` and `script` are not used by any prefab |
+| Weapons: one shared stats table `weapondata.js` (pistol, rifle, shotgun: damage, rate, magazine, reload, pellets, range, spread) used by `guns.js` and the first-person `weapons.js` | Partial: the two views still exist and keep their own pose, recoil and impulse numbers; the shooter's Blaster and Repeater are mini-game weapons outside the table. Rifle and shotgun numbers changed slightly in both views to match |
+| Merge vehicles (`vehicle.js` + `geo/vehicle.js`), terrain services, `ui.js` + `workspace-ui.js`, CharacterRig interface | Planned |
 | Existing modes run through Session with parity tests | Partial: Blank level, Coast, island and first-person checked by the level and living test groups; World, First Light and the shooter games were not re-run |
 
 ## Known failing tests (both fail on `main` before this PR)
