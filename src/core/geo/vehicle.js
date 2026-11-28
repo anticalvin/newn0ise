@@ -1,6 +1,7 @@
 // Player on foot and one drivable car. Both are kinematic controllers on the streamed terrain: they sample the tile heightfields, collide with building footprints and
 // store colliders, and carry on across tile edges because they live in region metres, not in a tile. (A Rapier raycast vehicle was not benchmarked; see docs/WORLD.md.)
 import * as THREE from 'three';
+import { carMesh } from '../vehicle.js';
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 export class Walker {
@@ -26,15 +27,8 @@ export class Walker {
 export class Car {
   constructor() {
     this.x = 0; this.z = 0; this.y = 0; this.yaw = 0; this.speed = 0; this.steer = 0; this.pitch = 0; this.roll = 0; this.wheelSpin = 0; this.hue = 0.58; this.onRoad = true;
-    const g = new THREE.Group(), M = c => new THREE.MeshStandardMaterial({ color: c, roughness: 0.4, metalness: 0.35 });
-    this.bodyMat = M(0x2d5fa8);
-    const body = new THREE.Mesh(new THREE.BoxGeometry(1.86, 0.62, 4.2), this.bodyMat); body.position.y = 0.62; body.castShadow = true;
-    const cab = new THREE.Mesh(new THREE.BoxGeometry(1.64, 0.56, 2.1), new THREE.MeshStandardMaterial({ color: 0x1c2228, roughness: 0.12, metalness: 0.7 })); cab.position.set(0, 1.2, -0.25); cab.castShadow = true;
-    g.add(body, cab);
-    this.wheels = []; const wg = new THREE.CylinderGeometry(0.34, 0.34, 0.24, 14); wg.rotateZ(Math.PI / 2); const wm = new THREE.MeshStandardMaterial({ color: 0x151515, roughness: 0.9 });
-    for (const [x, z] of [[-0.95, 1.35], [0.95, 1.35], [-0.95, -1.35], [0.95, -1.35]]) { const m = new THREE.Mesh(wg, wm); m.position.set(x, 0.34, z); g.add(m); this.wheels.push(m); }
-    const lm = new THREE.MeshStandardMaterial({ color: 0xfff1c9, emissive: 0xfff1c9, emissiveIntensity: 0.9 }), tm = new THREE.MeshStandardMaterial({ color: 0xaa1111, emissive: 0xaa1111, emissiveIntensity: 0.7 });
-    for (const sx of [-0.65, 0.65]) { const h = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.14, 0.06), lm); h.position.set(sx, 0.7, 2.12); const t = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.14, 0.06), tm); t.position.set(sx, 0.7, -2.12); g.add(h, t); }
+    // one car model for the whole engine: the same carMesh the level car uses (the old hand-built box car here was a duplicate)
+    const g = new THREE.Group(), car = carMesh('#2d5fa8'); car.position.y = 0.9; g.add(car); this.bodyMat = car.userData.paint; this.wheels = car.userData.wheels;
     this.root = new THREE.Group(); this.root.add(g); this.model = g; this.root.visible = false;
   }
   setHue(h) { this.hue = h; this.bodyMat.color.setHSL(h, 0.55, 0.38); }
@@ -67,6 +61,6 @@ export class Car {
   apply(ox, oz) {
     this.root.position.set(this.x - ox, this.y, this.z - oz); this.root.rotation.set(0, this.yaw, 0);
     this.model.rotation.set(this.pitch, 0, -this.roll, 'ZXY');
-    this.wheels.forEach((m, i) => { m.rotation.x = this.wheelSpin; if (i < 2) m.rotation.y = this.steer; });
+    this.wheels.forEach((m, i) => { m.children[0].rotation.x = this.wheelSpin; m.children[1].rotation.x = this.wheelSpin; if (i < 2) m.rotation.y = this.steer; });
   }
 }

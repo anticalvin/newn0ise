@@ -38,7 +38,7 @@ export class Actor {
     const a = this.app, x = this.pos.x + Math.cos(this.yaw) * 0.12 * -side, z = this.pos.z - Math.sin(this.yaw) * 0.12 * -side;
     if (this.depth < 0.15 && this.pos.y < 2.4 && this.pos.y > a.water.level + 0.02) a.terrain.stamp(x, z, 0.16 * this.scale, 0.9);
     if (a.stepFx) a.stepFx(this, x, z, sp);
-    if (a.fx && (this.isPlayer || a.player && Math.hypot(this.pos.x - a.player.pos.x, this.pos.z - a.player.pos.z) < 30)) a.fx.play(this.pos.y < 2.4 && !a.level ? 'stepSand' : 'step', (this.isPlayer ? 0.7 : 0.5) * Math.min(1.3, 0.5 + sp * 0.12), this.isPlayer ? null : this.pos);
+    if (a.fx && (this.isPlayer || a.player && Math.hypot(this.pos.x - a.player.pos.x, this.pos.z - a.player.pos.z) < 30)) a.fx.play(a.ground.materialAt(this.pos.x, this.pos.z) === 'sand' ? 'stepSand' : 'step', (this.isPlayer ? 0.7 : 0.5) * Math.min(1.3, 0.5 + sp * 0.12), this.isPlayer ? null : this.pos);
     if (sp > 4.2 && this.depth < 0.2) a.fx.dustPuff(x, this.pos.y, z, 1, 0.35, [0.78, 0.66, 0.5], 0.8);
     if (this.depth > 0.2 && sp > 1) a.water.splash(x, z, 0.35 * this.scale);
   }

@@ -11,6 +11,7 @@ export function carMesh(color = '#c0392b') {
   add(new THREE.BoxGeometry(1.8, 0.5, 4.0), paint, 0, 0.12, 0); add(new THREE.BoxGeometry(1.5, 0.5, 1.9), glass, 0, 0.62, -0.25); add(new THREE.BoxGeometry(1.56, 0.08, 1.96), paint, 0, 0.9, -0.25);
   add(new THREE.BoxGeometry(1.7, 0.1, 0.1), dark, 0, 0.0, 2.02); add(new THREE.BoxGeometry(1.7, 0.1, 0.1), dark, 0, 0.0, -2.02);
   for (const sx of [-0.55, 0.55]) { add(new THREE.BoxGeometry(0.28, 0.12, 0.05), new THREE.MeshBasicMaterial({ color: 0xfff1c9 }), sx, 0.2, 2.02); add(new THREE.BoxGeometry(0.28, 0.1, 0.05), new THREE.MeshBasicMaterial({ color: 0xff2a1a }), sx, 0.25, -2.02); }
+  g.userData.paint = paint;
   g.userData.wheels = WHEELS.map(([x, y, z]) => { const w = new THREE.Group(), t = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.38, 0.28, 20).rotateZ(Math.PI / 2), dark), r = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.3, 12).rotateZ(Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0xaab0b8, metalness: 0.8, roughness: 0.3 })); t.castShadow = true; w.add(t, r); w.position.set(x, y - 0.4, z); g.add(w); return w; });
   return g;
 }

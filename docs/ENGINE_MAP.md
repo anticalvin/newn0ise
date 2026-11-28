@@ -24,7 +24,7 @@ game.js            three hardcoded mini-games
 - `node tools/check-cycles.mjs` fails the build on circular imports in `src/core`.
 
 ## Spine (Phase 1, partly built)
-`session.js`: `app.session` holds the state, the `InputStack` (modal, firstlight, fps, geo, vehicle over a base of edit or play; the top owns input, `session.owner()`) and the ordered fixed-step `Systems` list (`control, grab, weapons, combat, rules, physics, aim, vehicle`). `?debug=1` shows state, stack and per-system ms. `schema.js`: prefabs declare `components` and a parameter `schema`; validation, the details panel, `describe` and console `prefab <name>` derive from it. `weapondata.js`: shared weapon stats.
+`session.js`: `app.session` holds the state, the `InputStack` (modal, firstlight, fps, geo, vehicle over a base of edit or play; the top owns input, `session.owner()`) and the ordered fixed-step `Systems` list (`control, grab, weapons, combat, rules, physics, aim, vehicle`). `?debug=1` shows state, stack and per-system ms. `schema.js`: prefabs declare `components` and a parameter `schema`; validation, the details panel, `describe` and console `prefab <name>` derive from it. `weapondata.js`: shared weapon stats. `terrainservice.js`: `app.ground` interface over both terrains.
 
 ## Module sizes and fan-in (generated 2026-11-28)
 | module | size | imported by |

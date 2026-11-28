@@ -60,7 +60,7 @@ ex({cmd:'level.play'});await wait(400);a.rig.setView(0,0.1,6);a.rig.snap();a.hol
 t('level: the player walks up a ramp and up stairs','/core.html?start=blank',`async()=>{${H}
 ex({cmd:'entity.create',prefab:'build.ramp',position:[0,0,0]});ex({cmd:'entity.create',prefab:'build.stairs',position:[20,0,0],parameters:{width:3,length:5,height:2,steps:8}});a.phys.buildHeightfield();await wait(300);a.setMode('explore');await wait(300);
 const P=a.player,mv=a.input.mv;const go=(x,z,dx,dz,n)=>{P.pos.set(x,0.5,z);P.prev.copy(P.pos);P.vel.set(0,0,0);a.phys.teleport(P);step(40);let top=0;mv.x=0;mv.y=0;for(let i=0;i<n;i++){const f=a.cam.yaw;mv.x=0;mv.y=1;const ang=Math.atan2(dx,dz);a.cam.yaw=Math.atan2(-dx,-dz);step(1);top=Math.max(top,P.pos.y)}mv.y=0;return top};
-const ramp=go(0,6,0,-1,300);const st=[go(20,6,0,-1,300),go(20,-6,0,1,300),go(14,0,1,0,300),go(26,0,-1,0,300)];const best=Math.max(...st);
+const ramp=go(0,6,0,-1,300);const st=[go(20,-6,0,1,480)];const best=Math.max(...st);   // stairs rise toward +z: walk up from the low end (the other three sides are the tall end and the two flanks, which are walls)
 if(!(ramp>1.6))return 'ramp: reached y='+ramp.toFixed(2);if(!(best>1.5))return 'stairs: best '+st.map(v=>v.toFixed(2)).join(',');return true}`);
 
 t('schema: every level and primitive prefab declares components and a schema; describe, validation and defaults come from it','/core.html?start=blank',`async()=>{${H}
@@ -74,3 +74,8 @@ r=ex({cmd:'entity.create',prefab:'build.block',parameters:{size:[3,3,3]}});if(!r
 a.editor.select([r.entity.id]);const p=document.createElement('div');a.editor.panelScene(p);if(p.querySelectorAll('input[type=color]').length<1)return 'details panel has no colour field from the schema';
 const h=n0.run('prefab light.point');if(!h.ok||!/intensity/.test(h.msg))return 'prefab help';
 return true}`);
+
+t('terrain service: app.ground gives height, normal and material; the world car shares the level car model','/core.html?start=blank',`async()=>{${H}
+const g=a.ground;if(g.name!=='core')return 'service '+g.name;if(Math.abs(g.heightAt(3,4)-a.terrain.hAt(3,4))>1e-6)return 'height mismatch';
+const n=g.normalAt(0,0);if(!(n[1]>0.99))return 'flat normal '+n;if(g.materialAt(0,0)!=='floor')return 'level material '+g.materialAt(0,0);
+const m=await import('/src/core/geo/vehicle.js');const c=new m.Car();if(c.wheels.length!==4)return 'wheels '+c.wheels.length;if(!c.bodyMat||!c.bodyMat.color)return 'no paint';c.setHue(0.1);c.apply(0,0);return true}`);

@@ -41,11 +41,14 @@ Source: CORE_ENGINE_PLAN and the master prompt. One PR per phase step. Status wo
 | `describe` lists every prefab with components and parameters; console `prefab` and `prefab <name>` | Done |
 | Components (model, collider, rigidbody, character, health, weapon, pickup, vehicle, ai, trigger, spawner, light, audio, emitter, script) | Declared only: they describe prefabs but systems do not read them yet. `trigger`, `audio`, `emitter` and `script` are not used by any prefab |
 | Weapons: one shared stats table `weapondata.js` (pistol, rifle, shotgun: damage, rate, magazine, reload, pellets, range, spread) used by `guns.js` and the first-person `weapons.js` | Partial: the two views still exist and keep their own pose, recoil and impulse numbers; the shooter's Blaster and Repeater are mini-game weapons outside the table. Rifle and shotgun numbers changed slightly in both views to match |
-| Merge vehicles (`vehicle.js` + `geo/vehicle.js`), terrain services, `ui.js` + `workspace-ui.js`, CharacterRig interface | Planned |
+| Vehicles: the streamed world's car now uses the same `carMesh` as the level car (the hand-built box car in `geo/vehicle.js` was deleted) | Done for the model. The two cars still have different dynamics (arcade kinematic car on streamed terrain vs Rapier raycast vehicle) because the world has no Rapier world; one dynamics model is **Planned** and depends on putting world tiles into Rapier |
+| Terrain: `terrainservice.js` gives one interface (`app.ground.heightAt / normalAt / materialAt`) over Core terrain and the streamed world; footsteps use it | Partial: new code should use `app.ground`; existing callers still use `terrain.hAt` and `geo.heightAt` directly |
+| Merge `ui.js` + `workspace-ui.js`, CharacterRig interface | Planned |
 | Existing modes run through Session with parity tests | Partial: Blank level, Coast, island and first-person checked by the level and living test groups; World, First Light and the shooter games were not re-run |
 
-## Known failing tests (both fail on `main` before this PR)
-- `level: the player walks up a ramp and up stairs`: approaching the stair block from +z the player stops at the first step; best climb 1.38 m of 2 m. Real bug, not yet fixed.
+## Known failing tests
+- `level: the player walks up a ramp and up stairs`: fixed. It was a test bug, not an engine bug: three of the four approaches walked into the tall end or the flanks (walls), and the one real approach needed about 270 fixed steps at walking speed, more than the 300-step budget allowed from 6 m away. I tried a stair-assist in `phys.js` (hand back unspent travel after a step-up); it made climbing slower, so it was reverted.
+- (flaky, passes alone: `world:` tests sometimes report "not ready" when the streamed world is slow to load under software GL.)
 - `world: ocean reuses Core water ...`: ocean height window disagrees with `GeoWorld.heightAt`.
 - Not re-run after this PR: the full suite (only `level:`, `world:`, `assets:` groups were run; `character:` was run and its one failure was a test edit of mine, reverted).
 
