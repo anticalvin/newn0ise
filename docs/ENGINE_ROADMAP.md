@@ -60,6 +60,13 @@ Source: CORE_ENGINE_PLAN and the master prompt. One PR per phase step. Status wo
 | Test projects declare checks and `npm run test:project -- <id>` runs them | Planned: manifests list a `boots` check only |
 | 20 MB scene round trip | Not measured: the IndexedDB path is tested with a small scene and a forced localStorage quota failure |
 
+## Engineering ledger (directive: unified living world engine)
+| Date | Decision | Why | Compatibility |
+|---|---|---|---|
+| 2026-11-28 | Interaction foundation: `interact.js` + `prefabs/interactive.js`; affordances declared per prefab, one runtime, runtime state kept out of records. See `INTERACTION.md` | Audit found no shared interaction system: the retail door is private code and writes `doorOpen` into the saved record, so Play changes the authored project | Additive. New prefabs `interact.*`, new commands `interact.discover/perform`, new component name `interaction`. Old `store.door` untouched until it is migrated |
+| 2026-11-28 | Baseline: `test:core` first 91 tests passed, 1 failed (the known ocean height test); the run was stopped before finishing, so there is no full-suite number for this revision | time | none |
+| open | Next consolidation: move `retail` door/products onto affordances; add triggers + an event-condition-action interpreter so a delivery mission is data | needed for the directive's acceptance scenario | |
+
 ## Known failing tests
 - `level: the player walks up a ramp and up stairs`: fixed. It was a test bug, not an engine bug: three of the four approaches walked into the tall end or the flanks (walls), and the one real approach needed about 270 fixed steps at walking speed, more than the 300-step budget allowed from 6 m away. I tried a stair-assist in `phys.js` (hand back unspent travel after a step-up); it made climbing slower, so it was reverted.
 - (flaky, passes alone: `world:` tests sometimes report "not ready" when the streamed world is slow to load under software GL.)

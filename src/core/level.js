@@ -5,6 +5,7 @@ import { Car } from './vehicle.js';
 import { Guns, GUNS } from './guns.js';
 import { gridTexture, kindOf, LEVEL_PREFABS } from './levelkit.js';
 import { clamp } from './util.js';
+import { InteractWorld } from './interact.js';
 
 const D2R = Math.PI / 180;
 
@@ -34,6 +35,7 @@ export class Runtime {
       else if (r.prefab.startsWith('pickup.')) this.pick.push({ r, o, k, on: true, back: 0 });
       else if (r.prefab === 'spawn.player') { spawn = r; o.visible = false; this.hidden.push(o); }
     }
+    this.interact = new InteractWorld(app);   // affordances of every interactive entity; runtime state only, records untouched
     const P = app.player; this.before = { spawn: app.spawn.slice() };
     if (spawn) { const [sx, sy, sz] = spawn.transform.position, sw = spawn.transform.rotation[1]; app.spawn = [sx, sz, sw, sy]; }
     else if (app.level) app.spawn = [0, 0, Math.PI, 0];
@@ -41,7 +43,7 @@ export class Runtime {
     P.lock = null; app.guns.reset();
   }
   step(dt) {
-    this.t += dt; const A = this.a, P = A.player, g = P && P.alive && !A.driving;
+    this.t += dt; const A = this.a, P = A.player, g = P && P.alive && !A.driving; this.interact.tick(dt);
     for (const k of this.pick) {
       const s = k.o.userData.spin; if (s) { s.rotation.y += dt * 1.6; s.position.y = 0.7 + Math.sin(this.t * 2.2) * 0.08; }
       if (!k.on) { if (k.back && this.t > k.back) { k.on = true; k.o.visible = true; } continue; }
@@ -54,7 +56,7 @@ export class Runtime {
     for (const b of this.props) if (b.body && b.p.y < -40) { b.body.setTranslation({ x: 0, y: 5, z: 0 }, true); b.body.setLinvel({ x: 0, y: 0, z: 0 }, true); }
   }
   dispose() {
-    const A = this.a; A.grab.release(); if (A.driving) A.lv.exitCar(); for (const c of this.cars) c.dispose(); for (const b of this.props) A.boulders.remove(b);
+    const A = this.a; this.interact.dispose(); A.grab.release(); if (A.driving) A.lv.exitCar(); for (const c of this.cars) c.dispose(); for (const b of this.props) A.boulders.remove(b);
     for (const e of this.actors) A.combat.remove(e); for (const o of this.hidden) o.visible = true;
     for (const k of this.pick) { k.o.visible = true; if (k.o.userData.spin) { k.o.userData.spin.rotation.y = 0; k.o.userData.spin.position.y = 0.7; } } A.guns.reset(); A.spawn = this.before.spawn;
   }
@@ -73,7 +75,7 @@ export function createLevel(app) {
     app.driving = null; app.session.leave('vehicle'); car.driven = false; car.input.thr = car.input.str = 0; P.hidden = false; P.frozen = false; P.root.visible = true; if (P.col) { P.col.setSensor(false); if (P.colGroups !== undefined) P.col.setCollisionGroups(P.colGroups); }
     P.pos.set(car.cp.x + rx * 2.3, car.cp.y + 0.6, car.cp.z + rz * 2.3); P.prev.copy(P.pos); P.vel.set(0, 0, 0); app.phys.teleport(P); app.rig.tDist = 5.2; app.rig.tPitch = 0.26; };
   L.nearCar = () => { const P = app.player; if (!L.rt || !P || !P.alive) return null; for (const c of L.rt.cars) if (Math.hypot(c.cp.x - P.pos.x, c.cp.z - P.pos.z) < 3.4 && Math.abs(c.cp.y - P.pos.y) < 3) return c; return null; };
-  L.interact = () => { if (app.driving) { L.exitCar(); return true; } const c = L.nearCar(); if (c) { L.enterCar(c); return true; } return false; };
+  L.interact = () => { if (app.driving) { L.exitCar(); return true; } const P0 = app.player; if (L.rt && P0 && P0.alive) { const r = L.rt.interact.use(P0); if (r.ok) return true; if (r.code === 'interact.busy') { app.ui.toast(r.msg); return true; } } const c = L.nearCar(); if (c) { L.enterCar(c); return true; } return false; };
   L.saveFile = () => { const b = new Blob([JSON.stringify(L.exportDoc(), null, 1)], { type: 'application/json' }), u = URL.createObjectURL(b), a = document.createElement('a'); a.href = u; a.download = (app.name || 'level').toLowerCase().replace(/[^a-z0-9]+/g, '-') + '.n0level.json'; a.click(); setTimeout(() => URL.revokeObjectURL(u), 4000); };
   L.openFile = () => { const i = document.createElement('input'); i.type = 'file'; i.accept = '.json,.n0level.json,application/json'; i.onchange = async () => { const f = i.files[0]; if (!f) return; try { const r = app.core.exec({ cmd: 'level.load', doc: JSON.parse(await f.text()) }); app.ui.toast(r.msg); } catch (e) { app.ui.toast('That file is not valid JSON.'); } }; i.click(); };
   // ---- .n0level.json ----
@@ -113,6 +115,7 @@ export function sampleLevel(app) {
   mk('prop.barrel', 5.5, 0, 0); mk('prop.barrel', 6.6, 0, 0.4); mk('prop.boulder', -3, 0, 2, 0, { r: 1.1 });
   mk('pickup.pistol', -2, 0, 8); mk('pickup.rifle', 2, 0, 8); mk('pickup.shotgun', -4, 0, 8); mk('pickup.health', 0, 0, 6); mk('pickup.ammo', 4, 0, 6);
   mk('actor.dummy', -4, 0, -1); mk('actor.brawler', 4, 0, -12, 180); mk('actor.heavy', -9, 2, -6, 90);
+  mk('interact.door', -9, 0, 11, 0); mk('interact.chair', -11, 0, 7, 0); mk('build.block', -6, 0, 11, 0, { size: [1.4, 0.8, 0.8], color: '#a89c8c' }); mk('interact.drink', -6, 0.8, 11); mk('interact.parcel', -6, 0, 8);
   mk('vehicle.car', 13, 0, 8, 90); mk('light.point', 0, 0, -2, 0, { color: '#ffd9a0', intensity: 24 });
   if (n0.length > 1) core.group(n0.length, 'Sample level'); return n0.length;
 }

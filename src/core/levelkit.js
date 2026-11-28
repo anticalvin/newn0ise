@@ -40,13 +40,14 @@ const SHAPES = {
   'build.block': { n: 'Block', size: [2, 2, 2], geo: 'box', color: '#9aa1ab' }, 'build.pillar': { n: 'Pillar', size: [0.8, 4, 0.8], geo: 'box', color: '#a89c8c' },
   'build.ramp': { n: 'Ramp', size: [4, 2, 6], geo: 'ramp', color: '#8e98a6' }, 'build.cylinder': { n: 'Cylinder', size: [2, 2, 2], geo: 'cyl', color: '#98a2ad' }, 'build.sphere': { n: 'Sphere', size: [2, 2, 2], geo: 'sphere', color: '#b0a090' },
 };
-export const CATS = ['Build', 'Physics props', 'Pickups', 'Characters', 'Gameplay'];
+export const CATS = ['Build', 'Physics props', 'Pickups', 'Characters', 'Interactive', 'Gameplay'];
 // the palette: [prefab, name, category, params]
 export const LEVEL_ITEMS = [
   ...Object.entries(SHAPES).map(([id, d]) => [id, d.n, 'Build', {}]),
   ['prop.crate', 'Crate', 'Physics props', {}], ['prop.barrel', 'Barrel', 'Physics props', {}], ['prop.boulder', 'Boulder', 'Physics props', { r: 1.1 }],
   ['pickup.pistol', 'Pistol', 'Pickups', {}], ['pickup.rifle', 'Rifle', 'Pickups', {}], ['pickup.shotgun', 'Shotgun', 'Pickups', {}], ['pickup.health', 'Health', 'Pickups', {}], ['pickup.ammo', 'Ammo', 'Pickups', {}],
   ['actor.brawler', 'Brawler', 'Characters', {}], ['actor.heavy', 'Heavy', 'Characters', {}], ['actor.dummy', 'Training dummy', 'Characters', {}],
+  ['interact.door', 'Door', 'Interactive', {}], ['interact.chair', 'Chair', 'Interactive', {}], ['interact.drink', 'Drink', 'Interactive', {}], ['interact.parcel', 'Parcel', 'Interactive', {}],
   ['spawn.player', 'Player start', 'Gameplay', {}], ['vehicle.car', 'Car', 'Gameplay', { color: '#c0392b' }], ['light.point', 'Point light', 'Gameplay', { color: '#ffd9a0', intensity: 24 }],
 ];
 export const kindOf = id => id.split('.')[1];

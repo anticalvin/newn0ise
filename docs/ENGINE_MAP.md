@@ -10,7 +10,7 @@ core.js            Core: one command gateway (Core.exec), undo/redo, serialize/l
 entities.js        entity registry: records {id, prefab, transform, parameters, components, tags}; meshes/colliders are derived
 prefabs/ levelkit.js buildkit.js   prefab packs (build kit, level kit, props)
 phys.js dynents.js simlite.js      Rapier world, entity-to-body bridge, fallback physics (to be removed, Phase 0 follow-up)
-actor.js character.js combat.js grab.js guns.js weapons.js vehicle.js   living-world gameplay
+actor.js character.js combat.js interact.js grab.js guns.js weapons.js vehicle.js   living-world gameplay
 camera.js input.js fx.js hud.js tune.js lab.js                          presentation and tuning
 editor3d.js ui.js  editor, panels, start sheet and workspace shell (workspace-ui.js was folded into ui.js)
 projectstore.js projects.js  project manifest, IndexedDB store, .n0project zip, export player

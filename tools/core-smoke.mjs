@@ -55,6 +55,7 @@ try{const ww=await import('./core-smoke-workspace.mjs');extra=extra.concat(ww.te
 try{const sx=await import('./core-smoke-studio.mjs');extra=extra.concat(sx.tests||[]);}catch(e){}
 try{const fl=await import('./core-smoke-firstlight.mjs');extra=extra.concat(fl.tests||[]);}catch(e){}
 try{const ch=await import('./core-smoke-character.mjs');extra=extra.concat(ch.tests||[]);}catch(e){}
+try{const ix=await import('./core-smoke-interact.mjs');extra=extra.concat(ix.tests||[]);}catch(e){console.error('interact tests failed to load:',e.message);}
 for(const [n,u,b] of extra)T.push([n,u,b]);
 let fail=0;const base0={};
 for(const [name,url,body] of T){

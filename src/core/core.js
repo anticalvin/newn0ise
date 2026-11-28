@@ -56,6 +56,8 @@ export const COMMANDS = {
   'store.door': '{id?, open?:boolean} → open, close or toggle the store door.',
   'product.take': '{id?, key?} → pick up a product (by key, or the nearest to the player). Saved with the scene.',
   'product.return': '{id?, key?} → put a product back (the last one taken by default).',
+  'interact.discover': '{actor?:"player"|actorId} → what that actor can do right now (Play only): [{entity, type, verb, available, reason}].',
+  'interact.perform': '{entity, type:"open"|"sit"|"stand"|"carry"|"place"|"consume", actor?} → run an affordance for the player or any fighter. Same path the Use key takes. Fails with interact.range / interact.busy and says why.',
   'interact.use': '{} → what the Use button does: take the nearest product, or toggle the nearest door.',
   describe: '{} → this list plus the current limits.',
   state: '{} → a summary of the scene (preset, counts, environment, player, imported worlds).',
@@ -151,6 +153,13 @@ export class Core {
         }
         case 'physics.models': {
           const mode = c.mode === 'static' ? 'static' : 'dynamic', n = a.dyn.setAll(mode); return { ok: true, msg: n + ' model' + (n === 1 ? '' : 's') + ' ' + (mode === 'dynamic' ? 'now physical' : 'fixed in place') };
+        }
+        case 'interact.discover': case 'interact.perform': {
+          const w = a.lv.rt && a.lv.rt.interact; if (!w) return { ok: false, code: 'interact.idle', msg: 'Interactions run in Play. Start Play first (level.play).' };
+          const who = c.actor == null || c.actor === 'player' ? a.player : a.combat.actors.find(x => x.id === c.actor); if (!who) return { ok: false, code: 'interact.actor', msg: `No actor "${c.actor}".`, path: 'actor' };
+          if (c.cmd === 'interact.discover') return { ok: true, msg: '', list: w.discover(who).map(({ aff, ...d }) => d) };
+          if (!c.type) return { ok: false, code: 'interact.invalid', msg: 'type is required', path: 'type' };
+          return w.perform(who, c.entity, String(c.type));
         }
         case 'level.play': a.lv.play(); return { ok: true, msg: 'Playing' };
         case 'level.stop': a.lv.stop(); return { ok: true, msg: 'Stopped' };

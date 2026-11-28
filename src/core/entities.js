@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { patchStandard } from './glsl.js';
 import { registerBuildKit } from './buildkit.js';
 import { registerLevelKit } from './levelkit.js';
+import { registerInteractive } from './prefabs/interactive.js';
 import { checkSchema, validateParams, describePrefab, field } from './schema.js';
 
 export const LIMIT = 2000;
@@ -27,7 +28,7 @@ export class Entities {
     this.a = app; this.recs = new Map(); this.rt = new Map(); this.prefabs = new Map(); this.group = new THREE.Group(); this.group.name = 'entities'; app.scene.add(this.group);
     this.mats = {}; this._cols = false; this.nextId = 1;
     this.register('prim.box', primPrefab('box')); this.register('prim.sphere', primPrefab('sphere')); this.register('prim.cylinder', primPrefab('cylinder'));
-    this.register('asset', assetPrefab); registerBuildKit(this, { toWorld, bad, vec3, hexOk, isNum }); registerLevelKit(this, { vec3, bad });
+    this.register('asset', assetPrefab); registerBuildKit(this, { toWorld, bad, vec3, hexOk, isNum }); registerLevelKit(this, { vec3, bad }); registerInteractive(this, { toWorld });
   }
   get size() { return this.recs.size; }
   // A prefab may declare {schema, components, label, category}; when it has a schema and no validate of its own, validation is derived from it.

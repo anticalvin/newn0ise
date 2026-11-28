@@ -3,7 +3,7 @@
 // Types: number, int, bool, color, vec3, enum, string. Records stay plain JSON; schemas never get saved.
 // Components are a declaration of what a prefab IS made of (model, collider, rigidbody, character, health, weapon, pickup, vehicle, ai, trigger, spawner, light, audio, emitter, script).
 // Honest status: today they describe the prefab (for describe, the panel and docs); systems do not yet read them to decide what to run.
-export const COMPONENTS = ['model', 'collider', 'rigidbody', 'character', 'health', 'weapon', 'pickup', 'vehicle', 'ai', 'trigger', 'spawner', 'light', 'audio', 'emitter', 'script'];
+export const COMPONENTS = ['model', 'collider', 'rigidbody', 'character', 'health', 'weapon', 'pickup', 'vehicle', 'ai', 'trigger', 'spawner', 'light', 'audio', 'emitter', 'script', 'interaction'];
 export const TYPES = ['number', 'int', 'bool', 'color', 'vec3', 'enum', 'string'];
 const isNum = v => typeof v === 'number' && Number.isFinite(v);
 const hexOk = v => typeof v === 'string' && /^#[0-9a-fA-F]{6}$/.test(v);
