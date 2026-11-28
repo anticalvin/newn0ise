@@ -21,6 +21,7 @@ import { readWorld, buildWorld, flatSpot, collidersFor } from './world.js';
 import { Core, LIMITS } from './core.js';
 import { Input } from './input.js';
 import { Session } from './session.js';
+import { createProjects } from './projects.js';
 import { coreTerrainService, geoTerrainService, activeGround } from './terrainservice.js';
 import { FX } from './fx.js';
 import { CamRig } from './camera.js';
@@ -29,7 +30,7 @@ import { Combat } from './combat.js';
 import { Hud } from './hud.js';
 import { TUNE } from './tune.js';
 import { initLab, flatArena } from './lab.js';
-import { UI } from './ui.js';
+import { UI, mountWorkspace } from './ui.js';
 import { clamp } from './util.js';
 import { connectBridge } from './api.js';
 import { Entities } from './entities.js';
@@ -38,7 +39,6 @@ import { retailPrefab } from './prefabs/retail.js';
 import { createTelemetry } from './debug.js';
 import { GeoWorld } from './geo/manager.js';
 import { OverviewMap } from './geo/map.js';
-import { mountWorkspace } from './workspace-ui.js';
 import { createFirstLightHost } from './first-light/host.js';
 
 const canvas = document.getElementById('c');
@@ -288,8 +288,13 @@ app.post = createPost(app);
 app.shooter = createShooter(app); app.lv = createLevel(app); app.sampleLevel = () => sampleLevel(app);
 app.game = createGame(app);
 app.start = start;
+app.projects = createProjects(app);
 { const q = new URLSearchParams(location.search).get('mcp'); if (q) setTimeout(() => connectBridge(app, q.startsWith('ws') ? q : undefined), 800); }
-{ const sp = new URLSearchParams(location.search), q = sp.get('start'); if (q === 'world') { ui.hideStart(); app.geo.open({ lat: sp.get('lat') ? +sp.get('lat') : undefined, lon: sp.get('lon') ? +sp.get('lon') : undefined, resume: sp.get('resume') === '1' }).then(() => ui.brand()); } else if (q === 'blank' || q === 'island' || q === 'coast' || q === 'continue' || q === 'lab' || q === 'physics' || q === 'first-light' || ['starter', 'sandbox', 'proving', 'photowalk', 'range', 'arena', 'coins'].includes(q)) { ui.hideStart(); start(q); } else ui.showStart(core.hasSave()); }
+// Export player: a published HTML sets window.__N0_PLAYER__ ({scene | route, commands}); run it with no editor chrome and no autosave
+if (window.__N0_PLAYER__) {
+  const P = window.__N0_PLAYER__; document.body.dataset.player = '1'; core.noSave = true; ui.hideStart();
+  (async () => { try { if (P.scene) await core.load(P.scene); else await start(P.route || 'blank'); for (const c of P.commands || []) core.exec(c); if (!['range', 'arena', 'coins'].includes(P.route)) app.setMode('explore'); document.title = P.name || document.title; app.playerReady = true; } catch (e) { ui.toast('Could not start: ' + (e.message || e)); app.playerError = String(e.message || e); } })();
+} else { const sp = new URLSearchParams(location.search), q = sp.get('start'); if (q === 'world') { ui.hideStart(); app.geo.open({ lat: sp.get('lat') ? +sp.get('lat') : undefined, lon: sp.get('lon') ? +sp.get('lon') : undefined, resume: sp.get('resume') === '1' }).then(() => ui.brand()); } else if (q === 'blank' || q === 'island' || q === 'coast' || q === 'continue' || q === 'lab' || q === 'physics' || q === 'first-light' || ['starter', 'sandbox', 'proving', 'photowalk', 'range', 'arena', 'coins'].includes(q)) { ui.hideStart(); start(q); } else ui.showStart(core.hasSave()); }
 
 function resize() { const w = innerWidth, h = innerHeight; camera.aspect = w / h; camera.updateProjectionMatrix(); renderer.setSize(w, h, false); sand.setScale(renderer, camera); }
 const maxPr = () => Math.min(devicePixelRatio, 2);

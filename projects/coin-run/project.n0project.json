@@ -1,0 +1,26 @@
+{
+ "format": "n0ise.project",
+ "version": 1,
+ "name": "Coin run",
+ "template": "platformer",
+ "startScene": {
+  "route": "coins",
+  "commands": []
+ },
+ "scenes": [],
+ "assets": [],
+ "rules": {},
+ "tests": {
+  "checks": [
+   "boots"
+  ]
+ },
+ "seed": {
+  "status": "ready",
+  "systems": [
+   "physics",
+   "character"
+  ],
+  "about": "Platforming mini game: collect the coins before time runs out."
+ }
+}

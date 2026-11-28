@@ -12,7 +12,8 @@ prefabs/ levelkit.js buildkit.js   prefab packs (build kit, level kit, props)
 phys.js dynents.js simlite.js      Rapier world, entity-to-body bridge, fallback physics (to be removed, Phase 0 follow-up)
 actor.js character.js combat.js grab.js guns.js weapons.js vehicle.js   living-world gameplay
 camera.js input.js fx.js hud.js tune.js lab.js                          presentation and tuning
-editor3d.js ui.js workspace-ui.js  editor, panels, start sheet
+editor3d.js ui.js  editor, panels, start sheet and workspace shell (workspace-ui.js was folded into ui.js)
+projectstore.js projects.js  project manifest, IndexedDB store, .n0project zip, export player
 level.js           level creator Play runtime (.n0level.json)
 world.js world-modes.js geo/       streamed world
 first-light/       full game slice

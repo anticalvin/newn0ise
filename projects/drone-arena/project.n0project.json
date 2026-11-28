@@ -1,0 +1,26 @@
+{
+ "format": "n0ise.project",
+ "version": 1,
+ "name": "Drone arena",
+ "template": "fps",
+ "startScene": {
+  "route": "arena",
+  "commands": []
+ },
+ "scenes": [],
+ "assets": [],
+ "rules": {},
+ "tests": {
+  "checks": [
+   "boots"
+  ]
+ },
+ "seed": {
+  "status": "ready",
+  "systems": [
+   "weapons",
+   "ai"
+  ],
+  "about": "Waves of drones. They fly straight at you: there is no pathfinding yet."
+ }
+}

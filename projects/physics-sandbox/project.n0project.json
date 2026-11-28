@@ -1,0 +1,25 @@
+{
+ "format": "n0ise.project",
+ "version": 1,
+ "name": "Physics sandbox",
+ "template": "sandbox",
+ "startScene": {
+  "route": "physics",
+  "commands": []
+ },
+ "scenes": [],
+ "assets": [],
+ "rules": {},
+ "tests": {
+  "checks": [
+   "boots"
+  ]
+ },
+ "seed": {
+  "status": "ready",
+  "systems": [
+   "physics"
+  ],
+  "about": "Flat yard: every catalog model as a rigid body."
+ }
+}

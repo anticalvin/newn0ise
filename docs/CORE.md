@@ -86,7 +86,7 @@ The in-app guide (`?`) shows the same table; keep both in step.
 
 Entities, assets and the convenience store: see [core-architecture.md](core-architecture.md) and [CORE_ASSETS.md](CORE_ASSETS.md). Use the Place tab to search assets or build a store; F, RB or the Use button opens the door and picks up the nearest product. Telemetry: `core.html?debug=1`.
 
-## Workspace shell (`src/core/workspace-ui.js`, `ui/core-workspace.css`)
+## Workspace shell (`src/core/ui.js` (folded in from workspace-ui.js), `ui/core-workspace.css`)
 
 The launcher, workspace navigation, inspector and status bar are one bundled module, mounted once from `main.js` after `window.n0` exists (`n0.workspace`). It is a presentation layer over the legacy `UI` class and `Core.exec`; it owns no simulation state. `mountWorkspace()` is idempotent and `n0.workspace.dispose()` removes every node, listener, timer and method patch it added.
 

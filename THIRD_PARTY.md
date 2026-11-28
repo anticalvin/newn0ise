@@ -87,3 +87,4 @@ The 3D model browser calls the Sketchfab Data API v3 from the visitor's browser.
 Checked 2026-11-28 against each package's own LICENSE and package.json.
 - three 0.187.0, MIT, https://github.com/mrdoob/three.js : renderer, addons (GLTFLoader, TransformControls, post passes). Bundled into `assets/core.js`.
 - @dimforge/rapier3d-compat 0.14.0, Apache-2.0, https://github.com/dimforge/rapier.js : physics; wasm embedded in the package, bundled into `assets/core.js`. (0.21.0 exists; kept at 0.14.0 so physics behaviour is unchanged. Upgrading is a separate, tested step.)
+- fflate 0.8.2, MIT, https://github.com/101arrowz/fflate : `.n0project` zip import and export. Checked 2026-11-28.

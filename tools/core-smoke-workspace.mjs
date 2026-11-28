@@ -3,7 +3,7 @@ export const tests=[];const t=(name,url,body)=>tests.push([name,url,body]);
 const W="const wait=ms=>new Promise(r=>setTimeout(r,ms));await wait(600);const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)];const click=s=>{const e=typeof s==='string'?q(s):s;if(!e)throw new Error('missing '+s);e.click();};";
 
 t('workspace: mounts once, launcher tabs and six templates','/core.html',`async()=>{${W}
-if(!n0.workspace)return 'workspace not mounted';const again=(await import('/src/core/workspace-ui.js?x='+Date.now())).mountWorkspace(n0);if(again!==n0.workspace)return 'mount is not idempotent';
+if(!n0.workspace)return 'workspace not mounted';const again=(await import('/src/core/ui.js?x='+Date.now())).mountWorkspace(n0);if(again!==n0.workspace)return 'mount is not idempotent';
 if(qa('.ws-sidebar').length!==1)return 'duplicate sidebar';
 if(!q('#start.on'))return 'launcher not shown on first run';
 for(const tab of ['Create','Projects','Examples','Labs']){click('[data-tab="'+tab+'"]');if(q('[data-tab="'+tab+'"]').getAttribute('aria-pressed')!=='true')return 'tab '+tab;}

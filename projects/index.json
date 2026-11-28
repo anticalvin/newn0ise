@@ -1,0 +1,209 @@
+{
+ "generated": "node tools/projects-index.mjs",
+ "projects": [
+  {
+   "id": "blank-level",
+   "name": "Blank level",
+   "template": "level",
+   "route": "blank",
+   "commands": [],
+   "status": "ready",
+   "systems": [
+    "physics",
+    "character",
+    "combat",
+    "weapons",
+    "vehicle",
+    "rules"
+   ],
+   "about": "Empty grid floor: build a level and Play it.",
+   "manifest": "projects/blank-level/project.n0project.json"
+  },
+  {
+   "id": "coast-demo",
+   "name": "Coast demo",
+   "template": "third-person",
+   "route": "coast",
+   "commands": [],
+   "status": "ready",
+   "systems": [
+    "physics",
+    "character",
+    "combat"
+   ],
+   "about": "Sculptable island with beach props, crates, a dummy and a brawler.",
+   "manifest": "projects/coast-demo/project.n0project.json"
+  },
+  {
+   "id": "physics-sandbox",
+   "name": "Physics sandbox",
+   "template": "sandbox",
+   "route": "physics",
+   "commands": [],
+   "status": "ready",
+   "systems": [
+    "physics"
+   ],
+   "about": "Flat yard: every catalog model as a rigid body.",
+   "manifest": "projects/physics-sandbox/project.n0project.json"
+  },
+  {
+   "id": "proving-ground",
+   "name": "Proving ground",
+   "template": "sandbox",
+   "route": "proving",
+   "commands": [],
+   "status": "ready",
+   "systems": [
+    "physics",
+    "character"
+   ],
+   "about": "Test course for movement.",
+   "manifest": "projects/proving-ground/project.n0project.json"
+  },
+  {
+   "id": "shooting-range",
+   "name": "Shooting range",
+   "template": "fps",
+   "route": "range",
+   "commands": [],
+   "status": "ready",
+   "systems": [
+    "weapons"
+   ],
+   "about": "First-person range with targets.",
+   "manifest": "projects/shooting-range/project.n0project.json"
+  },
+  {
+   "id": "drone-arena",
+   "name": "Drone arena",
+   "template": "fps",
+   "route": "arena",
+   "commands": [],
+   "status": "ready",
+   "systems": [
+    "weapons",
+    "ai"
+   ],
+   "about": "Waves of drones. They fly straight at you: there is no pathfinding yet.",
+   "manifest": "projects/drone-arena/project.n0project.json"
+  },
+  {
+   "id": "coin-run",
+   "name": "Coin run",
+   "template": "platformer",
+   "route": "coins",
+   "commands": [],
+   "status": "ready",
+   "systems": [
+    "physics",
+    "character"
+   ],
+   "about": "Platforming mini game: collect the coins before time runs out.",
+   "manifest": "projects/coin-run/project.n0project.json"
+  },
+  {
+   "id": "first-light",
+   "name": "First Light",
+   "template": "third-person",
+   "route": "first-light",
+   "commands": [],
+   "status": "ready",
+   "systems": [
+    "character",
+    "combat",
+    "audio"
+   ],
+   "about": "The full game slice.",
+   "manifest": "projects/first-light/project.n0project.json"
+  },
+  {
+   "id": "combat-lab",
+   "name": "Combat lab",
+   "template": "sandbox",
+   "route": "lab",
+   "commands": [],
+   "status": "ready",
+   "systems": [
+    "character",
+    "combat"
+   ],
+   "about": "Flat arena with the Tune panel.",
+   "manifest": "projects/combat-lab/project.n0project.json"
+  },
+  {
+   "id": "vehicle-yard",
+   "name": "Vehicle yard",
+   "template": "driving",
+   "route": "blank",
+   "commands": [
+    {
+     "cmd": "entity.create",
+     "prefab": "build.ramp",
+     "position": [
+      0,
+      0,
+      -14
+     ],
+     "parameters": {
+      "size": [
+       6,
+       2,
+       10
+      ]
+     }
+    },
+    {
+     "cmd": "entity.create",
+     "prefab": "build.block",
+     "position": [
+      12,
+      0,
+      -8
+     ],
+     "parameters": {
+      "size": [
+       4,
+       1,
+       4
+      ]
+     }
+    },
+    {
+     "cmd": "entity.create",
+     "prefab": "build.cylinder",
+     "position": [
+      -10,
+      0,
+      -6
+     ]
+    },
+    {
+     "cmd": "entity.create",
+     "prefab": "vehicle.car",
+     "position": [
+      0,
+      0,
+      6
+     ]
+    },
+    {
+     "cmd": "entity.create",
+     "prefab": "spawn.player",
+     "position": [
+      4,
+      0,
+      8
+     ]
+    }
+   ],
+   "status": "experimental",
+   "systems": [
+    "physics",
+    "vehicle"
+   ],
+   "about": "A car, a ramp, a block and a cylinder on the grid floor. Press F to drive.",
+   "manifest": "projects/vehicle-yard/project.n0project.json"
+  }
+ ]
+}

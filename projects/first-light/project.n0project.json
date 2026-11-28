@@ -1,0 +1,27 @@
+{
+ "format": "n0ise.project",
+ "version": 1,
+ "name": "First Light",
+ "template": "third-person",
+ "startScene": {
+  "route": "first-light",
+  "commands": []
+ },
+ "scenes": [],
+ "assets": [],
+ "rules": {},
+ "tests": {
+  "checks": [
+   "boots"
+  ]
+ },
+ "seed": {
+  "status": "ready",
+  "systems": [
+   "character",
+   "combat",
+   "audio"
+  ],
+  "about": "The full game slice."
+ }
+}

@@ -6,14 +6,15 @@
     "build": "node tools/build.mjs",
     "test:parity": "node tools/parity.mjs",
     "check:bundles": "node tools/build.mjs && git diff --exit-code -- assets effects.html studio.html",
-    "test": "npm run check:bundles && npm run check:cycles && npm run test:models && npm run test:parity && npm run test:ui && npm run test:core",
+    "test": "npm run check:bundles && npm run check:cycles && npm run check:projects && npm run test:models && npm run test:parity && npm run test:ui && npm run test:core",
     "test:models": "node --test studio-app/test/model.test.cjs studio-app/test/procedural-vector.test.mjs studio-app/test/sketchfab.test.mjs studio-app/test/viewport.test.cjs studio-app/test/lab-canvas.test.mjs studio-app/test/pathedit.test.cjs studio-app/test/grid.test.cjs studio-app/test/timeline-view.test.cjs studio-app/test/procgraph.test.cjs studio-app/test/palette.test.cjs studio-app/test/trace.test.cjs",
     "test:core": "node tools/core-smoke.mjs",
     "test:sim": "node tools/sim-test.mjs",
     "test:character": "node tools/core-smoke.mjs character:",
     "test:world": "node tools/world/check_geo.mjs && node tools/core-smoke.mjs world:",
     "test:ui": "node tools/ui-check.mjs",
-    "check:cycles": "node tools/check-cycles.mjs"
+    "check:cycles": "node tools/check-cycles.mjs",
+    "check:projects": "node tools/projects-index.mjs --check"
   },
   "devDependencies": {
     "@codemirror/autocomplete": "6.20.4",
@@ -25,6 +26,7 @@
     "@dimforge/rapier3d-compat": "0.14.0",
     "codemirror": "6.0.2",
     "esbuild": "0.25.5",
+    "fflate": "0.8.2",
     "three": "0.187.0"
   }
 }
