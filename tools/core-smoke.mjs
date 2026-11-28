@@ -27,6 +27,8 @@ ws.addEventListener('message',e=>{const m=JSON.parse(e.data);if(m.id&&wait.has(m
 const send=(method,params={})=>new Promise(ok=>{const i=++id;wait.set(i,ok);ws.send(JSON.stringify({id:i,method,params}));});
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 await send('Runtime.enable');await send('Page.enable');
+// the page is fully bundled (no import map); tests that import src/ modules directly get the vendored three from node_modules
+await send('Page.addScriptToEvaluateOnNewDocument',{source:`(()=>{const add=()=>{const s=document.createElement('script');s.type='importmap';s.textContent=JSON.stringify({imports:{three:'/node_modules/three/build/three.module.js','three/addons/':'/node_modules/three/examples/jsm/'}});(document.head||document.documentElement).appendChild(s);};if(document.documentElement)add();else{const o=new MutationObserver(()=>{if(document.documentElement){o.disconnect();add();}});o.observe(document,{childList:true});}})();`});
 await send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
 const ev=async expr=>{const r=await send('Runtime.evaluate',{expression:expr,awaitPromise:true,returnByValue:true,timeout:120000});if(r.exceptionDetails)return 'threw: '+(r.exceptionDetails.exception&&r.exceptionDetails.exception.description||r.exceptionDetails.text).split('\n')[0];return r.result.value;};
 const open=async url=>{errors.length=0;await send('Page.navigate',{url:base+url});for(let i=0;i<60;i++){await sleep(500);if(await ev('!!(window.__hum||(window.n0&&window.n0.app&&window.n0.app.phys&&(window.n0.app.phys.ready||window.n0.app.phys.failed)))'))break;}await sleep(500);};

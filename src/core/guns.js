@@ -23,12 +23,12 @@ export class Guns {
   addAmmo(n) { for (const k in this.inv) this.inv[k].reserve += Math.ceil(GUNS[k].mag * n); this.hud(); }
   equip(kind) { if (kind && !this.inv[kind]) return; if (kind === this.cur) kind = null; this.cur = kind; this.reloadT = 0; this.sync(); this.hud(); this.a.fx.play('click', 0.8); }
   sync() { const P = this.a.player; if (P) { P.character.setGun(this.cur); P.aim = !!this.cur; } }
-  reload() { const s = this.cur && this.inv[this.cur], g = this.cur && GUNS[this.cur]; if (!s || this.reloadT > 0 || s.mag >= g.mag || s.reserve <= 0) return; this.reloadT = g.reload; this.a.fx.play('click', 1); }
+  reload() { const s = this.cur && this.inv[this.cur], g = this.cur && GUNS[this.cur]; if (!s || this.reloadT > 0 || s.mag >= g.mag || s.reserve <= 0) return; this.reloadT = g.reload; this.a.fx.play('reload', 0.9); }
   hud() { const s = this.cur && this.inv[this.cur]; this.el.style.opacity = this.cur ? 1 : 0; if (s) { this.el.children[0].textContent = this.reloadT > 0 ? 'RELOADING' : s.mag; this.el.children[1].textContent = '/ ' + s.reserve; this.el.children[2].textContent = GUNS[this.cur].name; } }
   fire() {
     const A = this.a, P = A.player, s = this.cur && this.inv[this.cur], g = this.cur && GUNS[this.cur]; if (!s || this.cd > 0 || this.reloadT > 0 || !P.alive || P.state !== 'free') return;
-    if (s.mag <= 0) { this.cd = 0.25; A.fx.play('click', 1); this.reload(); return; }
-    s.mag--; this.cd = g.rate; A.fx.play('shot', g.pellets > 1 ? 1 : 0.8); A.rig.addTrauma(g.kick); this.hud();
+    if (s.mag <= 0) { this.cd = 0.25; A.fx.play('empty', 1); this.reload(); return; }
+    s.mag--; this.cd = g.rate; A.fx.play(this.cur, 1, P.pos); A.rig.addTrauma(g.kick); this.hud();
     const ndc = A.input.cursorNdc(new THREE.Vector2()); ray.setFromCamera(ndc, A.camera); const o = ray.ray.origin.clone(), d0 = ray.ray.direction.clone();
     const muzzle = P.character.limb('handR', new THREE.Vector3()); muzzle.addScaledVector(new THREE.Vector3(Math.sin(P.ryaw), 0.1, Math.cos(P.ryaw)), 0.45);
     A.fx.spark(muzzle.x, muzzle.y, muzzle.z, Math.sin(P.ryaw), Math.cos(P.ryaw), 6, [1, 0.85, 0.45], 5); A.fx.ring(muzzle.x, muzzle.y, muzzle.z, 0.45, 0xffd890);

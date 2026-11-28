@@ -1,7 +1,7 @@
 // Rapier physics for Core: a heightfield collider that mirrors the sculpted terrain, a kinematic character controller,
 // dynamic boulders (balls) and static props. Rapier is the same lazy, pinned build the Studio simulation uses (src/sim.js),
 // so it is only fetched when Core opens. Until it is ready (or if it cannot load) simlite.js keeps things walkable.
-import { RAPIER_CDN } from '../sim.js';
+import RAPIER from '@dimforge/rapier3d-compat';   // vendored: bundled by tools/build.mjs, wasm embedded, no network
 import { W, S, N } from './terrain.js';
 import { clamp } from './util.js';
 
@@ -10,7 +10,7 @@ const WATER_DRAG = 2.4, BUOY = 6.0;
 
 let rapierP = null;
 export function loadRapier() {
-  return rapierP || (rapierP = import(/* webpackIgnore: true */ RAPIER_CDN).then(async m => { const R = m.default || m; await R.init(); return R; }));
+  return rapierP || (rapierP = RAPIER.init().then(() => RAPIER));
 }
 
 export class Phys {

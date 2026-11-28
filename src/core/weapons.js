@@ -7,6 +7,8 @@ import * as THREE from 'three';
 const K = 'assets/core/kenney/';
 export const WEAPONS = {
   pistol: { name: 'Blaster', asset: 'kenney.blaster', sound: 'snd-blaster.ogg', auto: false, rate: 4.8, dmg: 34, mag: 12, reserve: 84, reload: 1.25, spread: 0.0035, grow: 0.01, recoil: 0.026, kick: 0.07, range: 220, len: 0.5, ads: 0.5, fov: 54, pos: [0.14, -0.12, -0.3], rot: [0, Math.PI, 0], scale: 0.16, sight: [0, 0.074, 0.0], muz: [0, 0.015, -0.2] },
+  rifle: { name: 'Rifle', asset: 'kenney.repeater', sound: 'snd-blaster_repeater.ogg', auto: true, synth: 'rifle', rate: 8, dmg: 22, mag: 30, reserve: 150, reload: 2.0, spread: 0.003, grow: 0.012, recoil: 0.014, kick: 0.04, range: 260, len: 0.7, ads: 0.6, fov: 42, pos: [0.14, -0.12, -0.32], rot: [0, Math.PI, 0], scale: 0.16, sight: [0, 0.07, -0.01], muz: [0, 0.015, -0.24] },
+  shotgun: { name: 'Shotgun', asset: 'kenney.blaster', sound: 'snd-blaster.ogg', auto: false, synth: 'shotgun', rate: 1.3, dmg: 11, pellets: 8, mag: 6, reserve: 36, reload: 2.2, spread: 0.045, grow: 0.0, recoil: 0.05, kick: 0.12, range: 60, len: 0.55, ads: 0.5, fov: 52, pos: [0.14, -0.13, -0.3], rot: [0, Math.PI, 0], scale: 0.16, sight: [0, 0.074, 0.0], muz: [0, 0.015, -0.2] },
   repeater: { name: 'Repeater', asset: 'kenney.repeater', sound: 'snd-blaster_repeater.ogg', auto: true, rate: 11, dmg: 15, mag: 32, reserve: 192, reload: 1.8, spread: 0.006, grow: 0.026, recoil: 0.011, kick: 0.035, range: 220, len: 0.6, ads: 0.55, fov: 50, pos: [0.14, -0.12, -0.3], rot: [0, Math.PI, 0], scale: 0.16, sight: [0, 0.07, -0.01], muz: [0, 0.015, -0.24] },
 };
 const lerp = (a, b, t) => a + (b - a) * t, clamp = (v, a, b) => Math.min(b, Math.max(a, v));
@@ -14,7 +16,7 @@ const el = (t, c, h) => { const e = document.createElement(t); if (c) e.classNam
 
 export function createShooter(app) {
   const { renderer, scene, camera, player } = app;
-  const S = { active: false, wid: 'pistol', loadout: ['pistol', 'repeater'], ammo: {}, reloading: 0, ads: 0, adsHold: false, fireCd: 0, spread: 0, rp: 0, rpv: 0, kick: 0, lp: 0, locked: false, trigger: false, shots: 0, hits: 0, fov0: 55, hitT: 0, targets: new Set(), flashT: 0, bob: 0 };
+  const S = { active: false, wid: 'pistol', loadout: ['pistol', 'repeater', 'rifle', 'shotgun'], ammo: {}, reloading: 0, ads: 0, adsHold: false, fireCd: 0, spread: 0, rp: 0, rpv: 0, kick: 0, lp: 0, locked: false, trigger: false, shots: 0, hits: 0, fov0: 55, hitT: 0, targets: new Set(), flashT: 0, bob: 0 };
   const vm = new THREE.Scene(); const hemi = new THREE.HemisphereLight(0xffffff, 0x6a6258, 1.9), key = new THREE.DirectionalLight(0xfff0dd, 2.6); key.position.set(1, 2, 1); vm.add(hemi, key);
   const root = new THREE.Group(); vm.add(root); const holder = new THREE.Group(); root.add(holder); let model = null, muzzle = new THREE.Object3D(), dot = null;
   const flashLight = new THREE.PointLight(0xffc27a, 0, 3); root.add(flashLight);
@@ -77,20 +79,25 @@ export function createShooter(app) {
   function fire() {
     const W = WEAPONS[S.wid], A = S.ammo[S.wid]; if (!S.active || S.fireCd > 0 || S.reloading > 0 || !model) return false;
     if (A.mag <= 0) { play('snd-weapon_change.ogg', 0.25, 1.6); if (A.reserve > 0) reload(); S.fireCd = 0.25; return false; }
-    A.mag--; S.shots++; S.fireCd = 1 / W.rate; const dir = fwd().clone(), up = new THREE.Vector3(0, 1, 0), right = new THREE.Vector3().crossVectors(dir, up).normalize(), up2 = new THREE.Vector3().crossVectors(right, dir);
-    const sprd = (W.spread + S.spread) * (1 - S.ads * 0.65) * (player.onGround ? 1 : 2.2) * (1 + Math.min(1, player.speed / 6)); const a = Math.random() * 6.283, r = Math.sqrt(Math.random()) * sprd; dir.addScaledVector(right, Math.cos(a) * r).addScaledVector(up2, Math.sin(a) * r).normalize();
+    A.mag--; S.shots++; S.fireCd = 1 / W.rate;
+    let res = null; for (let n = 0; n < (W.pellets || 1); n++) res = pellet(W, n === 0);
+    refreshHud(); return res;
+  }
+  function pellet(W, first) {
+    const dir = fwd().clone(), up = new THREE.Vector3(0, 1, 0), right = new THREE.Vector3().crossVectors(dir, up).normalize(), up2 = new THREE.Vector3().crossVectors(right, dir);
+    const sprd = (W.spread + (first ? S.spread : 0)) * (1 - S.ads * 0.65) * (player.onGround ? 1 : 2.2) * (1 + Math.min(1, player.speed / 6)); const a = Math.random() * 6.283, r = Math.sqrt(Math.random()) * sprd; dir.addScaledVector(right, Math.cos(a) * r).addScaledVector(up2, Math.sin(a) * r).normalize();
     const origin = camera.position.clone(); let hit = trace(origin, dir, W.range);
     { const ps = app.boulders.items.filter(b => b.body && !b.held).map(b => b.mesh); if (ps.length) { rc.set(origin, dir); rc.far = hit.t; const ph = rc.intersectObjects(ps, true)[0]; if (ph) { let o = ph.object, pr = null; while (o && !(pr = o.userData.prop)) o = o.parent; if (pr && pr.body) hit = { t: ph.distance, kind: 'prop', prop: pr, point: ph.point.clone(), normal: ph.face ? ph.face.normal.clone().transformDirection(ph.object.matrixWorld) : new THREE.Vector3(0, 1, 0) }; } } } const end = origin.clone().addScaledVector(dir, hit.t); const mp = muzzle.getWorldPosition(new THREE.Vector3());
     // tracer starts at the muzzle (as seen through the viewmodel camera, which is the main camera), drawn in the world
     const tr = tracers.find(x => !x.m.visible) || tracers[0]; const from = mp.clone(); tr.t = 0.09; tr.m.visible = true; const len = from.distanceTo(end); tr.m.position.copy(from).add(end).multiplyScalar(0.5); tr.m.scale.set(0.012, 0.012, len); tr.m.lookAt(end);
-    S.rpv += W.recoil * (1 - S.ads * 0.35); S.kick = Math.min(1, S.kick + 1); S.spread = Math.min(W.grow * 6, S.spread + W.grow); S.flashT = 0.05; flash.visible = true; flash.rotation.z = Math.random() * 6; flash.scale.setScalar(0.8 + Math.random() * 0.6); flashLight.intensity = 5; worldLight.position.copy(mp); worldLight.intensity = 30;
-    play(W.sound, 0.6, 1);
+    if (first) S.rpv += W.recoil * (1 - S.ads * 0.35); S.kick = Math.min(1, S.kick + 1); S.spread = Math.min(W.grow * 6, S.spread + W.grow); S.flashT = 0.05; flash.visible = true; flash.rotation.z = Math.random() * 6; flash.scale.setScalar(0.8 + Math.random() * 0.6); flashLight.intensity = 5; worldLight.position.copy(mp); worldLight.intensity = 30;
+    if (first) { if (W.synth && app.fx && app.fx.audio) app.fx.play(W.synth, 0.9); else play(W.sound, 0.6, 1); }
     if (hit.kind === 'target') { S.hits++; S.hitT = 0.18; burst(hit.point, 14, 4, [3, 0.9, 0.5], hit.normal); const info = { dmg: W.dmg * (hit.head ? 2 : 1), head: hit.head, point: hit.point, dist: hit.t, weapon: S.wid }; const was = hit.target.alive; hit.target.onHit(info); if (was && !hit.target.alive) { S.killT = 0.3; } hud.hm.classList.toggle('kill', !hit.target.alive); hud.hm.classList.add('on'); play(hit.target.alive ? 'snd-enemy_hurt.ogg' : 'snd-enemy_destroy.ogg', 0.5, 1); }
     else if (hit.kind === 'prop') { const pr = hit.prop, k = Math.min(60, W.dmg * 0.9 * (hit.t > 60 ? 0.6 : 1)); pr.body.applyImpulseAtPoint({ x: dir.x * k, y: dir.y * k + k * 0.08, z: dir.z * k }, { x: hit.point.x, y: hit.point.y, z: hit.point.z }, true); burst(hit.point, 10, 3, [3, 2.4, 1.2], hit.normal); play('snd-enemy_hurt.ogg', 0.2, 1.8); }
     else if (hit.kind === 'entity') { burst(hit.point, 12, 3.4, [3, 2.4, 1.2], hit.normal); decal(hit.point, hit.normal); }
     else if (hit.kind === 'terrain') { burst(hit.point, 10, 2.4, [1.1, 0.95, 0.7], hit.normal); decal(hit.point, hit.normal); }
     else if (hit.kind === 'water') burst(hit.point, 12, 3, [0.7, 0.9, 1.2], hit.normal);
-    refreshHud(); if (app.game && app.game.onShot) app.game.onShot(hit);
+    if (first) refreshHud(); if (app.game && app.game.onShot) app.game.onShot(hit);
     return hit;
   }
   S.fire = fire;
@@ -118,7 +125,7 @@ export function createShooter(app) {
 .sw .dmg{position:absolute;inset:0;background:radial-gradient(circle,transparent 45%,rgba(255,30,20,.55));opacity:0;transition:opacity .25s}
 @media (prefers-reduced-motion:reduce){.sw .vig,.sw .hm,.sw .dmg{transition:none}}
 </style><div class="vig"></div><div class="dmg"></div><div class="ch"><i class="a" style="top:-14px"></i><i class="a" style="top:5px"></i><i class="b" style="left:-14px"></i><i class="b" style="left:5px"></i><i class="dt"></i></div><div class="hm"></div>
-<div class="rl"><i></i></div><div class="amm"><b></b><span></span></div><div class="tip">Click to aim · Left mouse fires · Right mouse aims · R reloads · 1 2 weapons · Esc frees the mouse</div>
+<div class="rl"><i></i></div><div class="amm"><b></b><span></span></div><div class="tip">Click to aim · Left mouse fires · Right mouse aims (any gun) · R reloads · 1-4 weapons · Esc frees the mouse</div>
 <button class="tb fire" aria-label="Fire">Fire</button><button class="tb aim" aria-label="Aim">Aim</button><button class="tb rel" aria-label="Reload">R</button><button class="tb sw2" aria-label="Switch weapon">⇄</button>`);
     document.body.appendChild(r); hud.root = r; hud.vig = r.querySelector('.vig'); hud.ch = r.querySelector('.ch'); hud.hm = r.querySelector('.hm'); hud.amm = r.querySelector('.amm'); hud.rl = r.querySelector('.rl'); hud.tip = r.querySelector('.tip'); hud.dmg = r.querySelector('.dmg');
     const hold = (b, on, off) => { b.addEventListener('pointerdown', e => { e.preventDefault(); b.setPointerCapture(e.pointerId); on(); }); const up = () => off && off(); b.addEventListener('pointerup', up); b.addEventListener('pointercancel', up); };
@@ -136,7 +143,7 @@ export function createShooter(app) {
   const syncMouse = e => { if (!S.active || e.pointerType === 'touch') return; S.trigger = !!(e.buttons & 1); S.adsHold = !!(e.buttons & 2); };
   const onDown = e => { if (!S.active || app.ui.modalOpen()) return; const cv = renderer.domElement; if (e.target !== cv) return; if (e.pointerType === 'mouse' && document.pointerLockElement !== cv) { cv.requestPointerLock && cv.requestPointerLock(); audio(); return; } syncMouse(e); };
   const onUp = e => { if (e.pointerType === 'touch') return; syncMouse(e); };
-  const onKey = e => { if (!S.active || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return; const k = e.key.toLowerCase(); let used = true; if (k === 'r') reload(); else if (k === '1') { if (S.loadout[0] !== S.wid) { equip(S.loadout[0]); play('snd-weapon_change.ogg', 0.4); } } else if (k === '2') { if (S.loadout[1] && S.loadout[1] !== S.wid) { equip(S.loadout[1]); play('snd-weapon_change.ogg', 0.4); } } else if (k === 'q' || k === 'v') { if (k === 'v') exit(); else cycle(); } else if (k === 'e' || k === 'b' || k === 'f' || (k >= '3' && k <= '8')) { if (k === 'e') { exit(); } } else used = false; if (used) { e.preventDefault(); e.stopImmediatePropagation(); } };
+  const onKey = e => { if (!S.active || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return; const k = e.key.toLowerCase(); let used = true; if (k === 'r') reload(); else if (k === '1') { if (S.loadout[0] !== S.wid) { equip(S.loadout[0]); play('snd-weapon_change.ogg', 0.4); } } else if (k === '2') { if (S.loadout[1] && S.loadout[1] !== S.wid) { equip(S.loadout[1]); play('snd-weapon_change.ogg', 0.4); } } else if (k === '3' || k === '4') { const w = S.loadout[+k - 1]; if (w && w !== S.wid) { equip(w); play('snd-weapon_change.ogg', 0.4); } } else if (k === 'q' || k === 'v') { if (k === 'v') exit(); else cycle(); } else if (k === 'e' || k === 'b' || k === 'f' || (k >= '5' && k <= '8')) { if (k === 'e') { exit(); } } else used = false; if (used) { e.preventDefault(); e.stopImmediatePropagation(); } };
   addEventListener('mousemove', onMove); addEventListener('pointermove', e => { if (S.active && e.pointerType === 'mouse' && document.pointerLockElement === app.renderer.domElement) syncMouse(e); }, true); addEventListener('pointerdown', onDown, true); addEventListener('pointerup', onUp, true); addEventListener('keydown', onKey, true);
   addEventListener('keydown', e => { if (e.code !== 'KeyV' || e.repeat || S.active || e.ctrlKey || e.metaKey || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) || (app.inputOwner && app.inputOwner() !== 'play') || app.mode !== 'explore') return; S.enter({}); });
   document.addEventListener('pointerlockchange', () => { S.locked = document.pointerLockElement === renderer.domElement; if (hud.tip) hud.tip.style.display = S.locked ? 'none' : ''; });

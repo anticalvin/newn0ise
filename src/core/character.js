@@ -79,7 +79,8 @@ export class Character {
     const n = B.length * 3; this.cur = new Float32Array(n); this.vel = new Float32Array(n); this.tgt = new Float32Array(n); this.loco = new Float32Array(n);
     this.ph = 0; this.t = Math.random() * 10; this.stepN = 0; this.airW = 0; this.stW = 0; this.blW = 0; this.lastAct = null; this.onStep = null; this.actW = 0;
   }
-  setFlash(f) { this.flash = f; for (const m of this.mats) { m.emissive.setRGB(f * 0.9, f * 0.8, f * 0.6); } }
+  // hit flash: a short red tint. (It used to be a white emissive, which turned the figure into a white silhouette that vanished against the light level floor.)
+  setFlash(f) { this.flash = f; f = Math.min(0.55, f); for (const m of this.mats) { m.emissive.setRGB(f * 0.8, f * 0.07, f * 0.04); } }
   setGun(kind) {
     if (this.gun) { this.armR.end.remove(this.gun); this.gun = null; } if (!kind) return;
     const g = new THREE.Group(), m = new THREE.MeshStandardMaterial({ color: 0x1d1f22, roughness: 0.5, metalness: 0.6 }), L = kind === 'rifle' ? 0.62 : kind === 'shotgun' ? 0.7 : 0.26;

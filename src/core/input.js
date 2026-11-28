@@ -7,6 +7,7 @@ let cfgAt = 0, cfgV = { swap: false, invY: false, rumble: true };
 const cfg = () => { const n = performance.now(); if (n - cfgAt > 1000) { cfgAt = n; try { cfgV = { swap: false, invY: false, rumble: true, ...JSON.parse(localStorage.getItem('n0.gpcfg') || '{}') }; } catch (e) { /* keep defaults */ } } return cfgV; };
 const dz = (x, y) => { const m = Math.hypot(x, y); if (m < DZ) return [0, 0]; const k = (m - DZ) / (1 - DZ) / m; return [x * k, y * k]; };
 
+const clampZ = v => Math.max(-0.6, Math.min(0.6, v));
 export class Input {
   constructor(app, canvas) {
     this.app = app; this.canvas = canvas; this.keys = new Set(); this.pointers = new Map(); this.ptr = { x: innerWidth / 2, y: innerHeight / 2, in: false };
@@ -35,7 +36,8 @@ export class Input {
       if (k === ' ') { e.preventDefault(); this.jumpEdge = true; this.edge.jump = true; this.jumpHeld = true; }
       else if (k === 'e') app.toggleMode();
       else if (k === 'b') app.boulderAtCursor();
-      else if (k === 'f') app.interact();
+      else if (k === 'f') { if (app.mode === 'edit' && app.editor && app.editor.focus) app.editor.focus(); else app.interact(); }
+      else if (k === 'home' && app.mode === 'edit') app.resetCam();
       else if (k === '/') { e.preventDefault(); app.ui.toggleConsole(true); }
       else if (k === 'h') app.ui.toggleHidden();
       else if (k === 'p') app.snap();
@@ -49,11 +51,11 @@ export class Input {
     addEventListener('gamepadconnected', () => { this.pad.connected = true; app.ui.toast('Gamepad connected'); });
     addEventListener('gamepaddisconnected', () => { this.pad.connected = false; this.pad.active = false; });
     canvas.addEventListener('contextmenu', e => e.preventDefault());
-    canvas.addEventListener('wheel', e => { if (app.firstLight?.active) return; e.preventDefault(); if (app.grab && app.grab.held) app.grab.adjust(e.deltaY); else app.zoom(Math.exp(e.deltaY * 0.0011)); }, { passive: false });
+    canvas.addEventListener('wheel', e => { if (app.firstLight?.active) return; e.preventDefault(); if (app.grab && app.grab.held) app.grab.adjust(e.deltaY); else { const dy = e.deltaY * (e.deltaMode === 1 ? 33 : 1) * (e.ctrlKey ? 0.009 : 0.0011); app.zoom(Math.exp(clampZ(dy)), this.cursorNdc(new app.ndcClass())); } }, { passive: false });
     canvas.addEventListener('pointerdown', e => {
       if (app.firstLight?.active) return;
       canvas.setPointerCapture(e.pointerId); this.pad.active = false;
-      this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, button: e.button, type: e.pointerType, shift: e.shiftKey, t: 0, moved: 0 });
+      app.fx && app.fx.unlock(); this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, button: e.button, type: e.pointerType, shift: e.shiftKey, t: 0, moved: 0 });
       this.ptr.x = e.clientX; this.ptr.y = e.clientY; this.ptr.in = true; this.decide(e);
     });
     canvas.addEventListener('pointermove', e => {
@@ -64,7 +66,7 @@ export class Input {
       if (p.mode === 'shooter') { if (document.pointerLockElement !== this.canvas) app.shooter.look(dx, dy); return; }
       if (this.pointers.size >= 2) {
         const [a, b] = [...this.pointers.values()], d = Math.hypot(a.x - b.x, a.y - b.y);
-        if (this.pinch) app.zoom(this.pinch / d); this.pinch = d; for (const q of this.pointers.values()) if (q.mode === 'grab') { app.grab.release(); q.mode = 'orbit'; } app.orbit(dx * 0.5, dy * 0.5); return;
+        if (this.pinch) app.zoom(this.pinch / d, this.cursorNdc(new app.ndcClass())); this.pinch = d; for (const q of this.pointers.values()) if (q.mode === 'grab') { app.grab.release(); q.mode = 'orbit'; } if (app.mode === 'edit') app.pan(dx * 0.5, dy * 0.5); else app.orbit(dx * 0.5, dy * 0.5); return;   // two fingers: pinch zooms, drag pans in the editor and orbits in play
       }
       if (p.mode === 'editor') { app.editor.pointerMove(e); return; }
       if (p.mode === 'orbit') app.orbit(dx, dy); else if (p.mode === 'pan') app.pan(dx, dy);

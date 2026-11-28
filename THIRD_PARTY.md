@@ -82,3 +82,8 @@ No new dependencies. The Character page and Sculpt are our own code on three.js 
 
 ## Sketchfab (model browser)
 The 3D model browser calls the Sketchfab Data API v3 from the visitor's browser. Models belong to their authors and carry their own Creative Commons licences, shown in the browser and in the import message. Nothing is bundled; the visitor supplies their own API token.
+
+## Core runtime (vendored, bundled by esbuild; no CDN at runtime)
+Checked 2026-11-28 against each package's own LICENSE and package.json.
+- three 0.187.0, MIT, https://github.com/mrdoob/three.js : renderer, addons (GLTFLoader, TransformControls, post passes). Bundled into `assets/core.js`.
+- @dimforge/rapier3d-compat 0.14.0, Apache-2.0, https://github.com/dimforge/rapier.js : physics; wasm embedded in the package, bundled into `assets/core.js`. (0.21.0 exists; kept at 0.14.0 so physics behaviour is unchanged. Upgrading is a separate, tested step.)

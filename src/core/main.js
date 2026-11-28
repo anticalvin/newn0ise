@@ -6,6 +6,8 @@ import { DynEnts } from './dynents.js';
 import { createLevel, levelArena, sampleLevel } from './level.js';
 import { createGame } from './game.js';
 import * as THREE from 'three';
+import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { makeShared } from './glsl.js';
 import { Environment } from './env.js';
 import { Terrain } from './terrain.js';
@@ -57,7 +59,7 @@ scene.add(terrain.mesh, water.mesh, palms.mesh, grass.mesh, sand.mesh);
 water.ripples.forEach(r => scene.add(r.m));
 boulders.splash = (x, z, s) => { water.splash(x, z, s); if (app.fx) app.fx.play('splash', Math.min(1, s * 0.5)); };
 phys.splash = boulders.splash;
-phys.onImpact = (x, y, z, n) => { sand.burst(x, y, z, Math.round(n * 3), 1.8, 1.6, 0.5); if (app.fx && n > 3) app.fx.play('thud', Math.min(1, n / 10)); };
+phys.onImpact = (x, y, z, n) => { sand.burst(x, y, z, Math.round(n * 3), 1.8, 1.6, 0.5); if (app.fx && n > 3) app.fx.play(n > 9 ? 'rock' : n > 5 ? 'crate' : 'thud', Math.min(1, n / 10), { x, y, z }); };
 
 // cursor ring draped on the terrain
 const ringGeo = new THREE.BufferGeometry(); ringGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(97 * 3), 3));
@@ -185,10 +187,14 @@ const app = {
     else { this.rig.tDist = 5.2; this.rig.tPitch = 0.28; this.input.endBrush(); } ui.pad(this.padMode); },
   toggleMode() { if (this.geo && this.geo.active) return this.geo.swapMode(); this.setMode(this.mode === 'explore' ? 'edit' : 'explore'); },
   radius(d) { this.R = clamp(this.R + d * 2, 2, 40); ui.syncRadius(); ui.toast('Radius ' + this.R); },
-  zoom(f) { const c = this.cam; if (this.geo && this.geo.god) { c.dist = Math.max(40, Math.min(4.2e6, c.dist * f)); return; } const lo = this.mode === 'explore' ? 2.2 : 8, hi = this.mode === 'explore' ? 14 : 160; if (this.geo && this.geo.active) c.dist = clamp(c.dist * f, lo, hi); else this.rig.zoom(f, lo, hi); },
+  panLim() { return this.level ? 400 : 124; },
+  // wheel / pinch zoom: wide range in the editor, and it zooms toward the point under the cursor so you can dive into a spot
+  zoom(f, at) { const c = this.cam; if (this.geo && this.geo.god) { c.dist = Math.max(40, Math.min(4.2e6, c.dist * f)); return; } const edit = this.mode !== 'explore', lo = edit ? 0.8 : 2.2, hi = edit ? (this.level ? 420 : 220) : 14; if (this.geo && this.geo.active) { c.dist = clamp(c.dist * f, lo, hi); return; }
+    if (edit && at) { const rc = new THREE.Raycaster(); rc.setFromCamera(at, camera); const d = rc.ray.direction, o = rc.ray.origin; if (Math.abs(d.y) > 1e-3) { const t = (c.target.y - o.y) / d.y; if (t > 0 && t < 2000) { const px = o.x + d.x * t, pz = o.z + d.z * t, nd = clamp(this.rig.tDist * f, lo, hi), k = 1 - nd / this.rig.tDist, L = this.panLim(); c.target.x = clamp(c.target.x + (px - c.target.x) * k, -L, L); c.target.z = clamp(c.target.z + (pz - c.target.z) * k, -L, L); } } }
+    this.rig.zoom(f, lo, hi); },
   orbit(dx, dy) { const c = this.cam; if (this.geo && this.geo.active) { c.yaw -= dx * 0.005; c.pitch = clamp(c.pitch + dy * 0.005, 0.03, 1.45); } else this.rig.orbit(dx, dy); },
   pan(dx, dy) { if (this.mode !== 'edit') return; const c = this.cam, k = c.dist * 0.0016, fx = -Math.sin(c.yaw), fz = -Math.cos(c.yaw), rx = Math.cos(c.yaw), rz = -Math.sin(c.yaw);
-    c.target.x = clamp(c.target.x + (-rx * dx + fx * dy) * k, -124, 124); c.target.z = clamp(c.target.z + (-rz * dx + fz * dy) * k, -124, 124); },
+    const L = this.panLim(); c.target.x = clamp(c.target.x + (-rx * dx + fx * dy / Math.max(0.35, Math.sin(c.pitch))) * k, -L, L); c.target.z = clamp(c.target.z + (-rz * dx + fz * dy / Math.max(0.35, Math.sin(c.pitch))) * k, -L, L); },
   resetCam() { const yaw = Math.atan2(-Math.sin(player.yaw), -Math.cos(player.yaw)) + Math.PI, pitch = this.mode === 'edit' ? 0.78 : 0.28; if (this.geo && this.geo.active) { this.cam.yaw = yaw; this.cam.pitch = pitch; } else { this.rig.tYaw = yaw; this.rig.tPitch = pitch; } },
   brushStart() {
     if (this.mode !== 'edit') return;
@@ -321,7 +327,7 @@ function frame(now) {
   // movement relative to the camera; the edit camera pans with the same keys
   const fx0 = -Math.sin(c.yaw), fz0 = -Math.cos(c.yaw), rx0 = Math.cos(c.yaw), rz0 = -Math.sin(c.yaw);
   const explore = app.mode === 'explore', startOpen = ui.modalOpen();
-  if (!explore) { const k = c.dist * 0.6 * dt * (input.keys.has('shift') ? 3 : 1), mvx = fx0 * inp.mz + rx0 * inp.mx, mvz = fz0 * inp.mz + rz0 * inp.mx; c.target.x = clamp(c.target.x + mvx * k, -124, 124); c.target.z = clamp(c.target.z + mvz * k, -124, 124); }
+  if (!explore && !startOpen) { const k = Math.max(3, c.dist) * 0.6 * dt * (input.keys.has('shift') ? 3 : 1), mvx = fx0 * inp.mz + rx0 * inp.mx, mvz = fz0 * inp.mz + rz0 * inp.mx, L = app.panLim(), up = (input.keys.has(' ') ? 1 : 0) - (input.keys.has('c') ? 1 : 0); c.target.x = clamp(c.target.x + mvx * k, -L, L); c.target.z = clamp(c.target.z + mvz * k, -L, L); if (up) c.target.y = clamp(c.target.y + up * k, -10, 300); }
   // slow-mo eases back to real time; the simulation then runs on fixed 60 Hz steps and rendering interpolates between the last two
   const nowMs = performance.now(), slowOn = nowMs < app.slow.until; tsc += ((slowOn ? app.slow.s : 1) - tsc) * Math.min(1, dt * (slowOn ? 20 : 6));
   const sdt = dt * tsc * TUNE.timeScale; physAcc = Math.min(0.12, physAcc + sdt); let n = 0;
@@ -332,6 +338,7 @@ function frame(now) {
   if (explore && !app.lv.rt && app.lv.wanted && phys.ready) app.lv.start();
   // camera: critically damped follow with look-ahead, soft lock-on, terrain-aware boom, speed FOV and trauma shake (camera.js)
   const drv = app.driving;
+  fx.engine(!!drv, drv ? Math.min(1, drv.speed / 34) : 0, drv ? Math.abs(drv.input.thr) : 0);
   if (drv) { c.target.set(drv.pos.x, drv.pos.y + 1.1, drv.pos.z); app.rig.update(dt, { explore, player: drv.pos, vel: drv.vel, speed: drv.speed, lock: null, combat: false, dodge: false }); }
   else { if (explore) c.target.set(player.rpos.x, player.rpos.y + 1.5 * player.scale, player.rpos.z);
   app.rig.update(dt, { explore, player: player.pos, vel: player.vel, speed: player.speed, lock: player.lock && player.lock.alive ? player.lock.rpos : null, combat: player.combatT > 0, dodge: player.state === 'dodge' }); }
@@ -354,6 +361,6 @@ function frame(now) {
   if (!app.shooter.render()) renderer.render(scene, camera); tele.tick(now);
 }
 requestAnimationFrame(frame);
-window.n0 = { app, core, geo: app.geo, telemetry: () => tele.read(), run: l => core.run(l), exec: c => core.exec(c), get fps() { return app.fps; }, get pr() { return app.pr; } };
+window.n0 = { mods: { THREE, GLTFExporter, GLTFLoader }, app, core, geo: app.geo, telemetry: () => tele.read(), run: l => core.run(l), exec: c => core.exec(c), get fps() { return app.fps; }, get pr() { return app.pr; } };
 mountWorkspace(window.n0);
 window.Core = { exec: c => core.exec(c), describe: () => core.exec({ cmd: 'describe' }), state: () => core.exec({ cmd: 'state' }) };

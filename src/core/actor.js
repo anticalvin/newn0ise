@@ -38,6 +38,7 @@ export class Actor {
     const a = this.app, x = this.pos.x + Math.cos(this.yaw) * 0.12 * -side, z = this.pos.z - Math.sin(this.yaw) * 0.12 * -side;
     if (this.depth < 0.15 && this.pos.y < 2.4 && this.pos.y > a.water.level + 0.02) a.terrain.stamp(x, z, 0.16 * this.scale, 0.9);
     if (a.stepFx) a.stepFx(this, x, z, sp);
+    if (a.fx && (this.isPlayer || a.player && Math.hypot(this.pos.x - a.player.pos.x, this.pos.z - a.player.pos.z) < 30)) a.fx.play(this.pos.y < 2.4 && !a.level ? 'stepSand' : 'step', (this.isPlayer ? 0.7 : 0.5) * Math.min(1.3, 0.5 + sp * 0.12), this.isPlayer ? null : this.pos);
     if (sp > 4.2 && this.depth < 0.2) a.fx.dustPuff(x, this.pos.y, z, 1, 0.35, [0.78, 0.66, 0.5], 0.8);
     if (this.depth > 0.2 && sp > 1) a.water.splash(x, z, 0.35 * this.scale);
   }
@@ -81,7 +82,7 @@ export class Actor {
       if (this.blockT < 0.17 && from && from.state === 'attack') { if (from.stun) from.stun(0.6); return 'parry'; }
       this.hp -= dmgBase * 0.1; this.vel.x += dir.x * atk.kb * TUNE.kb * 0.4; this.vel.z += dir.z * atk.kb * TUNE.kb * 0.4; this.flinchT = 0.2; this.freeze = (atk.hs || 0.05) * TUNE.hitstop * 0.8; this.hurtT = 1.5; this.combatT = 4; this.checkDeath(dir); return 'block';
     }
-    this.hp -= dmgBase; this.hurtT = 2.5; this.combatT = 4; this.flash = 0.7; this.queued = null; this.blocking = false;
+    this.hp -= dmgBase; if (this.isPlayer) this.app.fx.play('hurt', 0.9); this.hurtT = 2.5; this.combatT = 4; this.flash = 0.7; this.queued = null; this.blocking = false;
     if (this.dummy) this.hp = Math.max(1, this.hp);
     const comboKnock = atk.knockCombo && from && from.comboN >= atk.knockCombo, knock = atk.knock || extra.knock || comboKnock || this.hp <= 0;
     const armored = this.armor && !knock && dmgBase < 14 * (from && from.power || 1);
@@ -154,10 +155,10 @@ export class Actor {
     if (Math.abs(nx) > 124 || Math.abs(nz) > 124) { this.vel.x = this.vel.z = 0; }
     // jump: coyote + buffer + variable height
     this.coyote = this.onGround ? TUNE.coyote : this.coyote - dt; this.jumpBuf -= dt;
-    if (this.jumpBuf > 0 && this.coyote > 0 && free && this.depth < 1.0) { this.vel.y = TUNE.jump; this.onGround = false; this.coyote = 0; this.jumpBuf = 0; this.landT = 0; A.fx.dustPuff(this.pos.x, this.pos.y, this.pos.z, 3, 0.5); }
+    if (this.jumpBuf > 0 && this.coyote > 0 && free && this.depth < 1.0) { this.vel.y = TUNE.jump; this.onGround = false; this.coyote = 0; this.jumpBuf = 0; this.landT = 0; A.fx.dustPuff(this.pos.x, this.pos.y, this.pos.z, 3, 0.5); A.fx.play('jump', this.isPlayer ? 0.7 : 0.3, this.isPlayer ? null : this.pos); }
     if (this.onGround && this.vel.y <= 0) this.vel.y = -2; else this.vel.y -= (this.vel.y > 0 ? (this.jumpHeld ? TUNE.gUp : TUNE.gCut) : TUNE.gDown) * dt; this.vel.y = Math.max(this.vel.y, -34);
     const vyBefore = this.vel.y; A.phys.moveActor(this, dt);
-    if (this.onGround && !this.wasGround && vyBefore < -3) { this.landT = clamp(-vyBefore / 14, 0.15, 1); if (vyBefore < -6) { A.fx.dustPuff(this.pos.x, this.pos.y, this.pos.z, 5, 0.8); A.fx.play('thud', clamp(-vyBefore / 20, 0.2, 0.8)); if (this.isPlayer) A.rig.addTrauma(clamp(-vyBefore / 40, 0, 0.3)); } }
+    if (this.onGround && !this.wasGround && vyBefore < -3) { this.landT = clamp(-vyBefore / 14, 0.15, 1); if (vyBefore < -3.5) A.fx.play('land', Math.min(1, -vyBefore / 12) * (this.isPlayer ? 0.8 : 0.4), this.isPlayer ? null : this.pos); if (vyBefore < -6) { A.fx.dustPuff(this.pos.x, this.pos.y, this.pos.z, 5, 0.8); A.fx.play('thud', clamp(-vyBefore / 20, 0.2, 0.8)); if (this.isPlayer) A.rig.addTrauma(clamp(-vyBefore / 40, 0, 0.3)); } }
     this.landT *= Math.exp(-7 * dt);
     // ---- facing ----
     const spd = Math.hypot(this.vel.x, this.vel.z), lastYaw = this.yaw;

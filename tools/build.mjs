@@ -7,7 +7,8 @@ await build({...common,external:[],entryPoints:{labeditor:'src/labeditor.js'},ou
 await build({...common,entryPoints:{labform:'src/labform.js'},outdir:'assets'});
 await build({...common,entryPoints:{figure:'src/figure.js'},outdir:'assets'});
 await build({...common,entryPoints:{gp:'src/gp-page.js'},outdir:'assets'});
-await build({...common,entryPoints:{core:'src/core/main.js'},outdir:'assets'});
+// Core is fully vendored: three, its addons and Rapier (wasm embedded) are bundled, so core.html boots with no network.
+await build({...common,external:[],entryPoints:{core:'src/core/main.js'},outdir:'assets'});
 // cache-bust: the pages reference the bundles with ?v=<hash of the bundle>
 import fs from 'node:fs';import crypto from 'node:crypto';
 for(const [html,js] of [['effects.html','assets/index.js'],['studio.html','assets/studio.js'],['character.html','assets/figure.js'],['index.html','assets/gp.js'],['lab.html','assets/gp.js'],['core.html','assets/core.js'],['physics.html','assets/core.js']]){

@@ -154,3 +154,10 @@ Records use radians, a floor origin and `parameters`; undo is Core's history, no
 - The third-person guns (`guns.js`) and the first-person shooter (`weapons.js`) share effects and the world-trace idea but still have separate weapon tables. They are not merged yet.
 - `.n0world` import does not place the new prefabs. Selection is one object. No triggers, scripting or objectives. Enemies are melee only. Hit checks are cone/reach and sphere tests. The car has been tuned only in a software-GL test, not on a real drive.
 - Not checked by eye: the new panels, the grid floor and the car were exercised by scripted tests, not looked at in a real browser or on a phone.
+
+
+## Editor camera, hit flash, first-person guns, sound (this PR)
+- **Editor camera:** wheel and pinch zoom range 0.8 to 420 m in a level (220 m elsewhere) and zoom toward the point under the cursor; two-finger drag pans on touch; middle-drag or Shift+left-drag pans; right-drag orbits; WASD pans (Shift is 3x), Space and C move up and down, F focuses the selection, Home resets the view. In a level the pan limit is 400 m.
+- **Hit flash:** was a white emissive, which made the player a white silhouette that looked like vanishing against the light floor. It is now a short red tint.
+- **First-person guns:** the shooter now has Blaster, Repeater, Rifle and Shotgun (8 pellets), keys 1 to 4, and right mouse aims down the sights with every gun. Rifle and shotgun reuse the two Kenney blaster models (no new art), so they look like scaled blasters. Approximated.
+- **Sound:** still synthesised, no audio files. New master bus (compressor plus generated room reverb), per-voice random pitch and level, positional pan and falloff for world sounds, distinct pistol, rifle and shotgun shots, reload, empty click, footsteps (sand or hard), jump, land, hurt, prop impacts, and a car engine loop. Not verified by ear: this was only checked for errors, not listened to.
