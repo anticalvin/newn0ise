@@ -53,6 +53,7 @@ export function registerBuildKit(E, H) {
   }
 
   E.register('build.wall', {
+    label: 'Wall', category: 'Build', components: ['model', 'collider'],
     validate(p) { const opening = p.opening == null ? 'none' : p.opening; if (!['none', 'door', 'window', 'gate'].includes(opening)) bad('entity.invalid', 'opening must be none, door, window or gate', 'parameters.opening');
       return { length: num(p.length, 0.3, 60, 4, 'parameters.length'), height: num(p.height, 0.4, 14, 2.8, 'parameters.height'), thickness: num(p.thickness, 0.05, 2, 0.2, 'parameters.thickness'), opening, material: matName(p.material), color: colorOf(p.color) }; },
     build(r, ctx) {
@@ -71,14 +72,17 @@ export function registerBuildKit(E, H) {
     },
   });
   E.register('build.floor', {
+    label: 'Floor', category: 'Build', components: ['model', 'collider'],
     validate(p) { return { width: num(p.width, 0.5, 80, 6, 'parameters.width'), depth: num(p.depth, 0.5, 80, 6, 'parameters.depth'), thickness: num(p.thickness, 0.05, 2, 0.2, 'parameters.thickness'), material: matName(p.material == null ? 'wood' : p.material), color: colorOf(p.color) }; },
     build(r, ctx) { const { width: W, depth: D, thickness: T } = r.parameters; return assemble(r, ctx, [{ c: [0, T / 2, 0], s: [W, T, D] }]); },
   });
   E.register('build.stairs', {
+    label: 'Stairs', category: 'Build', components: ['model', 'collider'],
     validate(p) { return { width: num(p.width, 0.5, 20, 1.4, 'parameters.width'), length: num(p.length, 0.6, 30, 3, 'parameters.length'), height: num(p.height, 0.2, 12, 2.8, 'parameters.height'), steps: Math.round(num(p.steps, 2, 30, 14, 'parameters.steps')), material: matName(p.material == null ? 'concrete' : p.material), color: colorOf(p.color) }; },
     build(r, ctx) { const { width: W, length: Ln, height: Ht, steps: n } = r.parameters, pieces = []; for (let i = 0; i < n; i++) { const h = Ht * (i + 1) / n, d = Ln / n; pieces.push({ c: [0, h / 2, -Ln / 2 + d * i + d / 2], s: [W, h, d] }); } return assemble(r, ctx, pieces); },
   });
   E.register('build.roof', {
+    label: 'Roof', category: 'Build', components: ['model', 'collider'],
     validate(p) { const style = p.style == null ? 'gable' : p.style; if (!['gable', 'flat'].includes(style)) bad('entity.invalid', 'style must be gable or flat', 'parameters.style');
       return { width: num(p.width, 0.5, 80, 8, 'parameters.width'), depth: num(p.depth, 0.5, 80, 6, 'parameters.depth'), rise: num(p.rise, 0.1, 10, 1.8, 'parameters.rise'), style, material: matName(p.material == null ? 'roofTile' : p.material), color: colorOf(p.color) }; },
     build(r, ctx) {
@@ -91,6 +95,7 @@ export function registerBuildKit(E, H) {
   });
   // an online CC0 model from Poly Haven (the same source the 3D page uses). Needs a network; offline it stays a wire box and says so.
   E.register('model.online', {
+    label: 'Online model', category: 'Models', components: ['model', 'collider'],
     validate(p) { const id = String(p.id || ''); if (!/^[a-z0-9_]{2,64}$/.test(id)) bad('entity.invalid', 'parameters.id must be a Poly Haven model id such as "armchair_01"', 'parameters.id'); return { src: 'polyhaven', id, scale: num(p.scale, 0.05, 50, 1, 'parameters.scale') }; },
     build(r, ctx) {
       const o = new THREE.Group(), ph = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.6, 0.6), new THREE.MeshBasicMaterial({ color: 0xff4fa3, wireframe: true })); ph.position.y = 0.3; o.add(ph); let size = [0.6, 0.6, 0.6];

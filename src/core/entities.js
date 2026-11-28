@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { patchStandard } from './glsl.js';
 import { registerBuildKit } from './buildkit.js';
 import { registerLevelKit } from './levelkit.js';
+import { checkSchema, validateParams, describePrefab, field } from './schema.js';
 
 export const LIMIT = 2000;
 const ID = /^[A-Za-z0-9_.-]{1,64}$/;
@@ -29,7 +30,12 @@ export class Entities {
     this.register('asset', assetPrefab); registerBuildKit(this, { toWorld, bad, vec3, hexOk, isNum }); registerLevelKit(this, { vec3, bad });
   }
   get size() { return this.recs.size; }
-  register(name, def) { this.prefabs.set(name, def); }
+  // A prefab may declare {schema, components, label, category}; when it has a schema and no validate of its own, validation is derived from it.
+  register(name, def) {
+    if (def.schema) { checkSchema(def.schema, name); if (!def.validate) def.validate = p => validateParams(def.schema, p, bad); }
+    this.prefabs.set(name, def);
+  }
+  describePrefabs() { const o = {}; this.prefabs.forEach((d, n) => { o[n] = describePrefab(n, d); }); return o; }
   instanceCount() { let n = 0; this.rt.forEach(r => { n += r.instanceCount ? r.instanceCount() : 0; }); return n; }
   ctx() { return { app: this.a, assets: this.a.assets, shared: this.a.shared, entities: this, material: (c, r = 0.7) => this.mats[c + r] || (this.mats[c + r] = patchStandard(new THREE.MeshStandardMaterial({ color: c, roughness: r }), this.a.shared, {}, 'ent')) }; }
   changed() { if (this._cols) return; this._cols = true; queueMicrotask(() => { this._cols = false; this.a.refreshColliders && this.a.refreshColliders(); }); }
@@ -108,12 +114,10 @@ export class Entities {
   tick(dt, t) { this.rt.forEach(r => r.tick && r.tick(dt, t)); }
 }
 
+const PRIM_SCHEMA = [field('size', 'vec3', { min: 0.01, max: 200, default: [1, 1, 1], label: 'Size', step: 0.25 }), field('color', 'color', { default: '#b9b4ac', label: 'Colour' })];
 function primPrefab(shape) {
   return {
-    validate(p) {
-      const size = vec3(p.size, 'parameters.size', 0.01, 200, [1, 1, 1]); const color = p.color == null ? '#b9b4ac' : p.color; if (!hexOk(color)) bad('entity.invalid', 'parameters.color must look like "#c9c1b3"', 'parameters.color');
-      return { size, color };
-    },
+    label: shape[0].toUpperCase() + shape.slice(1), category: 'Primitives', components: ['model', 'collider'], schema: PRIM_SCHEMA,
     build(r, ctx) {
       const [w, h, d] = r.parameters.size, g = shape === 'box' ? new THREE.BoxGeometry(1, 1, 1) : shape === 'sphere' ? new THREE.SphereGeometry(0.5, 24, 16) : new THREE.CylinderGeometry(0.5, 0.5, 1, 24);
       const m = new THREE.Mesh(g, ctx.material(new THREE.Color(r.parameters.color).getHex())); m.scale.set(w, h, d); m.position.y = h / 2; m.castShadow = m.receiveShadow = true;
@@ -124,6 +128,7 @@ function primPrefab(shape) {
 }
 
 const assetPrefab = {
+  label: 'Asset', category: 'Models', components: ['model', 'collider', 'rigidbody'],
   validate(p, ctx) { if (!p.assetId) bad('entity.invalid', 'parameters.assetId is required', 'parameters.assetId'); try { ctx.assets.meta(p.assetId); } catch (e) { throw new EntityError(e.code || 'asset.unknown', e.message, 'parameters.assetId'); } return { assetId: String(p.assetId) }; },
   build(r, ctx) {
     const a = ctx.assets, id = r.parameters.assetId, o = new THREE.Group(), inner = a.instantiate(id); o.add(inner);

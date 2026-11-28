@@ -161,3 +161,7 @@ Records use radians, a floor origin and `parameters`; undo is Core's history, no
 - **Hit flash:** was a white emissive, which made the player a white silhouette that looked like vanishing against the light floor. It is now a short red tint.
 - **First-person guns:** the shooter now has Blaster, Repeater, Rifle and Shotgun (8 pellets), keys 1 to 4, and right mouse aims down the sights with every gun. Rifle and shotgun reuse the two Kenney blaster models (no new art), so they look like scaled blasters. Approximated.
 - **Sound:** still synthesised, no audio files. New master bus (compressor plus generated room reverb), per-voice random pitch and level, positional pan and falloff for world sounds, distinct pistol, rifle and shotgun shots, reload, empty click, footsteps (sand or hard), jump, land, hurt, prop impacts, and a car engine loop. Not verified by ear: this was only checked for errors, not listened to.
+
+
+## Prefab schemas (Phase 1, step 2)
+A prefab can declare `{label, category, components, schema}`. `schema` is a list of fields `{name, type, min, max, step, default, label, group, options}` (types: number, int, bool, color, vec3, enum, string). If a prefab has a schema and no `validate`, validation is derived from it. The details panel draws a field per schema entry, `describe` returns `prefabs`, and the console has `prefab` (list) and `prefab <name>` (help). Components are a declaration for now: no system reads them yet. Prefabs without a schema (`build.*`, `asset`, `model.online`) keep hand-written validation and panel rows.

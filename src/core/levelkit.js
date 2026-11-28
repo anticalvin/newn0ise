@@ -7,6 +7,7 @@ import { makeCrateMesh, makeBarrelMesh, makeBoulderMesh } from './nature.js';
 import { Character } from './character.js';
 import { carMesh } from './vehicle.js';
 import { GUNS } from './guns.js';
+import { field } from './schema.js';
 
 // ---------- geometry (UVs in metres so the prototype grid reads at true scale) ----------
 function poly(G, pts, n) {
@@ -83,21 +84,22 @@ function shapeColliders(o, d, size) {
 
 export function registerLevelKit(E, { vec3, bad }) {
   for (const [id, d] of Object.entries(SHAPES)) E.register(id, {
-    validate(p) { const size = vec3(p.size, 'parameters.size', 0.1, 120, d.size), color = p.color == null ? d.color : p.color; if (!hexOk(color)) bad('entity.invalid', 'parameters.color must look like "#9aa1ab"', 'parameters.color'); return { size, color }; },
+    label: d.n, category: 'Build', components: ['model', 'collider'],
+    schema: [field('size', 'vec3', { min: 0.1, max: 120, default: d.size, label: 'Size', step: 0.25 }), field('color', 'color', { default: d.color, label: 'Colour' })],
     build(rec, ctx) {
       const size = rec.parameters.size, g = new THREE.Group(), m = new THREE.Mesh(buildGeo(d.geo, size), levelMat(rec.parameters.color)); m.position.y = size[1] / 2; m.castShadow = m.receiveShadow = true; g.add(m);
       return { object: g, colliders: () => (rec.components.collider && rec.components.collider.type === 'none') ? [] : shapeColliders(g, d, size), dispose: () => m.geometry.dispose() };
     },
   });
-  const simple = (name, make, extra = () => ({})) => E.register(name, { validate: p => ({ ...p, ...extra(p) }), build(rec, ctx) { const g = new THREE.Group(); const o = make(rec, ctx); g.add(o); if (o.userData.spin) g.userData.spin = o.userData.spin; return { object: g, colliders: () => [] }; } });
-  const radius = p => { const r = p.r === undefined ? 1.1 : +p.r; if (!(r >= 0.3 && r <= 3)) bad('entity.invalid', 'parameters.r must be 0.3 to 3 (metres)', 'parameters.r'); return { r }; };
-  simple('prop.crate', (r, c) => { const m = makeCrateMesh(c.app.shared, 0.5); m.position.y = 0.5; return m; });
-  simple('prop.barrel', (r, c) => { const m = makeBarrelMesh(c.app.shared, 0.45); m.position.y = 0.5; return m; });
-  simple('prop.boulder', (r, c) => { const m = makeBoulderMesh(c.app.shared, r.parameters.r, 11); m.position.y = r.parameters.r; return m; }, radius);
-  for (const k of ['pistol', 'rifle', 'shotgun', 'health', 'ammo']) simple('pickup.' + k, () => pickupVisual(k));
-  for (const k of ['brawler', 'heavy', 'dummy']) simple('actor.' + k, (r, c) => actorVisual(k, c.app.shared));
-  simple('spawn.player', () => { const m = new THREE.MeshBasicMaterial({ color: 0x7fe0c8, transparent: true, opacity: 0.55 }), g = new THREE.Group(), c = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 1.7, 20, 1, true), m), a = new THREE.Mesh(new THREE.ConeGeometry(0.28, 0.7, 4).rotateX(Math.PI / 2), m); c.position.y = 0.85; a.position.set(0, 0.2, 0.9); g.add(c, a); return g; });
-  simple('vehicle.car', (r, c) => { const m = carMesh(r.parameters.color); m.position.y = 0.8; return m; }, p => { const color = p.color == null ? '#c0392b' : p.color; if (!hexOk(color)) bad('entity.invalid', 'parameters.color must look like "#c0392b"', 'parameters.color'); return { color }; });
+  const simple = (name, make, meta = {}) => E.register(name, { ...meta, schema: meta.schema || [], build(rec, ctx) { const g = new THREE.Group(); const o = make(rec, ctx); g.add(o); if (o.userData.spin) g.userData.spin = o.userData.spin; return { object: g, colliders: () => [] }; } });
+  const radius = [field('r', 'number', { min: 0.3, max: 3, default: 1.1, label: 'Radius', step: 0.1 })];
+  simple('prop.crate', (r, c) => { const m = makeCrateMesh(c.app.shared, 0.5); m.position.y = 0.5; return m; }, { label: 'Crate', category: 'Physics props', components: ['model', 'collider', 'rigidbody'] });
+  simple('prop.barrel', (r, c) => { const m = makeBarrelMesh(c.app.shared, 0.45); m.position.y = 0.5; return m; }, { label: 'Barrel', category: 'Physics props', components: ['model', 'collider', 'rigidbody'] });
+  simple('prop.boulder', (r, c) => { const m = makeBoulderMesh(c.app.shared, r.parameters.r, 11); m.position.y = r.parameters.r; return m; }, { label: 'Boulder', category: 'Physics props', components: ['model', 'collider', 'rigidbody'], schema: radius });
+  for (const k of ['pistol', 'rifle', 'shotgun', 'health', 'ammo']) simple('pickup.' + k, () => pickupVisual(k), { label: k[0].toUpperCase() + k.slice(1), category: 'Pickups', components: GUNS[k] ? ['model', 'pickup', 'weapon'] : ['model', 'pickup'] });
+  for (const k of ['brawler', 'heavy', 'dummy']) simple('actor.' + k, (r, c) => actorVisual(k, c.app.shared), { label: k[0].toUpperCase() + k.slice(1), category: 'Characters', components: ['model', 'character', 'health', 'ai'] });
+  simple('spawn.player', () => { const m = new THREE.MeshBasicMaterial({ color: 0x7fe0c8, transparent: true, opacity: 0.55 }), g = new THREE.Group(), c = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 1.7, 20, 1, true), m), a = new THREE.Mesh(new THREE.ConeGeometry(0.28, 0.7, 4).rotateX(Math.PI / 2), m); c.position.y = 0.85; a.position.set(0, 0.2, 0.9); g.add(c, a); return g; }, { label: 'Player start', category: 'Gameplay', components: ['spawner'] });
+  simple('vehicle.car', (r, c) => { const m = carMesh(r.parameters.color); m.position.y = 0.8; return m; }, { label: 'Car', category: 'Gameplay', components: ['model', 'vehicle', 'rigidbody'], schema: [field('color', 'color', { default: '#c0392b', label: 'Colour' })] });
   simple('light.point', r => { const g = new THREE.Group(), s = new THREE.Mesh(new THREE.SphereGeometry(0.2, 12, 8), new THREE.MeshBasicMaterial({ color: r.parameters.color })); s.position.y = 2.5; g.add(s); const l = new THREE.PointLight(r.parameters.color, +r.parameters.intensity || 24, 22, 2); l.position.y = 2.5; g.add(l); return g; },
-    p => { const color = p.color == null ? '#ffd9a0' : p.color, intensity = p.intensity == null ? 24 : +p.intensity; if (!hexOk(color)) bad('entity.invalid', 'parameters.color must look like "#ffd9a0"', 'parameters.color'); if (!(intensity >= 0 && intensity <= 400)) bad('entity.invalid', 'parameters.intensity must be 0 to 400', 'parameters.intensity'); return { color, intensity }; });
+    { label: 'Point light', category: 'Gameplay', components: ['light'], schema: [field('color', 'color', { default: '#ffd9a0', label: 'Colour' }), field('intensity', 'number', { min: 0, max: 400, step: 4, default: 24, label: 'Intensity' })] });
 }
