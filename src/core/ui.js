@@ -84,7 +84,7 @@ export class UI {
   showStart(hasSave) {
     const c = this.el('scards'), a = this.a; this.startOpen = true; this.el('start').classList.add('on');
     const card = (id, t, d, ic) => `<button class="scard" data-s="${id}"><i>${ic}</i><b>${t}</b><span>${d}</span></button>`;
-    c.innerHTML = card('blank', 'Blank island', 'A flat round island in open sea, with a sky, a sun and a spawn point. Build on it or sculpt it.', '\u25a1') + card('coast', 'Coast demo', 'COAST_001: an island with a beach, dunes, palms, a pier and a shack.', '\u25d0')
+    c.innerHTML = card('blank', 'Blank (level creator)', 'An empty grid floor under a sky and one sun. Build a level from blocks, ramps, props, pickups, fighters and a car, then press Play.', '\u25a1') + card('coast', 'Coast demo', 'COAST_001: an island with a beach, dunes, palms, a pier and a shack.', '\u25d0')
       + card('world', 'South Africa', 'Real streets, buildings and traffic streamed from OpenStreetMap. Starts in Cape Town; open the map to go anywhere in the country.', '\u25ce') + card('import', 'Import', 'Open a .n0scene you saved, or a .n0world to place on the land.', '\u2191') + (hasSave ? card('continue', 'Continue', 'Pick up your last autosaved scene.', '\u21bb') : '');
     c.onclick = e => { const b = e.target.closest('[data-s]'); if (!b) return; const k = b.dataset.s;
       if (k === 'import') { this.el('file').onchange = async ev => { const f = ev.target.files[0]; ev.target.value = ''; if (!f) return; this.hideStart(); await a.start('blank'); await a.importFile(f); this.el('file').onchange = ev2 => { const g = ev2.target.files[0]; if (g) a.importFile(g); ev2.target.value = ''; }; }; this.el('file').click(); return; }

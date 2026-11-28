@@ -3,6 +3,7 @@ import { createEditor } from './editor3d.js';
 import { createPost } from './post.js';
 import { createShooter } from './weapons.js';
 import { DynEnts } from './dynents.js';
+import { createLevel, levelArena, sampleLevel } from './level.js';
 import { createGame } from './game.js';
 import * as THREE from 'three';
 import { makeShared } from './glsl.js';
@@ -72,6 +73,7 @@ const app = {
   inputOwner() { if (ui.modalOpen()) return 'modal'; if (this.firstLight && this.firstLight.active) return 'firstlight'; if (this.shooter && this.shooter.active) return 'fps'; if (this.geo && this.geo.active) return 'geo'; return this.mode === 'edit' ? 'editor' : 'play'; },
   slowmo(scale, dur) { this.slow.s = clamp(1 - (1 - scale) * TUNE.slowmo, 0.02, 1.5); this.slow.until = performance.now() + dur * 1000; },
   stepFx(a, x, z, sp) { const h = terrain.hAt(x, z); if (h > water.level + 0.1) sand.burst(x, h, z, sp > 4 ? 30 : 18, 0.8 + sp * 0.25, 0.9, 0.18); },
+  enterLevel() { this.exitArena(); this.arenaOff = levelArena(this); if (this.editor) this.editor.S.tab = 'level'; },
   exitArena() { if (this.arenaOff) { this.arenaOff(); this.arenaOff = null; } core.noSave = false; },
   focusPoint() { return this.mode === 'explore' ? player.pos.clone() : (this.hit ? this.hit.clone() : this.cam.target.clone()); },
   afterTerrain(force) {
@@ -114,7 +116,7 @@ const app = {
     if (lo < water.level + 0.3) return null; return { x, z, y: hi + 0.02, spread: hi - lo };
   },
   // E/F/RB/Use: open the door or pick up the nearest product
-  interact() { if (this.geo && this.geo.active) { const r = this.geo.interact(); ui.toast(r.msg); return r; } const r = core.exec({ cmd: 'interact.use' }); ui.toast(r.msg); ui.updHist(); return r; },
+  interact() { if (this.lv && this.mode === 'explore' && this.lv.interact()) return { ok: true, msg: '' }; if (this.geo && this.geo.active) { const r = this.geo.interact(); ui.toast(r.msg); return r; } const r = core.exec({ cmd: 'interact.use' }); ui.toast(r.msg); ui.updHist(); return r; },
   inventory() { const out = []; entities.rt.forEach((rt, id) => { if (rt.rec && rt.rec.state && rt.rec.state.removed) rt.rec.state.removed.forEach(k => { const s = rt.index.get(k); out.push({ store: id, key: k, name: s ? rt.lib.product[s.type].name : 'Item' }); }); }); return out; },
   defaultSpawn() {
     if (terrain.preset === 'blank') return [0, 0, 0];
@@ -123,11 +125,13 @@ const app = {
   },
   // preset 'blank' | 'coast': same engine, same tools, same commands
   newScene(preset, seed = 101) {
+    const island = preset === 'island'; if (island) preset = 'blank';   // 'island' is the old flat island (kept for tests and the Combat lab); 'blank' is the empty level space
     core.muted = true;
     try {
-      this.exitArena(); this.grab && this.grab.release(); terrain.generate(seed, preset); this.name = preset === 'blank' ? 'Blank island' : 'COAST_001';
+      this.exitArena(); this.grab && this.grab.release(); terrain.generate(seed, preset); this.name = preset === 'blank' ? (island ? 'Blank island' : 'Blank level') : 'COAST_001';
       palms.items = []; palms.rebuild(); [...boulders.items].forEach(b => boulders.remove(b)); this.combat.clearEnemies(); entities.clear(); this.clearWorlds(); this.setPreset(preset);
       env.set(preset === 'blank' ? { time: 11, cloud: 0.3, wind: 0.35, windAng: 0, sea: 0.45, tide: 0 } : { time: 17.4, cloud: 0.38, wind: 0.55, windAng: 0, sea: 0.55, tide: 0 });
+      if (preset === 'blank' && !island) this.enterLevel();
       if (preset === 'coast') this.populateCoast();
       this.spawn = this.defaultSpawn(); player.respawn(this.spawn[0], this.spawn[1], this.spawn[2]); player.inv = 0; if (preset === 'coast') this.populateLife(); sand.clear(); terrain.stamps = 0; terrain.prints.fill(0); terrain.dirtyF = true;
       this.afterTerrain(true); this.resetCam(); core.hist = []; core.ptr = 0;
@@ -176,7 +180,7 @@ const app = {
   // ---- editing ----
   undo() { const r = core.undo(); ui.toast(r.msg || 'Undo'); ui.updHist(); },
   redo() { const r = core.redo(); ui.toast(r.msg || 'Redo'); ui.updHist(); },
-  setTool(t) { this.tool = t; if (t !== 'grab' && this.grab) this.grab.release(); }, setMode(m) { if (m === this.mode) return; this.mode = m; ui.setMode(m); this.grab && this.grab.release();
+  setTool(t) { this.tool = t; if (t !== 'grab' && this.grab) this.grab.release(); }, setMode(m) { if (m === this.mode) return; this.mode = m; ui.setMode(m); this.grab && this.grab.release(); if (this.lv) { if (m === 'explore') this.lv.start(); else this.lv.end(); }
     if (m === 'edit') { this.rig.tDist = 46; this.rig.tPitch = 0.78; this.cam.target.set(player.pos.x, terrain.hAt(player.pos.x, player.pos.z), player.pos.z); }
     else { this.rig.tDist = 5.2; this.rig.tPitch = 0.28; this.input.endBrush(); } ui.pad(this.padMode); },
   toggleMode() { if (this.geo && this.geo.active) return this.geo.swapMode(); this.setMode(this.mode === 'explore' ? 'edit' : 'explore'); },
@@ -253,14 +257,15 @@ async function start(choice) {
   if (choice === 'import') { app.worldModes.importWorld(); return; }
   if (['range', 'arena', 'coins'].includes(choice)) { app.game.start(choice); return; }
   if (app.worldModes) app.worldModes.stop();
-  if (choice === 'lab') { app.newScene('blank'); core.noSave = true; app.arenaOff = flatArena(app); app.spawn = [0, 0, 0]; player.respawn(0, 0, 0); player.inv = 0; app.name = 'COMBAT LAB'; terrain.flush();
+  if (choice === 'lab') { app.newScene('island'); core.noSave = true; app.arenaOff = flatArena(app); app.spawn = [0, 0, 0]; player.respawn(0, 0, 0); player.inv = 0; app.name = 'COMBAT LAB'; terrain.flush();
     const drop = (x, z, r, kind) => boulders.add(x, terrain.hAt(x, z) + (kind === 'boulder' ? r : r * 1.1) + 0.05, z, r, undefined, kind); drop(4, 0, 0.5, 'crate'); drop(4, 1.1, 0.5, 'crate'); drop(5.2, -3, 0.45, 'barrel'); drop(-5, 3, 1.1, 'boulder');
     app.rig.setView(Math.PI / 2 + 0.35, 0.2, 5.4); app.rig.snap(); app.lab.show(true); ui.brand(); ui.say('Combat lab: a flat arena with the Tune panel. Nothing here is autosaved.', 7000); return; }
-  if (choice === 'physics') { app.newScene('blank'); core.noSave = true; app.arenaOff = flatArena(app); app.spawn = [0, 0, 0]; player.respawn(0, 0, 0); player.inv = 0; app.name = 'PHYSICS TEST'; terrain.flush();
+  if (choice === 'physics') { app.newScene('island'); core.noSave = true; app.arenaOff = flatArena(app); app.spawn = [0, 0, 0]; player.respawn(0, 0, 0); player.inv = 0; app.name = 'PHYSICS TEST'; terrain.flush();
     const n = app.physicsYard(); app.rig.setView(Math.PI / 2 + 0.35, 0.28, 8); app.rig.snap(); app.lab.show(true); ui.brand(); ui.say(n + ' models are real rigid bodies here. Walk into them, punch, kick, shoot (Shooting range) or grab them. Nothing is autosaved.', 9000); return; }
   if (choice === 'world') { app.geo.open({ resume: true }).then(() => ui.brand()); return; }
   if (choice === 'continue') { const ok = await core.restore(); if (!ok) { app.newScene('coast'); ui.toast('No saved scene, started the coast'); } else ui.toast('Restored your last scene'); }
-  else app.newScene(choice === 'blank' ? 'blank' : 'coast');
+  else app.newScene(choice === 'blank' ? 'blank' : choice === 'island' ? 'island' : 'coast');
+  if (choice === 'blank') { app.setMode('edit'); ui.setGroup(4); ui.say('Blank level: drag pieces in from Level kit, then press E (or Play) to run around in it. Sample level places an example.', 9000); }
   app.rig.setView(Math.atan2(-Math.sin(app.spawn[2]), -Math.cos(app.spawn[2])) + Math.PI + 0.35, 0.2, 5.4); app.rig.snap();
   ui.render(); ui.updHist(); ui.brand(); ui.say('Drag to look · WASD to walk · E to edit the land', 9000);
 }
@@ -268,11 +273,11 @@ app.firstLight = createFirstLightHost(app);
 app.worldModes = createWorldModes(app);
 app.editor = createEditor(app);
 app.post = createPost(app);
-app.shooter = createShooter(app);
+app.shooter = createShooter(app); app.lv = createLevel(app); app.sampleLevel = () => sampleLevel(app);
 app.game = createGame(app);
 app.start = start;
 { const q = new URLSearchParams(location.search).get('mcp'); if (q) setTimeout(() => connectBridge(app, q.startsWith('ws') ? q : undefined), 800); }
-{ const sp = new URLSearchParams(location.search), q = sp.get('start'); if (q === 'world') { ui.hideStart(); app.geo.open({ lat: sp.get('lat') ? +sp.get('lat') : undefined, lon: sp.get('lon') ? +sp.get('lon') : undefined, resume: sp.get('resume') === '1' }).then(() => ui.brand()); } else if (q === 'blank' || q === 'coast' || q === 'continue' || q === 'lab' || q === 'physics' || q === 'first-light' || ['starter', 'sandbox', 'proving', 'photowalk', 'range', 'arena', 'coins'].includes(q)) { ui.hideStart(); start(q); } else ui.showStart(core.hasSave()); }
+{ const sp = new URLSearchParams(location.search), q = sp.get('start'); if (q === 'world') { ui.hideStart(); app.geo.open({ lat: sp.get('lat') ? +sp.get('lat') : undefined, lon: sp.get('lon') ? +sp.get('lon') : undefined, resume: sp.get('resume') === '1' }).then(() => ui.brand()); } else if (q === 'blank' || q === 'island' || q === 'coast' || q === 'continue' || q === 'lab' || q === 'physics' || q === 'first-light' || ['starter', 'sandbox', 'proving', 'photowalk', 'range', 'arena', 'coins'].includes(q)) { ui.hideStart(); start(q); } else ui.showStart(core.hasSave()); }
 
 function resize() { const w = innerWidth, h = innerHeight; camera.aspect = w / h; camera.updateProjectionMatrix(); renderer.setSize(w, h, false); sand.setScale(renderer, camera); }
 const maxPr = () => Math.min(devicePixelRatio, 2);
@@ -283,17 +288,24 @@ const v3 = new THREE.Vector2(), FIX = 1 / 60; let last = performance.now(), phys
 // one fixed step: intent -> actors and fighters -> grab -> physics. Intents come from the latched input edges, so no tap is lost between frames.
 app.fixedStep = (inp, modal) => fixedStep(inp, modal);
 function fixedStep(inp, modal) {
-  const P = player, I = input, explore = app.mode === 'explore', owner = app.inputOwner();
+  const P = player, I = input, explore = app.mode === 'explore', owner = app.inputOwner(), G = app.guns, car = app.driving;
   if (explore && !modal && P.alive) {
-    const y = app.cam.yaw, fx = -Math.sin(y), fz = -Math.cos(y), rx = Math.cos(y), rz = -Math.sin(y), m = I.mv;
-    P.intent.mx = fx * m.y + rx * m.x; P.intent.mz = fz * m.y + rz * m.x; P.intent.run = m.run; P.intent.analog = m.analog;
-    P.tryJump(I.take('jump'), I.jumpHeld);
-    if (owner === 'play') { if (I.take('punch')) P.tryAttack('p'); if (I.take('kick')) P.tryAttack('k'); if (I.take('dodge')) P.tryDodge(P.intent.mx, P.intent.mz); P.setBlock(I.blockHeld); }
-    else { I.take('punch'); I.take('kick'); I.take('dodge'); P.setBlock(false); }
-  } else { P.intent.mx = P.intent.mz = 0; P.setBlock(false); P.tryJump(false, false); I.clearEdges(); }
+    if (car) { car.input.thr = I.mv.y; car.input.str = -I.mv.x; car.input.brake = I.jumpHeld; P.intent.mx = P.intent.mz = 0; P.setBlock(false); P.tryJump(false, false); I.take('jump'); I.take('punch'); I.take('kick'); I.take('dodge'); }
+    else {
+      const y = app.cam.yaw, fx = -Math.sin(y), fz = -Math.cos(y), rx = Math.cos(y), rz = -Math.sin(y), m = I.mv;
+      P.intent.mx = fx * m.y + rx * m.x; P.intent.mz = fz * m.y + rz * m.x; P.intent.run = m.run; P.intent.analog = m.analog;
+      P.tryJump(I.take('jump'), I.jumpHeld);
+      if (owner === 'play') { const pu = I.take('punch'), ki = I.take('kick'); if (G.cur) { if (pu) G.fireEdge = true; } else { if (pu) P.tryAttack('p'); if (ki) P.tryAttack('k'); } if (I.take('dodge')) P.tryDodge(P.intent.mx, P.intent.mz); P.setBlock(I.blockHeld && !G.cur); }
+      else { I.take('punch'); I.take('kick'); I.take('dodge'); P.setBlock(false); }
+    }
+  } else { P.intent.mx = P.intent.mz = 0; P.setBlock(false); P.tryJump(false, false); I.clearEdges(); if (car) { car.input.thr = car.input.str = 0; } }
   if (app.grab.held) app.grab.control(FIX, I.cursorNdc(v3));
+  if (explore) G.step(FIX);
   app.combat.step(FIX, water.level);
+  if (app.lv.rt) app.lv.rt.step(FIX);
   if (phys.ready) phys.step(FIX, water.level); else boulders.step(FIX, player, water.level, shared.uTime.value);
+  if (explore) G.faceAim(FIX);
+  if (app.driving) { const c = app.driving; P.pos.set(c.cp.x, c.cp.y - 0.4, c.cp.z); P.vel.set(0, 0, 0); P.inv = 1; P.hp = Math.max(P.hp, 1); phys.teleport(P); }
 }
 function frame(now) {
   requestAnimationFrame(frame);
@@ -309,17 +321,20 @@ function frame(now) {
   // movement relative to the camera; the edit camera pans with the same keys
   const fx0 = -Math.sin(c.yaw), fz0 = -Math.cos(c.yaw), rx0 = Math.cos(c.yaw), rz0 = -Math.sin(c.yaw);
   const explore = app.mode === 'explore', startOpen = ui.modalOpen();
-  if (!explore) { const k = c.dist * 0.6 * dt, mvx = fx0 * inp.mz + rx0 * inp.mx, mvz = fz0 * inp.mz + rz0 * inp.mx; c.target.x = clamp(c.target.x + mvx * k, -124, 124); c.target.z = clamp(c.target.z + mvz * k, -124, 124); }
+  if (!explore) { const k = c.dist * 0.6 * dt * (input.keys.has('shift') ? 3 : 1), mvx = fx0 * inp.mz + rx0 * inp.mx, mvz = fz0 * inp.mz + rz0 * inp.mx; c.target.x = clamp(c.target.x + mvx * k, -124, 124); c.target.z = clamp(c.target.z + mvz * k, -124, 124); }
   // slow-mo eases back to real time; the simulation then runs on fixed 60 Hz steps and rendering interpolates between the last two
   const nowMs = performance.now(), slowOn = nowMs < app.slow.until; tsc += ((slowOn ? app.slow.s : 1) - tsc) * Math.min(1, dt * (slowOn ? 20 : 6));
   const sdt = dt * tsc * TUNE.timeScale; physAcc = Math.min(0.12, physAcc + sdt); let n = 0;
   while (physAcc >= FIX && n++ < 6) { fixedStep(inp, startOpen); physAcc -= FIX; }
   if (n >= 6) physAcc = 0;
   phys.syncTerrain(app.stroking);
-  const alpha = physAcc / FIX; phys.interp(alpha); for (const a of app.combat.actors) a.render(alpha, sdt);
+  const alpha = physAcc / FIX; phys.interp(alpha); for (const a of app.combat.actors) a.render(alpha, sdt); if (app.lv.rt) for (const k of app.lv.rt.cars) k.render(alpha);
+  if (explore && !app.lv.rt && app.lv.wanted && phys.ready) app.lv.start();
   // camera: critically damped follow with look-ahead, soft lock-on, terrain-aware boom, speed FOV and trauma shake (camera.js)
-  if (explore) c.target.set(player.rpos.x, player.rpos.y + 1.5 * player.scale, player.rpos.z);
-  app.rig.update(dt, { explore, player: player.pos, vel: player.vel, speed: player.speed, lock: player.lock && player.lock.alive ? player.lock.rpos : null, combat: player.combatT > 0, dodge: player.state === 'dodge' });
+  const drv = app.driving;
+  if (drv) { c.target.set(drv.pos.x, drv.pos.y + 1.1, drv.pos.z); app.rig.update(dt, { explore, player: drv.pos, vel: drv.vel, speed: drv.speed, lock: null, combat: false, dodge: false }); }
+  else { if (explore) c.target.set(player.rpos.x, player.rpos.y + 1.5 * player.scale, player.rpos.z);
+  app.rig.update(dt, { explore, player: player.pos, vel: player.vel, speed: player.speed, lock: player.lock && player.lock.alive ? player.lock.rpos : null, combat: player.combatT > 0, dodge: player.state === 'dodge' }); }
   if (app.shooter.active) app.shooter.cameraUpdate();
   // edit cursor + stroke
   if (!explore) {
@@ -331,8 +346,8 @@ function frame(now) {
     }
   } else ring.visible = false;
   if (app.editor) { app.editor.prune(); app.editor.update(); }
-  app.shooter.update(dt); app.game.update(dt);
-  app.grab.setHover(input.cursorNdc(v3), (explore || app.tool === 'grab') && !input.pointers.size && !startOpen && !app.shooter.active); app.grab.render(now);
+  app.shooter.update(dt); app.game.update(dt); app.guns.render(dt);
+  app.grab.setHover(input.cursorNdc(v3), (explore || app.tool === 'grab') && !input.pointers.size && !startOpen && !app.shooter.active && !app.driving && !app.guns.cur); app.grab.render(now);
   app.hud.update(dt); fx.update(dt, renderer); app.lab.update(alpha);
   entities.tick(dt); terrain.flush(); water.update(dt, camera, env.p, env); env.update(dt, camera, explore ? player.pos : c.target);
   sand.update(dt, camera, explore ? player.pos : c.target, env, water.level);

@@ -16,7 +16,7 @@ export function loadRapier() {
 export class Phys {
   constructor(app) {
     this.a = app; this.ready = false; this.failed = false; this.R = null; this.world = null; this.hf = null; this.hfRev = -1; this.hfAt = 0;
-    this.static = []; this.actors = []; this.splash = null; this.onImpact = null; this.stats = { bodies: 0 };
+    this.static = []; this.actors = []; this.pre = []; this.post = []; this.splash = null; this.onImpact = null; this.stats = { bodies: 0 };
   }
   async init() {
     try {
@@ -63,11 +63,18 @@ export class Phys {
     this.propDefs = defs; if (!this.ready) return;
     const R = this.R; this.static.forEach(c => this.world.removeCollider(c, false)); this.static = [];
     for (const d of defs) {
-      const desc = R.ColliderDesc.cuboid(d.h[0], d.h[1], d.h[2]).setTranslation(d.c[0], d.c[1], d.c[2]).setFriction(0.8);
+      // d.type: undefined/'box' = cuboid (h = half extents); 'cyl' (h[1] = half height, h[0] = radius); 'ball' (h[0] = radius); 'hull' (pts = flat [x,y,z...] in the collider's local frame)
+      let desc = d.type === 'cyl' ? R.ColliderDesc.cylinder(d.h[1], d.h[0]) : d.type === 'ball' ? R.ColliderDesc.ball(d.h[0]) : d.type === 'hull' ? R.ColliderDesc.convexHull(new Float32Array(d.pts)) : R.ColliderDesc.cuboid(d.h[0], d.h[1], d.h[2]);
+      if (!desc) continue; desc.setTranslation(d.c[0], d.c[1], d.c[2]).setFriction(0.8);
       if (d.q) desc.setRotation({ x: d.q[0], y: d.q[1], z: d.q[2], w: d.q[3] });
       this.static.push(this.world.createCollider(desc));
     }
   }
+  // a single extra static collider (level pieces and the like); remove it with removeStatic
+  addStatic(desc) { return this.world.createCollider(desc); }
+  removeStatic(c) { try { this.world.removeCollider(c, false); } catch (e) { /* already gone */ } }
+  // camera boom: distance to the first fixed (non-dynamic, non-kinematic) collider along a ray, or null
+  castBoom(o, dx, dy, dz, max) { if (!this.ready) return null; const R = this.R, h = this.world.castRay(new R.Ray({ x: o.x, y: o.y, z: o.z }, { x: dx, y: dy, z: dz }), max, true, R.QueryFilterFlags.EXCLUDE_DYNAMIC | R.QueryFilterFlags.EXCLUDE_KINEMATIC); return h ? h.timeOfImpact : null; }
   // ---- dynamic props: boulder (ball), crate (cuboid), barrel (cylinder), all with explicit masses and CCD ----
   addBoulder(b) {
     const R = this.R, boul = b.kind === 'boulder' || !b.kind, body = this.world.createRigidBody(R.RigidBodyDesc.dynamic().setTranslation(b.p.x, b.p.y, b.p.z).setRotation({ x: b.q.x, y: b.q.y, z: b.q.z, w: b.q.w })
@@ -92,6 +99,7 @@ export class Phys {
   removeActor(a) { const i = this.actors.indexOf(a); if (i >= 0) this.actors.splice(i, 1); if (a.body && this.world) { this.world.removeRigidBody(a.body); } a.body = null; a.col = null; }
   // a.vel is a full velocity (gravity included). Updates a.pos and ground contact. Without Rapier it falls back to the sculpted ground plus decks (no solid props).
   moveActor(a, dt) {
+    if (a.frozen) return;   // riding in a car: no controller movement, so the capsule never shoves the chassis
     const T = this.a.terrain;
     if (!this.ready || !a.body) {
       a.wasGround = a.onGround; const nx = a.pos.x + a.vel.x * dt, nz = a.pos.z + a.vel.z * dt; a.pos.x = nx; a.pos.z = nz; a.pos.y += a.vel.y * dt;
@@ -125,7 +133,9 @@ export class Phys {
       }
       b.wasWet = sub > 0;
     }
+    for (const f of this.pre) f(dt);
     this.world.timestep = dt; this.world.step();
+    for (const f of this.post) f(dt);
     for (const b of items) {
       if (!b.body) continue; if (b.pp) { b.pp.copy(b.cp); b.pq.copy(b.cq); }
       let t = b.body.translation(); const q = b.body.rotation(), v = b.body.linvel(), sp = Math.hypot(v.x, v.y, v.z);

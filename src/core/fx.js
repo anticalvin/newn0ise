@@ -75,6 +75,9 @@ export class FX {
       case 'block': this.tone('square', 640, 380, 0.07, 0.16 * v); this.noise(0.05, 3000, 1500, 2, 0.3 * v); break;
       case 'parry': this.tone('triangle', 1400, 1900, 0.18, 0.28 * v); this.tone('sine', 2100, 2400, 0.25, 0.14 * v); break;
       case 'whoosh': this.noise(0.18, 350, 1500, 1.1, 0.16 * v); break;
+      case 'shot': this.noise(0.12, 2600, 300, 0.7, 0.7 * v); this.tone('sine', 150, 45, 0.16, 0.8 * v); break;
+      case 'click': this.tone('square', 900, 700, 0.03, 0.12 * v); break;
+      case 'pickup': this.tone('triangle', 520, 880, 0.12, 0.2 * v); this.tone('sine', 880, 1320, 0.16, 0.12 * v); break;
       case 'thud': this.tone('sine', 80, 32, 0.22, 0.6 * v); this.noise(0.12, 500, 150, 0.6, 0.35 * v); break;
       case 'splash': this.noise(0.35, 2400, 600, 0.5, 0.25 * v); break;
       case 'grab': this.tone('triangle', 300, 520, 0.08, 0.1 * v); break;

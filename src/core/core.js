@@ -15,7 +15,7 @@ export const LIMITS = { fighters: 8, boulders: 60, palms: 1600, radius: 40, stro
 export const COMMANDS = {
   undo: '{} → undo the last change.',
   redo: '{} → redo.',
-  'scene.new': `{preset:"blank"|"coast", seed?:1..99999} → replace the whole scene. blank = flat land (about 1.2 m), sky, sun, a spawn point and nothing else, with sea below the land. coast = the COAST_001 island.`,
+  'scene.new': `{preset:"blank"|"coast", seed?:1..99999} → replace the whole scene. blank = the empty level space: a grid floor, a sky and one sun, nothing else (build a level, then Play). coast = the COAST_001 island.`,
   'terrain.stroke': `{tool:"${TOOLS.join('|')}", center:[x,z], radius:1..${LIMITS.radius}, strength:0.05..1, duration:0.05..${LIMITS.strokeSeconds}, invert?} → one brush stroke.`,
   'terrain.reset': '{seed?, preset?:"blank"|"coast"} → regenerate the terrain only; scenery stays.',
   'environment.set': '{time:0..24, cloud:0..1, wind:0..1, windAng:-3.2..3.2, sea:0..1.2, tide:-0.8..0.9} → any subset. water.set is the same command.',
@@ -24,8 +24,12 @@ export const COMMANDS = {
   'boulder.drop': `{x, z, kind?:"boulder"|"crate"|"barrel", radius?:0.3..3, height?:1..60} → drop a physics prop (max ${LIMITS.boulders}). Crates and barrels are lighter and can be grabbed, thrown and punched.`,
   'entity.physics': '{id, mode:"dynamic"|"static", mass?:0.5..5000} → make one placed model (asset or primitive) a real rigid body you can shove, punch, shoot, grab and throw, or fix it in place again. Saves with the scene.',
   'physics.models': '{mode?:"dynamic"|"static"} → do that for every placed model at once. "dynamic" is the default.',
-  'entity.physics': '{id, mode?:"dynamic"|"static", mass?:0.5..5000} → make one placed model (catalog asset or primitive) a real rigid body you can shove, punch, shoot, grab and throw, or fix it in place again. Saves with the scene. The body is a box fitted to the model.',
-  'physics.models': '{mode?:"dynamic"|"static"} → do that for every placed model at once ("dynamic" by default).',
+  'level.play': 'Start Play: a runtime is built from the placed entities (static pieces, dynamic props, fighters, pickups, cars, the player at spawn.player). Stop restores the editor untouched.',
+  'level.stop': 'Stop Play and return to the editor. Runtime state never reaches the saved entities.',
+  'level.new': '{} → an empty Blank level (grid floor, sky, nothing else).',
+  'level.sample': '{} → place a small sample level (stairs, ramp, crates, pickups, fighters, a car) as one undo step.',
+  'level.save': '{} → the level as a .n0level.json document (n0ise.level v2: the entity records).',
+  'level.load': '{doc} → replace the entities with a .n0level.json document (v1 prototype files and v2). Fails with a list of what could not be placed.',
   'actor.spawn': `{kind?:"brawler"|"heavy"|"dummy", x, z, yaw?} → a melee fighter (max ${LIMITS.fighters}). Fighters use the same body, controller and attacks as the player.`,
   'actor.clear': '{} → remove every fighter (the player stays).',
   'player.teleport': '{x, z} → move the character.',
@@ -81,9 +85,9 @@ export class Core {
         case 'describe': return { ok: true, commands: { ...COMMANDS, ...GEO_COMMANDS }, limits: LIMITS, units: 'metres, hours, radians for windAng', world: '256 x 256 m, x and z from -128 to 128, y up' };
         case 'state': return { ok: true, ...a.summary() };
         case 'scene.new': {
-          const preset = c.preset === 'coast' ? 'coast' : c.preset === 'blank' ? 'blank' : null; if (!preset) return { ok: false, msg: 'preset must be "blank" or "coast"' };
+          const preset = c.preset === 'coast' ? 'coast' : c.preset === 'blank' ? 'blank' : c.preset === 'island' ? 'island' : null; if (!preset) return { ok: false, msg: 'preset must be "blank" or "coast"' };
           const before = a.snapshot(); a.newScene(preset, num(c.seed, 101, 1, 99999)); this.pushScene('scene.new ' + preset, before, a.snapshot());
-          return { ok: true, msg: preset === 'blank' ? 'Blank island' : 'Coast demo' };
+          return { ok: true, msg: preset === 'blank' ? 'Blank level' : preset === 'island' ? 'Blank island' : 'Coast demo' };
         }
         case 'terrain.stroke': {
           const [x, z] = c.center || [c.x, c.z]; if (!Number.isFinite(+x) || !Number.isFinite(+z)) return { ok: false, msg: 'center [x,z] required' };
@@ -140,6 +144,12 @@ export class Core {
         case 'physics.models': {
           const mode = c.mode === 'static' ? 'static' : 'dynamic', n = a.dyn.setAll(mode); return { ok: true, msg: n + ' model' + (n === 1 ? '' : 's') + ' ' + (mode === 'dynamic' ? 'now physical' : 'fixed in place') };
         }
+        case 'level.play': a.lv.play(); return { ok: true, msg: 'Playing' };
+        case 'level.stop': a.lv.stop(); return { ok: true, msg: 'Stopped' };
+        case 'level.new': return this.exec({ cmd: 'scene.new', preset: 'blank' });
+        case 'level.sample': { const n = a.sampleLevel(); return { ok: true, msg: n + ' objects placed' }; }
+        case 'level.save': return { ok: true, doc: a.lv.exportDoc(), msg: 'Level exported' };
+        case 'level.load': { const r = a.lv.importDoc(c.doc); if (!r.ok) return r; a.lv.end(); a.entities.clear(); const bad = [...r.probs]; for (const sp of r.specs) { try { a.entities.create(sp); } catch (e) { bad.push((sp.id || sp.prefab) + ': ' + e.message); } } this.hist = []; this.ptr = 0; this.emit('Level loaded'); a.ui.render(); if (a.mode === 'explore') a.lv.start(); return { ok: true, msg: a.entities.size + ' placed' + (bad.length ? ', ' + bad.length + ' skipped: ' + bad.slice(0, 3).join('; ') : ''), skipped: bad }; }
         case 'actor.spawn': {
           const kind = ['brawler', 'heavy', 'dummy'].includes(c.kind) ? c.kind : 'brawler'; if (a.combat.enemies().length >= LIMITS.fighters) return { ok: false, msg: 'Fighter limit reached (' + LIMITS.fighters + ')' };
           const x = num(c.x, 0, -120, 120), z = num(c.z, 0, -120, 120), yaw = num(c.yaw, Math.atan2(a.player.pos.x - x, a.player.pos.z - z), -7, 7); let ac = a.combat.add(kind, x, z, yaw);
@@ -250,10 +260,10 @@ export class Core {
   run(line) {
     const t = line.trim(); if (!t) return { ok: false, msg: '' };
     if (t[0] === '{') { try { return this.exec(JSON.parse(t)); } catch (e) { return { ok: false, msg: 'Bad JSON' }; } }
-    const [w, ...r] = t.split(/\s+/), v = parseFloat(r[0]), f = this.a.focusPoint();
+    const [w, ...r] = t.split(/\s+/), v = parseFloat(r[0]), f = this.a.focusPoint(), a0 = this.a;
     const map = { time: { cmd: 'environment.set', time: v }, cloud: { cmd: 'environment.set', cloud: v }, wind: { cmd: 'environment.set', wind: v }, sea: { cmd: 'water.set', sea: v }, tide: { cmd: 'water.set', tide: v },
       boulder: { cmd: 'boulder.drop', x: f.x, z: f.z }, crate: { cmd: 'boulder.drop', kind: 'crate', x: f.x, z: f.z }, barrel: { cmd: 'boulder.drop', kind: 'barrel', x: f.x, z: f.z },
-      fighter: { cmd: 'actor.spawn', kind: 'brawler', x: f.x + 4, z: f.z }, brawler: { cmd: 'actor.spawn', kind: 'brawler', x: f.x + 4, z: f.z }, heavy: { cmd: 'actor.spawn', kind: 'heavy', x: f.x + 4, z: f.z }, dummy: { cmd: 'actor.spawn', kind: 'dummy', x: f.x + 4, z: f.z }, physical: { cmd: 'physics.models' }, freeze: { cmd: 'physics.models', mode: 'static' }, clear: { cmd: 'actor.clear' }, palms: { cmd: 'scatter.add', center: [f.x, f.z], count: Number.isFinite(v) ? v : 8 }, undo: { cmd: 'undo' }, redo: { cmd: 'redo' },
+      fighter: { cmd: 'actor.spawn', kind: 'brawler', x: f.x + 4, z: f.z }, brawler: { cmd: 'actor.spawn', kind: 'brawler', x: f.x + 4, z: f.z }, heavy: { cmd: 'actor.spawn', kind: 'heavy', x: f.x + 4, z: f.z }, dummy: { cmd: 'actor.spawn', kind: 'dummy', x: f.x + 4, z: f.z }, physical: { cmd: 'physics.models' }, play: { cmd: 'level.play' }, stop: { cmd: 'level.stop' }, sample: { cmd: 'level.sample' }, pistol: { cmd: 'entity.create', prefab: 'pickup.pistol', position: [f.x, a0.terrain.hAt(f.x, f.z), f.z] }, rifle: { cmd: 'entity.create', prefab: 'pickup.rifle', position: [f.x, a0.terrain.hAt(f.x, f.z), f.z] }, shotgun: { cmd: 'entity.create', prefab: 'pickup.shotgun', position: [f.x, a0.terrain.hAt(f.x, f.z), f.z] }, car: { cmd: 'entity.create', prefab: 'vehicle.car', position: [f.x, a0.terrain.hAt(f.x, f.z), f.z] }, freeze: { cmd: 'physics.models', mode: 'static' }, clear: { cmd: 'actor.clear' }, palms: { cmd: 'scatter.add', center: [f.x, f.z], count: Number.isFinite(v) ? v : 8 }, undo: { cmd: 'undo' }, redo: { cmd: 'redo' },
       raise: { cmd: 'terrain.stroke', tool: 'raise', center: [f.x, f.z], radius: Number.isFinite(v) ? v : 10 }, lower: { cmd: 'terrain.stroke', tool: 'lower', center: [f.x, f.z], radius: Number.isFinite(v) ? v : 10 },
       sunset: { cmd: 'environment.set', time: 18.3 }, noon: { cmd: 'environment.set', time: 12 }, night: { cmd: 'environment.set', time: 23 },
       blank: { cmd: 'scene.new', preset: 'blank' }, coast: { cmd: 'scene.new', preset: 'coast' }, spawn: { cmd: 'spawn.set' }, state: { cmd: 'state' } };
@@ -269,7 +279,7 @@ export class Core {
     const a = this.a, r = n => +n.toFixed(2);
     return { format: FORMAT, version: VERSION, name: a.name, preset: a.terrain.preset, env: { ...a.env.p }, terrain: await a.terrain.pack(), spawn: a.spawn.map(r),
       palms: a.palms.items.map(p => [r(p.x), r(p.z), r(p.s), r(p.yaw)]),
-      boulders: a.boulders.items.filter(b => b.kind !== 'model').map(b => [r(b.p.x), r(b.p.y), r(b.p.z), r(b.r), b.seed, b.kind]),
+      level: !!a.level, boulders: a.boulders.items.filter(b => b.kind !== 'model').map(b => [r(b.p.x), r(b.p.y), r(b.p.z), r(b.r), b.seed, b.kind]),
       actors: a.combat.enemies().map(e => [e.kind, r(e.home[0]), r(e.home[1]), r(e.home[2])]),
       worlds: a.worlds.map(w => ({ name: w.name, at: w.at.map(r), doc: w.doc })), entities: a.entities.serialize(), assetsUsed: [...new Set(a.entities.serialize().filter(e => e.prefab === 'asset').map(e => e.parameters.assetId))],
       player: [r(a.player.pos.x), r(a.player.pos.z), r(a.player.yaw)] };
@@ -282,7 +292,7 @@ export class Core {
       a.palms.items = (d.palms || []).map(([x, z, s, yaw]) => ({ x: +x, z: +z, s: +s, yaw: +yaw })); a.palms.rebuild();
       [...a.boulders.items].forEach(b => a.boulders.remove(b)); (d.boulders || []).forEach(([x, y, z, r, seed, kind]) => a.boulders.add(+x, +y, +z, +r, seed | 0, ['crate', 'barrel'].includes(kind) ? kind : 'boulder'));
       a.combat.clearEnemies(); (d.actors || []).slice(0, LIMITS.fighters).forEach(([k, x, z, yw]) => { if (['brawler', 'heavy', 'dummy'].includes(k) && Number.isFinite(+x) && Number.isFinite(+z)) a.combat.add(k, +x, +z, +yw || 0); });
-      a.entities.clear(); a.clearWorlds(); a.setPreset(a.terrain.preset);
+      a.lv.end(); a.entities.clear(); a.clearWorlds(); a.setPreset(a.terrain.preset); if (d.level && !a.level) a.enterLevel(); else if (!d.level) a.exitArena();
       for (const w of (d.worlds || []).slice(0, LIMITS.worlds)) { const r = a.readWorld(w.doc); if (r.ok) a.placeWorld(r.doc, w.at, w.name); }
       this.loadProblems = a.entities.load(d.entities || []); if (this.loadProblems.length) a.ui && a.ui.toast(this.loadProblems.length + ' saved object(s) could not be restored: ' + this.loadProblems[0].msg);
       a.spawn = Array.isArray(d.spawn) ? d.spawn.map(Number) : d.player ? [+d.player[0], +d.player[1], +d.player[2]] : a.defaultSpawn();
@@ -291,7 +301,7 @@ export class Core {
       a.afterTerrain(true); this.hist = []; this.ptr = 0;
     } catch (e) { try { a.restoreScene(before); } catch (e2) { /* keep the original error */ } this.muted = false; throw e; }
     finally { this.muted = false; }
-    this.emit('Loaded');
+    this.emit('Loaded'); if (a.mode === 'explore' && a.lv) a.lv.start();
   }
   // cheap structural checks that run before anything is replaced
   checkScene(d) {

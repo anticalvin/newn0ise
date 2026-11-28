@@ -28,3 +28,7 @@
 .tnote{font-size:11px;line-height:1.4;padding-top:8px;border-top:1px solid var(--edge)}.tnote code{color:#fff}
 @media (max-width:520px){.tune{left:10px;right:10px;width:auto}}
 @media (prefers-reduced-motion:reduce){#hud .combo.pop b,#ui .flash.on{animation:none}#ui .flash.on{opacity:1}}
+
+/* level creator: ammo, crosshair and the Play / Stop pill */
+#ammo{position:absolute;right:22px;bottom:calc(22px + env(safe-area-inset-bottom));display:flex;align-items:baseline;gap:8px;color:#fff;font-variant-numeric:tabular-nums;opacity:0;transition:opacity .2s;pointer-events:none;text-shadow:0 2px 12px rgba(0,0,0,.6);z-index:5}#ammo b{font-size:38px;font-weight:700}#ammo span{color:rgba(255,255,255,.65);font-size:16px}#ammo i{font-style:normal;color:rgba(255,255,255,.65);font-size:12px;letter-spacing:.1em;text-transform:uppercase}
+#cross{position:absolute;left:0;top:0;width:22px;height:22px;pointer-events:none;opacity:0;border:2px solid rgba(255,255,255,.85);border-radius:50%;box-shadow:0 0 0 1px rgba(0,0,0,.35);z-index:5}#cross:after{content:'';position:absolute;left:50%;top:50%;width:3px;height:3px;margin:-1.5px;background:#fff;border-radius:50%}

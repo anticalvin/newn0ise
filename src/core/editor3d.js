@@ -4,6 +4,8 @@
 import * as THREE from 'three';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { MATERIALS } from './buildkit.js';
+import { LEVEL_ITEMS, CATS } from './levelkit.js';
+import { sampleLevel } from './level.js';
 
 const KIT = [
   { id: 'wall', name: 'Wall', prefab: 'build.wall', params: { length: 4, height: 2.8, opening: 'none' } },
@@ -21,7 +23,7 @@ const r3 = v => Math.round(v * 1000) / 1000;
 
 export function createEditor(app) {
   const { renderer, scene, camera } = app, E = app.entities, core = app.core;
-  const S = { tool: 'select', xf: 'translate', grid: 1, sel: [], pending: null, yaw: 0, tab: 'assets', cat: '', q: '', wall: { height: 2.8, thickness: 0.2, material: 'plaster', opening: 'none', color: null }, roof: true, level: 0, online: null, onlineErr: '' };
+  const S = { tool: 'select', xf: 'translate', grid: 1, sel: [], pending: null, yaw: 0, tab: 'assets', cat: '', q: '', wall: { height: 2.8, thickness: 0.2, material: 'plaster', opening: 'none', color: null }, roof: true, level: 0, online: null, onlineErr: '' }; if (app.level) S.tab = 'level';
   const ed = { S, dragging: null };
   const snap = v => S.grid > 0 ? Math.round(v / S.grid) * S.grid : v;
   const canvas = renderer.domElement;
@@ -177,6 +179,8 @@ export function createEditor(app) {
     if (mod && k === 'd') duplicate();
     else if (mod) used = false;
     else if (k === 'delete' || k === 'backspace') remove();
+    else if (k === 'g' && e.shiftKey) { S.grid = S.grid ? 0 : 1; refreshGizmo(); app.ui.refreshPanel(); }
+    else if (k === '[' || k === ']') { if (S.pending) S.yaw += (k === ']' ? 1 : -1) * Math.PI / 4; else if (S.sel.length === 1) { const rr = E.get(S.sel[0]), ro = rr.transform.rotation.slice(); ro[1] += (k === ']' ? 1 : -1) * Math.PI / 4; core.exec({ cmd: 'entity.set', id: S.sel[0], rotation: ro }); app.ui.updHist(); refreshGizmo(); app.ui.refreshPanel(); } }
     else if (k === 'g') { S.xf = 'translate'; refreshGizmo(); app.ui.refreshPanel(); }
     else if (k === 'r') { if (S.pending) { S.yaw += Math.PI / 4; } else { S.xf = 'rotate'; refreshGizmo(); app.ui.refreshPanel(); } }
     else if (k === 't') { S.xf = 'scale'; refreshGizmo(); app.ui.refreshPanel(); }
@@ -220,6 +224,7 @@ export function createEditor(app) {
 .bld .det{flex:1 1 280px;display:flex;flex-direction:column;gap:6px}.bld .hint2{color:var(--dim);font-size:12px}`); document.head.appendChild(css);
   const chip = (txt, on, fn, title) => { const b = el('button', 'chip', txt); b.type = 'button'; b.setAttribute('aria-pressed', String(!!on)); if (title) b.title = title; b.onclick = fn; return b; };
   const itemsAssets = () => app.assets.query({ limit: 200, query: S.q, ...(S.cat ? { category: S.cat } : {}) }).map(a => ({ key: 'a:' + a.id, asset: a.id, name: a.name, cat: a.category, license: a.license }));
+  const itemsLevel = () => LEVEL_ITEMS.filter(i => !S.cat || i[2] === S.cat).filter(i => !S.q || i[1].toLowerCase().includes(S.q.toLowerCase())).map(([prefab, name, cat, params]) => ({ key: 'l:' + prefab, prefab, params, name, cat }));
   const itemsKit = () => KIT.map(k => ({ key: 'k:' + k.id, prefab: k.prefab, params: k.params, name: k.name }));
   async function loadOnline() { if (S.online || S.onlineBusy) return; S.onlineBusy = true; try { const m = await import('../phmodels.js'); const list = await m.modelList(); S.online = list; S.phThumb = m.thumb; S.onlineErr = ''; } catch (e) { S.onlineErr = 'Could not reach Poly Haven (' + e.message + '). Check your connection.'; } S.onlineBusy = false; app.ui.refreshPanel(); }
   const itemsOnline = () => { const q = S.q.toLowerCase(); return (S.online || []).filter(m => (!S.cat || m.cats.includes(S.cat)) && (!q || (m.name + ' ' + m.tags.join(' ')).toLowerCase().includes(q))).slice(0, 60).map(m => ({ key: 'o:' + m.id, prefab: 'model.online', online: m.id, name: m.name, params: {}, remote: m.id })); };
@@ -245,13 +250,15 @@ export function createEditor(app) {
       if (S.tool === 'room') w.appendChild(chip('Roof', S.roof, () => { S.roof = !S.roof; ed.panelBuild(p); })); p.appendChild(w);
       p.appendChild(el('p', 'hint2', S.tool === 'wall' ? 'Drag on the ground (or on a floor) from one end of the wall to the other.' : S.tool === 'room' ? 'Drag a rectangle. You get a floor, four walls with a door and windows, and a roof.' : 'Drag a rectangle for a floor.'));
     }
-    const tabs = el('div', 'row'); [['assets', 'Props and buildings'], ['kit', 'Build pieces'], ['online', 'Online CC0']].forEach(([id, n]) => tabs.appendChild(chip(n, S.tab === id, () => { S.tab = id; S.cat = ''; S.q = ''; if (id === 'online') loadOnline(); ed.panelBuild(p); })));
+    if (app.level) { const lv = el('div', 'row'); lv.append(chip('Play', false, () => app.lv.play(), 'Play the level (E)'), chip('Sample level', false, () => { const n = sampleLevel(app); app.ui.toast(n + ' objects placed'); app.ui.updHist(); ed.panelBuild(p); }, 'Place a small example level'), chip('Save level', false, () => app.lv.saveFile(), 'Download a .n0level.json'), chip('Open level', false, () => app.lv.openFile(), 'Open a .n0level.json'), chip('Snap ' + (S.grid ? 'on' : 'off'), !!S.grid, () => { S.grid = S.grid ? 0 : 1; refreshGizmo(); ed.panelBuild(p); }, 'Toggle snapping (Shift+G)')); p.appendChild(lv); }
+    const tabs = el('div', 'row'); [['level', 'Level kit'], ['assets', 'Props and buildings'], ['kit', 'Build pieces'], ['online', 'Online CC0']].forEach(([id, n]) => tabs.appendChild(chip(n, S.tab === id, () => { S.tab = id; S.cat = ''; S.q = ''; if (id === 'online') loadOnline(); ed.panelBuild(p); })));
     const q = el('input'); q.type = 'search'; q.placeholder = 'Search'; q.value = S.q; q.setAttribute('aria-label', 'Search'); q.style.flex = '1'; q.addEventListener('keydown', ev => ev.stopPropagation()); q.oninput = () => { S.q = q.value; clearTimeout(q._t); q._t = setTimeout(() => { fill(); }, 200); }; tabs.appendChild(q); p.appendChild(tabs);
     const cats = el('div', 'row'); const list = el('div', 'tiles'); p.append(cats, list);
     function fill() {
       cats.innerHTML = ''; list.innerHTML = '';
       let items = [], cs = [];
       if (S.tab === 'assets') { cs = [...new Set(app.assets.query({ limit: 200 }).map(a => a.category))]; items = itemsAssets(); }
+      else if (S.tab === 'level') { cs = CATS; items = itemsLevel(); }
       else if (S.tab === 'kit') items = itemsKit();
       else { if (S.onlineErr) { list.appendChild(el('p', 'hint2', S.onlineErr)); return; } if (!S.online) { list.appendChild(el('p', 'hint2', 'Loading the Poly Haven library…')); loadOnline(); return; } const cc = {}; S.online.forEach(m => m.cats.forEach(c => { cc[c] = (cc[c] || 0) + 1; })); cs = Object.entries(cc).sort((a, b) => b[1] - a[1]).slice(0, 8).map(x => x[0]); items = itemsOnline(); }
       if (cs.length) { cats.appendChild(chip('All', !S.cat, () => { S.cat = ''; fill(); })); cs.forEach(c => cats.appendChild(chip(c, S.cat === c, () => { S.cat = S.cat === c ? '' : c; fill(); }))); }
@@ -272,6 +279,10 @@ export function createEditor(app) {
     if (r.prefab.startsWith('build.')) { const w = el('div', 'row'); const mat = el('select'); Object.entries(MATERIALS).forEach(([k, m]) => { const o = el('option', '', m.label); o.value = k; if (r.parameters.material === k) o.selected = true; mat.appendChild(o); }); mat.onchange = () => set({ parameters: { material: mat.value } });
       const col = el('input'); col.type = 'color'; col.value = r.parameters.color || MATERIALS[r.parameters.material].base; col.onchange = () => set({ parameters: { color: col.value } }); w.append(mat, col); det.appendChild(w);
       const dims = el('div', 'row'); for (const k of ['length', 'width', 'depth', 'height', 'thickness', 'rise']) if (typeof r.parameters[k] === 'number') { const n = el('input'); n.type = 'number'; n.step = 0.1; n.value = r.parameters[k]; n.title = k; n.setAttribute('aria-label', k); n.addEventListener('keydown', ev => ev.stopPropagation()); n.onchange = () => set({ parameters: { [k]: +n.value } }); const l = el('label', '', k + ' '); l.appendChild(n); dims.appendChild(l); } det.appendChild(dims); }
+    const P = r.parameters; if (r.prefab === 'vehicle.car' || r.prefab === 'light.point' || (P.size && P.color)) { const w = el('div', 'row'); const col = el('input'); col.type = 'color'; col.value = P.color || '#999999'; col.title = 'Colour'; col.onchange = () => set({ parameters: { color: col.value } }); w.append(col);
+      if (P.size) ['X', 'Y', 'Z'].forEach((ax, i) => { const n = el('input'); n.type = 'number'; n.step = 0.25; n.min = 0.1; n.value = P.size[i]; n.title = 'Size ' + ax; n.setAttribute('aria-label', 'Size ' + ax); n.addEventListener('keydown', ev => ev.stopPropagation()); n.onchange = () => { const sz = P.size.slice(); sz[i] = Math.max(0.1, +n.value || 1); set({ parameters: { size: sz } }); }; w.append(n); });
+      if (r.prefab === 'light.point') { const n = el('input'); n.type = 'number'; n.step = 4; n.min = 0; n.max = 400; n.value = P.intensity; n.title = 'Intensity'; n.setAttribute('aria-label', 'Intensity'); n.addEventListener('keydown', ev => ev.stopPropagation()); n.onchange = () => set({ parameters: { intensity: Math.min(400, Math.max(0, +n.value || 0)) } }); w.append(n); } det.appendChild(w); }
+    if (r.prefab === 'prop.boulder') { const w = el('div', 'row'); const n = el('input'); n.type = 'number'; n.step = 0.1; n.min = 0.3; n.max = 3; n.value = P.r; n.title = 'Radius'; n.setAttribute('aria-label', 'Radius'); n.addEventListener('keydown', ev => ev.stopPropagation()); n.onchange = () => set({ parameters: { r: Math.min(3, Math.max(0.3, +n.value || 1.1)) } }); w.append(n); det.appendChild(w); }
     const act = el('div', 'row'); const col2 = !(r.components.collider && r.components.collider.type === 'none'); act.appendChild(chip('Solid', col2, () => { set({ components: { collider: { type: col2 ? 'none' : 'static' } } }); ed.panelScene(p); }, 'Solid objects stop the player'));
     const d = el('button', 'chip', 'Duplicate'); d.type = 'button'; d.onclick = duplicate; const f = el('button', 'chip', 'Focus'); f.type = 'button'; f.onclick = focus; const x = el('button', 'chip', 'Delete'); x.type = 'button'; x.onclick = remove; act.append(d, f, x); det.appendChild(act);
   };

@@ -47,9 +47,9 @@ export class Combat {
   get player() { return this.actors.find(a => a.isPlayer); }
   add(kind, x, z, yaw = 0, opt = {}) {
     const a = this.a, K = KINDS[kind] || KINDS.brawler, y = a.terrain.hAt(x, z), ac = new Actor(a, { kind, name: kind, x, y, z, yaw, hp: K.hp, power: K.power, speedMul: K.speedMul, scale: K.scale, armor: K.armor, dummy: K.dummy, palette: K.palette, ...opt });
-    a.phys.addActor(ac, ac.scale); if (!ac.isPlayer) ac.brain = new Brain(ac, K.skill); ac.home = [x, z, yaw]; this.actors.push(ac); return ac;
+    a.phys.addActor(ac, ac.scale); if (!ac.isPlayer) ac.brain = new Brain(ac, K.skill); ac.home = [x, z, yaw, opt.y]; if (opt.y !== undefined) { ac.pos.y = opt.y; ac.prev.copy(ac.pos); a.phys.teleport(ac); } this.actors.push(ac); return ac;
   }
-  addPlayer(x, z, yaw) { const ac = this.add('player', x, z, yaw, { player: true, name: 'You', hp: 120, palette: { jacket: 0xd9d2c6 } }); ac.kind = 'player'; return ac; }
+  addPlayer(x, z, yaw, y) { const o = { player: true, name: 'You', hp: 120, palette: { jacket: 0xd9d2c6 } }; if (y !== undefined) o.y = y; const ac = this.add('player', x, z, yaw, o); ac.kind = 'player'; return ac; }
   remove(ac) { const i = this.actors.indexOf(ac); if (i >= 0) this.actors.splice(i, 1); if (this.lock === ac) this.lock = null; ac.dispose(); }
   clearEnemies() { for (const e of this.actors.filter(x => !x.isPlayer)) this.remove(e); }
   enemies() { return this.actors.filter(x => !x.isPlayer); }
@@ -90,7 +90,7 @@ export class Combat {
   shakeFor(a, b, v) { if ((a && a.isPlayer) || (b && b.isPlayer)) this.a.rig.addTrauma(v); else if (this.player && this.player.pos.distanceTo((a || b).pos) < 9) this.a.rig.addTrauma(v * 0.4); }
   slowmoHint() { this.a.slowmo(0.45, 0.16); }
   onKO(ac) { if (ac.isPlayer) { this.a.ui.flash('KO'); setTimeout(() => this.player && this.respawnPlayer(), 2600); } else { ac.koAt = this.t; } }
-  respawnPlayer() { const p = this.player, s = this.a.spawn; if (p && !p.alive) { p.respawn(s[0], s[1], s[2]); this.a.rig.snap(); } }
+  respawnPlayer() { const p = this.player, s = this.a.spawn; if (p && !p.alive) { p.respawn(s[0], s[1], s[2], s[3]); this.a.rig.snap(); } }
   // ---- fast props hurt ----
   propDamage(dt) {
     const A = this.a;
@@ -110,7 +110,7 @@ export class Combat {
     this.t += dt; const P = this.player; if (this.combo.t > 0) { this.combo.t -= dt; if (this.combo.t <= 0) this.combo.n = 0; }
     const live = this.a.mode === 'explore' && !this.a.ui.modalOpen();   // fighters hold still while you edit or a sheet is open
     for (const a of this.actors) { if (a.brain && P && live) a.brain.update(dt, P); else if (a.brain) { a.intent.mx = a.intent.mz = 0; a.wantBlock = false; } if (a.brain) a.setBlock(a.wantBlock); a.step(dt, level); }
-    for (const e of this.enemies()) { if (e.state === 'dead' && this.t - (e.koAt || 0) > 5) { const h = e.home; e.respawn(h[0], h[1], h[2]); e.brain && (e.brain.aggro = false, e.brain.mode = 'idle'); } }
+    for (const e of this.enemies()) { if (e.state === 'dead' && this.t - (e.koAt || 0) > 5) { const h = e.home; e.respawn(h[0], h[1], h[2], h[3]); e.brain && (e.brain.aggro = false, e.brain.mode = 'idle'); } }
     this.propDamage(dt);
     if (P && P.lock && (!P.lock.alive || P.lock.pos.distanceTo(P.pos) > 30)) P.lock = null;
     if (P) { P.faceTarget = !!P.lock; P.target = P.lock; if (P.lock) P.combatT = Math.max(P.combatT, 1); }

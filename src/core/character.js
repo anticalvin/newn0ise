@@ -80,6 +80,13 @@ export class Character {
     this.ph = 0; this.t = Math.random() * 10; this.stepN = 0; this.airW = 0; this.stW = 0; this.blW = 0; this.lastAct = null; this.onStep = null; this.actW = 0;
   }
   setFlash(f) { this.flash = f; for (const m of this.mats) { m.emissive.setRGB(f * 0.9, f * 0.8, f * 0.6); } }
+  setGun(kind) {
+    if (this.gun) { this.armR.end.remove(this.gun); this.gun = null; } if (!kind) return;
+    const g = new THREE.Group(), m = new THREE.MeshStandardMaterial({ color: 0x1d1f22, roughness: 0.5, metalness: 0.6 }), L = kind === 'rifle' ? 0.62 : kind === 'shotgun' ? 0.7 : 0.26;
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.055, L, 0.075), m); body.position.y = -L / 2 + 0.05; g.add(body);
+    const grip = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.13, 0.06), m); grip.position.set(0, 0.0, 0.06); grip.rotation.x = 0.25; g.add(grip);
+    g.rotation.x = 0; g.position.set(0, -0.02, 0.0); g.traverse(o => { if (o.isMesh) o.castShadow = true; }); this.armR.end.add(g); this.gun = g;
+  }
   limb(name, out) { const o = { handL: this.armL.end, handR: this.armR.end, footL: this.legL.end, footR: this.legR.end, chest: this.chest, head: this.headG }[name]; return o.getWorldPosition(out); }
   // s: {speed, vf, vs, onGround, vy, depth, leanF, leanR, stance, act, actT, actHold, blocking, landT}
   update(dt, s, onGround, depth, vy) {
@@ -130,6 +137,9 @@ export class Character {
     }
     // block (smooth hold)
     this.blW += ((s.blocking ? 1 : 0) - this.blW) * Math.min(1, dt * 18);
+    // aim (arms raised along the sights) for armed play
+    this.aimW = (this.aimW || 0) + ((s.aim ? 1 : 0) - (this.aimW || 0)) * Math.min(1, dt * 14);
+    if (this.aimW > 0.001) { const w = this.aimW; for (const [b, v] of [['uaR', [-1.5, 0, -0.04]], ['laR', [-0.1, 0, 0]], ['uaL', [-1.3, 0, 0.42]], ['laL', [-0.75, 0, 0]], ['chest', [0, -0.22, 0]], ['spine', [0.02, 0, 0]]]) { const i = BI[b] * 3; for (let q = 0; q < 3; q++) L[i + q] = lerp(L[i + q], v[q], w); } }
     // ---- action overlay ----
     const A = s.act ? ACTIONS[s.act] : null; let wEnv = 0; const T = this.tgt; T.set(L);
     if (A) {

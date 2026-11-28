@@ -125,7 +125,7 @@ t('character: strand hair styles grow, stay finite and stay out of the head', '/
   if(E.state.stats.strands<8)return id+': too few strands';E.stopHair();}
  H.pose('A-pose');return true}`);
 
-t('core: the old World modes now live in Core (starter level, sandbox, proving ground)', '/core.html?start=blank', `async()=>{const a=n0.app,W=a.worldModes;if(!W)return 'no world modes';const wait=ms=>new Promise(r=>setTimeout(r,ms));
+t('core: the old World modes now live in Core (starter level, sandbox, proving ground)', '/core.html?start=island', `async()=>{const a=n0.app,W=a.worldModes;if(!W)return 'no world modes';const wait=ms=>new Promise(r=>setTimeout(r,ms));
  for(const [m,name] of [['starter','Starter island'],['sandbox','Physics sandbox'],['proving','Proving ground']]){W[m]();await wait(400);
   if(a.name!==name)return m+': scene name is '+a.name;const n=n0.exec({cmd:'entity.list'}).entities.length;if(n<6)return m+': only '+n+' entities';
   if(m==='sandbox'&&a.boulders.items.length<10)return 'sandbox: '+a.boulders.items.length+' boulders';
@@ -133,7 +133,7 @@ t('core: the old World modes now live in Core (starter level, sandbox, proving g
  const html=await (await fetch('/index.html')).text();if(!/href="studio.html"[^>]*id="d3"/.test(html))return 'the 3D door on the home page should open the 3D launcher';
  return true}`);
 
-t('core: photo walk frames, crops and keeps a roll; leaving restores the camera', '/core.html?start=blank', `async()=>{const a=n0.app,W=a.worldModes,wait=ms=>new Promise(r=>setTimeout(r,ms));localStorage.removeItem('n0.core.roll');
+t('core: photo walk frames, crops and keeps a roll; leaving restores the camera', '/core.html?start=island', `async()=>{const a=n0.app,W=a.worldModes,wait=ms=>new Promise(r=>setTimeout(r,ms));localStorage.removeItem('n0.core.roll');
  const fov0=a.camera.fov;W.photowalk();await wait(500);if(!W.photo.on)return 'photo walk did not start';
  const btn=s=>[...document.querySelectorAll('.pw button')].find(b=>b.textContent.trim()===s);
  btn('85 mm').click();await wait(250);const want=2*Math.atan(12/85)*180/Math.PI;if(Math.abs(a.camera.fov-want)>.2)return 'lens did not set the field of view ('+a.camera.fov+' vs '+want+')';
@@ -158,13 +158,13 @@ t('first light: uses the character made in Character, or the reference one when 
  localStorage.removeItem('n0.core.autouse');return true}`);
 
 // ---- Core editor, building, weapons and the three test games ----
-t('core editor: the blank scene is a round island in open sea', '/core.html?start=blank', `async()=>{const a=n0.app,T=a.terrain,wl=a.water.level;
+t('core editor: the blank scene is a round island in open sea', '/core.html?start=island', `async()=>{const a=n0.app,T=a.terrain,wl=a.water.level;
  if(T.hAt(0,0)<wl+.5)return 'centre is not land ('+T.hAt(0,0)+')';
  for(const [x,z] of [[110,0],[-110,0],[0,110],[0,-110],[100,100],[-100,-100]])if(T.hAt(x,z)>wl-.5)return 'no sea at '+x+','+z+' (height '+T.hAt(x,z)+')';
  for(const [x,z] of [[40,0],[-40,10],[0,40],[0,-40]])if(T.hAt(x,z)<wl+.3)return 'island too small at '+x+','+z;
  if(a.name!=='Blank island')return 'scene is called '+a.name;return true}`);
 
-t('core editor: rooms build as one undo step, props place with colliders, copy and delete work, saves round-trip', '/core.html?start=blank', `async()=>{const a=n0.app,ed=a.editor,c=n0.core,wait=ms=>new Promise(r=>setTimeout(r,ms));const y=a.terrain.hAt(0,0);
+t('core editor: rooms build as one undo step, props place with colliders, copy and delete work, saves round-trip', '/core.html?start=island', `async()=>{const a=n0.app,ed=a.editor,c=n0.core,wait=ms=>new Promise(r=>setTimeout(r,ms));const y=a.terrain.hAt(0,0);
  const ids=ed.createRoom({x:-4,y,z:-3},{x:4,y,z:3},{roof:true});if(!ids||ids.length!==6)return 'room made '+(ids&&ids.length)+' pieces';
  const n=()=>n0.exec({cmd:'entity.list'}).entities.length;if(n()!==6)return 'entities '+n();
  const cols=a.entities.colliders().length;if(cols<10)return 'only '+cols+' colliders for a room';

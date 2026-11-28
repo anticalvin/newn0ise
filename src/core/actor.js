@@ -104,7 +104,7 @@ export class Actor {
   }
   checkDeath(dir) { if (this.hp <= 0 && this.alive && !this.dummy) { this.hp = 0; this.startDown(dir || { x: 0, z: 1 }, 5, true); } }
   heal(v) { this.hp = Math.min(this.maxHp, this.hp + v); }
-  respawn(x, z, yaw = 0) { this.hp = this.maxHp; this.state = 'free'; this.stateT = 0; this.pos.set(x, this.app.terrain.hAt(x, z), z); this.prev.copy(this.pos); this.vel.set(0, 0, 0); this.yaw = this.prevYaw = yaw; this.inv = 1.2; this.act = null; this.app.phys.teleport(this); this.flash = 0; }
+  respawn(x, z, yaw = 0, y) { this.hp = this.maxHp; this.state = 'free'; this.stateT = 0; this.pos.set(x, y ?? this.app.terrain.hAt(x, z), z); this.prev.copy(this.pos); this.vel.set(0, 0, 0); this.yaw = this.prevYaw = yaw; this.inv = 1.2; this.act = null; this.app.phys.teleport(this); this.flash = 0; }
 
   // ----- simulation (fixed step) -----
   step(dt, level) {
@@ -190,7 +190,7 @@ export class Actor {
     if (this.poseOverride) { act = this.poseOverride.act; t = this.poseOverride.t; hold = !!this.poseOverride.hold; }
     this.root.position.copy(this.rpos); this.root.position.y -= clamp(this.depth - 0.45, 0, 0.5) * 0.12 * this.scale; this.root.rotation.y = this.ryaw;
     const adt = this.freeze > 0 ? dt * 0.03 : dt;
-    c.update(adt, { speed: this.speed, vf: this.vf, vs: this.vs, onGround: this.onGround, vy: this.vel.y, depth: this.depth, leanF: this.leanF, leanR: this.leanR, stance: this.stance, act, actT: t, actHold: hold, blocking: this.blocking && this.state === 'free', landT: this.landT });
+    c.update(adt, { speed: this.speed, vf: this.vf, vs: this.vs, onGround: this.onGround, vy: this.vel.y, depth: this.depth, leanF: this.leanF, leanR: this.leanR, stance: this.stance, act, actT: t, actHold: hold, blocking: this.blocking && this.state === 'free', landT: this.landT, aim: this.aim && this.state === 'free' });
     if (this.flash > 0) { this.flash = Math.max(0, this.flash - dt * 5); c.setFlash(this.flash); }
   }
   dispose() { this.app.scene.remove(this.root); this.root.traverse(o => { if (o.geometry) o.geometry.dispose(); }); this.app.phys.removeActor(this); }

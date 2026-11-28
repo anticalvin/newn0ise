@@ -18,12 +18,12 @@ return true}`);
 
 t('workspace: create launches Blank, editor shell appears','/core.html',`async()=>{${W}
 click('[data-template="third"]');click('.ws-primary');await wait(1500);
-if(q('#start.on'))return 'launcher still open';if(n0.app.name!=='Blank island')return 'scene '+n0.app.name;
+if(q('#start.on'))return 'launcher still open';if(n0.app.name!=='Blank level')return 'scene '+n0.app.name;
 if(!q('.ws-sidebar'))return 'no sidebar';if(getComputedStyle(q('.ws-status')).display==='none')return 'no status bar';
 const sim=qa('#mode button').find(b=>b.textContent==='Simulate');if(!sim||!sim.disabled)return 'Simulate must be disabled';
 return true}`);
 
-t('workspace: mode switch, workspace tools and dock groups','/core.html?start=blank',`async()=>{${W}
+t('workspace: mode switch, workspace tools and dock groups','/core.html?start=island',`async()=>{${W}
 click('#mode [data-m="edit"]');if(n0.app.mode!=='edit')return 'not edit';
 click('[data-workspace="Assets"]');if(n0.app.ui.group!==3)return 'Assets did not open Place';
 click('[data-workspace="Environment"]');if(n0.app.ui.group!==6)return 'Environment did not open Sky';
@@ -34,7 +34,7 @@ click('#mode [data-m="explore"]');if(n0.app.mode!=='explore')return 'not play';
 if(getComputedStyle(q('.ws-sidebar')).display!=='none')return 'sidebar visible in Play';
 return true}`);
 
-t('workspace: scene hierarchy lists entities and edits position through entity.set','/core.html?start=blank',`async()=>{${W}
+t('workspace: scene hierarchy lists entities and edits position through entity.set','/core.html?start=island',`async()=>{${W}
 n0.exec({cmd:'entity.create',prefab:'prim.box',id:'hb',position:[3,1,4],parameters:{size:[1,1,1],color:'#336699'}});
 click('#mode [data-m="edit"]');click('[data-workspace="Scene"]');await wait(100);
 if(!q('[data-entity="hb"]'))return 'entity missing from hierarchy';click('[data-entity="hb"]');
@@ -44,7 +44,7 @@ n0.exec({cmd:'undo'});if(n0.app.entities.get('hb').transform.position[0]!==3)ret
 if(q('[data-position="0"]').value!=='3.000')return 'inspector stale after undo: '+q('[data-position="0"]').value;const f2=q('[data-position="0"]');f2.value='abc';const r=n0.app.entities.get('hb').transform.position[0];click('[data-inspect="apply"]');if(n0.app.entities.get('hb').transform.position[0]!==r)return 'invalid value applied';
 return true}`);
 
-t('workspace: unsaved-change guard on replacing the scene','/core.html?start=blank',`async()=>{${W}
+t('workspace: unsaved-change guard on replacing the scene','/core.html?start=island',`async()=>{${W}
 if(n0.workspace.dirty)return 'fresh scene dirty';n0.exec({cmd:'scatter.add',center:[10,10],radius:5,count:3});if(!n0.workspace.dirty)return 'edit not tracked';
 const pal=n0.app.palms.items.length;click('#ws-project');click('[data-template="blank"]');click('.ws-primary');await wait(200);
 if(!q('.ws-confirm.on'))return 'no confirm shown';if(n0.app.palms.items.length!==pal)return 'replaced before confirming';
@@ -52,7 +52,7 @@ if(!n0.app.ui.modalOpen())return 'confirm is not modal';click('.ws-confirm [data
 click('.ws-primary');await wait(200);click('.ws-confirm [data-r="1"]');await wait(1500);if(n0.app.palms.items.length===pal&&pal>0)return 'accept did not replace';if(n0.workspace.dirty)return 'dirty after new scene';
 return true}`);
 
-t('workspace: failed and cancelled imports do not change the scene','/core.html?start=blank',`async()=>{${W}
+t('workspace: failed and cancelled imports do not change the scene','/core.html?start=island',`async()=>{${W}
 n0.exec({cmd:'scatter.add',center:[10,10],radius:5,count:4});const s0=JSON.stringify(await n0.core.serialize());
 const mk=(txt,name)=>new File([txt],name);
 await n0.workspace.importFile(mk('not json','a.n0scene'));if(JSON.stringify(await n0.core.serialize())!==s0)return 'bad json changed scene';
@@ -61,13 +61,13 @@ const good=JSON.parse(s0);good.terrain={broken:true};const pc=n0.workspace.impor
 const d=JSON.parse(s0);d.palms='x';let threw=false;try{await n0.core.load(d)}catch(e){threw=true}if(!threw)return 'bad palms accepted';if(JSON.stringify(await n0.core.serialize())!==s0)return 'rejected load changed scene';
 return true}`);
 
-t('workspace: valid import replaces after confirm, cancel keeps scene','/core.html?start=blank',`async()=>{${W}
+t('workspace: valid import replaces after confirm, cancel keeps scene','/core.html?start=island',`async()=>{${W}
 const d=JSON.parse(JSON.stringify(await n0.core.serialize()));d.name='IMPORTED';n0.exec({cmd:'scatter.add',center:[10,10],radius:5,count:3});
 const p=n0.workspace.importFile(new File([JSON.stringify(d)],'ok.n0scene'));await wait(300);if(!q('.ws-confirm.on'))return 'no confirm for dirty import';click('.ws-confirm [data-r="0"]');await p;if(n0.app.name==='IMPORTED')return 'cancel imported';
 const p2=n0.workspace.importFile(new File([JSON.stringify(d)],'ok.n0scene'));await wait(300);click('.ws-confirm [data-r="1"]');await p2;if(n0.app.name!=='IMPORTED')return 'confirm did not import';
 return true}`);
 
-t('workspace: sheets suppress gameplay input','/core.html?start=blank',`async()=>{${W}
+t('workspace: sheets suppress gameplay input','/core.html?start=island',`async()=>{${W}
 click('#bHelp');if(!n0.app.ui.modalOpen())return 'guide not modal';const m0=n0.app.mode;dispatchEvent(new KeyboardEvent('keydown',{key:'e'}));if(n0.app.mode!==m0)return 'E toggled mode under a sheet';
 dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'}));if(n0.app.ui.modalOpen())return 'Escape did not close';
 click('#ws-project');if(!n0.app.ui.modalOpen())return 'launcher not modal';dispatchEvent(new KeyboardEvent('keydown',{key:'e'}));if(n0.app.mode!==m0)return 'E toggled under launcher';
@@ -75,15 +75,15 @@ dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'}));if(q('#start.on'))ret
 dispatchEvent(new KeyboardEvent('keydown',{key:'e'}));if(n0.app.mode===m0)return 'input not restored after closing';
 return true}`);
 
-t('workspace: UI hide and show','/core.html?start=blank',`async()=>{${W}
+t('workspace: UI hide and show','/core.html?start=island',`async()=>{${W}
 dispatchEvent(new KeyboardEvent('keydown',{key:'h'}));await wait(100);if(!q('#ui.hide'))return 'not hidden';dispatchEvent(new KeyboardEvent('keydown',{key:'h'}));if(q('#ui.hide'))return 'not shown';return true}`);
 
-t('workspace: diagnostics shows real telemetry or a dash','/core.html?start=blank',`async()=>{${W}
+t('workspace: diagnostics shows real telemetry or a dash','/core.html?start=island',`async()=>{${W}
 click('[data-workspace="Diagnostics"]');await wait(900);const m=q('#ws-metrics');if(!m)return 'no metrics';const t=n0.telemetry();
 if(!/Draw calls/.test(m.textContent))return 'no draw calls row';if(!/FPS/.test(q('#ws-fps').textContent))return 'no fps';
 if(!(t.calls>0))return 'telemetry empty';if(!q('#ws-metrics').textContent.includes(String(t.entities)))return 'entities not shown';return true}`);
 
-t('workspace: South Africa guards, transition and return to the local scene','/core.html?start=blank',`async()=>{${W}
+t('workspace: South Africa guards, transition and return to the local scene','/core.html?start=island',`async()=>{${W}
 n0.exec({cmd:'scatter.add',center:[10,10],radius:5,count:3});n0.exec({cmd:'entity.create',prefab:'prim.box',id:'keep',position:[2,1,2],parameters:{size:[1,1,1],color:'#aa6633'}});
 const pal=n0.app.palms.items.length,name=n0.app.name,h=n0.app.terrain.hAt(5,5);
 click('#ws-project');click('[data-tab="Examples"]');click('[data-template="world"]');const p=n0.app.start('world');await wait(50);
